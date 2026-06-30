@@ -1,0 +1,3 @@
+cd C:\Users\Bount\Downloads\tng_crm_2_0\tng_crm_2_0
+git checkout main
+notepad .gitignore
