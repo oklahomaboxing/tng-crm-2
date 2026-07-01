@@ -135,7 +135,45 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
     if not rep:
         raise HTTPException(status_code=404, detail="Rep link not found")
     return {"rep_id": rep.id, "rep_name": rep.user.name, "clover_link": rep.clover_link, "products": db.query(MembershipProduct).filter(MembershipProduct.active == True).all()}
+@app.get("/api/members")
+def list_members(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    members = db.query(Member).all()
+    return [
+        {
+            "id": m.id,
+            "first_name": m.first_name,
+            "last_name": m.last_name,
+            "email": m.email,
+            "phone": m.phone,
+            "status": m.status,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in members
+    ]
 
+
+@app.get("/api/sales")
+def list_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    sales = db.query(Sale).all()
+    results = []
+
+    for s in sales:
+        rep = db.query(SalesRep).filter(SalesRep.id == s.sales_rep_id).first()
+        member = db.query(Member).filter(Member.id == s.member_id).first()
+        product = db.query(MembershipProduct).filter(MembershipProduct.id == s.product_id).first()
+
+        results.append({
+            "id": s.id,
+            "member": f"{member.first_name} {member.last_name}" if member else "",
+            "rep": rep.user.name if rep and rep.user else "",
+            "membership": product.name if product else "",
+            "amount": s.amount,
+            "payment_status": s.payment_status,
+            "sale_date": s.sale_date.isoformat() if s.sale_date else None,
+            "clover_payment_id": s.clover_payment_id,
+        })
+
+    return results
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
