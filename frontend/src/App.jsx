@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-
+import Sidebar from "./components/Sidebar.jsx";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function App() {
@@ -88,21 +88,7 @@ async function loadQr(repId) {
 
   return (
     <div style={styles.app}>
-      <aside style={styles.sidebar}>
-        <h2>🥊 TNG CRM</h2>
-        {["Dashboard", "Members", "Sales", "Sales Reps", "QR Referrals", "Clover", "Reports"].map((item) => (
-          <button
-            key={item}
-            onClick={() => setPage(item)}
-            style={{
-              ...styles.navBtn,
-              background: page === item ? "#d71920" : "transparent",
-            }}
-          >
-            {item}
-          </button>
-        ))}
-      </aside>
+     <Sidebar page={page} setPage={setPage} styles={styles} />
 
       <main style={styles.main}>
         <header style={styles.header}>
