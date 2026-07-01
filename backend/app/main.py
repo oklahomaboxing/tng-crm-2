@@ -23,7 +23,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+def seed_admin():
+    db = next(get_db())
+    existing = db.query(User).filter(User.email == "admin@tngboxinggym.com").first()
+    if not existing:
+        admin = User(
+            name="TNG Admin",
+            email="admin@tngboxinggym.com",
+            password_hash=hash_password("admin123"),
+            role="admin"
+        )
+        db.add(admin)
+        db.commit()
 
+seed_admin()
 def current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
