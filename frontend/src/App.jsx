@@ -7,11 +7,12 @@ function App() {
   const [email, setEmail] = useState("admin@tngboxinggym.com");
   const [password, setPassword] = useState("admin123");
   const [token, setToken] = useState(localStorage.getItem("token") || "");
+  const [page, setPage] = useState("Dashboard");
   const [dash, setDash] = useState(null);
   const [reps, setReps] = useState([]);
   const [leader, setLeader] = useState([]);
   const [msg, setMsg] = useState("");
-  const [page, setPage] = useState("Dashboard");
+
   async function login() {
     const r = await fetch(`${API}/api/login`, {
       method: "POST",
@@ -19,12 +20,15 @@ function App() {
       body: JSON.stringify({ email, password }),
     });
     const j = await r.json();
+
     if (j.token) {
       localStorage.setItem("token", j.token);
       setToken(j.token);
       setMsg("Logged in");
       setTimeout(load, 300);
-    } else setMsg(j.detail || "Login failed");
+    } else {
+      setMsg(j.detail || "Login failed");
+    }
   }
 
   async function load() {
@@ -64,7 +68,7 @@ function App() {
     return (
       <main style={styles.loginPage}>
         <div style={styles.loginCard}>
-          <h1 style={styles.logo}>🥊 TNG CRM</h1>
+          <h1>🥊 TNG CRM</h1>
           <p style={styles.sub}>Sales • Members • Commissions • Clover</p>
           <input style={styles.input} value={email} onChange={(e) => setEmail(e.target.value)} />
           <input style={styles.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -78,25 +82,25 @@ function App() {
   return (
     <div style={styles.app}>
       <aside style={styles.sidebar}>
-  <h2>🥊 TNG CRM</h2>
-  {["Dashboard", "Members", "Sales", "Sales Reps", "QR Referrals", "Clover", "Reports"].map((item) => (
-    <button
-      key={item}
-      onClick={() => setPage(item)}
-      style={{
-        ...styles.navBtn,
-        background: page === item ? "#d71920" : "transparent",
-      }}
-    >
-      {item}
-    </button>
-  ))}
-</aside>
+        <h2>🥊 TNG CRM</h2>
+        {["Dashboard", "Members", "Sales", "Sales Reps", "QR Referrals", "Clover", "Reports"].map((item) => (
+          <button
+            key={item}
+            onClick={() => setPage(item)}
+            style={{
+              ...styles.navBtn,
+              background: page === item ? "#d71920" : "transparent",
+            }}
+          >
+            {item}
+          </button>
+        ))}
+      </aside>
 
       <main style={styles.main}>
         <header style={styles.header}>
           <div>
-            <h1>Dashboard</h1>
+            <h1>{page}</h1>
             <p>TNG Boxing sales and commission command center</p>
           </div>
           <div>
@@ -108,40 +112,91 @@ function App() {
 
         {msg && <p style={styles.notice}>{msg}</p>}
 
-        {dash && (
-          <section style={styles.grid4}>
-            <Card title="Sales This Month" value={dash.sales_this_month} />
-            <Card title="Revenue This Month" value={`$${Number(dash.revenue_this_month || 0).toFixed(2)}`} />
-            <Card title="Commission Rate" value={`${Number((dash.commission_rate || 0) * 100).toFixed(0)}%`} />
-            <Card title="Commission Earned" value={`$${Number(dash.commission_earned || 0).toFixed(2)}`} />
+        {page === "Dashboard" && (
+          <>
+            {dash && (
+              <section style={styles.grid4}>
+                <Card title="Sales This Month" value={dash.sales_this_month} />
+                <Card title="Revenue This Month" value={`$${Number(dash.revenue_this_month || 0).toFixed(2)}`} />
+                <Card title="Commission Rate" value={`${Number((dash.commission_rate || 0) * 100).toFixed(0)}%`} />
+                <Card title="Commission Earned" value={`$${Number(dash.commission_earned || 0).toFixed(2)}`} />
+              </section>
+            )}
+
+            <section style={styles.panel}>
+              <h2>Quick Start</h2>
+              <p>Click Refresh to load live CRM data. Add reps, track sales, and prepare Clover automation.</p>
+            </section>
+          </>
+        )}
+
+        {page === "Members" && (
+          <section style={styles.panel}>
+            <h2>Members</h2>
+            <p>Member database coming next: name, phone, email, membership, coach, sales rep, Clover customer ID, and waiver status.</p>
           </section>
         )}
 
-        <section style={styles.panel}>
-          <h2>Sales Reps</h2>
-          <div style={styles.repGrid}>
+        {page === "Sales" && (
+          <section style={styles.panel}>
+            <h2>Sales</h2>
+            <p>This page will show every membership sold, payment status, Clover ID, sales rep, and commission amount.</p>
+          </section>
+        )}
+
+        {page === "Sales Reps" && (
+          <section style={styles.panel}>
+            <h2>Sales Reps</h2>
+            <div style={styles.repGrid}>
+              {Array.isArray(reps) && reps.map((r) => (
+                <div key={r.id} style={styles.repCard}>
+                  <h3>{r.name}</h3>
+                  <p>{r.email}</p>
+                  <p><b>Referral:</b> /join/{r.slug}</p>
+                  <p><b>Clover:</b> {r.clover_link ? "Connected" : "Not Added"}</p>
+                  <p><b>Temp Password:</b> TNG12345</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {page === "QR Referrals" && (
+          <section style={styles.panel}>
+            <h2>QR Referrals</h2>
+            <p>Each sales rep will get a QR code that sends customers to their referral page.</p>
             {Array.isArray(reps) && reps.map((r) => (
-              <div key={r.id} style={styles.repCard}>
-                <h3>{r.name}</h3>
-                <p>{r.email}</p>
-                <p><b>Referral:</b> /join/{r.slug}</p>
-                <p><b>Clover:</b> {r.clover_link ? "Connected" : "Not Added"}</p>
+              <div key={r.id} style={styles.row}>
+                <b>{r.name}</b>
+                <span>/join/{r.slug}</span>
+                <span>{r.clover_link ? "Clover link ready" : "Needs Clover link"}</span>
               </div>
             ))}
-          </div>
-        </section>
+          </section>
+        )}
 
-        <section style={styles.panel}>
-          <h2>Leaderboard</h2>
-          {Array.isArray(leader) && leader.map((r, i) => (
-            <div key={r.rep_id} style={styles.row}>
-              <b>#{i + 1} {r.name}</b>
-              <span>{r.sales} sales</span>
-              <span>${Number(r.revenue || 0).toFixed(2)}</span>
-              <span>{Number((r.rate || 0) * 100).toFixed(0)}%</span>
-            </div>
-          ))}
-        </section>
+        {page === "Clover" && (
+          <section style={styles.panel}>
+            <h2>Clover Integration</h2>
+            <p>Backend webhook is ready at:</p>
+            <code>{API}/api/clover/webhook</code>
+            <p>Next step: add Clover webhook secret and match payments to sales reps.</p>
+          </section>
+        )}
+
+        {page === "Reports" && (
+          <section style={styles.panel}>
+            <h2>Leaderboard</h2>
+            {Array.isArray(leader) && leader.map((r, i) => (
+              <div key={r.rep_id} style={styles.row}>
+                <b>#{i + 1} {r.name}</b>
+                <span>{r.sales} sales</span>
+                <span>${Number(r.revenue || 0).toFixed(2)}</span>
+                <span>{Number((r.rate || 0) * 100).toFixed(0)}%</span>
+              </div>
+            ))}
+          </section>
+        )}
       </main>
     </div>
   );
@@ -157,19 +212,6 @@ function Card({ title, value }) {
 }
 
 const styles = {
-  navBtn: {
-    display: "block",
-    width: "100%",
-    padding: "12px",
-    marginBottom: "8px",
-    border: 0,
-    borderRadius: 10,
-    color: "white",
-    textAlign: "left",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-
   loginPage: {
     minHeight: "100vh",
     background: "#0b0b0f",
@@ -185,7 +227,6 @@ const styles = {
     width: 380,
     boxShadow: "0 20px 50px rgba(0,0,0,.3)",
   },
-  logo: { marginBottom: 4 },
   sub: { color: "#666", marginBottom: 20 },
   input: {
     width: "100%",
@@ -211,6 +252,18 @@ const styles = {
     background: "#0b0b0f",
     color: "white",
     padding: 24,
+  },
+  navBtn: {
+    display: "block",
+    width: "100%",
+    padding: "12px",
+    marginBottom: "8px",
+    border: 0,
+    borderRadius: 10,
+    color: "white",
+    textAlign: "left",
+    cursor: "pointer",
+    fontWeight: "bold",
   },
   main: { flex: 1, padding: 28 },
   header: {
