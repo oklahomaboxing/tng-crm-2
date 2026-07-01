@@ -12,7 +12,7 @@ function App() {
   const [reps, setReps] = useState([]);
   const [leader, setLeader] = useState([]);
   const [msg, setMsg] = useState("");
-
+  const [qrCodes, setQrCodes] = useState({});
   async function login() {
     const r = await fetch(`${API}/api/login`, {
       method: "POST",
@@ -37,7 +37,14 @@ function App() {
     setReps(await (await fetch(`${API}/api/reps`, { headers: h })).json().catch(() => []));
     setLeader(await (await fetch(`${API}/api/leaderboard`, { headers: h })).json().catch(() => []));
   }
+async function loadQr(repId) {
+  const h = { Authorization: "Bearer " + localStorage.getItem("token") };
 
+  const r = await fetch(`${API}/api/reps/${repId}/qr`, { headers: h });
+  const j = await r.json();
+
+  setQrCodes((old) => ({ ...old, [repId]: j }));
+}
   async function addRep() {
     const name = prompt("Rep name?");
     const repEmail = prompt("Rep email?");
@@ -161,20 +168,63 @@ function App() {
           </section>
         )}
 
-        {page === "QR Referrals" && (
-          <section style={styles.panel}>
-            <h2>QR Referrals</h2>
-            <p>Each sales rep will get a QR code that sends customers to their referral page.</p>
-            {Array.isArray(reps) && reps.map((r) => (
-              <div key={r.id} style={styles.row}>
-                <b>{r.name}</b>
-                <span>/join/{r.slug}</span>
-                <span>{r.clover_link ? "Clover link ready" : "Needs Clover link"}</span>
-              </div>
-            ))}
-          </section>
-        )}
+      {page === "QR Referrals" && (
+  <section style={styles.panel}>
+    <h2>QR Referrals</h2>
+    <p>Each sales rep has their own referral page and QR code.</p>
 
+    {Array.isArray(reps) &&
+      reps.map((r) => (
+        <div key={r.id} style={styles.repCard}>
+          <h3>{r.name}</h3>
+
+          <p>
+            <b>Referral:</b> /join/{r.slug}
+          </p>
+
+          <p>
+            {r.clover_link ? "✅ Clover Connected" : "❌ Clover Not Connected"}
+          </p>
+
+          <button
+            style={styles.secondaryBtn}
+            onClick={() => loadQr(r.id)}
+          >
+            Generate QR Code
+          </button>
+
+          {qrCodes[r.id] && (
+            <>
+              <p>
+                <b>Referral URL</b>
+              </p>
+
+              <a
+                href={qrCodes[r.id].url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {qrCodes[r.id].url}
+              </a>
+
+              <br />
+              <br />
+
+              <img
+                src={`data:image/png;base64,${qrCodes[r.id].qr_png_base64}`}
+                alt="QR Code"
+                style={{
+                  width: 180,
+                  border: "1px solid #ddd",
+                  borderRadius: 10,
+                }}
+              />
+            </>
+          )}
+        </div>
+      ))}
+  </section>
+)}
         {page === "Clover" && (
           <section style={styles.panel}>
             <h2>Clover Integration</h2>
