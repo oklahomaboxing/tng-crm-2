@@ -2,6 +2,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import Sidebar from "./components/Sidebar.jsx";
+import Members from "./pages/Members.jsx";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function App() {
