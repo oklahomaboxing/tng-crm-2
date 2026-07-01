@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import Sidebar from "./components/Sidebar.jsx";
 import Members from "./pages/Members.jsx";
+import Sales from "./pages/Sales.jsx";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function App() {
@@ -123,12 +124,9 @@ async function loadQr(repId) {
           </section>
         )}
 
-        {page === "Sales" && (
-          <section style={styles.panel}>
-            <h2>Sales</h2>
-            <p>This page will show every membership sold, payment status, Clover ID, sales rep, and commission amount.</p>
-          </section>
-        )}
+       {page === "Sales" && (
+  <Sales />
+)}
 
         {page === "Sales Reps" && (
           <section style={styles.panel}>
