@@ -12,7 +12,17 @@ from .commission import commission_rate
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="TNG CRM 2.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://goldfish-app-jq38z.ondigitalocean.app",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)):
     if not authorization.startswith("Bearer "):
