@@ -11,7 +11,7 @@ function App() {
   const [reps, setReps] = useState([]);
   const [leader, setLeader] = useState([]);
   const [msg, setMsg] = useState("");
-
+  const [page, setPage] = useState("Dashboard");
   async function login() {
     const r = await fetch(`${API}/api/login`, {
       method: "POST",
@@ -78,15 +78,20 @@ function App() {
   return (
     <div style={styles.app}>
       <aside style={styles.sidebar}>
-        <h2>🥊 TNG CRM</h2>
-        <p>Dashboard</p>
-        <p>Members</p>
-        <p>Sales</p>
-        <p>Sales Reps</p>
-        <p>QR Referrals</p>
-        <p>Clover</p>
-        <p>Reports</p>
-      </aside>
+  <h2>🥊 TNG CRM</h2>
+  {["Dashboard", "Members", "Sales", "Sales Reps", "QR Referrals", "Clover", "Reports"].map((item) => (
+    <button
+      key={item}
+      onClick={() => setPage(item)}
+      style={{
+        ...styles.navBtn,
+        background: page === item ? "#d71920" : "transparent",
+      }}
+    >
+      {item}
+    </button>
+  ))}
+</aside>
 
       <main style={styles.main}>
         <header style={styles.header}>
@@ -152,6 +157,19 @@ function Card({ title, value }) {
 }
 
 const styles = {
+  navBtn: {
+    display: "block",
+    width: "100%",
+    padding: "12px",
+    marginBottom: "8px",
+    border: 0,
+    borderRadius: 10,
+    color: "white",
+    textAlign: "left",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+
   loginPage: {
     minHeight: "100vh",
     background: "#0b0b0f",
