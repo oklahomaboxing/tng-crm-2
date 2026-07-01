@@ -1,3 +1,4 @@
+import Dashboard from "./pages/Dashboard.jsx";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import Sidebar from "./components/Sidebar.jsx";
@@ -106,22 +107,13 @@ async function loadQr(repId) {
         {msg && <p style={styles.notice}>{msg}</p>}
 
         {page === "Dashboard" && (
-          <>
-            {dash && (
-              <section style={styles.grid4}>
-                <Card title="Sales This Month" value={dash.sales_this_month} />
-                <Card title="Revenue This Month" value={`$${Number(dash.revenue_this_month || 0).toFixed(2)}`} />
-                <Card title="Commission Rate" value={`${Number((dash.commission_rate || 0) * 100).toFixed(0)}%`} />
-                <Card title="Commission Earned" value={`$${Number(dash.commission_earned || 0).toFixed(2)}`} />
-              </section>
-            )}
-
-            <section style={styles.panel}>
-              <h2>Quick Start</h2>
-              <p>Click Refresh to load live CRM data. Add reps, track sales, and prepare Clover automation.</p>
-            </section>
-          </>
-        )}
+  <Dashboard
+    dash={dash}
+    leader={leader}
+    load={load}
+  />
+)}
+     
 
         {page === "Members" && (
           <section style={styles.panel}>
