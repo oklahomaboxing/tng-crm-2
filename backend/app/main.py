@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 from datetime import datetime
 import base64, io, qrcode
+import os
+import requests
 from .database import Base, engine, get_db
 from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead
 from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
@@ -287,6 +289,71 @@ def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)
         })
 
     return results
+@app.post("/api/clover/create-checkout/{lead_id}")
+def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Membership product not found")
+
+    merchant_id = os.getenv("CLOVER_MERCHANT_ID")
+    api_token = os.getenv("CLOVER_API_TOKEN")
+    clover_env = os.getenv("CLOVER_ENV", "production")
+
+    if not merchant_id or not api_token:
+        raise HTTPException(status_code=500, detail="Clover credentials missing")
+
+    base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
+
+    payload = {
+        "customer": {
+            "firstName": lead.first_name,
+            "lastName": lead.last_name,
+            "email": lead.email,
+            "phoneNumber": lead.phone or "",
+        },
+        "shoppingCart": {
+            "lineItems": [
+                {
+                    "name": product.name,
+                    "price": int(product.price * 100),
+                    "unitQty": 1,
+                }
+            ]
+        }
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.post(
+        f"{base_url}/invoicingcheckoutservice/v1/checkouts",
+        json=payload,
+        headers=headers,
+        timeout=20,
+    )
+
+    if response.status_code >= 400:
+        raise HTTPException(status_code=500, detail=response.text)
+
+    checkout = response.json()
+
+    lead.status = "started_checkout"
+    lead.clover_order_id = checkout.get("id") or checkout.get("checkoutSessionId")
+    db.commit()
+
+    checkout_url = checkout.get("href") or checkout.get("url") or checkout.get("checkoutUrl")
+
+    return {
+        "lead_id": lead.id,
+        "checkout": checkout,
+        "checkout_url": checkout_url,
+    }
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
