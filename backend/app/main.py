@@ -306,7 +306,7 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
     if not merchant_id or not api_token:
         raise HTTPException(status_code=500, detail="Clover credentials missing")
 
-    base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
+    base_url = "https://scl.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
 
     payload = {
         "customer": {
@@ -354,7 +354,9 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         "lead_id": lead.id,
         "checkout_url": checkout_url,
         "checkout": checkout,
-    }@app.post("/api/clover/webhook")
+    }
+
+@app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
     # TODO: verify Clover signature using webhook secret after deployment.
