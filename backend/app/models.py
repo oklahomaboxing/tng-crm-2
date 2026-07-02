@@ -34,6 +34,15 @@ class Member(Base):
     clover_customer_id = Column(String, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     sales = relationship("Sale", back_populates="member")
+    member_number = Column(String, nullable=True)
+    barcode = Column(String, nullable=True)
+    membership_start = Column(DateTime, nullable=True)
+    membership_end = Column(DateTime, nullable=True)
+    membership_status = Column(String, default="active")
+    clover_customer_id = Column(String, nullable=True)
+    auto_renew = Column(Boolean, default=False)
+    assigned_coach = Column(String, nullable=True)
+    waiver_signed = Column(Boolean, default=False)
 
 class MembershipProduct(Base):
     __tablename__ = "membership_products"
@@ -57,6 +66,11 @@ class Sale(Base):
     member = relationship("Member", back_populates="sales")
     sales_rep = relationship("SalesRep", back_populates="sales")
     product = relationship("MembershipProduct")
+    clover_checkout_id = Column(String, nullable=True)
+    transaction_status = Column(String, default="paid")
+    refunded = Column(Boolean, default=False)
+    refund_amount = Column(Float, default=0)
+    payment_method = Column(String, nullable=True)
 
 class CloverSetting(Base):
     __tablename__ = "clover_settings"
@@ -86,3 +100,5 @@ class Lead(Base):
     clover_checkout_id = Column(String, nullable=True)
     clover_payment_id = Column(String, nullable=True)
     paid_at = Column(DateTime, nullable=True)
+    converted_at = Column(DateTime, nullable=True)
+    conversion_source = Column(String, default="qr_referral")
