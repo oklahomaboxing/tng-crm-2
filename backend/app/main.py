@@ -326,10 +326,10 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         }
     }
 
-  headers = {
-    "Authorization": f"Bearer {api_token}",
-    "X-Clover-Merchant-Id": merchant_id,
-    "Content-Type": "application/json",
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "X-Clover-Merchant-Id": merchant_id,
+        "Content-Type": "application/json",
     }
 
     response = requests.post(
@@ -352,10 +352,9 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
 
     return {
         "lead_id": lead.id,
-        "checkout": checkout,
         "checkout_url": checkout_url,
-    }
-@app.post("/api/clover/webhook")
+        "checkout": checkout,
+    }@app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
     # TODO: verify Clover signature using webhook secret after deployment.
