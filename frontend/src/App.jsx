@@ -54,6 +54,27 @@ async function loadQr(repId) {
 
   setQrCodes((old) => ({ ...old, [repId]: j }));
 }
+
+async function syncProducts() {
+  const h = {
+    Authorization: "Bearer " + localStorage.getItem("token"),
+  };
+
+  const r = await fetch(`${API}/api/clover/sync-products`, {
+    method: "POST",
+    headers: h,
+  });
+
+  const j = await r.json();
+
+  alert(
+    j.message
+      ? `${j.message}\n${j.synced} products synced.`
+      : JSON.stringify(j)
+  );
+
+  load();
+}
   async function addRep() {
     const name = prompt("Rep name?");
     const repEmail = prompt("Rep email?");
@@ -107,6 +128,13 @@ async function loadQr(repId) {
           </div>
           <div>
             <button style={styles.secondaryBtn} onClick={load}>Refresh</button>
+<button
+  style={styles.secondaryBtn}
+  onClick={syncProducts}
+>
+  Sync Clover Products
+</button>
+            
             <button style={styles.primaryBtnSmall} onClick={addRep}>Add Rep</button>
             <button style={styles.logoutBtn} onClick={() => { localStorage.clear(); setToken(""); }}>Logout</button>
           </div>
