@@ -10,6 +10,7 @@ import Leads from "./pages/Leads.jsx";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function App() {
+
   const [email, setEmail] = useState("admin@tngboxinggym.com");
   const [password, setPassword] = useState("admin123");
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -18,8 +19,47 @@ function App() {
   const [reps, setReps] = useState([]);
   const [leader, setLeader] = useState([]);
   const [msg, setMsg] = useState("");
-  const [qrCodes, setQrCodes] = useState({});
-if (new URLSearchParams(window.location.search).has("join")) {
+  const [qrCodes, setQrCodes] = useState({});const params = new URLSearchParams(window.location.search);
+const paymentStatus = params.get("payment");
+
+if (paymentStatus === "success") {
+  return (
+    <main style={styles.paymentPage}>
+      <div style={styles.paymentCard}>
+        <h1>🥊 Payment Successful!</h1>
+        <p>Welcome to TNG Boxing. Your membership payment was processed successfully.</p>
+        <p>Our team will follow up with your next steps.</p>
+        <button style={styles.primaryBtn} onClick={() => window.location.href = "/"}>
+          Go to TNG CRM
+        </button>
+      </div>
+    </main>
+  );
+}
+
+if (paymentStatus === "cancelled") {
+  return (
+    <main style={styles.paymentPage}>
+      <div style={styles.paymentCard}>
+        <h1>Payment Cancelled</h1>
+        <p>Your checkout was cancelled. You can restart your signup anytime.</p>
+      </div>
+    </main>
+  );
+}
+
+if (paymentStatus === "failed") {
+  return (
+    <main style={styles.paymentPage}>
+      <div style={styles.paymentCard}>
+        <h1>Payment Failed</h1>
+        <p>Something went wrong with the payment. Please try again or contact TNG Boxing.</p>
+      </div>
+    </main>
+  );
+}
+
+if (params.has("join")) {
   return <JoinPage />;
 }
   async function login() {
@@ -269,6 +309,24 @@ const styles = {
     alignItems: "center",
     fontFamily: "Arial",
   },
+paymentPage: {
+  minHeight: "100vh",
+  background: "#0b0b0f",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  fontFamily: "Arial",
+  padding: 20,
+},
+
+paymentCard: {
+  background: "white",
+  padding: 36,
+  borderRadius: 18,
+  maxWidth: 520,
+  textAlign: "center",
+  boxShadow: "0 20px 50px rgba(0,0,0,.3)",
+},
   loginCard: {
     background: "white",
     padding: 32,
