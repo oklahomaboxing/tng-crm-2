@@ -94,7 +94,7 @@ def rep_qr(rep_id: int, db: Session = Depends(get_db), user: User = Depends(curr
         raise HTTPException(status_code=404, detail="Rep not found")
     if user.role != "admin" and (not user.rep_profile or user.rep_profile.id != rep_id):
         raise HTTPException(status_code=403, detail="Not allowed")
-    url = f"https://crm.tngboxinggym.com/join/{rep.referral_slug}"
+    url = f"https://goldfish-app-jq38z.ondigitalocean.app/join/{rep.referral_slug}"
     img = qrcode.make(url)
     buf = io.BytesIO(); img.save(buf, format="PNG")
     return {"url": url, "qr_png_base64": base64.b64encode(buf.getvalue()).decode()}
