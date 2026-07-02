@@ -365,10 +365,14 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
-    # TODO: verify Clover signature using webhook secret after deployment.
-    # TODO: match checkout/order metadata to referral_slug or rep_id.
-    return {"received": True, "note": "Webhook received. Signature verification and sale matching should be enabled before production.", "payload_preview": payload}
 
+    print("========== CLOVER WEBHOOK ==========")
+    print(payload)
+    print("====================================")
+
+    return {
+        "received": True
+    }
 @app.get("/api/clover/settings")
 def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
