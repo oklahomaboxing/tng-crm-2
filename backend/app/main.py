@@ -352,8 +352,9 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         )
 
     lead.status = "started_checkout"
-    lead.clover_order_id = checkout.get("id") or checkout.get("checkoutSessionId")
-    db.commit()
+lead.clover_checkout_id = checkout.get("id") or checkout.get("checkoutSessionId")
+lead.clover_order_id = checkout.get("id") or checkout.get("checkoutSessionId")
+db.commit()
 
     checkout_url = checkout.get("href") or checkout.get("url") or checkout.get("checkoutUrl")
 

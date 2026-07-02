@@ -83,3 +83,6 @@ class Lead(Base):
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+    clover_checkout_id = Column(String, nullable=True)
+    clover_payment_id = Column(String, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
