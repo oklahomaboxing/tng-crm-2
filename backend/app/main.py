@@ -362,6 +362,69 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         "checkout_url": checkout_url,
         "checkout": checkout,
     }
+@app.post("/api/clover/sync-products")
+def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+
+    merchant_id = os.getenv("CLOVER_MERCHANT_ID")
+    api_token = os.getenv("CLOVER_API_TOKEN")
+    clover_env = os.getenv("CLOVER_ENV", "production")
+
+    if not merchant_id or not api_token:
+        raise HTTPException(status_code=500, detail="Clover credentials missing")
+
+    base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
+
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.get(
+        f"{base_url}/v3/merchants/{merchant_id}/items",
+        headers=headers,
+        timeout=20,
+    )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clover product sync error {response.status_code}: {response.text}"
+        )
+
+    data = response.json()
+    items = data.get("elements", [])
+
+    synced = 0
+
+    for item in items:
+        name = item.get("name")
+        price_cents = item.get("price", 0)
+
+        if not name:
+            continue
+
+        existing = db.query(MembershipProduct).filter(MembershipProduct.name == name).first()
+
+        if existing:
+            existing.price = price_cents / 100
+            existing.active = True
+        else:
+            product = MembershipProduct(
+                name=name,
+                price=price_cents / 100,
+                active=True,
+            )
+            db.add(product)
+
+        synced += 1
+
+    db.commit()
+
+    return {
+        "message": "Clover products synced",
+        "synced": synced,
+    }
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
