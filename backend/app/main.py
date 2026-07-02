@@ -174,6 +174,68 @@ def list_sales(db: Session = Depends(get_db), user: User = Depends(current_user)
         })
 
     return results
+@app.get("/api/my-dashboard")
+def my_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    now = datetime.utcnow()
+
+    if user.role == "admin":
+        rep = db.query(SalesRep).first()
+    else:
+        rep = user.rep_profile
+
+    if not rep:
+        return {
+            "rep_name": user.name,
+            "sales_this_month": 0,
+            "revenue": 0,
+            "commission_rate": 0,
+            "commission_earned": 0,
+            "next_tier": "No sales rep profile found",
+            "referral_url": "",
+            "recent_sales": []
+        }
+
+    q = db.query(Sale).filter(
+        Sale.sales_rep_id == rep.id,
+        extract("month", Sale.sale_date) == now.month,
+        extract("year", Sale.sale_date) == now.year
+    )
+
+    sales = q.all()
+    count = len(sales)
+    revenue = sum(s.amount for s in sales)
+    rate = commission_rate(count)
+
+    if count < 10:
+        next_tier = f"{10 - count} more sales until 20%"
+    elif count < 20:
+        next_tier = f"{20 - count} more sales until 25%"
+    else:
+        next_tier = "Max tier reached"
+
+    recent_sales = []
+    for s in sales[-5:]:
+        member = db.query(Member).filter(Member.id == s.member_id).first()
+        product = db.query(MembershipProduct).filter(MembershipProduct.id == s.product_id).first()
+
+        recent_sales.append({
+            "member": f"{member.first_name} {member.last_name}" if member else "",
+            "membership": product.name if product else "",
+            "amount": s.amount,
+            "date": s.sale_date.isoformat() if s.sale_date else None
+        })
+
+    return {
+        "rep_name": rep.user.name,
+        "sales_this_month": count,
+        "revenue": revenue,
+        "commission_rate": rate,
+        "commission_earned": revenue * rate,
+        "next_tier": next_tier,
+        "referral_slug": rep.referral_slug,
+        "referral_url": f"https://goldfish-app-jq38z.ondigitalocean.app/join/{rep.referral_slug}",
+        "recent_sales": recent_sales
+    }
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
