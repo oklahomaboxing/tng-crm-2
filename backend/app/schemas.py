@@ -23,3 +23,11 @@ class SaleCreate(BaseModel):
     clover_order_id: str = ""
     clover_payment_id: str = ""
     payment_status: str = "paid"
+
+class LeadCreate(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    phone: str | None = None
+    product_id: int | None = None
+    referral_slug: str | None = None

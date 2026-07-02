@@ -5,8 +5,8 @@ from sqlalchemy import func, extract
 from datetime import datetime
 import base64, io, qrcode
 from .database import Base, engine, get_db
-from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting
-from .schemas import LoginIn, RepCreate, SaleCreate
+from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead
+from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
 
@@ -235,6 +235,34 @@ def my_dashboard(db: Session = Depends(get_db), user: User = Depends(current_use
         "referral_slug": rep.referral_slug,
         "referral_url": f"https://goldfish-app-jq38z.ondigitalocean.app/join/{rep.referral_slug}",
         "recent_sales": recent_sales
+    }
+
+@app.post("/api/leads")
+def create_lead(data: LeadCreate, db: Session = Depends(get_db)):
+    rep = None
+
+    if data.referral_slug:
+        rep = db.query(SalesRep).filter(SalesRep.referral_slug == data.referral_slug).first()
+
+    lead = Lead(
+        first_name=data.first_name,
+        last_name=data.last_name,
+        email=data.email,
+        phone=data.phone,
+        product_id=data.product_id,
+        sales_rep_id=rep.id if rep else None,
+        referral_slug=data.referral_slug,
+        status="new",
+    )
+
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    return {
+        "id": lead.id,
+        "status": lead.status,
+        "message": "Lead created",
     }
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):

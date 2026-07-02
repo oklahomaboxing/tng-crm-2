@@ -65,3 +65,21 @@ class CloverSetting(Base):
     environment = Column(String, default="sandbox")
     webhook_secret = Column(String, default="")
     access_token_note = Column(String, default="Store production token in environment variables, not database.")
+
+class Lead(Base):
+    __tablename__ = "leads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    phone = Column(String, nullable=True)
+    product_id = Column(Integer, ForeignKey("membership_products.id"), nullable=True)
+    sales_rep_id = Column(Integer, ForeignKey("sales_reps.id"), nullable=True)
+    referral_slug = Column(String, nullable=True)
+    status = Column(String, default="new")
+    clover_order_id = Column(String, nullable=True)
+    clover_payment_id = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
