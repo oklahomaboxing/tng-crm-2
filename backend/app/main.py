@@ -331,14 +331,12 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         "X-Clover-Merchant-Id": merchant_id,
         "Content-Type": "application/json",
     }
-
-     response = requests.post(
+    response = requests.post(
         f"{base_url}/invoicingcheckoutservice/v1/checkouts",
         json=payload,
         headers=headers,
         timeout=20,
     )
-
     if response.status_code >= 400:
         raise HTTPException(
             status_code=500,
