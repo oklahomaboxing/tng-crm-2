@@ -35,30 +35,45 @@ export default function JoinPage() {
     setForm((old) => ({ ...old, [field]: value }));
   }
 
-async function continueToPayment() {
-  const res = await fetch(`${API}/api/leads`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      first_name: form.first_name,
-      last_name: form.last_name,
-      email: form.email,
-      phone: form.phone,
-      product_id: selectedProduct,
-      referral_slug: slug,
-    }),
-  });
+  async function continueToPayment() {
+    try {
+      const leadResponse = await fetch(`${API}/api/leads`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          first_name: form.first_name,
+          last_name: form.last_name,
+          email: form.email,
+          phone: form.phone,
+          product_id: selectedProduct,
+          referral_slug: slug,
+        }),
+      });
 
-  const json = await res.json();
+      const lead = await leadResponse.json();
 
-  if (res.ok) {
-    setMessage("Lead saved! Next we'll redirect to Clover.");
-  } else {
-    setMessage(json.detail || "Unable to save lead.");
+      if (!leadResponse.ok) {
+        throw new Error(lead.detail || "Could not create lead");
+      }
+
+      const checkoutResponse = await fetch(
+        `${API}/api/clover/create-checkout/${lead.id}`,
+        { method: "POST" }
+      );
+
+      const checkout = await checkoutResponse.json();
+
+      if (!checkoutResponse.ok) {
+        throw new Error(checkout.detail || "Could not create Clover checkout");
+      }
+
+      window.location.href = checkout.checkout_url;
+    } catch (err) {
+      setMessage(err.message);
+    }
   }
-}
 
   if (!data) return <Box sx={{ p: 4 }}>Loading...</Box>;
 
@@ -78,49 +93,23 @@ async function continueToPayment() {
 
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="First Name"
-                value={form.first_name}
-                onChange={(e) => update("first_name", e.target.value)}
-              />
+              <TextField fullWidth label="First Name" value={form.first_name} onChange={(e) => update("first_name", e.target.value)} />
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Last Name"
-                value={form.last_name}
-                onChange={(e) => update("last_name", e.target.value)}
-              />
+              <TextField fullWidth label="Last Name" value={form.last_name} onChange={(e) => update("last_name", e.target.value)} />
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Email"
-                value={form.email}
-                onChange={(e) => update("email", e.target.value)}
-              />
+              <TextField fullWidth label="Email" value={form.email} onChange={(e) => update("email", e.target.value)} />
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Phone"
-                value={form.phone}
-                onChange={(e) => update("phone", e.target.value)}
-              />
+              <TextField fullWidth label="Phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
             </Grid>
 
             <Grid item xs={12}>
-              <TextField
-                select
-                fullWidth
-                label="Choose Membership"
-                value={selectedProduct}
-                onChange={(e) => setSelectedProduct(e.target.value)}
-              >
+              <TextField select fullWidth label="Choose Membership" value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}>
                 {(data.products || []).map((p) => (
                   <MenuItem key={p.id} value={p.id}>
                     {p.name} — ${Number(p.price || 0).toFixed(2)}
@@ -130,13 +119,7 @@ async function continueToPayment() {
             </Grid>
 
             <Grid item xs={12}>
-              <Button
-                fullWidth
-                variant="contained"
-                color="error"
-                size="large"
-                onClick={continueToPayment}
-              >
+              <Button fullWidth variant="contained" color="error" size="large" onClick={continueToPayment}>
                 Continue to Payment
               </Button>
             </Grid>
