@@ -1,7 +1,16 @@
 import React from "react";
 
 export default function Sidebar({ page, setPage, styles }) {
-  const items = ["Dashboard", "Members", "Sales", "Sales Reps", "QR Referrals", "Clover", "Reports"];
+  const items = [
+  "Dashboard",
+  "Members",
+  "Sales",
+  "Leads",
+  "Sales Reps",
+  "QR Referrals",
+  "Clover",
+  "Reports"
+];
 
   return (
     <aside style={styles.sidebar}>
