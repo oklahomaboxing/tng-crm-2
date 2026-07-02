@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import Sidebar from "./components/Sidebar.jsx";
 import Members from "./pages/Members.jsx";
 import Sales from "./pages/Sales.jsx";
+import SalesRepDashboard from "./pages/SalesRepDashboard.jsx";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function App() {
@@ -117,33 +118,17 @@ async function loadQr(repId) {
 )}
      
 
-        {page === "Members" && (
-          <section style={styles.panel}>
-            <h2>Members</h2>
-            <p>Member database coming next: name, phone, email, membership, coach, sales rep, Clover customer ID, and waiver status.</p>
-          </section>
-        )}
+      {page === "Members" && (
+  <Members />
+)}
 
        {page === "Sales" && (
   <Sales />
 )}
 
-        {page === "Sales Reps" && (
-          <section style={styles.panel}>
-            <h2>Sales Reps</h2>
-            <div style={styles.repGrid}>
-              {Array.isArray(reps) && reps.map((r) => (
-                <div key={r.id} style={styles.repCard}>
-                  <h3>{r.name}</h3>
-                  <p>{r.email}</p>
-                  <p><b>Referral:</b> /join/{r.slug}</p>
-                  <p><b>Clover:</b> {r.clover_link ? "Connected" : "Not Added"}</p>
-                  <p><b>Temp Password:</b> TNG12345</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+       {page === "Sales Reps" && (
+  <SalesRepDashboard />
+)}
 
       {page === "QR Referrals" && (
   <section style={styles.panel}>
