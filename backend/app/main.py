@@ -306,7 +306,7 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
     if not merchant_id or not api_token:
         raise HTTPException(status_code=500, detail="Clover credentials missing")
 
-    base_url = "https://scl.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
+    base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
 
     payload = {
         "customer": {
@@ -333,7 +333,7 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
     }
 
     response = requests.post(
-        f"{base_url}/invoicingcheckoutservice/v1/checkouts",
+        f"{base_url}/ecommerce/v1/checkouts",
         json=payload,
         headers=headers,
         timeout=20,
