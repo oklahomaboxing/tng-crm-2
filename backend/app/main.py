@@ -264,6 +264,29 @@ def create_lead(data: LeadCreate, db: Session = Depends(get_db)):
         "status": lead.status,
         "message": "Lead created",
     }
+
+@app.get("/api/leads")
+def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    leads = db.query(Lead).order_by(Lead.created_at.desc()).all()
+    results = []
+
+    for lead in leads:
+        product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
+        rep = db.query(SalesRep).filter(SalesRep.id == lead.sales_rep_id).first()
+
+        results.append({
+            "id": lead.id,
+            "first_name": lead.first_name,
+            "last_name": lead.last_name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "membership": product.name if product else "",
+            "rep": rep.user.name if rep and rep.user else "",
+            "status": lead.status,
+            "created_at": lead.created_at.isoformat() if lead.created_at else None,
+        })
+
+    return results
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
