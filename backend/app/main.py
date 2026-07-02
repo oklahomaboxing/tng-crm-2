@@ -339,19 +339,19 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         timeout=20,
     )
 
-  if response.status_code >= 400:
-    raise HTTPException(
-        status_code=500,
-        detail=f"Clover error {response.status_code}: {response.text}"
-    )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clover error {response.status_code}: {response.text}"
+        )
 
-try:
-    checkout = response.json()
-except Exception:
-    raise HTTPException(
-        status_code=500,
-        detail=f"Clover returned non-JSON response: {response.status_code} {response.text}"
-    )
+    try:
+        checkout = response.json()
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clover returned non-JSON response: {response.status_code} {response.text}"
+        )
 
     lead.status = "started_checkout"
     lead.clover_order_id = checkout.get("id") or checkout.get("checkoutSessionId")
@@ -364,7 +364,6 @@ except Exception:
         "checkout_url": checkout_url,
         "checkout": checkout,
     }
-
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
