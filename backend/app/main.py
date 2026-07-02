@@ -326,10 +326,11 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         }
     }
 
-    headers = {
-        "Authorization": f"Bearer {api_token}",
-        "Content-Type": "application/json",
-    }
+  headers = {
+    "Authorization": f"Bearer {api_token}",
+    "X-Clover-Merchant-Id": merchant_id,
+    "Content-Type": "application/json",
+}
 
     response = requests.post(
         f"{base_url}/invoicingcheckoutservice/v1/checkouts",
