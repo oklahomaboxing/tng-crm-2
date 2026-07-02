@@ -6,7 +6,7 @@ import {
 import { API } from "../services/api";
 
 export default function JoinPage() {
-  const slug = window.location.pathname.split("/join/")[1] || "";
+  const slug = new URLSearchParams(window.location.search).get("join") || "";
   const [data, setData] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [form, setForm] = useState({
