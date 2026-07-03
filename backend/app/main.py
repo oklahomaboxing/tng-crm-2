@@ -6,6 +6,7 @@ from datetime import datetime
 import base64, io, qrcode
 import os
 import requests
+from sqlalchemy import text
 from .database import Base, engine, get_db
 from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead
 from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
@@ -13,6 +14,37 @@ from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
 
 Base.metadata.create_all(bind=engine)
+def add_column_if_missing(table, column, column_type):
+    with engine.connect() as conn:
+        existing = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+        columns = [row[1] for row in existing]
+
+        if column not in columns:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}"))
+            conn.commit()
+
+def run_sqlite_migrations():
+    add_column_if_missing("members", "member_number", "VARCHAR")
+    add_column_if_missing("members", "barcode", "VARCHAR")
+    add_column_if_missing("members", "membership_start", "DATETIME")
+    add_column_if_missing("members", "membership_end", "DATETIME")
+    add_column_if_missing("members", "membership_status", "VARCHAR")
+    add_column_if_missing("members", "auto_renew", "BOOLEAN DEFAULT 0")
+    add_column_if_missing("members", "assigned_coach", "VARCHAR")
+    add_column_if_missing("members", "waiver_signed", "BOOLEAN DEFAULT 0")
+
+    add_column_if_missing("sales", "clover_checkout_id", "VARCHAR")
+    add_column_if_missing("sales", "transaction_status", "VARCHAR")
+    add_column_if_missing("sales", "refunded", "BOOLEAN DEFAULT 0")
+    add_column_if_missing("sales", "refund_amount", "FLOAT DEFAULT 0")
+    add_column_if_missing("sales", "payment_method", "VARCHAR")
+
+    add_column_if_missing("leads", "clover_checkout_id", "VARCHAR")
+    add_column_if_missing("leads", "paid_at", "DATETIME")
+    add_column_if_missing("leads", "converted_at", "DATETIME")
+    add_column_if_missing("leads", "conversion_source", "VARCHAR")
+
+run_sqlite_migrations()
 app = FastAPI(title="TNG CRM 2.0")
 app.add_middleware(
     CORSMiddleware,
@@ -363,6 +395,7 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         "checkout_url": checkout_url,
         "checkout": checkout,
     }
+
 @app.post("/api/clover/sync-products")
 def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
