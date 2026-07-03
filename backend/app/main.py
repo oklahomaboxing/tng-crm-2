@@ -196,29 +196,32 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
     if not rep:
         raise HTTPException(status_code=404, detail="Rep link not found")
     return {"rep_id": rep.id, "rep_name": rep.user.name, "clover_link": rep.clover_link, "products": db.query(MembershipProduct).filter(MembershipProduct.active == True).all()}
+
 @app.get("/api/members")
 def list_members(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    members = db.query(Member).all()return [
-    {
-        "id": m.id,
-        "first_name": m.first_name,
-        "last_name": m.last_name,
-        "email": m.email,
-        "phone": m.phone,
-        "status": m.status,
-        "member_number": m.member_number,
-        "barcode": m.barcode,
-        "qr_code": m.qr_code,
-        "digital_member_id": m.digital_member_id,
-        "membership_type": m.membership_type,
-        "membership_status": m.membership_status,
-        "clover_customer_id": m.clover_customer_id,
-        "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
-        "total_checkins": m.total_checkins,
-        "created_at": m.created_at.isoformat() if m.created_at else None,
-    }
-    for m in members
-]
+    members = db.query(Member).all()
+
+    return [
+        {
+            "id": m.id,
+            "first_name": m.first_name,
+            "last_name": m.last_name,
+            "email": m.email,
+            "phone": m.phone,
+            "status": m.status,
+            "member_number": m.member_number,
+            "barcode": m.barcode,
+            "qr_code": m.qr_code,
+            "digital_member_id": m.digital_member_id,
+            "membership_type": m.membership_type,
+            "membership_status": m.membership_status,
+            "clover_customer_id": m.clover_customer_id,
+            "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
+            "total_checkins": m.total_checkins,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in members
+    ]
 
 
 @app.get("/api/sales")
