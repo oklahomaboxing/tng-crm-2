@@ -4,12 +4,12 @@ export default function Sidebar({ page, setPage, styles }) {
   const items = [
   "Dashboard",
   "Members",
+  "Front Desk",
   "Sales",
   "Leads",
   "Sales Reps",
   "QR Referrals",
   "Clover",
-  "Front Desk",
   "Reports"
 ];
 
