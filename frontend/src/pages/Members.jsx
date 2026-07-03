@@ -87,48 +87,55 @@ export default function Members() {
               <CircularProgress color="error" />
             </Box>
           ) : (
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Phone</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Created</TableCell>
-                </TableRow>
-              </TableHead>
+           <Table>
+  <TableHead>
+    <TableRow>
+      <TableCell>Member #</TableCell>
+      <TableCell>Name</TableCell>
+      <TableCell>Barcode</TableCell>
+      <TableCell>Membership</TableCell>
+      <TableCell>Status</TableCell>
+      <TableCell>Check-ins</TableCell>
+      <TableCell>Created</TableCell>
+    </TableRow>
+  </TableHead>
 
-              <TableBody>
-                {filteredMembers.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell>
-                      {member.first_name} {member.last_name}
-                    </TableCell>
-                    <TableCell>{member.email}</TableCell>
-                    <TableCell>{member.phone}</TableCell>
-                    <TableCell>
-                      <Chip
-                        color={member.status === "active" ? "success" : "warning"}
-                        label={member.status || "pending"}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {member.created_at
-                        ? new Date(member.created_at).toLocaleDateString()
-                        : ""}
-                    </TableCell>
-                  </TableRow>
-                ))}
+  <TableBody>
+    {filteredMembers.map((member) => (
+      <TableRow key={member.id}>
+        <TableCell>{member.member_number || "-"}</TableCell>
+        <TableCell>
+          {member.first_name} {member.last_name}
+          <Typography variant="caption" display="block" color="text.secondary">
+            {member.email || member.phone || ""}
+          </Typography>
+        </TableCell>
+        <TableCell>{member.barcode || "-"}</TableCell>
+        <TableCell>{member.membership_type || "Clover Customer"}</TableCell>
+        <TableCell>
+          <Chip
+            color={member.membership_status === "active" || member.status === "active" ? "success" : "warning"}
+            label={member.membership_status || member.status || "pending"}
+          />
+        </TableCell>
+        <TableCell>{member.total_checkins || 0}</TableCell>
+        <TableCell>
+          {member.created_at
+            ? new Date(member.created_at).toLocaleDateString()
+            : ""}
+        </TableCell>
+      </TableRow>
+    ))}
 
-                {filteredMembers.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5}>
-                      No members found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+    {filteredMembers.length === 0 && (
+      <TableRow>
+        <TableCell colSpan={7}>
+          No members found.
+        </TableCell>
+      </TableRow>
+    )}
+  </TableBody>
+</Table>
           )}
         </CardContent>
       </Card>
