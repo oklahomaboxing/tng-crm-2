@@ -598,6 +598,46 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         "member_id": member.id,
         "member_number": member.member_number,
     }
+@app.post("/api/checkin")
+def checkin(data: dict, db: Session = Depends(get_db)):
+    code = data.get("code", "").replace("-", "").upper()
+
+    member = db.query(Member).filter(
+        (Member.barcode == code) |
+        (Member.member_number == code) |
+        (Member.qr_code == code)
+    ).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    attendance = Attendance(
+        member_id=member.id,
+        method="barcode",
+        location="Front Desk"
+    )
+
+    db.add(attendance)
+
+    member.last_checkin = datetime.utcnow()
+    member.checkins = (member.checkins or 0) + 1
+    member.total_checkins = (member.total_checkins or 0) + 1
+
+    db.commit()
+
+    return {
+        "success": True,
+        "member": {
+            "id": member.id,
+            "name": f"{member.first_name} {member.last_name}",
+            "member_number": member.member_number,
+            "membership": member.membership_type,
+            "status": member.membership_status,
+            "last_checkin": member.last_checkin,
+            "total_checkins": member.total_checkins,
+        }
+    }
+
 @app.get("/api/clover/settings")
 def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
