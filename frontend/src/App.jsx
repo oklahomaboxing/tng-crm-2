@@ -193,7 +193,10 @@ async function syncCustomers() {
 >
   Sync Clover Products
 </button>
-            
+ 
+<button style={styles.secondaryBtn} onClick={syncCustomers}>
+  Sync Clover Customers
+</button>           
             <button style={styles.primaryBtnSmall} onClick={addRep}>Add Rep</button>
             <button style={styles.logoutBtn} onClick={() => { localStorage.clear(); setToken(""); }}>Logout</button>
           </div>
