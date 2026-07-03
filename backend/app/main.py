@@ -348,6 +348,13 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
             "email": lead.email,
             "phoneNumber": lead.phone or "",
         },
+         payload = {
+        "customer": {
+            "firstName": lead.first_name,
+            "lastName": lead.last_name,
+            "email": lead.email,
+            "phoneNumber": lead.phone or "",
+        },
         "shoppingCart": {
             "lineItems": [
                 {
@@ -356,6 +363,11 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
                     "unitQty": 1,
                 }
             ]
+        },
+        "redirectUrls": {
+            "success": "https://goldfish-app-jq38z.ondigitalocean.app?payment=success",
+            "failure": "https://goldfish-app-jq38z.ondigitalocean.app?payment=failed",
+            "cancel": "https://goldfish-app-jq38z.ondigitalocean.app?payment=cancelled",
         }
     }
 
@@ -370,6 +382,11 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         headers=headers,
         timeout=20,
     )
+    print("========== CLOVER RESPONSE ==========")
+    print(response.status_code)
+    print(response.text)
+    print("=====================================")
+
     if response.status_code >= 400:
         raise HTTPException(
             status_code=500,
@@ -482,8 +499,89 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     print(payload)
     print("====================================")
 
+    event_type = payload.get("type") or payload.get("eventType") or ""
+    payment_id = payload.get("paymentId") or payload.get("id")
+    checkout_id = payload.get("checkoutId") or payload.get("checkoutSessionId") or payload.get("orderId")
+
+    lead = None
+
+    if checkout_id:
+        lead = db.query(Lead).filter(
+            (Lead.clover_checkout_id == checkout_id) |
+            (Lead.clover_order_id == checkout_id)
+        ).first()
+
+    if not lead:
+        lead = db.query(Lead).filter(Lead.status == "started_checkout").order_by(Lead.created_at.desc()).first()
+
+    if not lead:
+        return {
+            "received": True,
+            "message": "No matching lead found"
+        }
+
+    product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
+
+    existing_member = db.query(Member).filter(Member.email == lead.email).first()
+
+    if existing_member:
+        member = existing_member
+    else:
+        member = Member(
+            first_name=lead.first_name,
+            last_name=lead.last_name,
+            email=lead.email,
+            phone=lead.phone,
+            status="active",
+            membership_status="active",
+            membership_start=datetime.utcnow(),
+            membership_type=product.name if product else "Membership",
+            waiver_signed=False,
+        )
+
+        db.add(member)
+        db.commit()
+        db.refresh(member)
+
+        member.member_number = f"TNG-{member.id:06d}"
+        member.digital_member_id = generate_digital_member_id()
+        member.barcode = generate_barcode(member.member_number)
+        member.qr_code = generate_qr_code(member.member_number)
+
+        db.commit()
+        db.refresh(member)
+
+    existing_sale = db.query(Sale).filter(
+        Sale.clover_checkout_id == lead.clover_checkout_id
+    ).first()
+
+    if not existing_sale and lead.sales_rep_id and product:
+        sale = Sale(
+            member_id=member.id,
+            sales_rep_id=lead.sales_rep_id,
+            product_id=product.id,
+            amount=product.price,
+            payment_status="paid",
+            transaction_status="paid",
+            clover_checkout_id=lead.clover_checkout_id,
+            clover_order_id=lead.clover_order_id or "",
+            clover_payment_id=payment_id or "",
+            payment_method="clover",
+        )
+        db.add(sale)
+
+    lead.status = "converted"
+    lead.clover_payment_id = payment_id
+    lead.paid_at = datetime.utcnow()
+    lead.converted_at = datetime.utcnow()
+
+    db.commit()
+
     return {
-        "received": True
+        "received": True,
+        "message": "Lead converted to member",
+        "member_id": member.id,
+        "member_number": member.member_number,
     }
 @app.get("/api/clover/settings")
 def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_user)):
