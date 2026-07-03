@@ -44,6 +44,19 @@ def run_sqlite_migrations():
     add_column_if_missing("leads", "paid_at", "DATETIME")
     add_column_if_missing("leads", "converted_at", "DATETIME")
     add_column_if_missing("leads", "conversion_source", "VARCHAR")
+    add_column_if_missing("members", "digital_member_id", "VARCHAR")
+    add_column_if_missing("members", "qr_code", "VARCHAR")
+    add_column_if_missing("members", "photo_url", "VARCHAR")
+    add_column_if_missing("members", "date_of_birth", "DATETIME")
+    add_column_if_missing("members", "emergency_contact", "VARCHAR")
+    add_column_if_missing("members", "emergency_phone", "VARCHAR")
+    add_column_if_missing("members", "membership_type", "VARCHAR")
+    add_column_if_missing("members", "membership_level", "VARCHAR")
+    add_column_if_missing("members", "last_checkin", "DATETIME")
+    add_column_if_missing("members", "checkins", "INTEGER DEFAULT 0")
+    add_column_if_missing("members", "total_checkins", "INTEGER DEFAULT 0")
+    add_column_if_missing("members", "expires_soon", "BOOLEAN DEFAULT 0")
+    add_column_if_missing("members", "notes", "VARCHAR")
 
 run_sqlite_migrations()
 app = FastAPI(title="TNG CRM 2.0")
@@ -347,6 +360,7 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
             "email": lead.email,
             "phoneNumber": lead.phone or "",
         },
+
         "shoppingCart": {
             "lineItems": [
                 {
@@ -356,11 +370,7 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
                 }
             ]
         },
-        "redirectUrls": {
-            "success": "https://goldfish-app-jq38z.ondigitalocean.app?payment=success",
-            "failure": "https://goldfish-app-jq38z.ondigitalocean.app?payment=failed",
-            "cancel": "https://goldfish-app-jq38z.ondigitalocean.app?payment=cancelled",
-        }
+      
     }
 
     headers = {
