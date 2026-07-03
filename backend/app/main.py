@@ -341,14 +341,7 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
 
     base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
 
-    payload = {
-        "customer": {
-            "firstName": lead.first_name,
-            "lastName": lead.last_name,
-            "email": lead.email,
-            "phoneNumber": lead.phone or "",
-        },
-         payload = {
+      payload = {
         "customer": {
             "firstName": lead.first_name,
             "lastName": lead.last_name,
