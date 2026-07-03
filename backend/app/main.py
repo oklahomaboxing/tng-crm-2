@@ -6,6 +6,7 @@ from datetime import datetime
 import base64, io, qrcode
 import os
 import requests
+import uuid
 from sqlalchemy import text
 from .database import Base, engine, get_db
 from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead
@@ -459,6 +460,20 @@ def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(cur
         "message": "Clover products synced",
         "synced": synced,
     }
+def generate_member_number(db: Session):
+    count = db.query(Member).count() + 1
+    return f"TNG-{count:06d}"
+
+def generate_digital_member_id():
+    return f"TNG-{uuid.uuid4().hex[:8].upper()}"
+
+def generate_barcode(member_number: str):
+    return member_number.replace("-", "")
+
+def generate_qr_code(member_number: str):
+    return f"member:{member_number}"
+
+
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.json()
