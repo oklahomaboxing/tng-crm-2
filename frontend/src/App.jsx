@@ -7,6 +7,7 @@ import Sales from "./pages/Sales.jsx";
 import SalesRepDashboard from "./pages/SalesRepDashboard.jsx";
 import JoinPage from "./pages/JoinPage.jsx";
 import Leads from "./pages/Leads.jsx";
+import FrontDesk from "./pages/FrontDesk.jsx";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function App() {
@@ -193,6 +194,10 @@ async function syncProducts() {
 
       {page === "Members" && (
   <Members />
+)}
+
+{page === "Front Desk" && (
+  <FrontDesk />
 )}
 
        {page === "Sales" && (
