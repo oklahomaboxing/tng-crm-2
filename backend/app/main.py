@@ -505,6 +505,108 @@ def generate_barcode(member_number: str):
 def generate_qr_code(member_number: str):
     return f"member:{member_number}"
 
+@app.post("/api/clover/sync-customers")
+def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+
+    merchant_id = os.getenv("CLOVER_MERCHANT_ID")
+    api_token = os.getenv("CLOVER_API_TOKEN")
+    clover_env = os.getenv("CLOVER_ENV", "production")
+
+    if not merchant_id or not api_token:
+        raise HTTPException(status_code=500, detail="Clover credentials missing")
+
+    base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
+
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.get(
+        f"{base_url}/v3/merchants/{merchant_id}/customers",
+        headers=headers,
+        timeout=20,
+    )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clover customer sync error {response.status_code}: {response.text}"
+        )
+
+    data = response.json()
+    customers = data.get("elements", [])
+
+    synced = 0
+    skipped = 0
+
+    for c in customers:
+        first_name = c.get("firstName") or ""
+        last_name = c.get("lastName") or ""
+        email = ""
+        phone = ""
+
+        emails = c.get("emailAddresses", {}).get("elements", [])
+        if emails:
+            email = emails[0].get("emailAddress") or ""
+
+        phones = c.get("phoneNumbers", {}).get("elements", [])
+        if phones:
+            phone = phones[0].get("phoneNumber") or ""
+
+        if not first_name and not last_name and not email and not phone:
+            skipped += 1
+            continue
+
+        existing = None
+
+        if email:
+            existing = db.query(Member).filter(Member.email == email).first()
+
+        if not existing and phone:
+            existing = db.query(Member).filter(Member.phone == phone).first()
+
+        if existing:
+            existing.clover_customer_id = c.get("id")
+            if not existing.member_number:
+                existing.member_number = f"TNG-{existing.id:06d}"
+                existing.digital_member_id = generate_digital_member_id()
+                existing.barcode = generate_barcode(existing.member_number)
+                existing.qr_code = generate_qr_code(existing.member_number)
+            synced += 1
+            continue
+
+        member = Member(
+            first_name=first_name or "Clover",
+            last_name=last_name or "Customer",
+            email=email,
+            phone=phone,
+            status="active",
+            membership_status="active",
+            clover_customer_id=c.get("id"),
+            membership_type="Clover Customer",
+            membership_start=datetime.utcnow(),
+            waiver_signed=False,
+        )
+
+        db.add(member)
+        db.commit()
+        db.refresh(member)
+
+        member.member_number = f"TNG-{member.id:06d}"
+        member.digital_member_id = generate_digital_member_id()
+        member.barcode = generate_barcode(member.member_number)
+        member.qr_code = generate_qr_code(member.member_number)
+
+        db.commit()
+        synced += 1
+
+    return {
+        "message": "Clover customers synced",
+        "synced": synced,
+        "skipped": skipped,
+    }
 
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
