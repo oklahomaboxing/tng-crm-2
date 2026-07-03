@@ -9,7 +9,7 @@ import requests
 import uuid
 from sqlalchemy import text
 from .database import Base, engine, get_db
-from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead
+from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead, Attendance
 from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
@@ -57,6 +57,19 @@ def run_sqlite_migrations():
     add_column_if_missing("members", "total_checkins", "INTEGER DEFAULT 0")
     add_column_if_missing("members", "expires_soon", "BOOLEAN DEFAULT 0")
     add_column_if_missing("members", "notes", "VARCHAR")
+    with engine.connect() as conn:
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS attendance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER NOT NULL,
+            checkin_time DATETIME,
+            checkout_time DATETIME,
+            method VARCHAR,
+            location VARCHAR,
+            FOREIGN KEY(member_id) REFERENCES members(id)
+        )
+        """))
+        conn.commit()
 
 run_sqlite_migrations()
 app = FastAPI(title="TNG CRM 2.0")

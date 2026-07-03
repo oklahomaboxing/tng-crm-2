@@ -114,3 +114,17 @@ class Lead(Base):
     paid_at = Column(DateTime, nullable=True)
     converted_at = Column(DateTime, nullable=True)
     conversion_source = Column(String, default="qr_referral")
+
+class Attendance(Base):
+    __tablename__ = "attendance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+
+    checkin_time = Column(DateTime, default=datetime.utcnow)
+    checkout_time = Column(DateTime, nullable=True)
+
+    method = Column(String, default="barcode")
+    location = Column(String, default="Front Desk")
+
+    member = relationship("Member")
