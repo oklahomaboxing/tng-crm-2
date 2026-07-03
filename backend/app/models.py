@@ -34,7 +34,9 @@ class Member(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     sales = relationship("Sale", back_populates="member")
     member_number = Column(String, nullable=True)
+    digital_member_id = Column(String, unique=True, nullable=True)
     barcode = Column(String, nullable=True)
+    qr_code = Column(String, nullable=True)
     membership_start = Column(DateTime, nullable=True)
     membership_end = Column(DateTime, nullable=True)
     membership_status = Column(String, default="active")
@@ -42,6 +44,17 @@ class Member(Base):
     auto_renew = Column(Boolean, default=False)
     assigned_coach = Column(String, nullable=True)
     waiver_signed = Column(Boolean, default=False)
+    photo_url = Column(String, nullable=True)
+    date_of_birth = Column(DateTime, nullable=True)
+    emergency_contact = Column(String, nullable=True)
+    emergency_phone = Column(String, nullable=True)
+    membership_type = Column(String, nullable=True)
+    membership_level = Column(String, default="Bronze")
+    last_checkin = Column(DateTime, nullable=True)
+    checkins = Column(Integer, default=0)
+    total_checkins = Column(Integer, default=0)
+    expires_soon = Column(Boolean, default=False)
+    notes = Column(String, nullable=True)
 
 class MembershipProduct(Base):
     __tablename__ = "membership_products"
@@ -50,6 +63,7 @@ class MembershipProduct(Base):
     price = Column(Float, nullable=False)
     recurring = Column(Boolean, default=False)
     active = Column(Boolean, default=True)
+
 
 class Sale(Base):
     __tablename__ = "sales"
