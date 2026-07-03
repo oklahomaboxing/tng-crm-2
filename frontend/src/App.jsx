@@ -101,24 +101,6 @@ async function syncProducts() {
     Authorization: "Bearer " + localStorage.getItem("token"),
   };
 
-async function syncCustomers() {
-  const res = await fetch(`${API}/api/clover/sync-customers`, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-  });
-
-  const data = await res.json();
-
-  alert(
-    data.message
-      ? `${data.message}\n${data.synced} customers synced.`
-      : JSON.stringify(data)
-  );
-
-  load();
-}
   const r = await fetch(`${API}/api/clover/sync-products`, {
     method: "POST",
     headers: h,
@@ -129,6 +111,24 @@ async function syncCustomers() {
   alert(
     j.message
       ? `${j.message}\n${j.synced} products synced.`
+      : JSON.stringify(j)
+  );
+
+  load();
+}
+async function syncCustomers() {
+  const r = await fetch(`${API}/api/clover/sync-customers`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+  });
+
+  const j = await r.json();
+
+  alert(
+    j.message
+      ? `${j.message}\n${j.synced} customers synced.`
       : JSON.stringify(j)
   );
 
@@ -193,9 +193,7 @@ async function syncCustomers() {
 >
   Sync Clover Products
 </button>
-          <button style={styles.secondaryBtn} onClick={syncCustomers}>
-  Sync Clover Customers
-</button>  
+            
             <button style={styles.primaryBtnSmall} onClick={addRep}>Add Rep</button>
             <button style={styles.logoutBtn} onClick={() => { localStorage.clear(); setToken(""); }}>Logout</button>
           </div>
