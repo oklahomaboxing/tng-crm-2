@@ -7,6 +7,9 @@ import base64, io, qrcode
 import os
 import requests
 import uuid
+from fastapi.staticfiles import StaticFiles
+from fastapi import UploadFile, File
+import shutil
 from sqlalchemy import text
 from .database import Base, engine, get_db
 from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead, Attendance
@@ -73,6 +76,8 @@ def run_sqlite_migrations():
 
 run_sqlite_migrations()
 app = FastAPI(title="TNG CRM 2.0")
+os.makedirs("uploads/members", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -849,6 +854,41 @@ def update_member(member_id: int, data: dict, db: Session = Depends(get_db), use
         "membership_status": m.membership_status,
         "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
         "total_checkins": m.total_checkins,
+    }
+@app.post("/api/members/{member_id}/photo")
+def upload_member_photo(
+    member_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user)
+):
+    m = db.query(Member).filter(Member.id == member_id).first()
+
+    if not m:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    ext = file.filename.split(".")[-1].lower()
+
+    if ext not in ["jpg", "jpeg", "png", "webp"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPG, PNG, and WEBP files are allowed"
+        )
+
+    filename = f"{member_id}.{ext}"
+    filepath = f"uploads/members/{filename}"
+
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    m.photo_url = f"/uploads/members/{filename}"
+
+    db.commit()
+    db.refresh(m)
+
+    return {
+        "message": "Photo uploaded successfully",
+        "photo_url": m.photo_url,
     }
 
 @app.get("/api/clover/settings")
