@@ -28,7 +28,30 @@ export default function Sales() {
       setLoading(false);
     }
   }
+async function syncCloverSales() {
+  try {
+    setLoading(true);
+    setError("");
 
+    const res = await fetch(`${API}/api/clover/sync-sales`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || "Could not sync Clover sales");
+    }
+
+    alert(`${data.message}\nSynced: ${data.synced}\nSkipped: ${data.skipped}`);
+    await loadSales();
+  } catch (err) {
+    setError(err.message || "Something went wrong syncing sales");
+  } finally {
+    setLoading(false);
+  }
+}
   useEffect(() => {
     loadSales();
   }, []);
@@ -47,7 +70,9 @@ export default function Sales() {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography variant="h4" fontWeight="bold">Sales</Typography>
-        <Button variant="contained" color="error">Add Sale</Button>
+        <Button variant="contained" color="error" onClick={syncCloverSales}>
+          Sync Clover Sales
+        </Button>
       </Box>
 
       <TextField
