@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Card,
@@ -11,12 +11,45 @@ import {
   Stack,
 } from "@mui/material";
 
+const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
 export default function MemberProfile({ member, onBack }) {
   const [tab, setTab] = useState("Profile");
+  const [attendance, setAttendance] = useState(null);
+  const [attendanceError, setAttendanceError] = useState("");
+
   if (!member) return null;
 
   const fullName = `${member.first_name || ""} ${member.last_name || ""}`.trim();
   const isActive = member.membership_status === "active" || member.status === "active";
+
+  async function loadAttendance() {
+    try {
+      setAttendanceError("");
+
+      const res = await fetch(`${API}/api/members/${member.id}/attendance`, {
+        headers: {
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Could not load attendance");
+      }
+
+      setAttendance(data);
+    } catch (err) {
+      setAttendanceError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "Attendance") {
+      loadAttendance();
+    }
+  }, [tab]);
 
   return (
     <Box>
@@ -164,7 +197,63 @@ export default function MemberProfile({ member, onBack }) {
         </Grid>
       )}
 
-      {tab !== "Profile" && (
+      {tab === "Attendance" && (
+        <Card sx={{ borderRadius: 3 }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight="bold">Attendance History</Typography>
+            <Divider sx={{ my: 2 }} />
+
+            {attendanceError && (
+              <Typography color="error">{attendanceError}</Typography>
+            )}
+
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} md={4}>
+                <Card sx={{ p: 2, background: "#f7f7f7" }}>
+                  <Typography color="text.secondary">Total Check-ins</Typography>
+                  <Typography variant="h4" fontWeight="bold">
+                    {attendance?.total_checkins ?? member.total_checkins ?? 0}
+                  </Typography>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={8}>
+                <Card sx={{ p: 2, background: "#f7f7f7" }}>
+                  <Typography color="text.secondary">Last Check-in</Typography>
+                  <Typography variant="h6" fontWeight="bold">
+                    {attendance?.last_checkin
+                      ? new Date(attendance.last_checkin).toLocaleString()
+                      : member.last_checkin
+                      ? new Date(member.last_checkin).toLocaleString()
+                      : "-"}
+                  </Typography>
+                </Card>
+              </Grid>
+            </Grid>
+
+            {attendance?.attendance?.length > 0 ? (
+              <Stack spacing={1}>
+                {attendance.attendance.map((row) => (
+                  <Card key={row.id} sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography fontWeight="bold">
+                      ✅ {row.checkin_time ? new Date(row.checkin_time).toLocaleString() : "-"}
+                    </Typography>
+                    <Typography color="text.secondary">
+                      Method: {row.method || "barcode"} • Location: {row.location || "Front Desk"}
+                    </Typography>
+                  </Card>
+                ))}
+              </Stack>
+            ) : (
+              <Typography color="text.secondary">
+                No attendance records yet.
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab !== "Profile" && tab !== "Attendance" && (
         <Card sx={{ borderRadius: 3 }}>
           <CardContent>
             <Typography variant="h6" fontWeight="bold">{tab}</Typography>
