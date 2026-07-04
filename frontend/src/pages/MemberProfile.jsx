@@ -54,7 +54,7 @@ export default function MemberProfile({ member, onBack }) {
           Authorization: "Bearer " + localStorage.getItem("token"),
         },
         body: JSON.stringify({
-          code: member.barcode || member.member_number,
+          code: member.barcode || member.member_number || member.qr_code,
         }),
       });
 
