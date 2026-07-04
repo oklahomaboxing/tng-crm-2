@@ -114,8 +114,20 @@ export default function MemberProfile({ member, onBack }) {
       return;
     }
 
-    await loadMember();
+    const updated = await fetch(`${API}/api/members/${memberData.id}`, {
+      headers: {
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+    });
+
+    const updatedData = await updated.json();
+
+    if (updated.ok) {
+      setMemberData(updatedData);
+    }
+
     alert("✅ Photo uploaded");
+
   }
 
   useEffect(() => {
