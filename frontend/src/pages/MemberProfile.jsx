@@ -18,7 +18,8 @@ export default function MemberProfile({ member, onBack }) {
   const [memberData, setMemberData] = useState(member);
   const [attendance, setAttendance] = useState(null);
   const [attendanceError, setAttendanceError] = useState("");
-
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
   if (!memberData) return null;
 
   const fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim();
@@ -139,6 +140,44 @@ export default function MemberProfile({ member, onBack }) {
       loadAttendance();
     }
   }, [tab]);
+function startEdit() {
+  setEditForm({
+    first_name: memberData.first_name || "",
+    last_name: memberData.last_name || "",
+    email: memberData.email || "",
+    phone: memberData.phone || "",
+    membership_type: memberData.membership_type || "",
+    membership_status: memberData.membership_status || "active",
+    assigned_coach: memberData.assigned_coach || "",
+    emergency_contact: memberData.emergency_contact || "",
+    emergency_phone: memberData.emergency_phone || "",
+    notes: memberData.notes || "",
+  });
+
+  setEditing(true);
+}
+
+async function saveEdit() {
+  const res = await fetch(`${API}/api/members/${memberData.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+    body: JSON.stringify(editForm),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || "Could not update member");
+    return;
+  }
+
+  setMemberData(data);
+  setEditing(false);
+  alert("✅ Member updated");
+}
 
   return (
     <Box>
@@ -255,9 +294,9 @@ export default function MemberProfile({ member, onBack }) {
                 <Button fullWidth variant="outlined" color="error">
                   📷 Show QR Code
                 </Button>
-                <Button fullWidth variant="outlined" color="error">
-                  ✏ Edit Member
-                </Button>
+                <Button fullWidth variant="outlined" color="error" onClick={startEdit}>
+                 ✏ Edit Member
+               </Button>
               </Stack>
             </Grid>
           </Grid>
@@ -281,7 +320,57 @@ export default function MemberProfile({ member, onBack }) {
           </Stack>
         </CardContent>
       </Card>
+{editing && (
+  <Card sx={{ borderRadius: 3, mb: 3 }}>
+    <CardContent>
+      <Typography variant="h6" fontWeight="bold">
+        Edit Member
+      </Typography>
+      <Divider sx={{ my: 2 }} />
 
+      <Grid container spacing={2}>
+        {[
+          ["first_name", "First Name"],
+          ["last_name", "Last Name"],
+          ["email", "Email"],
+          ["phone", "Phone"],
+          ["membership_type", "Membership Type"],
+          ["membership_status", "Membership Status"],
+          ["assigned_coach", "Assigned Coach"],
+          ["emergency_contact", "Emergency Contact"],
+          ["emergency_phone", "Emergency Phone"],
+          ["notes", "Notes"],
+        ].map(([field, label]) => (
+          <Grid item xs={12} md={6} key={field}>
+            <input
+              value={editForm[field] || ""}
+              onChange={(e) =>
+                setEditForm({ ...editForm, [field]: e.target.value })
+              }
+              placeholder={label}
+              style={{
+                width: "100%",
+                padding: 12,
+                borderRadius: 8,
+                border: "1px solid #ccc",
+                boxSizing: "border-box",
+              }}
+            />
+          </Grid>
+        ))}
+      </Grid>
+
+      <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+        <Button variant="contained" color="error" onClick={saveEdit}>
+          Save Changes
+        </Button>
+        <Button variant="outlined" color="error" onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+      </Stack>
+    </CardContent>
+  </Card>
+)}
       {tab === "Profile" && (
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
