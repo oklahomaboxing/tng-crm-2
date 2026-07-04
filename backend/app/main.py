@@ -555,7 +555,6 @@ def generate_barcode(member_number: str):
 
 def generate_qr_code(member_number: str):
     return f"member:{member_number}"
-
 @app.post("/api/clover/sync-customers")
 def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
@@ -586,11 +585,11 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
             detail=f"Clover customer sync error {response.status_code}: {response.text}"
         )
 
-    data = response.json()
-    customers = data.get("elements", [])
+    customers = response.json().get("elements", [])
 
     synced = 0
     skipped = 0
+    updated = 0
 
     for c in customers:
         first_name = c.get("firstName") or ""
@@ -610,7 +609,7 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
             skipped += 1
             continue
 
-            existing = db.query(Member).filter(
+        existing = db.query(Member).filter(
             Member.clover_customer_id == c.get("id")
         ).first()
 
@@ -621,7 +620,17 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
             existing = db.query(Member).filter(Member.phone == phone).first()
 
         if existing:
-            skipped += 1
+            existing.clover_customer_id = c.get("id")
+            if email and not existing.email:
+                existing.email = email
+            if phone and not existing.phone:
+                existing.phone = phone
+            if not existing.member_number:
+                existing.member_number = f"TNG-{existing.id:06d}"
+                existing.digital_member_id = generate_digital_member_id()
+                existing.barcode = generate_barcode(existing.member_number)
+                existing.qr_code = generate_qr_code(existing.member_number)
+            updated += 1
             continue
 
         member = Member(
@@ -649,11 +658,15 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
         db.commit()
         synced += 1
 
+    db.commit()
+
     return {
         "message": "Clover customers synced",
         "synced": synced,
+        "updated": updated,
         "skipped": skipped,
     }
+
 @app.post("/api/clover/sync-sales")
 def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
@@ -735,11 +748,7 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
         if not member:
             skipped += 1
             continue
-        payment_id = ""
-        payments = order.get("payments", {}).get("elements", [])
-        if payments:
-            payment_id = payments[0].get("id") or ""
-
+       
         sale = Sale(
             member_id=member.id,
             sales_rep_id=default_rep.id,
