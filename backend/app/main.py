@@ -754,6 +754,40 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
         "synced": synced,
         "skipped": skipped,
     }
+@app.get("/api/members/{member_id}/payments")
+def member_payments(member_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    member = db.query(Member).filter(Member.id == member_id).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    sales = (
+        db.query(Sale)
+        .filter(Sale.member_id == member_id)
+        .order_by(Sale.sale_date.desc())
+        .all()
+    )
+
+    return {
+        "member_id": member.id,
+        "member_name": f"{member.first_name} {member.last_name}",
+        "total_payments": len(sales),
+        "lifetime_value": sum(s.amount or 0 for s in sales),
+        "payments": [
+            {
+                "id": s.id,
+                "amount": s.amount,
+                "payment_status": s.payment_status,
+                "transaction_status": s.transaction_status,
+                "payment_method": s.payment_method,
+                "clover_order_id": s.clover_order_id,
+                "clover_payment_id": s.clover_payment_id,
+                "sale_date": s.sale_date.isoformat() if s.sale_date else None,
+                "membership": s.product.name if s.product else "",
+            }
+            for s in sales
+        ],
+    }
 
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
