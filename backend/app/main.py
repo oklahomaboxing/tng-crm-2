@@ -750,6 +750,37 @@ def checkin(data: dict, db: Session = Depends(get_db)):
             "total_checkins": member.total_checkins,
         }
     }
+@app.get("/api/members/{member_id}/attendance")
+def member_attendance(member_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    member = db.query(Member).filter(Member.id == member_id).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    rows = (
+        db.query(Attendance)
+        .filter(Attendance.member_id == member_id)
+        .order_by(Attendance.checkin_time.desc())
+        .limit(50)
+        .all()
+    )
+
+    return {
+        "member_id": member.id,
+        "member_name": f"{member.first_name} {member.last_name}",
+        "total_checkins": member.total_checkins or 0,
+        "last_checkin": member.last_checkin.isoformat() if member.last_checkin else None,
+        "attendance": [
+            {
+                "id": a.id,
+                "checkin_time": a.checkin_time.isoformat() if a.checkin_time else None,
+                "checkout_time": a.checkout_time.isoformat() if a.checkout_time else None,
+                "method": a.method,
+                "location": a.location,
+            }
+            for a in rows
+        ],
+    }
 
 @app.get("/api/clover/settings")
 def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_user)):
