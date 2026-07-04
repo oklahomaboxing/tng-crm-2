@@ -165,15 +165,49 @@ def rep_qr(rep_id: int, db: Session = Depends(get_db), user: User = Depends(curr
 
 @app.get("/api/dashboard")
 def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    today = datetime.utcnow().date()
     now = datetime.utcnow()
-    q = db.query(Sale).filter(extract('month', Sale.sale_date) == now.month, extract('year', Sale.sale_date) == now.year)
-    if user.role == "rep":
-        q = q.filter(Sale.sales_rep_id == user.rep_profile.id)
-    sales = q.all()
-    count = len(sales)
-    revenue = sum(s.amount for s in sales)
-    rate = commission_rate(count)
-    return {"sales_this_month": count, "revenue_this_month": revenue, "commission_rate": rate, "commission_earned": revenue * rate, "next_tier": "10 sales" if count < 10 else "20 sales" if count < 20 else "Max tier"}
+
+    total_members = db.query(Member).count()
+    active_members = db.query(Member).filter(Member.membership_status == "active").count()
+    total_leads = db.query(Lead).count()
+
+    today_checkins = db.query(Attendance).filter(
+        func.date(Attendance.checkin_time) == today
+    ).count()
+
+    month_sales = db.query(Sale).filter(
+        extract("month", Sale.sale_date) == now.month,
+        extract("year", Sale.sale_date) == now.year,
+    ).all()
+
+    revenue_this_month = sum(s.amount or 0 for s in month_sales)
+
+    recent_checkins = (
+        db.query(Attendance)
+        .order_by(Attendance.checkin_time.desc())
+        .limit(10)
+        .all()
+    )
+
+    recent = []
+    for a in recent_checkins:
+        member = db.query(Member).filter(Member.id == a.member_id).first()
+        recent.append({
+            "member": f"{member.first_name} {member.last_name}" if member else "Unknown",
+            "time": a.checkin_time.isoformat() if a.checkin_time else None,
+            "method": a.method,
+        })
+
+    return {
+        "total_members": total_members,
+        "active_members": active_members,
+        "total_leads": total_leads,
+        "today_checkins": today_checkins,
+        "sales_this_month": len(month_sales),
+        "revenue_this_month": revenue_this_month,
+        "recent_checkins": recent,
+    }
 
 @app.post("/api/sales")
 def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
