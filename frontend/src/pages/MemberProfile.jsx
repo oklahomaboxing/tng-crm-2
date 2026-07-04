@@ -10,7 +10,7 @@ import {
   Divider,
   Stack,
 } from "@mui/material";
-
+import MemberCard from "./MemberCard.jsx";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 export default function MemberProfile({ member, onBack }) {
@@ -20,6 +20,7 @@ export default function MemberProfile({ member, onBack }) {
   const [attendanceError, setAttendanceError] = useState("");
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [showCard, setShowCard] = useState(false);
   if (!memberData) return null;
 
   const fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim();
@@ -288,7 +289,7 @@ async function saveEdit() {
                 <Button fullWidth variant="contained" color="error">
                   💳 Renew Membership
                 </Button>
-                <Button fullWidth variant="outlined" color="error">
+                <Button fullWidth variant="outlined" color="error" onClick={() => setShowCard(true)}>
                   🖨 Print Card
                 </Button>
                 <Button fullWidth variant="outlined" color="error">
@@ -368,6 +369,23 @@ async function saveEdit() {
           Cancel
         </Button>
       </Stack>
+    </CardContent>
+  </Card>
+)}
+
+{showCard && (
+  <Card sx={{ borderRadius: 3, mb: 3 }}>
+    <CardContent>
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+        <Button variant="contained" color="error" onClick={() => window.print()}>
+          Print
+        </Button>
+        <Button variant="outlined" color="error" onClick={() => setShowCard(false)}>
+          Close
+        </Button>
+      </Stack>
+
+      <MemberCard member={memberData} />
     </CardContent>
   </Card>
 )}
