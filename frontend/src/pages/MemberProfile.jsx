@@ -15,16 +15,32 @@ const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 export default function MemberProfile({ member, onBack }) {
   const [tab, setTab] = useState("Profile");
-const [attendance, setAttendance] = useState(null);
-const [attendanceError, setAttendanceError] = useState("");
+  const [memberData, setMemberData] = useState(member);
+  const [attendance, setAttendance] = useState(null);
+  const [attendanceError, setAttendanceError] = useState("");
 
-const [memberData, setMemberData] = useState(member);
-const [photoUrl, setPhotoUrl] = useState(member.photo_url || "");
-
-  if (!member) return null;
+  if (!memberData) return null;
 
   const fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim();
-  const isActive = memberData.membership_status === "active" || memberData.status === "active";
+  const isActive =
+    memberData.membership_status === "active" || memberData.status === "active";
+
+  function photoSrc() {
+    if (!memberData.photo_url) return "";
+    if (memberData.photo_url.startsWith("http")) return memberData.photo_url;
+    return `${API}${memberData.photo_url}`;
+  }
+
+  async function loadMember() {
+    const res = await fetch(`${API}/api/members/${memberData.id}`, {
+      headers: {
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+    });
+
+    const data = await res.json();
+    if (res.ok) setMemberData(data);
+  }
 
   async function loadAttendance() {
     try {
@@ -37,77 +53,14 @@ const [photoUrl, setPhotoUrl] = useState(member.photo_url || "");
       });
 
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Could not load attendance");
-      }
+      if (!res.ok) throw new Error(data.detail || "Could not load attendance");
 
       setAttendance(data);
     } catch (err) {
       setAttendanceError(err.message);
     }
   }
-async function loadMember() {
-  const res = await fetch(`${API}/api/members/${memberData.id}`, {
-    headers: {
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-  });
 
-  const data = await res.json();
-
-  if (res.ok) {
-    setMemberData(data);
-  }
-}
-
-async function savePhoto() {
-  const res = await fetch(`${API}/api/members/${memberData.id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-    body: JSON.stringify({
-      photo_url: photoUrl,
-    }),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    alert(data.detail || "Could not save photo");
-    return;
-  }
-
-  setMemberData(data);
-  alert("✅ Photo saved");
-}
-async function uploadPhoto(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await fetch(`${API}/api/members/${memberData.id}/photo`, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-    body: formData,
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    alert(data.detail || "Photo upload failed");
-    return;
-  }
-
-  await loadMember();
-  alert("✅ Photo uploaded");
-}
   async function checkInMember() {
     try {
       const res = await fetch(`${API}/api/checkin`, {
@@ -117,15 +70,28 @@ async function uploadPhoto(e) {
           Authorization: "Bearer " + localStorage.getItem("token"),
         },
         body: JSON.stringify({
-          code: memberData.barcode || memberData.member_number || memberData.qr_code,
+          code:
+            memberData.barcode ||
+            memberData.member_number ||
+            memberData.qr_code,
         }),
       });
 
       const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Check-in failed");
 
-      if (!res.ok) {
-        throw new Error(data.detail || "Check-in failed");
+      alert(`✅ ${data.member.name} checked in successfully`);
+
+      await loadMember();
+
+      if (tab === "Attendance") {
+        await loadAttendance();
       }
+    } catch (err) {
+      alert(`❌ ${err.message}`);
+    }
+  }
+
   async function uploadPhoto(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -151,24 +117,10 @@ async function uploadPhoto(e) {
     await loadMember();
     alert("✅ Photo uploaded");
   }
-      alert(`✅ ${data.member.name} checked in successfully`);
-
-      await loadMember();
-
-      if (tab === "Attendance") {
-        loadAttendance();
-      }
-
-    } catch (err) {
-      alert(`❌ ${err.message}`);
-    }
-  }
 
   useEffect(() => {
-    if (tab === "Attendance") {
-      loadAttendance();
-    }
-  }, [tab]);
+    setMemberData(member);
+  }, [member]);
 
   useEffect(() => {
     if (tab === "Attendance") {
@@ -205,39 +157,39 @@ async function uploadPhoto(e) {
                   fontSize: 60,
                   fontWeight: "bold",
                   border: "5px solid #d71920",
+                  overflow: "hidden",
                 }}
               >
                 {memberData.photo_url ? (
                   <img
-                    src={memberData.photo_url}
+                    src={photoSrc()}
                     alt={fullName}
                     style={{
                       width: "100%",
                       height: "100%",
-                      borderRadius: "50%",
                       objectFit: "cover",
                     }}
                   />
                 ) : (
                   fullName ? fullName[0].toUpperCase() : "?"
                 )}
-
               </Box>
-<Button
-  fullWidth
-  variant="outlined"
-  color="error"
-  component="label"
-  sx={{ mt: 2 }}
->
-  📸 Upload Photo
-  <input
-    hidden
-    type="file"
-    accept="image/*"
-    onChange={uploadPhoto}
-  />
-</Button>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                color="error"
+                component="label"
+                sx={{ mt: 2 }}
+              >
+                📸 Upload Photo
+                <input
+                  hidden
+                  type="file"
+                  accept="image/*"
+                  onChange={uploadPhoto}
+                />
+              </Button>
             </Grid>
 
             <Grid item xs={12} md={5}>
@@ -256,7 +208,13 @@ async function uploadPhoto(e) {
               <Box sx={{ mt: 2 }}>
                 <Chip
                   color={isActive ? "success" : "warning"}
-                  label={isActive ? "ACTIVE MEMBER" : memberData.membership_status || memberData.status || "PENDING"}
+                  label={
+                    isActive
+                      ? "ACTIVE MEMBER"
+                      : memberData.membership_status ||
+                        memberData.status ||
+                        "PENDING"
+                  }
                   sx={{ fontWeight: "bold" }}
                 />
               </Box>
@@ -268,7 +226,12 @@ async function uploadPhoto(e) {
               </Typography>
 
               <Stack spacing={1}>
-                <Button fullWidth variant="contained" color="success" onClick={checkInMember}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="success"
+                  onClick={checkInMember}
+                >
                   ✅ Check In
                 </Button>
                 <Button fullWidth variant="contained" color="error">
@@ -312,7 +275,9 @@ async function uploadPhoto(e) {
           <Grid item xs={12} md={6}>
             <Card sx={{ borderRadius: 3 }}>
               <CardContent>
-                <Typography variant="h6" fontWeight="bold">Contact</Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  Contact
+                </Typography>
                 <Divider sx={{ my: 2 }} />
                 <Typography><b>Email:</b> {memberData.email || "-"}</Typography>
                 <Typography><b>Phone:</b> {memberData.phone || "-"}</Typography>
@@ -324,14 +289,18 @@ async function uploadPhoto(e) {
           <Grid item xs={12} md={6}>
             <Card sx={{ borderRadius: 3 }}>
               <CardContent>
-                <Typography variant="h6" fontWeight="bold">Membership</Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  Membership
+                </Typography>
                 <Divider sx={{ my: 2 }} />
                 <Typography><b>Type:</b> {memberData.membership_type || "Clover Customer"}</Typography>
                 <Typography><b>Status:</b> {memberData.membership_status || memberData.status || "-"}</Typography>
                 <Typography><b>Total Check-ins:</b> {memberData.total_checkins || 0}</Typography>
                 <Typography>
                   <b>Last Check-in:</b>{" "}
-                  {memberData.last_checkin ? new Date(memberData.last_checkin).toLocaleString() : "-"}
+                  {memberData.last_checkin
+                    ? new Date(memberData.last_checkin).toLocaleString()
+                    : "-"}
                 </Typography>
               </CardContent>
             </Card>
@@ -340,7 +309,9 @@ async function uploadPhoto(e) {
           <Grid item xs={12}>
             <Card sx={{ borderRadius: 3 }}>
               <CardContent>
-                <Typography variant="h6" fontWeight="bold">Member Card Data</Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  Member Card Data
+                </Typography>
                 <Divider sx={{ my: 2 }} />
                 <Typography><b>Barcode:</b> {memberData.barcode || "-"}</Typography>
                 <Typography><b>QR Code:</b> {memberData.qr_code || "-"}</Typography>
@@ -354,7 +325,9 @@ async function uploadPhoto(e) {
       {tab === "Attendance" && (
         <Card sx={{ borderRadius: 3 }}>
           <CardContent>
-            <Typography variant="h6" fontWeight="bold">Attendance History</Typography>
+            <Typography variant="h6" fontWeight="bold">
+              Attendance History
+            </Typography>
             <Divider sx={{ my: 2 }} />
 
             {attendanceError && (
@@ -390,10 +363,14 @@ async function uploadPhoto(e) {
                 {attendance.attendance.map((row) => (
                   <Card key={row.id} sx={{ p: 2, borderRadius: 2 }}>
                     <Typography fontWeight="bold">
-                      ✅ {row.checkin_time ? new Date(row.checkin_time).toLocaleString() : "-"}
+                      ✅{" "}
+                      {row.checkin_time
+                        ? new Date(row.checkin_time).toLocaleString()
+                        : "-"}
                     </Typography>
                     <Typography color="text.secondary">
-                      Method: {row.method || "barcode"} • Location: {row.location || "Front Desk"}
+                      Method: {row.method || "barcode"} • Location:{" "}
+                      {row.location || "Front Desk"}
                     </Typography>
                   </Card>
                 ))}
@@ -410,7 +387,9 @@ async function uploadPhoto(e) {
       {tab !== "Profile" && tab !== "Attendance" && (
         <Card sx={{ borderRadius: 3 }}>
           <CardContent>
-            <Typography variant="h6" fontWeight="bold">{tab}</Typography>
+            <Typography variant="h6" fontWeight="bold">
+              {tab}
+            </Typography>
             <Divider sx={{ my: 2 }} />
             <Typography color="text.secondary">
               {tab} details coming next.
