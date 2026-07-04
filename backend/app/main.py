@@ -748,17 +748,39 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
         if not member:
             skipped += 1
             continue
-       
+
+        created_time = order.get("createdTime") or order.get("clientCreatedTime")
+
+        sale_date = datetime.utcnow()
+        if created_time:
+            try:
+                sale_date = datetime.fromtimestamp(int(created_time) / 1000)
+            except Exception:
+                sale_date = datetime.utcnow()
+        product = default_product
+
+        line_items = order.get("lineItems", {}).get("elements", [])
+        if line_items:
+            clover_item_name = line_items[0].get("name") or ""
+
+            if clover_item_name:
+                matched_product = db.query(MembershipProduct).filter(
+                    MembershipProduct.name == clover_item_name
+                ).first()
+
+                if matched_product:
+                    product = matched_product
         sale = Sale(
             member_id=member.id,
             sales_rep_id=default_rep.id,
-            product_id=default_product.id,
+            product_id=product.id,
             amount=total_cents / 100,
             payment_status="paid",
             transaction_status="paid",
             clover_order_id=order_id,
             clover_payment_id=payment_id,
             payment_method="clover",
+            sale_date=sale_date,
         )
 
         db.add(sale)
