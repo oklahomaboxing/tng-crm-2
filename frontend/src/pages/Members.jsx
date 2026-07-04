@@ -16,12 +16,14 @@ import {
   Alert,
 } from "@mui/material";
 import { API, authHeaders } from "../services/api";
+import MemberProfile from "./MemberProfile.jsx";
 
 export default function Members() {
   const [members, setMembers] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedMember, setSelectedMember] = useState(null);
 
   async function loadMembers() {
     try {
@@ -32,9 +34,7 @@ export default function Members() {
         headers: authHeaders(),
       });
 
-      if (!res.ok) {
-        throw new Error("Could not load members");
-      }
+      if (!res.ok) throw new Error("Could not load members");
 
       const data = await res.json();
       setMembers(Array.isArray(data) ? data : []);
@@ -57,6 +57,15 @@ export default function Members() {
 
     return fullName.includes(q) || email.includes(q) || phone.includes(q);
   });
+
+  if (selectedMember) {
+    return (
+      <MemberProfile
+        member={selectedMember}
+        onBack={() => setSelectedMember(null)}
+      />
+    );
+  }
 
   return (
     <Box>
@@ -87,55 +96,62 @@ export default function Members() {
               <CircularProgress color="error" />
             </Box>
           ) : (
-           <Table>
-  <TableHead>
-    <TableRow>
-      <TableCell>Member #</TableCell>
-      <TableCell>Name</TableCell>
-      <TableCell>Barcode</TableCell>
-      <TableCell>Membership</TableCell>
-      <TableCell>Status</TableCell>
-      <TableCell>Check-ins</TableCell>
-      <TableCell>Created</TableCell>
-    </TableRow>
-  </TableHead>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Member #</TableCell>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Barcode</TableCell>
+                  <TableCell>Membership</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Check-ins</TableCell>
+                  <TableCell>Created</TableCell>
+                </TableRow>
+              </TableHead>
 
-  <TableBody>
-    {filteredMembers.map((member) => (
-      <TableRow key={member.id}>
-        <TableCell>{member.member_number || "-"}</TableCell>
-        <TableCell>
-          {member.first_name} {member.last_name}
-          <Typography variant="caption" display="block" color="text.secondary">
-            {member.email || member.phone || ""}
-          </Typography>
-        </TableCell>
-        <TableCell>{member.barcode || "-"}</TableCell>
-        <TableCell>{member.membership_type || "Clover Customer"}</TableCell>
-        <TableCell>
-          <Chip
-            color={member.membership_status === "active" || member.status === "active" ? "success" : "warning"}
-            label={member.membership_status || member.status || "pending"}
-          />
-        </TableCell>
-        <TableCell>{member.total_checkins || 0}</TableCell>
-        <TableCell>
-          {member.created_at
-            ? new Date(member.created_at).toLocaleDateString()
-            : ""}
-        </TableCell>
-      </TableRow>
-    ))}
+              <TableBody>
+                {filteredMembers.map((member) => (
+                  <TableRow
+                    key={member.id}
+                    hover
+                    onClick={() => setSelectedMember(member)}
+                    sx={{ cursor: "pointer" }}
+                  >
+                    <TableCell>{member.member_number || "-"}</TableCell>
+                    <TableCell>
+                      {member.first_name} {member.last_name}
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        {member.email || member.phone || ""}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{member.barcode || "-"}</TableCell>
+                    <TableCell>{member.membership_type || "Clover Customer"}</TableCell>
+                    <TableCell>
+                      <Chip
+                        color={
+                          member.membership_status === "active" || member.status === "active"
+                            ? "success"
+                            : "warning"
+                        }
+                        label={member.membership_status || member.status || "pending"}
+                      />
+                    </TableCell>
+                    <TableCell>{member.total_checkins || 0}</TableCell>
+                    <TableCell>
+                      {member.created_at
+                        ? new Date(member.created_at).toLocaleDateString()
+                        : ""}
+                    </TableCell>
+                  </TableRow>
+                ))}
 
-    {filteredMembers.length === 0 && (
-      <TableRow>
-        <TableCell colSpan={7}>
-          No members found.
-        </TableCell>
-      </TableRow>
-    )}
-  </TableBody>
-</Table>
+                {filteredMembers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7}>No members found.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
