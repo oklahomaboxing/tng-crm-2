@@ -781,6 +781,31 @@ def member_attendance(member_id: int, db: Session = Depends(get_db), user: User 
             for a in rows
         ],
     }
+@app.get("/api/members/{member_id}")
+def get_member(member_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    m = db.query(Member).filter(Member.id == member_id).first()
+
+    if not m:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    return {
+        "id": m.id,
+        "first_name": m.first_name,
+        "last_name": m.last_name,
+        "email": m.email,
+        "phone": m.phone,
+        "status": m.status,
+        "member_number": m.member_number,
+        "barcode": m.barcode,
+        "qr_code": m.qr_code,
+        "digital_member_id": m.digital_member_id,
+        "membership_type": m.membership_type,
+        "membership_status": m.membership_status,
+        "clover_customer_id": m.clover_customer_id,
+        "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
+        "total_checkins": m.total_checkins,
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    }
 
 @app.get("/api/clover/settings")
 def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_user)):
