@@ -610,23 +610,19 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
             skipped += 1
             continue
 
-        existing = None
+        existing = db.query(Member).filter(
+    Member.clover_customer_id == c.get("id")
+).first()
 
-        if email:
-            existing = db.query(Member).filter(Member.email == email).first()
+if not existing and email:
+    existing = db.query(Member).filter(Member.email == email).first()
 
-        if not existing and phone:
-            existing = db.query(Member).filter(Member.phone == phone).first()
+if not existing and phone:
+    existing = db.query(Member).filter(Member.phone == phone).first()
 
-        if existing:
-            existing.clover_customer_id = c.get("id")
-            if not existing.member_number:
-                existing.member_number = f"TNG-{existing.id:06d}"
-                existing.digital_member_id = generate_digital_member_id()
-                existing.barcode = generate_barcode(existing.member_number)
-                existing.qr_code = generate_qr_code(existing.member_number)
-            synced += 1
-            continue
+if existing:
+    skipped += 1
+    continue
 
         member = Member(
             first_name=first_name or "Clover",
@@ -710,7 +706,16 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             skipped += 1
             continue
 
-        existing_sale = db.query(Sale).filter(Sale.clover_order_id == order_id).first()
+              payment_id = ""
+        payments = order.get("payments", {}).get("elements", [])
+        if payments:
+            payment_id = payments[0].get("id") or ""
+
+        existing_sale = db.query(Sale).filter(
+            (Sale.clover_order_id == order_id) |
+            (Sale.clover_payment_id == payment_id)
+        ).first()
+
         if existing_sale:
             skipped += 1
             continue
@@ -721,12 +726,15 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             customer_id = customers[0].get("id") or ""
 
         member = None
+
         if customer_id:
-            member = db.query(Member).filter(Member.clover_customer_id == customer_id).first()
+            member = db.query(Member).filter(
+                Member.clover_customer_id == customer_id
+            ).first()
 
         if not member:
-            member = db.query(Member).first()
-
+            skipped += 1
+            continue
         payment_id = ""
         payments = order.get("payments", {}).get("elements", [])
         if payments:
@@ -821,7 +829,7 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
 
     existing_member = db.query(Member).filter(Member.email == lead.email).first()
-
+    
     if existing_member:
         member = existing_member
     else:
