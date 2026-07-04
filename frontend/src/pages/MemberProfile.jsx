@@ -45,6 +45,35 @@ export default function MemberProfile({ member, onBack }) {
     }
   }
 
+  async function checkInMember() {
+    try {
+      const res = await fetch(`${API}/api/checkin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        },
+        body: JSON.stringify({
+          code: member.barcode || member.member_number,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Check-in failed");
+      }
+
+      alert(`✅ ${data.member.name} checked in successfully`);
+
+      if (tab === "Attendance") {
+        loadAttendance();
+      }
+    } catch (err) {
+      alert(`❌ ${err.message}`);
+    }
+  }
+
   useEffect(() => {
     if (tab === "Attendance") {
       loadAttendance();
@@ -114,7 +143,7 @@ export default function MemberProfile({ member, onBack }) {
               </Typography>
 
               <Stack spacing={1}>
-                <Button fullWidth variant="contained" color="success">
+                <Button fullWidth variant="contained" color="success" onClick={checkInMember}>
                   ✅ Check In
                 </Button>
                 <Button fullWidth variant="contained" color="error">
