@@ -31,9 +31,7 @@ export default function FrontDesk() {
 
       const j = await r.json();
 
-      if (!r.ok) {
-        throw new Error(j.detail || "Check-in failed");
-      }
+      if (!r.ok) throw new Error(j.detail || "Check-in failed");
 
       setResult(j.member);
       setCode("");
@@ -50,10 +48,10 @@ export default function FrontDesk() {
   }
 
   return (
-    <main style={styles.page}>
+    <main style={result ? styles.pageSuccess : styles.page}>
       <section style={styles.card}>
-        <h1>🥊 TNG BOXING</h1>
-        <h2>Front Desk Check-In</h2>
+        <div style={styles.brand}>🥊 TNG BOXING</div>
+        <div style={styles.subTitle}>FRONT DESK CHECK-IN</div>
 
         <form onSubmit={submitCheckin}>
           <input
@@ -71,16 +69,21 @@ export default function FrontDesk() {
 
         {result ? (
           <div style={styles.success}>
-            <h1>✅ WELCOME!</h1>
+            <div style={styles.bigCheck}>✅</div>
+            <h1>WELCOME!</h1>
             <h2>{result.name}</h2>
-            <p><b>Status:</b> {result.status || "active"}</p>
-            <p><b>Membership:</b> {result.membership || "Membership"}</p>
-            <p><b>Member #:</b> {result.member_number}</p>
-            <p><b>Total Visits:</b> {result.total_checkins || 0}</p>
+
+            <div style={styles.infoGrid}>
+              <div><b>Status</b><span>{result.status || "active"}</span></div>
+              <div><b>Membership</b><span>{result.membership || "Membership"}</span></div>
+              <div><b>Member #</b><span>{result.member_number}</span></div>
+              <div><b>Total Visits</b><span>{result.total_checkins || 0}</span></div>
+            </div>
           </div>
         ) : (
           <div style={styles.waiting}>
-            Waiting for member scan...
+            <h2>Ready for next member</h2>
+            <p>Scan barcode or enter member number</p>
           </div>
         )}
       </section>
@@ -99,52 +102,82 @@ const styles = {
     borderRadius: 18,
     padding: 24,
   },
+  pageSuccess: {
+    minHeight: "75vh",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    background: "#063b19",
+    color: "white",
+    borderRadius: 18,
+    padding: 24,
+  },
   card: {
     width: "100%",
-    maxWidth: 760,
+    maxWidth: 900,
     textAlign: "center",
+  },
+  brand: {
+    fontSize: 42,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
+  subTitle: {
+    fontSize: 20,
+    color: "#ddd",
+    marginBottom: 25,
+    letterSpacing: 3,
   },
   input: {
     width: "100%",
-    padding: 20,
-    fontSize: 22,
-    borderRadius: 14,
-    border: "3px solid #d71920",
+    padding: 24,
+    fontSize: 26,
+    borderRadius: 16,
+    border: "4px solid #d71920",
     textAlign: "center",
-    marginTop: 20,
     boxSizing: "border-box",
   },
   button: {
     marginTop: 14,
-    padding: 16,
+    padding: 18,
     width: "100%",
-    borderRadius: 12,
+    borderRadius: 14,
     border: 0,
     background: "#d71920",
     color: "white",
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
     cursor: "pointer",
   },
   waiting: {
-    marginTop: 30,
-    padding: 24,
+    marginTop: 35,
+    padding: 35,
     background: "#181820",
-    borderRadius: 16,
-    fontSize: 22,
+    borderRadius: 20,
+    fontSize: 24,
   },
   success: {
-    marginTop: 30,
-    padding: 28,
+    marginTop: 35,
+    padding: 40,
     background: "#0f7a34",
-    borderRadius: 18,
-    fontSize: 22,
+    borderRadius: 22,
+    fontSize: 24,
+    boxShadow: "0 20px 60px rgba(0,0,0,.35)",
+  },
+  bigCheck: {
+    fontSize: 70,
+  },
+  infoGrid: {
+    marginTop: 25,
+    display: "grid",
+    gridTemplateColumns: "repeat(2, 1fr)",
+    gap: 16,
   },
   error: {
     marginTop: 24,
-    padding: 20,
+    padding: 24,
     background: "#7a1010",
-    borderRadius: 14,
-    fontSize: 20,
+    borderRadius: 16,
+    fontSize: 22,
   },
 };
