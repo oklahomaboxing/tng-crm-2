@@ -223,6 +223,7 @@ def list_members(db: Session = Depends(get_db), user: User = Depends(current_use
             "clover_customer_id": m.clover_customer_id,
             "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
             "total_checkins": m.total_checkins,
+            "photo_url": m.photo_url,
             "created_at": m.created_at.isoformat() if m.created_at else None,
         }
         for m in members
@@ -809,6 +810,7 @@ def get_member(member_id: int, db: Session = Depends(get_db), user: User = Depen
         "clover_customer_id": m.clover_customer_id,
         "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
         "total_checkins": m.total_checkins,
+        "photo_url": m.photo_url,
         "created_at": m.created_at.isoformat() if m.created_at else None,
     }
 @app.put("/api/members/{member_id}")
