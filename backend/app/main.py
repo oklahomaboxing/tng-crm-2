@@ -740,10 +740,35 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
         member = None
 
+        # Match by Clover Customer ID
         if customer_id:
             member = db.query(Member).filter(
                 Member.clover_customer_id == customer_id
             ).first()
+
+        # If not found, try matching by email
+        if not member:
+            customers = order.get("customers", {}).get("elements", [])
+            if customers:
+                emails = customers[0].get("emailAddresses", {}).get("elements", [])
+                if emails:
+                    email = emails[0].get("emailAddress")
+                    if email:
+                        member = db.query(Member).filter(
+                            Member.email == email
+                        ).first()
+
+        # If still not found, try matching by phone
+        if not member:
+            customers = order.get("customers", {}).get("elements", [])
+            if customers:
+                phones = customers[0].get("phoneNumbers", {}).get("elements", [])
+                if phones:
+                    phone = phones[0].get("phoneNumber")
+                    if phone:
+                        member = db.query(Member).filter(
+                            Member.phone == phone
+                        ).first()
 
         if not member:
             skipped += 1
