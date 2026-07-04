@@ -806,6 +806,50 @@ def get_member(member_id: int, db: Session = Depends(get_db), user: User = Depen
         "total_checkins": m.total_checkins,
         "created_at": m.created_at.isoformat() if m.created_at else None,
     }
+@app.put("/api/members/{member_id}")
+def update_member(member_id: int, data: dict, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    m = db.query(Member).filter(Member.id == member_id).first()
+
+    if not m:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    allowed_fields = [
+        "first_name",
+        "last_name",
+        "email",
+        "phone",
+        "photo_url",
+        "membership_type",
+        "membership_status",
+        "assigned_coach",
+        "emergency_contact",
+        "emergency_phone",
+        "notes",
+    ]
+
+    for field in allowed_fields:
+        if field in data:
+            setattr(m, field, data[field])
+
+    db.commit()
+    db.refresh(m)
+
+    return {
+        "id": m.id,
+        "first_name": m.first_name,
+        "last_name": m.last_name,
+        "email": m.email,
+        "phone": m.phone,
+        "photo_url": m.photo_url,
+        "member_number": m.member_number,
+        "barcode": m.barcode,
+        "qr_code": m.qr_code,
+        "digital_member_id": m.digital_member_id,
+        "membership_type": m.membership_type,
+        "membership_status": m.membership_status,
+        "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
+        "total_checkins": m.total_checkins,
+    }
 
 @app.get("/api/clover/settings")
 def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_user)):
