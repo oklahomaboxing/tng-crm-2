@@ -658,6 +658,102 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
         "synced": synced,
         "skipped": skipped,
     }
+@app.post("/api/clover/sync-sales")
+def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+
+    merchant_id = os.getenv("CLOVER_MERCHANT_ID")
+    api_token = os.getenv("CLOVER_API_TOKEN")
+    clover_env = os.getenv("CLOVER_ENV", "production")
+
+    if not merchant_id or not api_token:
+        raise HTTPException(status_code=500, detail="Clover credentials missing")
+
+    base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
+
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.get(
+        f"{base_url}/v3/merchants/{merchant_id}/orders?expand=payments,lineItems,customers&limit=1000",
+        headers=headers,
+        timeout=30,
+    )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clover sales sync error {response.status_code}: {response.text}"
+        )
+
+    orders = response.json().get("elements", [])
+
+    synced = 0
+    skipped = 0
+
+    default_rep = db.query(SalesRep).first()
+    default_product = db.query(MembershipProduct).first()
+
+    if not default_rep or not default_product:
+        raise HTTPException(
+            status_code=400,
+            detail="Need at least one sales rep and one membership product before syncing sales"
+        )
+
+    for order in orders:
+        order_id = order.get("id")
+        total_cents = order.get("total", 0) or 0
+
+        if not order_id or total_cents <= 0:
+            skipped += 1
+            continue
+
+        existing_sale = db.query(Sale).filter(Sale.clover_order_id == order_id).first()
+        if existing_sale:
+            skipped += 1
+            continue
+
+        customer_id = ""
+        customers = order.get("customers", {}).get("elements", [])
+        if customers:
+            customer_id = customers[0].get("id") or ""
+
+        member = None
+        if customer_id:
+            member = db.query(Member).filter(Member.clover_customer_id == customer_id).first()
+
+        if not member:
+            member = db.query(Member).first()
+
+        payment_id = ""
+        payments = order.get("payments", {}).get("elements", [])
+        if payments:
+            payment_id = payments[0].get("id") or ""
+
+        sale = Sale(
+            member_id=member.id,
+            sales_rep_id=default_rep.id,
+            product_id=default_product.id,
+            amount=total_cents / 100,
+            payment_status="paid",
+            transaction_status="paid",
+            clover_order_id=order_id,
+            clover_payment_id=payment_id,
+            payment_method="clover",
+        )
+
+        db.add(sale)
+        synced += 1
+
+    db.commit()
+
+    return {
+        "message": "Clover sales synced",
+        "synced": synced,
+        "skipped": skipped,
+    }
 
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
