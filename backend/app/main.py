@@ -610,19 +610,19 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
             skipped += 1
             continue
 
-        existing = db.query(Member).filter(
-    Member.clover_customer_id == c.get("id")
-).first()
+            existing = db.query(Member).filter(
+            Member.clover_customer_id == c.get("id")
+        ).first()
 
-if not existing and email:
-    existing = db.query(Member).filter(Member.email == email).first()
+        if not existing and email:
+            existing = db.query(Member).filter(Member.email == email).first()
 
-if not existing and phone:
-    existing = db.query(Member).filter(Member.phone == phone).first()
+        if not existing and phone:
+            existing = db.query(Member).filter(Member.phone == phone).first()
 
-if existing:
-    skipped += 1
-    continue
+        if existing:
+            skipped += 1
+            continue
 
         member = Member(
             first_name=first_name or "Clover",
@@ -706,7 +706,7 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             skipped += 1
             continue
 
-              payment_id = ""
+        payment_id = ""
         payments = order.get("payments", {}).get("elements", [])
         if payments:
             payment_id = payments[0].get("id") or ""
