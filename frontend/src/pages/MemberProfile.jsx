@@ -83,24 +83,6 @@ async function savePhoto() {
   setMemberData(data);
   alert("✅ Photo saved");
 }
-  async function checkInMember() {
-    try {
-      const res = await fetch(`${API}/api/checkin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + localStorage.getItem("token"),
-        },
-        body: JSON.stringify({
-          code: memberData.barcode || memberData.member_number || memberData.qr_code,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Check-in failed");
-      }
 async function uploadPhoto(e) {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -126,6 +108,49 @@ async function uploadPhoto(e) {
   await loadMember();
   alert("✅ Photo uploaded");
 }
+  async function checkInMember() {
+    try {
+      const res = await fetch(`${API}/api/checkin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        },
+        body: JSON.stringify({
+          code: memberData.barcode || memberData.member_number || memberData.qr_code,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Check-in failed");
+      }
+  async function uploadPhoto(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API}/api/members/${memberData.id}/photo`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+      body: formData,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.detail || "Photo upload failed");
+      return;
+    }
+
+    await loadMember();
+    alert("✅ Photo uploaded");
+  }
       alert(`✅ ${data.member.name} checked in successfully`);
 
       await loadMember();
@@ -184,7 +209,7 @@ async function uploadPhoto(e) {
               >
                 {memberData.photo_url ? (
                   <img
-                    src={`${API}${memberData.photo_url}`}
+                    src={memberData.photo_url}
                     alt={fullName}
                     style={{
                       width: "100%",
@@ -197,24 +222,22 @@ async function uploadPhoto(e) {
                   fullName ? fullName[0].toUpperCase() : "?"
                 )}
 
-                           </Box>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                color="error"
-                component="label"
-                sx={{ mt: 2 }}
-              >
-                📸 Upload Photo
-                <input
-                  hidden
-                  type="file"
-                  accept="image/*"
-                  onChange={uploadPhoto}
-                />
-              </Button>
-
+              </Box>
+<Button
+  fullWidth
+  variant="outlined"
+  color="error"
+  component="label"
+  sx={{ mt: 2 }}
+>
+  📸 Upload Photo
+  <input
+    hidden
+    type="file"
+    accept="image/*"
+    onChange={uploadPhoto}
+  />
+</Button>
             </Grid>
 
             <Grid item xs={12} md={5}>
