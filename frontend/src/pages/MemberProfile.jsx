@@ -19,6 +19,7 @@ const [attendance, setAttendance] = useState(null);
 const [attendanceError, setAttendanceError] = useState("");
 
 const [memberData, setMemberData] = useState(member);
+const [photoUrl, setPhotoUrl] = useState(member.photo_url || "");
 
   if (!member) return null;
 
@@ -60,6 +61,28 @@ async function loadMember() {
   }
 }
 
+async function savePhoto() {
+  const res = await fetch(`${API}/api/members/${memberData.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+    body: JSON.stringify({
+      photo_url: photoUrl,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || "Could not save photo");
+    return;
+  }
+
+  setMemberData(data);
+  alert("✅ Photo saved");
+}
   async function checkInMember() {
     try {
       const res = await fetch(`${API}/api/checkin`, {
@@ -78,7 +101,31 @@ async function loadMember() {
       if (!res.ok) {
         throw new Error(data.detail || "Check-in failed");
       }
+async function uploadPhoto(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API}/api/members/${memberData.id}/photo`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+    body: formData,
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || "Photo upload failed");
+    return;
+  }
+
+  await loadMember();
+  alert("✅ Photo uploaded");
+}
       alert(`✅ ${data.member.name} checked in successfully`);
 
       await loadMember();
@@ -135,8 +182,39 @@ async function loadMember() {
                   border: "5px solid #d71920",
                 }}
               >
-                {fullName ? fullName[0].toUpperCase() : "?"}
-              </Box>
+                {memberData.photo_url ? (
+                  <img
+                    src={`${API}${memberData.photo_url}`}
+                    alt={fullName}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: "50%",
+                      objectFit: "cover",
+                    }}
+                  />
+                ) : (
+                  fullName ? fullName[0].toUpperCase() : "?"
+                )}
+
+                           </Box>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                color="error"
+                component="label"
+                sx={{ mt: 2 }}
+              >
+                📸 Upload Photo
+                <input
+                  hidden
+                  type="file"
+                  accept="image/*"
+                  onChange={uploadPhoto}
+                />
+              </Button>
+
             </Grid>
 
             <Grid item xs={12} md={5}>
