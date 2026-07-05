@@ -18,6 +18,8 @@ export default function MemberProfile({ member, onBack }) {
   const [memberData, setMemberData] = useState(member);
   const [attendance, setAttendance] = useState(null);
   const [attendanceError, setAttendanceError] = useState("");
+  const [payments, setPayments] = useState(null);
+  const [paymentError, setPaymentError] = useState("");
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [showCard, setShowCard] = useState(false);
@@ -63,6 +65,30 @@ export default function MemberProfile({ member, onBack }) {
     }
   }
 
+async function loadPayments() {
+  try {
+    setPaymentError("");
+
+    const res = await fetch(
+      `${API}/api/members/${memberData.id}/payments`,
+      {
+        headers: {
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        },
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || "Could not load payments");
+    }
+
+    setPayments(data);
+  } catch (err) {
+    setPaymentError(err.message);
+  }
+}
   async function checkInMember() {
     try {
       const res = await fetch(`${API}/api/checkin`, {
@@ -137,10 +163,15 @@ export default function MemberProfile({ member, onBack }) {
   }, [member]);
 
   useEffect(() => {
-    if (tab === "Attendance") {
-      loadAttendance();
-    }
-  }, [tab]);
+  if (tab === "Attendance") {
+    loadAttendance();
+  }
+
+  if (tab === "Payments") {
+    loadPayments();
+  }
+}, [tab]);
+
 function startEdit() {
   setEditForm({
     first_name: memberData.first_name || "",
@@ -503,19 +534,82 @@ async function saveEdit() {
         </Card>
       )}
 
-      {tab !== "Profile" && tab !== "Attendance" && (
-        <Card sx={{ borderRadius: 3 }}>
-          <CardContent>
-            <Typography variant="h6" fontWeight="bold">
-              {tab}
-            </Typography>
-            <Divider sx={{ my: 2 }} />
-            <Typography color="text.secondary">
-              {tab} details coming next.
-            </Typography>
-          </CardContent>
-        </Card>
+      {tab === "Payments" && (
+  <Card sx={{ borderRadius: 3 }}>
+    <CardContent>
+      <Typography variant="h6" fontWeight="bold">
+        Payment History
+      </Typography>
+      <Divider sx={{ my: 2 }} />
+
+      {paymentError && (
+        <Typography color="error">{paymentError}</Typography>
       )}
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ p: 2, background: "#f7f7f7" }}>
+            <Typography color="text.secondary">Lifetime Value</Typography>
+            <Typography variant="h4" fontWeight="bold">
+              ${Number(payments?.lifetime_value || 0).toFixed(2)}
+            </Typography>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card sx={{ p: 2, background: "#f7f7f7" }}>
+            <Typography color="text.secondary">Total Payments</Typography>
+            <Typography variant="h4" fontWeight="bold">
+              {payments?.total_payments || 0}
+            </Typography>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {payments?.payments?.length > 0 ? (
+        <Stack spacing={1}>
+          {payments.payments.map((p) => (
+            <Card key={p.id} sx={{ p: 2, borderRadius: 2 }}>
+              <Typography fontWeight="bold">
+                💳 ${Number(p.amount || 0).toFixed(2)}
+              </Typography>
+
+              <Typography color="text.secondary">
+                {p.membership || "Membership"} • {p.payment_status || "paid"}
+              </Typography>
+
+              <Typography color="text.secondary">
+                {p.sale_date ? new Date(p.sale_date).toLocaleString() : ""}
+              </Typography>
+
+              <Typography variant="caption" color="text.secondary">
+                Clover Order: {p.clover_order_id || "-"}
+              </Typography>
+            </Card>
+          ))}
+        </Stack>
+      ) : (
+        <Typography color="text.secondary">
+          No payments found for this member.
+        </Typography>
+      )}
+    </CardContent>
+  </Card>
+)}
+
+{tab !== "Profile" && tab !== "Attendance" && tab !== "Payments" && (
+  <Card sx={{ borderRadius: 3 }}>
+    <CardContent>
+      <Typography variant="h6" fontWeight="bold">
+        {tab}
+      </Typography>
+      <Divider sx={{ my: 2 }} />
+      <Typography color="text.secondary">
+        {tab} details coming next.
+      </Typography>
+    </CardContent>
+  </Card>
+)}
     </Box>
   );
 }
