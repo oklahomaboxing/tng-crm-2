@@ -818,6 +818,24 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
         "synced": synced,
         "skipped": skipped,
     }
+@app.post("/api/clover/sync-all")
+def sync_all_clover(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    products = sync_clover_products(db, user)
+    customers = sync_clover_customers(db, user)
+    sales = sync_clover_sales(db, user)
+
+    return {
+        "message": "Clover sync complete",
+        "products": products,
+        "customers": customers,
+        "sales": sales,
+    }
+
 @app.post("/api/clover/reset-imported-sales")
 def reset_imported_clover_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
