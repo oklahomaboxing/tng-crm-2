@@ -71,6 +71,7 @@ class MembershipProduct(Base):
     price = Column(Float, nullable=False)
     recurring = Column(Boolean, default=False)
     active = Column(Boolean, default=True)
+    category = Column(String, nullable=True)
 
 
 class Sale(Base):
