@@ -45,6 +45,7 @@ def run_sqlite_migrations():
     add_column_if_missing("sales", "refunded", "BOOLEAN DEFAULT 0")
     add_column_if_missing("sales", "refund_amount", "FLOAT DEFAULT 0")
     add_column_if_missing("sales", "payment_method", "VARCHAR")
+    add_column_if_missing("membership_products", "category", "VARCHAR")
 
     add_column_if_missing("leads", "clover_checkout_id", "VARCHAR")
     add_column_if_missing("leads", "paid_at", "DATETIME")
@@ -586,6 +587,47 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         "checkout_url": checkout_url,
         "checkout": checkout,
     }
+def categorize_clover_product(name):
+    if not name:
+        return "other"
+
+    n = name.lower()
+
+    event_words = [
+        "ga",
+        "general admission",
+        "kids under",
+        "kid",
+        "table",
+        "table seat",
+        "seat",
+        "vip",
+        "ringside",
+        "ticket",
+        "admission",
+        "fight night",
+    ]
+
+    membership_words = [
+        "month to month",
+        "monthly",
+        "membership",
+        "3 month",
+        "3-month",
+        "unlimited boxing",
+        "youth boxing",
+        "annual",
+    ]
+
+    for word in event_words:
+        if word in n:
+            return "event_ticket"
+
+    for word in membership_words:
+        if word in n:
+            return "membership"
+
+    return "other"
 
 @app.post("/api/clover/sync-products")
 def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -625,20 +667,25 @@ def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(cur
     for item in items:
         name = item.get("name")
         price_cents = item.get("price", 0)
+        category = categorize_clover_product(name)
 
         if not name:
             continue
 
-        existing = db.query(MembershipProduct).filter(MembershipProduct.name == name).first()
+        existing = db.query(MembershipProduct).filter(
+            MembershipProduct.name == name
+        ).first()
 
         if existing:
             existing.price = price_cents / 100
             existing.active = True
+            existing.category = category
         else:
             product = MembershipProduct(
                 name=name,
                 price=price_cents / 100,
                 active=True,
+                category=category,
             )
             db.add(product)
 
@@ -928,6 +975,8 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
         "synced": synced,
         "skipped": skipped,
     }
+
+
 @app.post("/api/clover/sync-all")
 def sync_all_clover(
     db: Session = Depends(get_db),
