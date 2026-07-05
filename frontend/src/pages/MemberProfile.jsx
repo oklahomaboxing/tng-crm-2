@@ -209,6 +209,19 @@ function startEdit() {
     emergency_contact: memberData.emergency_contact || "",
     emergency_phone: memberData.emergency_phone || "",
     notes: memberData.notes || "",
+    membership_start: memberData.membership_start
+      ? memberData.membership_start.slice(0, 10)
+      : "",
+    membership_end: memberData.membership_end
+      ? memberData.membership_end.slice(0, 10)
+      : "",
+    billing_cycle: memberData.billing_cycle || "",
+    monthly_rate: memberData.monthly_rate || "",
+    next_billing_date: memberData.next_billing_date
+      ? memberData.next_billing_date.slice(0, 10)
+      : "",
+    autopay_enabled: memberData.autopay_enabled || false,
+    billing_status: memberData.billing_status || "",
   });
 
   setEditing(true);
@@ -431,6 +444,12 @@ async function deleteMember() {
           ["assigned_coach", "Assigned Coach"],
           ["emergency_contact", "Emergency Contact"],
           ["emergency_phone", "Emergency Phone"],
+          ["membership_start", "Membership Start"],
+          ["membership_end", "Membership Expiration"],
+          ["billing_cycle", "Billing Cycle"],
+          ["monthly_rate", "Monthly Rate"],
+          ["next_billing_date", "Next Billing Date"],
+          ["billing_status", "Billing Status"],
           ["notes", "Notes"],
         ].map(([field, label]) => (
           <Grid item xs={12} md={6} key={field}>
