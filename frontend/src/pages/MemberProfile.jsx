@@ -185,6 +185,35 @@ async function uploadPhoto(e) {
   alert("✅ Photo uploaded");
 }
 
+function startEdit() {
+  setEditForm({
+    first_name: memberData.first_name || "",
+    last_name: memberData.last_name || "",
+    email: memberData.email || "",
+    phone: memberData.phone || "",
+    membership_type: memberData.membership_type || "",
+    membership_status: memberData.membership_status || "active",
+    assigned_coach: memberData.assigned_coach || "",
+    emergency_contact: memberData.emergency_contact || "",
+    emergency_phone: memberData.emergency_phone || "",
+    membership_start: memberData.membership_start
+      ? memberData.membership_start.slice(0, 10)
+      : "",
+    membership_end: memberData.membership_end
+      ? memberData.membership_end.slice(0, 10)
+      : "",
+    billing_cycle: memberData.billing_cycle || "",
+    monthly_rate: memberData.monthly_rate || "",
+    next_billing_date: memberData.next_billing_date
+      ? memberData.next_billing_date.slice(0, 10)
+      : "",
+    billing_status: memberData.billing_status || "",
+    notes: memberData.notes || "",
+  });
+
+  setEditing(true);
+}
+
 async function saveEdit() {
   const res = await fetch(`${API}/api/members/${memberData.id}`, {
     method: "PUT",
