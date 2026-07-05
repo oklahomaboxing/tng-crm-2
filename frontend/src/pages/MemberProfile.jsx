@@ -156,7 +156,36 @@ async function renewMembership() {
   } catch (err) {
     alert(`❌ ${err.message}`);
   }
-}async function saveEdit() {
+}
+
+async function uploadPhoto(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API}/api/members/${memberData.id}/photo`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+    body: formData,
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || "Photo upload failed");
+    return;
+  }
+
+  await loadMember();
+
+  alert("✅ Photo uploaded");
+}
+
+async function saveEdit() {
   const res = await fetch(`${API}/api/members/${memberData.id}`, {
     method: "PUT",
     headers: {
