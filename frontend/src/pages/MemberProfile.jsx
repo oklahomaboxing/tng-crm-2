@@ -121,14 +121,26 @@ async function loadPayments() {
   }
 
 async function renewMembership() {
+  const monthsText = prompt(
+    "Renew membership for how many months?\n\nType 1 for 1 month\nType 3 for 3 months"
+  );
+
+  if (monthsText !== "1" && monthsText !== "3") {
+    return;
+  }
+
   try {
     const res = await fetch(
       `${API}/api/members/${memberData.id}/renew`,
       {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: "Bearer " + localStorage.getItem("token"),
         },
+        body: JSON.stringify({
+          months: Number(monthsText),
+        }),
       }
     );
 
@@ -140,94 +152,11 @@ async function renewMembership() {
 
     await loadMember();
 
-    alert("✅ Membership renewed successfully");
+    alert(`✅ ${data.message}`);
   } catch (err) {
     alert(`❌ ${err.message}`);
   }
-}
-  async function uploadPhoto(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const res = await fetch(`${API}/api/members/${memberData.id}/photo`, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
-      body: formData,
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      alert(data.detail || "Photo upload failed");
-      return;
-    }
-
-    const updated = await fetch(`${API}/api/members/${memberData.id}`, {
-      headers: {
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
-    });
-
-    const updatedData = await updated.json();
-
-    if (updated.ok) {
-      setMemberData(updatedData);
-    }
-
-    alert("✅ Photo uploaded");
-
-  }
-
-  useEffect(() => {
-    setMemberData(member);
-  }, [member]);
-
-  useEffect(() => {
-  if (tab === "Attendance") {
-    loadAttendance();
-  }
-
-  if (tab === "Payments") {
-    loadPayments();
-  }
-}, [tab]);
-
-function startEdit() {
-  setEditForm({
-    first_name: memberData.first_name || "",
-    last_name: memberData.last_name || "",
-    email: memberData.email || "",
-    phone: memberData.phone || "",
-    membership_type: memberData.membership_type || "",
-    membership_status: memberData.membership_status || "active",
-    assigned_coach: memberData.assigned_coach || "",
-    emergency_contact: memberData.emergency_contact || "",
-    emergency_phone: memberData.emergency_phone || "",
-    notes: memberData.notes || "",
-    membership_start: memberData.membership_start
-      ? memberData.membership_start.slice(0, 10)
-      : "",
-    membership_end: memberData.membership_end
-      ? memberData.membership_end.slice(0, 10)
-      : "",
-    billing_cycle: memberData.billing_cycle || "",
-    monthly_rate: memberData.monthly_rate || "",
-    next_billing_date: memberData.next_billing_date
-      ? memberData.next_billing_date.slice(0, 10)
-      : "",
-    autopay_enabled: memberData.autopay_enabled || false,
-    billing_status: memberData.billing_status || "",
-  });
-
-  setEditing(true);
-}
-
-async function saveEdit() {
+}async function saveEdit() {
   const res = await fetch(`${API}/api/members/${memberData.id}`, {
     method: "PUT",
     headers: {
