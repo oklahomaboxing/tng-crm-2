@@ -72,6 +72,11 @@ class MembershipProduct(Base):
     recurring = Column(Boolean, default=False)
     active = Column(Boolean, default=True)
     category = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    is_membership = Column(Boolean, default=False)
+    renews_monthly = Column(Boolean, default=False)
+    autopay_allowed = Column(Boolean, default=False)
+    default_membership_months = Column(Integer, default=1)
 
 
 class Sale(Base):

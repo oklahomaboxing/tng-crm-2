@@ -72,6 +72,11 @@ def run_sqlite_migrations():
     add_column_if_missing("members", "clover_subscription_id", "VARCHAR")
     add_column_if_missing("members", "last_payment_date", "DATETIME")
     add_column_if_missing("members", "past_due_amount", "FLOAT DEFAULT 0")
+    add_column_if_missing("membership_products", "category", "VARCHAR")
+    add_column_if_missing("membership_products", "is_membership", "BOOLEAN DEFAULT 0")
+    add_column_if_missing("membership_products", "renews_monthly", "BOOLEAN DEFAULT 0")
+    add_column_if_missing("membership_products", "autopay_allowed", "BOOLEAN DEFAULT 0")
+    add_column_if_missing("membership_products", "default_membership_months", "INTEGER DEFAULT 1")
     with engine.connect() as conn:
         conn.execute(text("""
         CREATE TABLE IF NOT EXISTS attendance (
@@ -952,6 +957,7 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
         if product.category == "event_ticket":
             skipped += 1
             continue
+
 
         sale = Sale(
             member_id=member.id,
