@@ -219,6 +219,39 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         "revenue_this_month": revenue_this_month,
         "recent_checkins": recent,
     }
+def apply_membership(member, product):
+    membership_start = datetime.utcnow()
+
+    if (
+        product
+        and (
+            "3 month" in product.name.lower()
+            or "3-month" in product.name.lower()
+            or product.price == 300
+        )
+    ):
+        membership_end = membership_start + relativedelta(months=3)
+        billing_cycle = "3_month_prepaid"
+        monthly_rate = 0
+        next_billing = None
+    else:
+        membership_end = membership_start + relativedelta(months=1)
+        billing_cycle = "monthly"
+        monthly_rate = product.price if product else 0
+        next_billing = membership_end
+
+    member.membership_type = product.name if product else "Membership"
+    member.membership_status = "active"
+    member.membership_start = membership_start
+    member.membership_end = membership_end
+    member.billing_cycle = billing_cycle
+    member.monthly_rate = monthly_rate
+    member.next_billing_date = next_billing
+    member.autopay_enabled = False
+    member.billing_status = "active"
+
+    return member
+
 @app.post("/api/sales")
 def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     if user.role == "rep" and user.rep_profile.id != data.sales_rep_id:
@@ -228,20 +261,7 @@ def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = De
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    membership_start = datetime.utcnow()
 
-    if product and (
-        "3 month" in product.name.lower()
-        or "3-month" in product.name.lower()
-        or product.price == 300
-    ):
-        membership_end = membership_start + relativedelta(months=3)
-        billing_cycle = "3_month_prepaid"
-        autopay_enabled = False
-    else:
-        membership_end = membership_start + relativedelta(months=1)
-        billing_cycle = "monthly"
-        autopay_enabled = False
 
     member = Member(
         first_name=data.member_first_name,
@@ -250,16 +270,12 @@ def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = De
         phone=data.member_phone,
         status="active" if data.payment_status == "paid" else "pending",
         membership_status="active" if data.payment_status == "paid" else "pending",
-        membership_type=product.name,
-        membership_start=membership_start,
-        membership_end=membership_end,
-        billing_cycle=billing_cycle,
-        monthly_rate=product.price if billing_cycle == "monthly" else 0,
-        next_billing_date=membership_end if billing_cycle == "monthly" else None,
-        autopay_enabled=autopay_enabled,
-        billing_status="active" if data.payment_status == "paid" else "pending",
-    )
-
+            )
+    if data.payment_status == "paid":
+        member = apply_membership(member, product)
+    else:
+        member.membership_status = "pending"
+        member.billing_status = "pending"
     db.add(member)
     db.flush()
 
@@ -282,8 +298,8 @@ def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = De
         "sale_id": sale.id,
         "amount": sale.amount,
         "status": sale.payment_status,
-        "membership_end": membership_end.isoformat(),
-        "billing_cycle": billing_cycle,
+        "membership_end": member.membership_end.isoformat() if member.membership_end else None,
+        "billing_cycle": member.billing_cycle,
     }
 
 @app.get("/api/leaderboard")
@@ -1210,6 +1226,9 @@ def update_member(member_id: int, data: dict, db: Session = Depends(get_db), use
         "digital_member_id": m.digital_member_id,
         "membership_type": m.membership_type,
         "membership_status": m.membership_status,
+        "membership_start": m.membership_start.isoformat() if m.membership_start else None,
+        
+"membership_end": m.membership_end.isoformat() if m.membership_end else None,
         "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
         "total_checkins": m.total_checkins,
         "billing_cycle": m.billing_cycle,
