@@ -96,28 +96,8 @@ async function loadQr(repId) {
   setQrCodes((old) => ({ ...old, [repId]: j }));
 }
 
-async function syncProducts() {
-  const h = {
-    Authorization: "Bearer " + localStorage.getItem("token"),
-  };
-
-  const r = await fetch(`${API}/api/clover/sync-products`, {
-    method: "POST",
-    headers: h,
-  });
-
-  const j = await r.json();
-
-  alert(
-    j.message
-      ? `${j.message}\n${j.synced} products synced.`
-      : JSON.stringify(j)
-  );
-
-  load();
-}
-async function syncCustomers() {
-  const r = await fetch(`${API}/api/clover/sync-customers`, {
+async function syncTngOS() {
+  const r = await fetch(`${API}/api/clover/sync-all`, {
     method: "POST",
     headers: {
       Authorization: "Bearer " + localStorage.getItem("token"),
@@ -126,14 +106,28 @@ async function syncCustomers() {
 
   const j = await r.json();
 
+  if (!r.ok) {
+    alert(j.detail || "TNG OS Sync failed");
+    return;
+  }
+
   alert(
-    j.message
-      ? `${j.message}\n${j.synced} customers synced.`
-      : JSON.stringify(j)
+`✅ TNG OS Sync Complete
+
+Products Synced: ${j.products?.synced || 0}
+
+Customers Added: ${j.customers?.synced || 0}
+
+Customers Updated: ${j.customers?.updated || 0}
+
+Sales Imported: ${j.sales?.synced || 0}
+
+Sales Skipped: ${j.sales?.skipped || 0}`
   );
 
   load();
 }
+
   async function addRep() {
     const name = prompt("Rep name?");
     const repEmail = prompt("Rep email?");
@@ -188,16 +182,14 @@ async function syncCustomers() {
           <div>
             <button style={styles.secondaryBtn} onClick={load}>Refresh</button>
 <button
-  style={styles.secondaryBtn}
-  onClick={syncProducts}
+  style={{
+    ...styles.primaryBtnSmall,
+    background: "#111",
+  }}
+  onClick={syncTngOS}
 >
-  Sync Clover Products
-</button>
- 
-<button style={styles.secondaryBtn} onClick={syncCustomers}>
-  Sync Clover Customers
-</button>           
-            <button style={styles.primaryBtnSmall} onClick={addRep}>Add Rep</button>
+  🔄 TNG OS Sync
+</button>            <button style={styles.primaryBtnSmall} onClick={addRep}>Add Rep</button>
             <button style={styles.logoutBtn} onClick={() => { localStorage.clear(); setToken(""); }}>Logout</button>
           </div>
         </header>
