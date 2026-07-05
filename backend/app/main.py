@@ -875,27 +875,24 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
                 if matched_product:
                     product = matched_product
-      sale = Sale(
-    member_id=member.id,
-    sales_rep_id=default_rep.id,
-    product_id=product.id,
-    amount=total_cents / 100,
-    payment_status="paid",
-    transaction_status="paid",
-    clover_order_id=order_id,
-    clover_payment_id=payment_id,
-    payment_method="clover",
-    sale_date=sale_date,
-)
+        sale = Sale(
+            member_id=member.id,
+            sales_rep_id=default_rep.id,
+            product_id=product.id,
+            amount=total_cents / 100,
+            payment_status="paid",
+            transaction_status="paid",
+            clover_order_id=order_id,
+            clover_payment_id=payment_id,
+            payment_method="clover",
+            sale_date=sale_date,
+        )
 
-member = apply_membership(member, product)
+        member = apply_membership(member, product)
 
-db.add(sale)
+        db.add(sale)
 
-db.commit()
-db.refresh(member)
-
-synced += 1
+        synced += 1
 
     db.commit()
 
@@ -1034,9 +1031,6 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         member.digital_member_id = generate_digital_member_id()
         member.barcode = generate_barcode(member.member_number)
         member.qr_code = generate_qr_code(member.member_number)
-
-        db.commit()
-        db.refresh(member)
 
     existing_sale = db.query(Sale).filter(
         Sale.clover_checkout_id == lead.clover_checkout_id
