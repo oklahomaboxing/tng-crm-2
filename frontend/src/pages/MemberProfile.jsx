@@ -211,6 +211,33 @@ async function saveEdit() {
   alert("✅ Member updated");
 }
 
+async function deleteMember() {
+  const confirmText = prompt(
+    `Type DELETE to permanently delete ${fullName || "this member"}`
+  );
+
+  if (confirmText !== "DELETE") {
+    return;
+  }
+
+  const res = await fetch(`${API}/api/members/${memberData.id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || "Could not delete member");
+    return;
+  }
+
+  alert("✅ Member deleted");
+  onBack();
+}
+
   return (
     <Box>
       <Button variant="outlined" color="error" onClick={onBack} sx={{ mb: 2 }}>
@@ -329,6 +356,14 @@ async function saveEdit() {
                 <Button fullWidth variant="outlined" color="error" onClick={startEdit}>
                  ✏ Edit Member
                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="error"
+                  onClick={deleteMember}
+                >
+                  🗑 Delete Member
+                </Button>
               </Stack>
             </Grid>
           </Grid>
