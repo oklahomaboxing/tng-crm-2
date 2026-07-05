@@ -263,6 +263,20 @@ async function deleteMember() {
   onBack();
 }
 
+useEffect(() => {
+  setMemberData(member);
+}, [member]);
+
+useEffect(() => {
+  if (tab === "Attendance") {
+    loadAttendance();
+  }
+
+  if (tab === "Payments") {
+    loadPayments();
+  }
+}, [tab]);
+
   return (
     <Box>
       <Button variant="outlined" color="error" onClick={onBack} sx={{ mb: 2 }}>
