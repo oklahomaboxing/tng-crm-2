@@ -28,6 +28,41 @@ export default function Sales() {
       setLoading(false);
     }
   }
+  async function syncClover() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch(`${API}/api/clover/sync-all`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Sync failed");
+      }
+
+      alert(
+        `✅ Clover Sync Complete
+
+Products Synced: ${data.products.synced}
+Customers Added: ${data.customers.synced}
+Customers Updated: ${data.customers.updated}
+Sales Imported: ${data.sales.synced}
+Sales Skipped: ${data.sales.skipped}`
+      );
+
+      await loadSales();
+
+    } catch (err) {
+      setError(err.message || "Sync failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
 async function syncCloverSales() {
   try {
     setLoading(true);
@@ -70,9 +105,13 @@ async function syncCloverSales() {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography variant="h4" fontWeight="bold">Sales</Typography>
-        <Button variant="contained" color="error" onClick={syncCloverSales}>
-          Sync Clover Sales
-        </Button>
+      <Button
+        variant="contained"
+        color="error"
+        onClick={syncClover}
+      >
+        🔄 Sync Clover
+      </Button>
       </Box>
 
       <TextField
