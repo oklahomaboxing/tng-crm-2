@@ -972,9 +972,6 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             sale_date=sale_date,
         )
 
-        if not member.membership_start:
-            member.membership_start = sale_date
-
 
         if not member.membership_start:
             member.membership_start = sale_date
@@ -1437,6 +1434,82 @@ def renew_member(
         "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
         "membership_status": member.membership_status,
         "billing_status": member.billing_status,
+    }
+@app.post("/api/members/{member_id}/recalculate-membership")
+def recalculate_membership(
+    member_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    member = db.query(Member).filter(Member.id == member_id).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    sales = (
+        db.query(Sale)
+        .filter(Sale.member_id == member_id)
+        .order_by(Sale.sale_date.asc())
+        .all()
+    )
+
+    membership_sales = [
+        s for s in sales
+        if s.product and is_membership_product(s.product)
+    ]
+
+    if not membership_sales:
+        raise HTTPException(status_code=404, detail="No membership payments found")
+
+    first_sale = membership_sales[0]
+    last_sale = membership_sales[-1]
+
+    member.membership_start = first_sale.sale_date or datetime.utcnow()
+    member.membership_end = member.membership_start
+
+    for sale in membership_sales:
+        product = sale.product
+        sale_date = sale.sale_date or member.membership_end
+
+        if sale_date > member.membership_end:
+            member.membership_end = sale_date
+
+        if product and (
+            "3 month" in product.name.lower()
+            or "3 months" in product.name.lower()
+            or "3-month" in product.name.lower()
+            or product.price == 300
+        ):
+            member.membership_end = member.membership_end + relativedelta(months=3)
+            member.billing_cycle = "3_month_prepaid"
+            member.monthly_rate = 0
+            member.next_billing_date = None
+            member.autopay_enabled = False
+        else:
+            member.membership_end = member.membership_end + relativedelta(months=1)
+            member.billing_cycle = "monthly"
+            member.monthly_rate = product.price if product else 0
+            member.next_billing_date = member.membership_end
+
+        member.membership_type = product.name if product else member.membership_type
+
+    member.membership_status = "active"
+    member.billing_status = "active"
+    member.last_payment_date = last_sale.sale_date
+    member.past_due_amount = 0
+
+    db.commit()
+    db.refresh(member)
+
+    return {
+        "message": "Membership recalculated",
+        "membership_start": member.membership_start.isoformat() if member.membership_start else None,
+        "membership_end": member.membership_end.isoformat() if member.membership_end else None,
+        "billing_cycle": member.billing_cycle,
+        "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
+        "last_payment_date": member.last_payment_date.isoformat() if member.last_payment_date else None,
     }
 
 @app.delete("/api/members/{member_id}")
