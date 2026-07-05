@@ -158,6 +158,32 @@ async function renewMembership() {
   }
 }
 
+async function recalculateMembership() {
+  try {
+    const res = await fetch(
+      `${API}/api/members/${memberData.id}/recalculate-membership`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        },
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || "Recalculation failed");
+    }
+
+    await loadMember();
+
+    alert("✅ Membership dates recalculated from payment history.");
+  } catch (err) {
+    alert(`❌ ${err.message}`);
+  }
+}
+
 async function uploadPhoto(e) {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -408,6 +434,25 @@ return (
                   onClick={renewMembership}
                 >
                   💳 Renew Membership
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  fullWidth
+                  sx={{ mt: 1 }}
+                  onClick={recalculateMembership}
+                >
+                  🔄 Recalculate From Payments
+                </Button>
+
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  fullWidth
+                  sx={{ mt: 1 }}
+                  onClick={recalculateMembership}
+                >
+                  🔄 Recalculate From Payments
                 </Button>
                 <Button fullWidth variant="outlined" color="error" onClick={() => setShowCard(true)}>
                   🖨 Print Card
