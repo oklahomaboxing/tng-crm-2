@@ -1198,6 +1198,8 @@ def update_member(member_id: int, data: dict, db: Session = Depends(get_db), use
         "billing_cycle",
         "monthly_rate",
         "next_billing_date",
+        "membership_start",
+        "membership_end",
         "autopay_enabled",
         "billing_status",
         "clover_subscription_id",
@@ -1205,6 +1207,15 @@ def update_member(member_id: int, data: dict, db: Session = Depends(get_db), use
         "past_due_amount",
         "notes",
     ]
+
+    date_fields = ["membership_start", "membership_end", "next_billing_date", "last_payment_date"]
+
+    for field in date_fields:
+        if field in data and data[field]:
+            try:
+                data[field] = datetime.fromisoformat(data[field])
+            except Exception:
+                raise HTTPException(status_code=400, detail=f"Invalid date format for {field}. Use YYYY-MM-DD.")
 
     for field in allowed_fields:
         if field in data:
