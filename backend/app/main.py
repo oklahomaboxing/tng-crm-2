@@ -818,6 +818,27 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
         "synced": synced,
         "skipped": skipped,
     }
+@app.post("/api/clover/reset-imported-sales")
+def reset_imported_clover_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+
+    sales = db.query(Sale).filter(
+        Sale.payment_method == "clover",
+        Sale.clover_order_id != None
+    ).all()
+
+    deleted = len(sales)
+
+    for sale in sales:
+        db.delete(sale)
+
+    db.commit()
+
+    return {
+        "message": "Imported Clover sales cleared",
+        "deleted": deleted,
+    }
+
 @app.get("/api/members/{member_id}/payments")
 def member_payments(member_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     member = db.query(Member).filter(Member.id == member_id).first()
