@@ -16,6 +16,8 @@ from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetti
 from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
+from dateutil.relativedelta import relativedelta
+
 
 Base.metadata.create_all(bind=engine)
 def add_column_if_missing(table, column, column_type):
@@ -216,19 +218,72 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         "revenue_this_month": revenue_this_month,
         "recent_checkins": recent,
     }
-
 @app.post("/api/sales")
 def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     if user.role == "rep" and user.rep_profile.id != data.sales_rep_id:
         raise HTTPException(status_code=403, detail="Reps can only create their own sales")
+
     product = db.query(MembershipProduct).filter(MembershipProduct.id == data.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    member = Member(first_name=data.member_first_name, last_name=data.member_last_name, email=data.member_email, phone=data.member_phone, status="active" if data.payment_status == "paid" else "pending")
-    db.add(member); db.flush()
-    sale = Sale(member_id=member.id, sales_rep_id=data.sales_rep_id, product_id=product.id, amount=product.price, payment_status=data.payment_status, clover_order_id=data.clover_order_id, clover_payment_id=data.clover_payment_id)
-    db.add(sale); db.commit(); db.refresh(sale)
-    return {"sale_id": sale.id, "amount": sale.amount, "status": sale.payment_status}
+
+    membership_start = datetime.utcnow()
+
+    if product and (
+        "3 month" in product.name.lower()
+        or "3-month" in product.name.lower()
+        or product.price == 300
+    ):
+        membership_end = membership_start + relativedelta(months=3)
+        billing_cycle = "3_month_prepaid"
+        autopay_enabled = False
+    else:
+        membership_end = membership_start + relativedelta(months=1)
+        billing_cycle = "monthly"
+        autopay_enabled = False
+
+    member = Member(
+        first_name=data.member_first_name,
+        last_name=data.member_last_name,
+        email=data.member_email,
+        phone=data.member_phone,
+        status="active" if data.payment_status == "paid" else "pending",
+        membership_status="active" if data.payment_status == "paid" else "pending",
+        membership_type=product.name,
+        membership_start=membership_start,
+        membership_end=membership_end,
+        billing_cycle=billing_cycle,
+        monthly_rate=product.price if billing_cycle == "monthly" else 0,
+        next_billing_date=membership_end if billing_cycle == "monthly" else None,
+        autopay_enabled=autopay_enabled,
+        billing_status="active" if data.payment_status == "paid" else "pending",
+    )
+
+    db.add(member)
+    db.flush()
+
+    sale = Sale(
+        member_id=member.id,
+        sales_rep_id=data.sales_rep_id,
+        product_id=product.id,
+        amount=product.price,
+        payment_status=data.payment_status,
+        clover_order_id=data.clover_order_id,
+        clover_payment_id=data.clover_payment_id,
+        sale_date=datetime.utcnow(),
+    )
+
+    db.add(sale)
+    db.commit()
+    db.refresh(sale)
+
+    return {
+        "sale_id": sale.id,
+        "amount": sale.amount,
+        "status": sale.payment_status,
+        "membership_end": membership_end.isoformat(),
+        "billing_cycle": billing_cycle,
+    }
 
 @app.get("/api/leaderboard")
 def leaderboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
