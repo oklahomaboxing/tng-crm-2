@@ -55,6 +55,14 @@ class Member(Base):
     total_checkins = Column(Integer, default=0)
     expires_soon = Column(Boolean, default=False)
     notes = Column(String, nullable=True)
+    billing_cycle = Column(String, nullable=True)
+    monthly_rate = Column(Float, default=0)
+    next_billing_date = Column(DateTime, nullable=True)
+    autopay_enabled = Column(Boolean, default=False)
+    billing_status = Column(String, nullable=True)
+    clover_subscription_id = Column(String, nullable=True)
+    last_payment_date = Column(DateTime, nullable=True)
+    past_due_amount = Column(Float, default=0)
 
 class MembershipProduct(Base):
     __tablename__ = "membership_products"
