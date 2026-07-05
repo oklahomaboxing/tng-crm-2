@@ -67,7 +67,7 @@ def run_sqlite_migrations():
     add_column_if_missing("members", "billing_status", "VARCHAR")
     add_column_if_missing("members", "clover_subscription_id", "VARCHAR")
     add_column_if_missing("members", "last_payment_date", "DATETIME")
-    add_column_if_missing("members", "past_due_amount", "FLOAT DEFAULT 0
+    add_column_if_missing("members", "past_due_amount", "FLOAT DEFAULT 0")
     with engine.connect() as conn:
         conn.execute(text("""
         CREATE TABLE IF NOT EXISTS attendance (
