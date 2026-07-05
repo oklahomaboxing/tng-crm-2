@@ -277,8 +277,8 @@ useEffect(() => {
   }
 }, [tab]);
 
-  return (
-    <Box>
+return (
+  <Box>
       <Button variant="outlined" color="error" onClick={onBack} sx={{ mb: 2 }}>
         ← Back to Members
       </Button>
@@ -383,7 +383,12 @@ useEffect(() => {
                 >
                   ✅ Check In
                 </Button>
-                <Button fullWidth variant="contained" color="error">
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="error"
+                  onClick={renewMembership}
+                >
                   💳 Renew Membership
                 </Button>
                 <Button fullWidth variant="outlined" color="error" onClick={() => setShowCard(true)}>
