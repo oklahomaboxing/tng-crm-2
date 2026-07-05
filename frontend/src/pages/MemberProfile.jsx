@@ -445,15 +445,7 @@ return (
                   🔄 Recalculate From Payments
                 </Button>
 
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  fullWidth
-                  sx={{ mt: 1 }}
-                  onClick={recalculateMembership}
-                >
-                  🔄 Recalculate From Payments
-                </Button>
+
                 <Button fullWidth variant="outlined" color="error" onClick={() => setShowCard(true)}>
                   🖨 Print Card
                 </Button>
