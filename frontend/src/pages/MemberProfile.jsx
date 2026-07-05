@@ -482,6 +482,41 @@ async function deleteMember() {
                 <Typography><b>Status:</b> {memberData.membership_status || memberData.status || "-"}</Typography>
                 <Typography><b>Total Check-ins:</b> {memberData.total_checkins || 0}</Typography>
                 <Typography>
+                  <b>Membership Starts:</b>{" "}
+                  {memberData.membership_start
+                    ? new Date(memberData.membership_start).toLocaleDateString()
+                    : "-"}
+                </Typography>
+
+                <Typography>
+                  <b>Membership Expires:</b>{" "}
+                  {memberData.membership_end
+                    ? new Date(memberData.membership_end).toLocaleDateString()
+                    : "-"}
+                </Typography>
+
+                <Typography>
+                  <b>Billing Cycle:</b>{" "}
+                  {memberData.billing_cycle || "-"}
+                </Typography>
+
+                <Typography>
+                  <b>Monthly Rate:</b>{" "}
+                  ${Number(memberData.monthly_rate || 0).toFixed(2)}
+                </Typography>
+
+                <Typography>
+                  <b>Next Billing:</b>{" "}
+                  {memberData.next_billing_date
+                    ? new Date(memberData.next_billing_date).toLocaleDateString()
+                    : "Not Scheduled"}
+                </Typography>
+
+                <Typography>
+                  <b>AutoPay:</b>{" "}
+                  {memberData.autopay_enabled ? "🟢 Enabled" : "⚪ Disabled"}
+                </Typography>
+                <Typography>
                   <b>Last Check-in:</b>{" "}
                   {memberData.last_checkin
                     ? new Date(memberData.last_checkin).toLocaleString()
