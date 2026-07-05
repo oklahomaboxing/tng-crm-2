@@ -120,6 +120,31 @@ async function loadPayments() {
     }
   }
 
+async function renewMembership() {
+  try {
+    const res = await fetch(
+      `${API}/api/members/${memberData.id}/renew`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        },
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || "Renewal failed");
+    }
+
+    await loadMember();
+
+    alert("✅ Membership renewed successfully");
+  } catch (err) {
+    alert(`❌ ${err.message}`);
+  }
+}
   async function uploadPhoto(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -691,6 +716,7 @@ async function deleteMember() {
           variant="contained"
           color="error"
           fullWidth
+          onClick={renewMembership}
         >
           🔄 Renew Membership
         </Button>
