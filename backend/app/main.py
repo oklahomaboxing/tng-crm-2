@@ -875,21 +875,27 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
                 if matched_product:
                     product = matched_product
-        sale = Sale(
-            member_id=member.id,
-            sales_rep_id=default_rep.id,
-            product_id=product.id,
-            amount=total_cents / 100,
-            payment_status="paid",
-            transaction_status="paid",
-            clover_order_id=order_id,
-            clover_payment_id=payment_id,
-            payment_method="clover",
-            sale_date=sale_date,
-        )
+      sale = Sale(
+    member_id=member.id,
+    sales_rep_id=default_rep.id,
+    product_id=product.id,
+    amount=total_cents / 100,
+    payment_status="paid",
+    transaction_status="paid",
+    clover_order_id=order_id,
+    clover_payment_id=payment_id,
+    payment_method="clover",
+    sale_date=sale_date,
+)
 
-        db.add(sale)
-        synced += 1
+member = apply_membership(member, product)
+
+db.add(sale)
+
+db.commit()
+db.refresh(member)
+
+synced += 1
 
     db.commit()
 
