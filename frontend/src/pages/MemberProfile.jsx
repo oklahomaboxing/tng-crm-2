@@ -480,42 +480,10 @@ async function deleteMember() {
                 <Divider sx={{ my: 2 }} />
                 <Typography><b>Type:</b> {memberData.membership_type || "Clover Customer"}</Typography>
                 <Typography><b>Status:</b> {memberData.membership_status || memberData.status || "-"}</Typography>
-                <Typography><b>Total Check-ins:</b> {memberData.total_checkins || 0}</Typography>
                 <Typography>
-                  <b>Membership Starts:</b>{" "}
-                  {memberData.membership_start
-                    ? new Date(memberData.membership_start).toLocaleDateString()
-                    : "-"}
+                  <b>Total Check-ins:</b> {memberData.total_checkins || 0}
                 </Typography>
 
-                <Typography>
-                  <b>Membership Expires:</b>{" "}
-                  {memberData.membership_end
-                    ? new Date(memberData.membership_end).toLocaleDateString()
-                    : "-"}
-                </Typography>
-
-                <Typography>
-                  <b>Billing Cycle:</b>{" "}
-                  {memberData.billing_cycle || "-"}
-                </Typography>
-
-                <Typography>
-                  <b>Monthly Rate:</b>{" "}
-                  ${Number(memberData.monthly_rate || 0).toFixed(2)}
-                </Typography>
-
-                <Typography>
-                  <b>Next Billing:</b>{" "}
-                  {memberData.next_billing_date
-                    ? new Date(memberData.next_billing_date).toLocaleDateString()
-                    : "Not Scheduled"}
-                </Typography>
-
-                <Typography>
-                  <b>AutoPay:</b>{" "}
-                  {memberData.autopay_enabled ? "🟢 Enabled" : "⚪ Disabled"}
-                </Typography>
                 <Typography>
                   <b>Last Check-in:</b>{" "}
                   {memberData.last_checkin
@@ -667,8 +635,87 @@ async function deleteMember() {
   </Card>
 )}
 
-{tab !== "Profile" && tab !== "Attendance" && tab !== "Payments" && (
+{tab === "Membership" && (
   <Card sx={{ borderRadius: 3 }}>
+    <CardContent>
+      <Typography variant="h6" fontWeight="bold">
+        Membership Billing
+      </Typography>
+      <Divider sx={{ my: 2 }} />
+
+      <Typography><b>Plan:</b> {memberData.membership_type || "-"}</Typography>
+      <Typography><b>Status:</b> {memberData.membership_status || "-"}</Typography>
+
+      <Typography>
+        <b>Membership Starts:</b>{" "}
+        {memberData.membership_start
+          ? new Date(memberData.membership_start).toLocaleDateString()
+          : "-"}
+      </Typography>
+
+      <Typography>
+        <b>Membership Expires:</b>{" "}
+        {memberData.membership_end
+          ? new Date(memberData.membership_end).toLocaleDateString()
+          : "-"}
+      </Typography>
+
+      <Typography><b>Billing Cycle:</b> {memberData.billing_cycle || "-"}</Typography>
+
+      <Typography>
+        <b>Monthly Rate:</b> ${Number(memberData.monthly_rate || 0).toFixed(2)}
+      </Typography>
+
+      <Typography>
+        <b>Next Billing:</b>{" "}
+        {memberData.next_billing_date
+          ? new Date(memberData.next_billing_date).toLocaleDateString()
+          : "Not Scheduled"}
+      </Typography>
+
+      <Typography>
+        <b>AutoPay:</b> {memberData.autopay_enabled ? "🟢 Enabled" : "⚪ Disabled"}
+      </Typography>
+      <Divider sx={{ my: 3 }} />
+
+      <Stack direction="row" spacing={2} flexWrap="wrap">
+        <Button
+          variant="contained"
+          color="success"
+          fullWidth
+        >
+          💳 Enable AutoPay
+        </Button>
+
+        <Button
+          variant="contained"
+          color="error"
+          fullWidth
+        >
+          🔄 Renew Membership
+        </Button>
+
+        <Button
+          variant="outlined"
+          color="warning"
+          fullWidth
+        >
+          ⏸ Pause Membership
+        </Button>
+
+        <Button
+          variant="outlined"
+          color="error"
+          fullWidth
+        >
+          ❌ Cancel Membership
+        </Button>
+      </Stack>
+    </CardContent>
+  </Card>
+)}
+
+{tab !== "Profile" && tab !== "Attendance" && tab !== "Payments" && tab !== "Membership" && (  <Card sx={{ borderRadius: 3 }}>
     <CardContent>
       <Typography variant="h6" fontWeight="bold">
         {tab}
