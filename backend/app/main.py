@@ -1282,6 +1282,51 @@ def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_
     settings = db.query(CloverSetting).first()
     return settings or {"merchant_id": "", "environment": "sandbox", "webhook_secret": ""}
 
+@app.post("/api/members/{member_id}/renew")
+def renew_member(
+    member_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    member = db.query(Member).filter(Member.id == member_id).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    today = datetime.utcnow()
+
+    current_end = member.membership_end if member.membership_end and member.membership_end > today else today
+
+    if member.billing_cycle == "3_month_prepaid" or (member.monthly_rate or 0) == 0:
+        new_end = current_end + relativedelta(months=3)
+        member.billing_cycle = "3_month_prepaid"
+        member.next_billing_date = None
+        member.autopay_enabled = False
+    else:
+        new_end = current_end + relativedelta(months=1)
+        member.billing_cycle = "monthly"
+        member.next_billing_date = new_end
+
+    member.membership_start = member.membership_start or today
+    member.membership_end = new_end
+    member.membership_status = "active"
+    member.billing_status = "active"
+    member.past_due_amount = 0
+
+    db.commit()
+    db.refresh(member)
+
+    return {
+        "message": "Membership renewed",
+        "membership_end": member.membership_end.isoformat() if member.membership_end else None,
+        "billing_cycle": member.billing_cycle,
+        "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
+        "membership_status": member.membership_status,
+        "billing_status": member.billing_status,
+    }
+
 @app.delete("/api/members/{member_id}")
 def delete_member(
     member_id: int,
