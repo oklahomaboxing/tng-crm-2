@@ -219,8 +219,35 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         "revenue_this_month": revenue_this_month,
         "recent_checkins": recent,
     }
+def is_membership_product(product):
+    if not product or not product.name:
+        return False
+
+    name = product.name.lower()
+
+    non_membership_words = [
+        "ga",
+        "general admission",
+        "table",
+        "table seat",
+        "seat",
+        "vip table",
+        "ringside",
+        "ticket",
+        "fight night",
+        "admission",
+    ]
+
+    for word in non_membership_words:
+        if word in name:
+            return False
+
+    return True
+
 def apply_membership(member, product):
     membership_start = datetime.utcnow()
+    if not is_membership_product(product):
+        return member
 
     if (
         product
@@ -1296,6 +1323,7 @@ def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_
 @app.post("/api/members/{member_id}/renew")
 def renew_member(
     member_id: int,
+    data: dict,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -1306,19 +1334,15 @@ def renew_member(
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    today = datetime.utcnow()
+    months = int(data.get("months", 1))
 
+    if months not in [1, 3]:
+        raise HTTPException(status_code=400, detail="Renewal must be 1 or 3 months")
+
+    today = datetime.utcnow()
     current_end = member.membership_end if member.membership_end and member.membership_end > today else today
 
-    if member.billing_cycle == "3_month_prepaid" or (member.monthly_rate or 0) == 0:
-        new_end = current_end + relativedelta(months=3)
-        member.billing_cycle = "3_month_prepaid"
-        member.next_billing_date = None
-        member.autopay_enabled = False
-    else:
-        new_end = current_end + relativedelta(months=1)
-        member.billing_cycle = "monthly"
-        member.next_billing_date = new_end
+    new_end = current_end + relativedelta(months=months)
 
     member.membership_start = member.membership_start or today
     member.membership_end = new_end
@@ -1326,11 +1350,20 @@ def renew_member(
     member.billing_status = "active"
     member.past_due_amount = 0
 
+    if months == 3:
+        member.billing_cycle = "3_month_prepaid"
+        member.next_billing_date = None
+        member.autopay_enabled = False
+    else:
+        member.billing_cycle = "monthly"
+        member.next_billing_date = new_end
+
     db.commit()
     db.refresh(member)
 
     return {
-        "message": "Membership renewed",
+        "message": f"Membership renewed for {months} month(s)",
+        "membership_start": member.membership_start.isoformat() if member.membership_start else None,
         "membership_end": member.membership_end.isoformat() if member.membership_end else None,
         "billing_cycle": member.billing_cycle,
         "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
