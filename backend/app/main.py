@@ -60,6 +60,14 @@ def run_sqlite_migrations():
     add_column_if_missing("members", "total_checkins", "INTEGER DEFAULT 0")
     add_column_if_missing("members", "expires_soon", "BOOLEAN DEFAULT 0")
     add_column_if_missing("members", "notes", "VARCHAR")
+    add_column_if_missing("members", "billing_cycle", "VARCHAR")
+    add_column_if_missing("members", "monthly_rate", "FLOAT DEFAULT 0")
+    add_column_if_missing("members", "next_billing_date", "DATETIME")
+    add_column_if_missing("members", "autopay_enabled", "BOOLEAN DEFAULT 0")
+    add_column_if_missing("members", "billing_status", "VARCHAR")
+    add_column_if_missing("members", "clover_subscription_id", "VARCHAR")
+    add_column_if_missing("members", "last_payment_date", "DATETIME")
+    add_column_if_missing("members", "past_due_amount", "FLOAT DEFAULT 0
     with engine.connect() as conn:
         conn.execute(text("""
         CREATE TABLE IF NOT EXISTS attendance (
@@ -1078,6 +1086,14 @@ def get_member(member_id: int, db: Session = Depends(get_db), user: User = Depen
         "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
         "total_checkins": m.total_checkins,
         "photo_url": m.photo_url,
+        "billing_cycle": m.billing_cycle,
+        "monthly_rate": m.monthly_rate,
+        "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
+        "autopay_enabled": m.autopay_enabled,
+        "billing_status": m.billing_status,
+        "clover_subscription_id": m.clover_subscription_id,
+        "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
+        "past_due_amount": m.past_due_amount,
         "created_at": m.created_at.isoformat() if m.created_at else None,
     }
 @app.put("/api/members/{member_id}")
@@ -1098,6 +1114,14 @@ def update_member(member_id: int, data: dict, db: Session = Depends(get_db), use
         "assigned_coach",
         "emergency_contact",
         "emergency_phone",
+        "billing_cycle",
+        "monthly_rate",
+        "next_billing_date",
+        "autopay_enabled",
+        "billing_status",
+        "clover_subscription_id",
+        "last_payment_date",
+        "past_due_amount",
         "notes",
     ]
 
@@ -1123,6 +1147,14 @@ def update_member(member_id: int, data: dict, db: Session = Depends(get_db), use
         "membership_status": m.membership_status,
         "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
         "total_checkins": m.total_checkins,
+        "billing_cycle": m.billing_cycle,
+        "monthly_rate": m.monthly_rate,
+        "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
+        "autopay_enabled": m.autopay_enabled,
+        "billing_status": m.billing_status,
+        "clover_subscription_id": m.clover_subscription_id,
+        "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
+        "past_due_amount": m.past_due_amount,
     }
 @app.post("/api/members/{member_id}/photo")
 def upload_member_photo(
