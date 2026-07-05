@@ -949,6 +949,10 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
                 if matched_product:
                     product = matched_product
+        if product.category == "event_ticket":
+            skipped += 1
+            continue
+
         sale = Sale(
             member_id=member.id,
             sales_rep_id=default_rep.id,
