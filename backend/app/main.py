@@ -251,7 +251,7 @@ def is_membership_product(product):
     return True
 
 def apply_membership(member, product):
-    membership_start = datetime.utcnow()
+    membership_start = member.membership_start or datetime.utcnow()
     if not is_membership_product(product):
         return member
 
@@ -972,7 +972,16 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             sale_date=sale_date,
         )
 
+        if not member.membership_start:
+            member.membership_start = sale_date
+
+
+        if not member.membership_start:
+            member.membership_start = sale_date
+
         member = apply_membership(member, product)
+
+        member.last_payment_date = sale_date
 
         db.add(sale)
 
