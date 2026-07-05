@@ -265,7 +265,11 @@ async function deleteMember() {
 
 useEffect(() => {
   setMemberData(member);
-}, [member]);
+
+  if (member?.id) {
+    loadMember();
+  }
+}, [member?.id]);
 
 useEffect(() => {
   if (tab === "Attendance") {
@@ -274,6 +278,20 @@ useEffect(() => {
 
   if (tab === "Payments") {
     loadPayments();
+  }
+}, [tab]);
+
+useEffect(() => {
+  if (tab === "Attendance") {
+    loadAttendance();
+  }
+
+  if (tab === "Payments") {
+    loadPayments();
+  }
+
+  if (tab === "Membership") {
+    loadMember();
   }
 }, [tab]);
 
