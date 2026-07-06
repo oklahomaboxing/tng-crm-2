@@ -147,8 +147,56 @@ def me(user: User = Depends(current_user)):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role}
 
 @app.get("/api/products")
-def products(db: Session = Depends(get_db)):
-    return db.query(MembershipProduct).filter(MembershipProduct.active == True).all()
+def products(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return db.query(MembershipProduct).order_by(MembershipProduct.name.asc()).all()
+@app.put("/api/products/{product_id}")
+def update_product(
+    product_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    product = db.query(MembershipProduct).filter(
+        MembershipProduct.id == product_id
+    ).first()
+
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    allowed_fields = [
+        "name",
+        "price",
+        "active",
+        "category",
+        "is_membership",
+        "renews_monthly",
+        "autopay_allowed",
+        "default_membership_months",
+    ]
+
+    for field in allowed_fields:
+        if field in data:
+            setattr(product, field, data[field])
+
+    db.commit()
+    db.refresh(product)
+
+    return {
+        "message": "Product updated",
+        "product": {
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+            "active": product.active,
+            "category": product.category,
+            "is_membership": product.is_membership,
+            "renews_monthly": product.renews_monthly,
+            "autopay_allowed": product.autopay_allowed,
+            "default_membership_months": product.default_membership_months,
+        },
+    }
 
 @app.post("/api/reps")
 def create_rep(data: RepCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
