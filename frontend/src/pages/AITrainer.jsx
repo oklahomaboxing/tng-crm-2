@@ -284,7 +284,9 @@ async function updateLiveDisplay(extra = {}) {
       sub_prompt: subPrompt,
       ...extra,
     }),
-  }).catch(() => {});
+    }).catch((err) => {
+    console.error("Live display update failed", err);
+  });
 }
 
 function randomFrom(list) {
@@ -588,9 +590,17 @@ export default function AITrainer() {
     return () => clearTimers();
   }, []);
 useEffect(() => {
-  updateLiveDisplay();
-}, [phase, currentRound, timeLeft, prompt, subPrompt]);
-
+  updateLiveDisplay({
+    active: running,
+    phase,
+    round: currentRound,
+    total_rounds: rounds,
+    time_left: timeLeft,
+    module: currentModuleRef.current,
+    prompt,
+    sub_prompt: subPrompt,
+  });
+}, [running, phase, currentRound, rounds, timeLeft, prompt, subPrompt]);
   return (
     <Box>
       <Box
