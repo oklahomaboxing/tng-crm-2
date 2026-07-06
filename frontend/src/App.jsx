@@ -1,4 +1,5 @@
 import Dashboard from "./pages/Dashboard.jsx";
+import AIDisplay from "./pages/AIDisplay.jsx";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import Sidebar from "./components/Sidebar.jsx";
@@ -65,6 +66,10 @@ if (paymentStatus === "failed") {
 
 if (params.has("join")) {
   return <JoinPage />;
+}
+
+if (params.has("ai-display")) {
+  return <AIDisplay />;
 }
   async function login() {
     const r = await fetch(`${API}/api/login`, {
