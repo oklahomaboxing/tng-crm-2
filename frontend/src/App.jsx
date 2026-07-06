@@ -68,9 +68,6 @@ if (params.has("join")) {
   return <JoinPage />;
 }
 
-if (params.has("ai-display")) {
-  return <AIDisplay />;
-}
   async function login() {
     const r = await fetch(`${API}/api/login`, {
       method: "POST",
@@ -483,4 +480,10 @@ paymentCard: {
   },
 };
 
-createRoot(document.getElementById("root")).render(<App />);
+const host = window.location.hostname.toLowerCase();
+
+if (host === "display.tngboxinggym.com") {
+  createRoot(document.getElementById("root")).render(<AIDisplay />);
+} else {
+  createRoot(document.getElementById("root")).render(<App />);
+}
