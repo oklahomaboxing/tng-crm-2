@@ -198,6 +198,7 @@ def update_product(
         },
     }
 
+
 @app.post("/api/reps")
 def create_rep(data: RepCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
@@ -826,12 +827,23 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
         if not existing and phone:
             existing = db.query(Member).filter(Member.phone == phone).first()
 
+        if not existing and first_name and last_name:
+            existing = db.query(Member).filter(
+                func.lower(Member.first_name) == first_name.lower(),
+                func.lower(Member.last_name) == last_name.lower(),
+            ).first()
+
         if existing:
             existing.clover_customer_id = c.get("id")
             if email and not existing.email:
                 existing.email = email
             if phone and not existing.phone:
                 existing.phone = phone
+            if first_name:
+                existing.first_name = first_name
+
+            if last_name:
+                existing.last_name = last_name
             if not existing.member_number:
                 existing.member_number = f"TNG-{existing.id:06d}"
                 existing.digital_member_id = generate_digital_member_id()
@@ -1559,6 +1571,69 @@ def recalculate_membership(
         "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
         "last_payment_date": member.last_payment_date.isoformat() if member.last_payment_date else None,
     }
+@app.get("/api/duplicates/members")
+def find_duplicate_members(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    members = db.query(Member).all()
+    results = []
+
+    for i, a in enumerate(members):
+        for b in members[i + 1:]:
+            reasons = []
+            confidence = 0
+
+            if a.email and b.email and a.email.lower() == b.email.lower():
+                reasons.append("Same email")
+                confidence = max(confidence, 100)
+
+            if a.phone and b.phone and a.phone == b.phone:
+                reasons.append("Same phone")
+                confidence = max(confidence, 100)
+
+            if (
+                a.clover_customer_id
+                and b.clover_customer_id
+                and a.clover_customer_id == b.clover_customer_id
+            ):
+                reasons.append("Same Clover Customer ID")
+                confidence = max(confidence, 100)
+
+            if (
+                a.first_name
+                and b.first_name
+                and a.last_name
+                and b.last_name
+                and a.first_name.lower() == b.first_name.lower()
+                and a.last_name.lower() == b.last_name.lower()
+            ):
+                reasons.append("Same first and last name")
+                confidence = max(confidence, 90)
+
+            if reasons:
+                results.append({
+                    "member_a": {
+                        "id": a.id,
+                        "name": f"{a.first_name} {a.last_name}",
+                        "email": a.email,
+                        "phone": a.phone,
+                        "member_number": a.member_number,
+                    },
+                    "member_b": {
+                        "id": b.id,
+                        "name": f"{b.first_name} {b.last_name}",
+                        "email": b.email,
+                        "phone": b.phone,
+                        "member_number": b.member_number,
+                    },
+                    "reasons": reasons,
+                    "confidence": confidence,
+                })
+
+    return results
 
 @app.delete("/api/members/{member_id}")
 def delete_member(
