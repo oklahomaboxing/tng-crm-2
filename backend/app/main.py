@@ -1581,6 +1581,47 @@ def find_duplicate_members(
     members = db.query(Member).all()
     results = []
 
+    def member_summary(m):
+        payments = db.query(Sale).filter(Sale.member_id == m.id).all()
+        payment_count = len(payments)
+        lifetime_value = sum(s.amount or 0 for s in payments)
+        attendance_count = db.query(Attendance).filter(
+            Attendance.member_id == m.id
+        ).count()
+
+        score = 0
+        if m.clover_customer_id:
+            score += 100
+        if payment_count:
+            score += payment_count * 10
+        if attendance_count:
+            score += min(attendance_count, 50)
+        if m.photo_url:
+            score += 15
+        if m.membership_status == "active":
+            score += 20
+        if m.email:
+            score += 5
+        if m.phone:
+            score += 5
+
+        return {
+            "id": m.id,
+            "name": f"{m.first_name or ''} {m.last_name or ''}".strip(),
+            "email": m.email,
+            "phone": m.phone,
+            "member_number": m.member_number,
+            "membership_status": m.membership_status,
+            "membership_type": m.membership_type,
+            "clover_customer_id": m.clover_customer_id,
+            "photo_url": m.photo_url,
+            "payment_count": payment_count,
+            "lifetime_value": lifetime_value,
+            "attendance_count": attendance_count,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "score": score,
+        }
+
     for i, a in enumerate(members):
         for b in members[i + 1:]:
             reasons = []
@@ -1614,27 +1655,26 @@ def find_duplicate_members(
                 confidence = max(confidence, 90)
 
             if reasons:
+                summary_a = member_summary(a)
+                summary_b = member_summary(b)
+
+                if summary_a["score"] >= summary_b["score"]:
+                    recommended_keep_id = a.id
+                    recommended_merge_id = b.id
+                else:
+                    recommended_keep_id = b.id
+                    recommended_merge_id = a.id
+
                 results.append({
-                    "member_a": {
-                        "id": a.id,
-                        "name": f"{a.first_name} {a.last_name}",
-                        "email": a.email,
-                        "phone": a.phone,
-                        "member_number": a.member_number,
-                    },
-                    "member_b": {
-                        "id": b.id,
-                        "name": f"{b.first_name} {b.last_name}",
-                        "email": b.email,
-                        "phone": b.phone,
-                        "member_number": b.member_number,
-                    },
+                    "member_a": summary_a,
+                    "member_b": summary_b,
                     "reasons": reasons,
                     "confidence": confidence,
+                    "recommended_keep_id": recommended_keep_id,
+                    "recommended_merge_id": recommended_merge_id,
                 })
 
-    return results
-@app.post("/api/duplicates/members/merge")
+    return results@app.post("/api/duplicates/members/merge")
 def merge_duplicate_members(
     data: dict,
     db: Session = Depends(get_db),
