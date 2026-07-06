@@ -1745,6 +1745,44 @@ def merge_duplicate_members(
         "kept_member_id": keep.id,
         "deleted_member_id": merge_id,
     }
+LIVE_AI_SESSION = {
+    "active": False,
+    "phase": "Ready",
+    "round": 0,
+    "total_rounds": 0,
+    "time_left": 0,
+    "module": "TNG Coach AI",
+    "prompt": "Waiting for coach to start session",
+    "sub_prompt": "Open this screen on every TV in the gym.",
+    "updated_at": datetime.utcnow().isoformat(),
+}
+
+
+@app.get("/api/ai/live-session")
+def get_live_ai_session():
+    return LIVE_AI_SESSION
+
+
+@app.post("/api/ai/live-session")
+def update_live_ai_session(
+    data: dict,
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    LIVE_AI_SESSION.update({
+        "active": data.get("active", LIVE_AI_SESSION["active"]),
+        "phase": data.get("phase", LIVE_AI_SESSION["phase"]),
+        "round": data.get("round", LIVE_AI_SESSION["round"]),
+        "total_rounds": data.get("total_rounds", LIVE_AI_SESSION["total_rounds"]),
+        "time_left": data.get("time_left", LIVE_AI_SESSION["time_left"]),
+        "module": data.get("module", LIVE_AI_SESSION["module"]),
+        "prompt": data.get("prompt", LIVE_AI_SESSION["prompt"]),
+        "sub_prompt": data.get("sub_prompt", LIVE_AI_SESSION["sub_prompt"]),
+        "updated_at": datetime.utcnow().isoformat(),
+    })
+
+    return LIVE_AI_SESSION
 
 @app.delete("/api/members/{member_id}")
 def delete_member(
