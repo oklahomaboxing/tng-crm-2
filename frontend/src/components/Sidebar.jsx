@@ -12,6 +12,7 @@ export default function Sidebar({ page, setPage, styles }) {
   "QR Referrals",
   "Clover",
   "Duplicate Review",
+  "AI Trainer",
   "Reports"
 ];
 
