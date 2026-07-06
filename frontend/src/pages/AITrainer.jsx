@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+
 import {
   Box,
   Card,
@@ -15,7 +16,7 @@ import {
   Slider,
   LinearProgress,
 } from "@mui/material";
-
+const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const TRAINING_MODULES = {
   "Heavy Bag": {
     category: "Boxing",
@@ -264,6 +265,27 @@ const RING_IQ_PROMPTS = [
   "Opponent is covering up. Touch body then head.",
   "You landed clean. Do not admire it. Exit.",
 ];
+
+async function updateLiveDisplay(extra = {}) {
+  await fetch(`${API}/api/ai/live-session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+    body: JSON.stringify({
+      active: runningRef.current,
+      phase,
+      round: currentRound,
+      total_rounds: rounds,
+      time_left: timeLeft,
+      module: currentModuleRef.current,
+      prompt,
+      sub_prompt: subPrompt,
+      ...extra,
+    }),
+  }).catch(() => {});
+}
 
 function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)];
@@ -565,6 +587,9 @@ export default function AITrainer() {
   useEffect(() => {
     return () => clearTimers();
   }, []);
+useEffect(() => {
+  updateLiveDisplay();
+}, [phase, currentRound, timeLeft, prompt, subPrompt]);
 
   return (
     <Box>
