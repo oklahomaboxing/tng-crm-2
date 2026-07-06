@@ -97,11 +97,14 @@ os.makedirs("uploads/members", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://goldfish-app-jq38z.ondigitalocean.app",
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-    ],
+allow_origins=[
+    "https://goldfish-app-jq38z.ondigitalocean.app",
+    "https://tngos.tngboxinggym.com",
+    "https://display.tngboxinggym.com",
+    "https://crm.tngboxinggym.com",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
