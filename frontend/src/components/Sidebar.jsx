@@ -11,6 +11,7 @@ export default function Sidebar({ page, setPage, styles }) {
   "Sales Reps",
   "QR Referrals",
   "Clover",
+  "Duplicate Review",
   "Reports"
 ];
 
