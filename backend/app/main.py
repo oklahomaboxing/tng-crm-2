@@ -1634,6 +1634,77 @@ def find_duplicate_members(
                 })
 
     return results
+@app.post("/api/duplicates/members/merge")
+def merge_duplicate_members(
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    keep_id = data.get("keep_id")
+    merge_id = data.get("merge_id")
+
+    if not keep_id or not merge_id or keep_id == merge_id:
+        raise HTTPException(status_code=400, detail="Invalid merge request")
+
+    keep = db.query(Member).filter(Member.id == keep_id).first()
+    merge = db.query(Member).filter(Member.id == merge_id).first()
+
+    if not keep or not merge:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    # Move attendance
+    db.query(Attendance).filter(
+        Attendance.member_id == merge.id
+    ).update({"member_id": keep.id})
+
+    # Move sales/payments
+    db.query(Sale).filter(
+        Sale.member_id == merge.id
+    ).update({"member_id": keep.id})
+
+    # Fill missing profile fields
+    fields = [
+        "email",
+        "phone",
+        "photo_url",
+        "clover_customer_id",
+        "membership_type",
+        "membership_status",
+        "membership_start",
+        "membership_end",
+        "billing_cycle",
+        "monthly_rate",
+        "next_billing_date",
+        "autopay_enabled",
+        "billing_status",
+        "last_payment_date",
+        "past_due_amount",
+        "notes",
+    ]
+
+    for field in fields:
+        if not getattr(keep, field, None) and getattr(merge, field, None):
+            setattr(keep, field, getattr(merge, field))
+
+    keep.total_checkins = (keep.total_checkins or 0) + (merge.total_checkins or 0)
+    keep.checkins = (keep.checkins or 0) + (merge.checkins or 0)
+
+    if merge.last_checkin and (
+        not keep.last_checkin or merge.last_checkin > keep.last_checkin
+    ):
+        keep.last_checkin = merge.last_checkin
+
+    db.delete(merge)
+    db.commit()
+    db.refresh(keep)
+
+    return {
+        "message": "Members merged successfully",
+        "kept_member_id": keep.id,
+        "deleted_member_id": merge_id,
+    }
 
 @app.delete("/api/members/{member_id}")
 def delete_member(
