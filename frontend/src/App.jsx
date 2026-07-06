@@ -8,6 +8,7 @@ import SalesRepDashboard from "./pages/SalesRepDashboard.jsx";
 import JoinPage from "./pages/JoinPage.jsx";
 import Leads from "./pages/Leads.jsx";
 import FrontDesk from "./pages/FrontDesk.jsx";
+import Products from "./pages/Products.jsx";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function App() {
@@ -213,14 +214,17 @@ Sales Skipped: ${j.sales?.skipped || 0}`
   <FrontDesk />
 )}
 
-       {page === "Sales" && (
+{page === "Sales" && (
   <Sales />
+)}
+
+{page === "Products" && (
+  <Products />
 )}
 
 {page === "Leads" && (
   <Leads />
-)}
-       {page === "Sales Reps" && (
+)}       {page === "Sales Reps" && (
   <SalesRepDashboard />
 )}
 

@@ -4,6 +4,7 @@ export default function Sidebar({ page, setPage, styles }) {
   const items = [
   "Dashboard",
   "Members",
+  "Products",
   "Front Desk",
   "Sales",
   "Leads",
