@@ -97,52 +97,80 @@ export default function Members() {
             </Box>
           ) : (
             <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Member #</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Barcode</TableCell>
-                  <TableCell>Membership</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Check-ins</TableCell>
-                  <TableCell>Created</TableCell>
-                </TableRow>
-              </TableHead>
+
+<TableHead>
+  <TableRow>
+    <TableCell>Member #</TableCell>
+    <TableCell>Name</TableCell>
+    <TableCell>Membership</TableCell>
+    <TableCell>Status</TableCell>
+    <TableCell>Join Date</TableCell>
+    <TableCell>Expires</TableCell>
+    <TableCell>Days Left</TableCell>
+    <TableCell>Last Payment</TableCell>
+    <TableCell>Check-ins</TableCell>
+  </TableRow>
+</TableHead>
 
               <TableBody>
                 {filteredMembers.map((member) => (
-                  <TableRow
-                    key={member.id}
-                    hover
-                    onClick={() => setSelectedMember(member)}
-                    sx={{ cursor: "pointer" }}
-                  >
-                    <TableCell>{member.member_number || "-"}</TableCell>
-                    <TableCell>
-                      {member.first_name} {member.last_name}
-                      <Typography variant="caption" display="block" color="text.secondary">
-                        {member.email || member.phone || ""}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{member.barcode || "-"}</TableCell>
-                    <TableCell>{member.membership_type || "Clover Customer"}</TableCell>
-                    <TableCell>
-                      <Chip
-                        color={
-                          member.membership_status === "active" || member.status === "active"
-                            ? "success"
-                            : "warning"
-                        }
-                        label={member.membership_status || member.status || "pending"}
-                      />
-                    </TableCell>
-                    <TableCell>{member.total_checkins || 0}</TableCell>
-                    <TableCell>
-                      {member.created_at
-                        ? new Date(member.created_at).toLocaleDateString()
-                        : ""}
-                    </TableCell>
-                  </TableRow>
+<TableRow
+  key={member.id}
+  hover
+  onClick={() => setSelectedMember(member)}
+  sx={{ cursor: "pointer" }}
+>
+  <TableCell>{member.member_number || "-"}</TableCell>
+
+  <TableCell>
+    {member.first_name} {member.last_name}
+    <Typography
+      variant="caption"
+      display="block"
+      color="text.secondary"
+    >
+      {member.email || member.phone || ""}
+    </Typography>
+  </TableCell>
+
+  <TableCell>{member.membership_type || "-"}</TableCell>
+
+  <TableCell>
+    <Chip
+      color={member.membership_status === "active" ? "success" : "error"}
+      label={member.membership_status || "pending"}
+    />
+  </TableCell>
+
+  <TableCell>
+    {member.membership_start
+      ? new Date(member.membership_start).toLocaleDateString()
+      : "-"}
+  </TableCell>
+
+  <TableCell>
+    {member.membership_end
+      ? new Date(member.membership_end).toLocaleDateString()
+      : "-"}
+  </TableCell>
+
+  <TableCell>
+    {member.membership_end
+      ? Math.ceil(
+          (new Date(member.membership_end) - new Date()) /
+            (1000 * 60 * 60 * 24)
+        )
+      : "-"}
+  </TableCell>
+
+  <TableCell>
+    {member.last_payment_date
+      ? new Date(member.last_payment_date).toLocaleDateString()
+      : "-"}
+  </TableCell>
+
+  <TableCell>{member.total_checkins || 0}</TableCell>
+</TableRow>
                 ))}
 
                 {filteredMembers.length === 0 && (
