@@ -232,7 +232,6 @@ def rep_qr(rep_id: int, db: Session = Depends(get_db), user: User = Depends(curr
     img = qrcode.make(url)
     buf = io.BytesIO(); img.save(buf, format="PNG")
     return {"url": url, "qr_png_base64": base64.b64encode(buf.getvalue()).decode()}
-
 @app.get("/api/dashboard")
 def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
     today = datetime.utcnow().date()
@@ -265,36 +264,27 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         db.query(Member)
         .filter(
             member_filter,
-            Member.membership_status == "active"
+            Member.membership_status == "active",
         )
         .count()
     )
 
     total_leads = db.query(Lead).count()
-member_filter = or_(
-    *[
-        Member.membership_type.ilike(f"%{p}%")
-        for p in MEMBERSHIP_PRODUCTS
-    ]
-)
 
-total_members = db.query(Member).filter(member_filter).count()
+    today_checkins = (
+        db.query(Attendance)
+        .filter(func.date(Attendance.checkin_time) == today)
+        .count()
+    )
 
-active_members = (
-    db.query(Member)
-    .filter(member_filter, Member.membership_status == "active")
-    .count()
-)
-    total_leads = db.query(Lead).count()
-
-    today_checkins = db.query(Attendance).filter(
-        func.date(Attendance.checkin_time) == today
-    ).count()
-
-    month_sales = db.query(Sale).filter(
-        extract("month", Sale.sale_date) == now.month,
-        extract("year", Sale.sale_date) == now.year,
-    ).all()
+    month_sales = (
+        db.query(Sale)
+        .filter(
+            extract("month", Sale.sale_date) == now.month,
+            extract("year", Sale.sale_date) == now.year,
+        )
+        .all()
+    )
 
     revenue_this_month = sum(s.amount or 0 for s in month_sales)
 
@@ -306,8 +296,10 @@ active_members = (
     )
 
     recent = []
+
     for a in recent_checkins:
         member = db.query(Member).filter(Member.id == a.member_id).first()
+
         recent.append({
             "member": f"{member.first_name} {member.last_name}" if member else "Unknown",
             "time": a.checkin_time.isoformat() if a.checkin_time else None,
@@ -323,6 +315,7 @@ active_members = (
         "revenue_this_month": revenue_this_month,
         "recent_checkins": recent,
     }
+
 def is_membership_product(product):
     if not product or not product.name:
         return False
