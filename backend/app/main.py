@@ -238,20 +238,39 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
     today = datetime.utcnow().date()
     now = datetime.utcnow()
 
-MEMBERSHIP_PRODUCTS = [
-    "month",
-    "monthly",
-    "3 month",
-    "annual",
-    "year",
-    "pre-sale",
-    "special",
-    "family",
-    "vip",
-    "non profit",
-    "registration",
-]
+    MEMBERSHIP_PRODUCTS = [
+        "month",
+        "monthly",
+        "3 month",
+        "annual",
+        "year",
+        "pre-sale",
+        "special",
+        "family",
+        "vip",
+        "non profit",
+        "registration",
+    ]
 
+    member_filter = or_(
+        *[
+            Member.membership_type.ilike(f"%{p}%")
+            for p in MEMBERSHIP_PRODUCTS
+        ]
+    )
+
+    total_members = db.query(Member).filter(member_filter).count()
+
+    active_members = (
+        db.query(Member)
+        .filter(
+            member_filter,
+            Member.membership_status == "active"
+        )
+        .count()
+    )
+
+    total_leads = db.query(Lead).count()
 member_filter = or_(
     *[
         Member.membership_type.ilike(f"%{p}%")
