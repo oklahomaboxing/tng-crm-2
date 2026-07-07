@@ -1438,8 +1438,7 @@ def get_member(member_id: int, db: Session = Depends(get_db), user: User = Depen
         "digital_member_id": m.digital_member_id,
         "membership_type": m.membership_type,
         "membership_status": m.membership_status,
-        "membership_start": m.membership_start.isoformat() if m.membership_start else None,
-        "membership_end": m.membership_end.isoformat() if m.membership_end else None,
+
         "billing_cycle": m.billing_cycle,
         "monthly_rate": m.monthly_rate,
         "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
@@ -1457,7 +1456,7 @@ def get_member(member_id: int, db: Session = Depends(get_db), user: User = Depen
         "autopay_enabled": m.autopay_enabled,
         "billing_status": m.billing_status,
         "clover_subscription_id": m.clover_subscription_id,
-        "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
+     
         "past_due_amount": m.past_due_amount,
         "created_at": m.created_at.isoformat() if m.created_at else None,
     }
@@ -1523,7 +1522,7 @@ def update_member(member_id: int, data: dict, db: Session = Depends(get_db), use
         "membership_status": m.membership_status,
         "membership_start": m.membership_start.isoformat() if m.membership_start else None,
         
-"membership_end": m.membership_end.isoformat() if m.membership_end else None,
+        "membership_end": m.membership_end.isoformat() if m.membership_end else None,
         "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
         "total_checkins": m.total_checkins,
         "billing_cycle": m.billing_cycle,
@@ -1743,8 +1742,13 @@ def find_duplicate_members(
             "email": m.email,
             "phone": m.phone,
             "member_number": m.member_number,
-            "membership_status": m.membership_status,
             "membership_type": m.membership_type,
+            "membership_status": m.membership_status,
+
+            "membership_start": m.membership_start.isoformat() if m.membership_start else None,
+            "membership_end": m.membership_end.isoformat() if m.membership_end else None,
+            "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
+
             "clover_customer_id": m.clover_customer_id,
             "photo_url": m.photo_url,
             "payment_count": payment_count,
