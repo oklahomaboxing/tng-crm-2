@@ -403,7 +403,9 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
 
 @app.get("/api/members")
 def list_members(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    members = db.query(Member).all()
+    members = db.query(Member).filter(
+        Member.membership_type != "Clover Customer"
+    ).all()
 
     return [
         {
