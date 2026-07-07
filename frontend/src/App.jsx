@@ -1,6 +1,6 @@
 import Dashboard from "./pages/Dashboard.jsx";
 import AIDisplay from "./pages/AIDisplay.jsx";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Sidebar from "./components/Sidebar.jsx";
 import Members from "./pages/Members.jsx";
@@ -80,7 +80,7 @@ if (params.has("join")) {
       localStorage.setItem("token", j.token);
       setToken(j.token);
       setMsg("Logged in");
-      setTimeout(load, 300);
+      setTimeout(syncTngOS, 300);
     } else {
       setMsg(j.detail || "Login failed");
     }
@@ -132,6 +132,38 @@ Sales Skipped: ${j.sales?.skipped || 0}`
 
   load();
 }
+async function syncTngOS() {
+  const r = await fetch(`${API}/api/clover/sync-all`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+  });
+
+  const j = await r.json();
+
+  if (!r.ok) {
+    alert(j.detail || "TNG OS Sync failed");
+    return;
+  }
+
+  alert(
+`✅ TNG OS Sync Complete
+
+Products Synced: ${j.products?.synced || 0}
+
+Customers Added: ${j.customers?.synced || 0}
+
+Customers Updated: ${j.customers?.updated || 0}
+
+Sales Imported: ${j.sales?.synced || 0}
+
+Sales Skipped: ${j.sales?.skipped || 0}`
+  );
+
+  load();
+}
+
 
   async function addRep() {
     const name = prompt("Rep name?");
