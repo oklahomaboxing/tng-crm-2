@@ -387,55 +387,40 @@ def recalculate_member_from_payments(member, db: Session):
         s for s in sales
         if s.product and is_membership_product(s.product)
     ]
-
     if not membership_sales:
+        if member.next_billing_date and not member.membership_end:
+            member.membership_end = member.next_billing_date
+
+            if member.membership_type and (
+                "3 month" in member.membership_type.lower()
+                or "3 months" in member.membership_type.lower()
+                or "3-month" in member.membership_type.lower()
+            ):
+                member.membership_start = member.next_billing_date - relativedelta(months=3)
+            else:
+                member.membership_start = member.next_billing_date - relativedelta(months=1)
+
+        elif member.membership_start and not member.membership_end:
+            if member.membership_type and (
+                "3 month" in member.membership_type.lower()
+                or "3 months" in member.membership_type.lower()
+                or "3-month" in member.membership_type.lower()
+            ):
+                member.membership_end = member.membership_start + relativedelta(months=3)
+            else:
+                member.membership_end = member.membership_start + relativedelta(months=1)
+
+        if member.membership_end:
+            now = datetime.utcnow()
+
+            if member.membership_end < now:
+                member.membership_status = "inactive"
+                member.billing_status = "expired"
+            else:
+                member.membership_status = "active"
+                member.billing_status = "active"
+
         return member
-
-    first_sale = membership_sales[0]
-    last_sale = membership_sales[-1]
-
-    member.membership_start = first_sale.sale_date or datetime.utcnow()
-    member.membership_end = member.membership_start
-
-    for sale in membership_sales:
-        product = sale.product
-        sale_date = sale.sale_date or member.membership_end
-
-        if sale_date > member.membership_end:
-            member.membership_end = sale_date
-
-        if product and (
-            "3 month" in product.name.lower()
-            or "3 months" in product.name.lower()
-            or "3-month" in product.name.lower()
-            or product.price == 300
-        ):
-            member.membership_end = member.membership_end + relativedelta(months=3)
-            member.billing_cycle = "3_month_prepaid"
-            member.monthly_rate = 0
-            member.next_billing_date = None
-            member.autopay_enabled = False
-        else:
-            member.membership_end = member.membership_end + relativedelta(months=1)
-            member.billing_cycle = "monthly"
-            member.monthly_rate = product.price if product else 0
-            member.next_billing_date = member.membership_end
-
-        member.membership_type = product.name if product else member.membership_type
-
-    member.last_payment_date = last_sale.sale_date
-    member.past_due_amount = 0
-
-    now = datetime.utcnow()
-
-    if member.membership_end and member.membership_end < now:
-        member.membership_status = "inactive"
-        member.billing_status = "expired"
-    else:
-        member.membership_status = "active"
-        member.billing_status = "active"
-
-    return member
 
 @app.post("/api/sales")
 def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -1702,6 +1687,38 @@ def recalculate_membership(
         "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
         "last_payment_date": member.last_payment_date.isoformat() if member.last_payment_date else None,
     }
+
+@app.post("/api/members/recalculate-all")
+def recalculate_all_memberships(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    members = db.query(Member).all()
+
+    updated = 0
+    skipped = 0
+
+    for member in members:
+        before_start = member.membership_start
+        before_end = member.membership_end
+
+        recalculate_member_from_payments(member, db)
+
+        if member.membership_start != before_start or member.membership_end != before_end:
+            updated += 1
+        else:
+            skipped += 1
+
+    db.commit()
+
+    return {
+        "message": "All memberships recalculated",
+        "updated": updated,
+        "skipped": skipped,
+    }
+
 @app.get("/api/duplicates/members")
 def find_duplicate_members(
     db: Session = Depends(get_db),
