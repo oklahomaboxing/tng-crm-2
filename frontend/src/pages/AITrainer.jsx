@@ -266,28 +266,7 @@ const RING_IQ_PROMPTS = [
   "You landed clean. Do not admire it. Exit.",
 ];
 
-async function updateLiveDisplay(extra = {}) {
-  await fetch(`${API}/api/ai/live-session`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-    body: JSON.stringify({
-      active: runningRef.current,
-      phase,
-      round: currentRound,
-      total_rounds: rounds,
-      time_left: timeLeft,
-      module: currentModuleRef.current,
-      prompt,
-      sub_prompt: subPrompt,
-      ...extra,
-    }),
-    }).catch((err) => {
-    console.error("Live display update failed", err);
-  });
-}
+
 
 function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)];
@@ -325,6 +304,28 @@ export default function AITrainer() {
   const currentModuleRef = useRef(selectedModule);
 
   const moduleConfig = TRAINING_MODULES[selectedModule];
+async function updateLiveDisplay(extra = {}) {
+  await fetch(`${API}/api/ai/live-session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+    body: JSON.stringify({
+      active: runningRef.current,
+      phase,
+      round: currentRound,
+      total_rounds: rounds,
+      time_left: timeLeft,
+      module: currentModuleRef.current,
+      prompt,
+      sub_prompt: subPrompt,
+      ...extra,
+    }),
+    }).catch((err) => {
+    console.error("Live display update failed", err);
+  });
+}
 
   const progress = useMemo(() => {
     const total = phase === "Rest" ? restTime : roundTime;
