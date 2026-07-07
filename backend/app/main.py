@@ -375,6 +375,67 @@ def apply_membership(member, product):
     member.billing_status = "active"
 
     return member
+def recalculate_member_from_payments(member, db: Session):
+    sales = (
+        db.query(Sale)
+        .filter(Sale.member_id == member.id)
+        .order_by(Sale.sale_date.asc())
+        .all()
+    )
+
+    membership_sales = [
+        s for s in sales
+        if s.product and is_membership_product(s.product)
+    ]
+
+    if not membership_sales:
+        return member
+
+    first_sale = membership_sales[0]
+    last_sale = membership_sales[-1]
+
+    member.membership_start = first_sale.sale_date or datetime.utcnow()
+    member.membership_end = member.membership_start
+
+    for sale in membership_sales:
+        product = sale.product
+        sale_date = sale.sale_date or member.membership_end
+
+        if sale_date > member.membership_end:
+            member.membership_end = sale_date
+
+        if product and (
+            "3 month" in product.name.lower()
+            or "3 months" in product.name.lower()
+            or "3-month" in product.name.lower()
+            or product.price == 300
+        ):
+            member.membership_end = member.membership_end + relativedelta(months=3)
+            member.billing_cycle = "3_month_prepaid"
+            member.monthly_rate = 0
+            member.next_billing_date = None
+            member.autopay_enabled = False
+        else:
+            member.membership_end = member.membership_end + relativedelta(months=1)
+            member.billing_cycle = "monthly"
+            member.monthly_rate = product.price if product else 0
+            member.next_billing_date = member.membership_end
+
+        member.membership_type = product.name if product else member.membership_type
+
+    member.last_payment_date = last_sale.sale_date
+    member.past_due_amount = 0
+
+    now = datetime.utcnow()
+
+    if member.membership_end and member.membership_end < now:
+        member.membership_status = "inactive"
+        member.billing_status = "expired"
+    else:
+        member.membership_status = "active"
+        member.billing_status = "active"
+
+    return member
 
 @app.post("/api/sales")
 def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -1114,57 +1175,7 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
     members_with_sales = db.query(Member).join(Sale).distinct().all()
 
     for member in members_with_sales:
-        sales = (
-            db.query(Sale)
-            .filter(Sale.member_id == member.id)
-            .order_by(Sale.sale_date.asc())
-            .all()
-        )
-
-        membership_sales = [
-            s for s in sales
-            if s.product and is_membership_product(s.product)
-        ]
-
-        if not membership_sales:
-            continue
-
-        first_sale = membership_sales[0]
-        last_sale = membership_sales[-1]
-
-        member.membership_start = first_sale.sale_date or datetime.utcnow()
-        member.membership_end = member.membership_start
-
-        for sale in membership_sales:
-            product = sale.product
-            sale_date = sale.sale_date or member.membership_end
-
-            if sale_date > member.membership_end:
-                member.membership_end = sale_date
-
-            if product and (
-                "3 month" in product.name.lower()
-                or "3 months" in product.name.lower()
-                or "3-month" in product.name.lower()
-                or product.price == 300
-            ):
-                member.membership_end = member.membership_end + relativedelta(months=3)
-                member.billing_cycle = "3_month_prepaid"
-                member.monthly_rate = 0
-                member.next_billing_date = None
-                member.autopay_enabled = False
-            else:
-                member.membership_end = member.membership_end + relativedelta(months=1)
-                member.billing_cycle = "monthly"
-                member.monthly_rate = product.price if product else 0
-                member.next_billing_date = member.membership_end
-
-            member.membership_type = product.name if product else member.membership_type
-
-        member.membership_status = "active"
-        member.billing_status = "active"
-        member.last_payment_date = last_sale.sale_date
-        member.past_due_amount = 0
+        recalculate_member_from_payments(member, db)
 
     db.commit()
     return {
