@@ -17,7 +17,7 @@ from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetti
 from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
-
+from sqlalchemy import or_
 
 
 Base.metadata.create_all(bind=engine)
@@ -46,6 +46,7 @@ def run_sqlite_migrations():
     add_column_if_missing("sales", "refund_amount", "FLOAT DEFAULT 0")
     add_column_if_missing("sales", "payment_method", "VARCHAR")
     add_column_if_missing("membership_products", "category", "VARCHAR")
+    add_column_if_missing("members", "member_type", "VARCHAR DEFAULT 'MEMBER'")
 
     add_column_if_missing("leads", "clover_checkout_id", "VARCHAR")
     add_column_if_missing("leads", "paid_at", "DATETIME")
@@ -403,9 +404,32 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
 
 @app.get("/api/members")
 def list_members(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    members = db.query(Member).filter(
-        Member.membership_type != "Clover Customer"
-    ).all()
+
+    MEMBERSHIP_PRODUCTS = [
+        "month",
+        "monthly",
+        "3 month",
+        "annual",
+        "year",
+        "pre-sale",
+        "special",
+        "family",
+        "vip",
+        "non profit",
+    ]
+
+    members = (
+        db.query(Member)
+        .filter(
+            or_(
+                *[
+                    Member.membership_type.ilike(f"%{p}%")
+                    for p in MEMBERSHIP_PRODUCTS
+                ]
+            )
+        )
+        .all()
+    )
 
     return [
         {
@@ -429,7 +453,6 @@ def list_members(db: Session = Depends(get_db), user: User = Depends(current_use
         }
         for m in members
     ]
-
 
 @app.get("/api/sales")
 def list_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):

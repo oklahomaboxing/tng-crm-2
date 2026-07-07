@@ -63,6 +63,7 @@ class Member(Base):
     clover_subscription_id = Column(String, nullable=True)
     last_payment_date = Column(DateTime, nullable=True)
     past_due_amount = Column(Float, default=0)
+    member_type = Column(String, default="MEMBER")
 
 class MembershipProduct(Base):
     __tablename__ = "membership_products"
