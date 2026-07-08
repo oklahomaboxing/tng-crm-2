@@ -304,28 +304,36 @@ export default function AITrainer() {
   const currentModuleRef = useRef(selectedModule);
 
   const moduleConfig = TRAINING_MODULES[selectedModule];
-async function updateLiveDisplay(extra = {}) {
-  await fetch(`${API}/api/ai/live-session`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-    body: JSON.stringify({
-      active: runningRef.current,
-      phase,
-      round: currentRound,
-      total_rounds: rounds,
-      time_left: timeLeft,
-      module: currentModuleRef.current,
-      prompt,
-      sub_prompt: subPrompt,
-      ...extra,
-    }),
+
+  async function updateLiveDisplay(extra = {}) {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      console.warn("No token found. Live display update skipped.");
+      return;
+    }
+
+    await fetch(`${API}/api/ai/live-session`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify({
+        active: runningRef.current,
+        phase,
+        round: currentRound,
+        total_rounds: Number(rounds),
+        time_left: timeLeft,
+        module: currentModuleRef.current,
+        prompt,
+        sub_prompt: subPrompt,
+        ...extra,
+      }),
     }).catch((err) => {
-    console.error("Live display update failed", err);
-  });
-}
+      console.error("Live display update failed", err);
+    });
+  }
 
   const progress = useMemo(() => {
     const total = phase === "Rest" ? restTime : roundTime;
@@ -446,6 +454,17 @@ async function updateLiveDisplay(extra = {}) {
     setPrompt("Workout Complete");
     setSubPrompt("Good work. Recover, hydrate, and log your notes.");
     speak("Workout complete");
+
+    updateLiveDisplay({
+      active: false,
+      phase: "Complete",
+      round: currentRound,
+      total_rounds: Number(rounds),
+      time_left: 0,
+      module: currentModuleRef.current,
+      prompt: "Workout Complete",
+      sub_prompt: "Good work. Recover, hydrate, and log your notes.",
+    });
   }
 
   function startRest(roundNumber) {
@@ -456,6 +475,17 @@ async function updateLiveDisplay(extra = {}) {
     setPrompt("Rest");
     setSubPrompt("Breathe, recover, and get ready for the next round.");
     speak("Rest");
+
+    updateLiveDisplay({
+      active: true,
+      phase: "Rest",
+      round: roundNumber,
+      total_rounds: Number(rounds),
+      time_left: Number(restTime),
+      module: currentModuleRef.current,
+      prompt: "Rest",
+      sub_prompt: "Breathe, recover, and get ready for the next round.",
+    });
 
     timerRef.current = setInterval(() => {
       setTimeLeft((old) => {
@@ -469,7 +499,20 @@ async function updateLiveDisplay(extra = {}) {
 
         if (old === 10) speak("10 seconds");
 
-        return old - 1;
+        const next = old - 1;
+
+        updateLiveDisplay({
+          active: true,
+          phase: "Rest",
+          round: roundNumber,
+          total_rounds: Number(rounds),
+          time_left: next,
+          module: currentModuleRef.current,
+          prompt: "Rest",
+          sub_prompt: "Breathe, recover, and get ready for the next round.",
+        });
+
+        return next;
       });
     }, 1000);
   }
@@ -480,11 +523,26 @@ async function updateLiveDisplay(extra = {}) {
     const activeModule = resolveActiveModule(roundNumber);
     currentModuleRef.current = activeModule;
 
+    const roundPrompt = `Round ${roundNumber}: ${activeModule}`;
+    const roundSubPrompt =
+      TRAINING_MODULES[activeModule]?.focus || "Boxing round active.";
+
     setCurrentRound(roundNumber);
     setPhase("Fight");
     setTimeLeft(Number(roundTime));
-    setPrompt(`Round ${roundNumber}: ${activeModule}`);
-    setSubPrompt(TRAINING_MODULES[activeModule]?.focus || "Boxing round active.");
+    setPrompt(roundPrompt);
+    setSubPrompt(roundSubPrompt);
+
+    updateLiveDisplay({
+      active: true,
+      phase: "Fight",
+      round: roundNumber,
+      total_rounds: Number(rounds),
+      time_left: Number(roundTime),
+      module: activeModule,
+      prompt: roundPrompt,
+      sub_prompt: roundSubPrompt,
+    });
 
     speak(`Round ${roundNumber}. ${activeModule}. Begin.`);
     startPromptLoop();
@@ -507,7 +565,20 @@ async function updateLiveDisplay(extra = {}) {
 
         if (old === 10) speak("10 seconds");
 
-        return old - 1;
+        const next = old - 1;
+
+        updateLiveDisplay({
+          active: true,
+          phase: "Fight",
+          round: roundNumber,
+          total_rounds: Number(rounds),
+          time_left: next,
+          module: activeModule,
+          prompt,
+          sub_prompt: subPrompt,
+        });
+
+        return next;
       });
     }, 1000);
   }
@@ -533,6 +604,17 @@ async function updateLiveDisplay(extra = {}) {
     setPaused(true);
     setPhase("Paused");
 
+    updateLiveDisplay({
+      active: true,
+      phase: "Paused",
+      round: currentRound,
+      total_rounds: Number(rounds),
+      time_left: timeLeft,
+      module: currentModuleRef.current,
+      prompt,
+      sub_prompt: "Timer paused.",
+    });
+
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
@@ -545,6 +627,17 @@ async function updateLiveDisplay(extra = {}) {
     setPaused(false);
     setPhase("Fight");
     speak("Resume");
+
+    updateLiveDisplay({
+      active: true,
+      phase: "Fight",
+      round: currentRound,
+      total_rounds: Number(rounds),
+      time_left: timeLeft,
+      module: currentModuleRef.current,
+      prompt,
+      sub_prompt: "Timer resumed.",
+    });
   }
 
   function resetSession() {
@@ -561,6 +654,17 @@ async function updateLiveDisplay(extra = {}) {
     setPrompt("Select a module and press Start");
     setSubPrompt("TNG Coach AI is ready.");
     setPromptLog([]);
+
+    updateLiveDisplay({
+      active: false,
+      phase: "Ready",
+      round: 0,
+      total_rounds: Number(rounds),
+      time_left: 0,
+      module: selectedModule,
+      prompt: "Waiting for coach to start session",
+      sub_prompt: "Open this screen on every TV in the gym.",
+    });
 
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -590,18 +694,19 @@ async function updateLiveDisplay(extra = {}) {
   useEffect(() => {
     return () => clearTimers();
   }, []);
-useEffect(() => {
-  updateLiveDisplay({
-    active: running,
-    phase,
-    round: currentRound,
-    total_rounds: rounds,
-    time_left: timeLeft,
-    module: currentModuleRef.current,
-    prompt,
-    sub_prompt: subPrompt,
-  });
-}, [running, phase, currentRound, rounds, timeLeft, prompt, subPrompt]);
+  useEffect(() => {
+    updateLiveDisplay({
+      active: running,
+      phase,
+      round: currentRound,
+      total_rounds: Number(rounds),
+      time_left: timeLeft,
+      module: currentModuleRef.current,
+      prompt,
+      sub_prompt: subPrompt,
+    });
+  }, [running, phase, currentRound, rounds, timeLeft, prompt, subPrompt]);
+
   return (
     <Box>
       <Box
