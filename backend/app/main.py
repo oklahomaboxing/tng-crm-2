@@ -138,6 +138,9 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
 def require_admin(user: User):
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
+def require_admin_or_staff(user: User):
+    if user.role not in ["admin", "staff"]:
+        raise HTTPException(status_code=403, detail="Admin or staff access required")
 
 @app.post("/api/login")
 def login(data: LoginIn, db: Session = Depends(get_db)):
@@ -220,6 +223,51 @@ def list_reps(db: Session = Depends(get_db), user: User = Depends(current_user))
     require_admin(user)
     reps = db.query(SalesRep).all()
     return [{"id": r.id, "name": r.user.name, "email": r.user.email, "phone": r.phone, "slug": r.referral_slug, "clover_link": r.clover_link} for r in reps]
+
+@app.post("/api/staff")
+def create_staff(
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not name or not email or not password:
+        raise HTTPException(
+            status_code=400,
+            detail="Name, email, and password are required",
+        )
+
+    existing = db.query(User).filter(User.email == email).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already exists",
+        )
+
+    staff_user = User(
+        name=name,
+        email=email,
+        password_hash=hash_password(password),
+        role="staff",
+    )
+
+    db.add(staff_user)
+    db.commit()
+    db.refresh(staff_user)
+
+    return {
+        "id": staff_user.id,
+        "name": staff_user.name,
+        "email": staff_user.email,
+        "role": staff_user.role,
+        "message": "Staff account created",
+    }
 
 @app.get("/api/reps/{rep_id}/qr")
 def rep_qr(rep_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
