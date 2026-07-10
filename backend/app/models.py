@@ -9,8 +9,7 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, default="rep")  # admin, manager, rep
-    active = Column(Boolean, default=True)
+    role = Column(String, default="rep")  # admin, staff, rep    active = Column(Boolean, default=True)
     rep_profile = relationship("SalesRep", back_populates="user", uselist=False)
 
 class SalesRep(Base):

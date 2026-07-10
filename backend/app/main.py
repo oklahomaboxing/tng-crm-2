@@ -1068,6 +1068,132 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
         "updated": updated,
         "skipped": skipped,
     }
+@app.get("/api/users")
+def list_users(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    users = db.query(User).order_by(User.name.asc()).all()
+
+    results = []
+
+    for account in users:
+        rep = account.rep_profile
+
+        results.append({
+            "id": account.id,
+            "name": account.name,
+            "email": account.email,
+            "role": account.role,
+            "active": account.active,
+            "sales_rep_id": rep.id if rep else None,
+            "phone": rep.phone if rep else "",
+            "referral_slug": rep.referral_slug if rep else "",
+            "clover_link": rep.clover_link if rep else "",
+        })
+
+    return results
+
+
+@app.post("/api/users")
+def create_user_account(
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    role = (data.get("role") or "").strip().lower()
+
+    phone = (data.get("phone") or "").strip()
+    referral_slug = (data.get("referral_slug") or "").strip().lower()
+    clover_link = (data.get("clover_link") or "").strip()
+
+    if not name or not email or not password:
+        raise HTTPException(
+            status_code=400,
+            detail="Name, email, and password are required",
+        )
+
+    if role not in ["admin", "staff", "rep"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Role must be admin, staff, or rep",
+        )
+
+    existing_user = db.query(User).filter(
+        func.lower(User.email) == email
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="A user with this email already exists",
+        )
+
+    if role == "rep":
+        if not referral_slug:
+            raise HTTPException(
+                status_code=400,
+                detail="Referral slug is required for sales reps",
+            )
+
+        existing_slug = db.query(SalesRep).filter(
+            func.lower(SalesRep.referral_slug) == referral_slug
+        ).first()
+
+        if existing_slug:
+            raise HTTPException(
+                status_code=400,
+                detail="Referral slug already exists",
+            )
+
+    account = User(
+        name=name,
+        email=email,
+        password_hash=hash_password(password),
+        role=role,
+        active=True,
+    )
+
+    db.add(account)
+    db.flush()
+
+    rep = None
+
+    if role == "rep":
+        rep = SalesRep(
+            user_id=account.id,
+            phone=phone,
+            referral_slug=referral_slug,
+            clover_link=clover_link,
+        )
+
+        db.add(rep)
+
+    db.commit()
+    db.refresh(account)
+
+    if rep:
+        db.refresh(rep)
+
+    return {
+        "message": "User account created successfully",
+        "user": {
+            "id": account.id,
+            "name": account.name,
+            "email": account.email,
+            "role": account.role,
+            "active": account.active,
+            "sales_rep_id": rep.id if rep else None,
+            "referral_slug": rep.referral_slug if rep else "",
+        },
+    }
 
 @app.post("/api/clover/sync-sales")
 def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
