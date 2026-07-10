@@ -1,8 +1,25 @@
-import Dashboard from "./pages/Dashboard.jsx";
-import AIDisplay from "./pages/AIDisplay.jsx";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import Sidebar from "./components/Sidebar.jsx";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  CssBaseline,
+  Link,
+  Stack,
+  TextField,
+  ThemeProvider,
+  Typography,
+  createTheme,
+} from "@mui/material";
+import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
+
+import AppShell from "./layout/AppShell.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import AIDisplay from "./pages/AIDisplay.jsx";
 import Members from "./pages/Members.jsx";
 import Sales from "./pages/Sales.jsx";
 import SalesRepDashboard from "./pages/SalesRepDashboard.jsx";
@@ -16,6 +33,96 @@ import UserManagement from "./pages/UserManagement.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+const theme = createTheme({
+  palette: {
+    mode: "light",
+    primary: { main: "#d71920" },
+    error: { main: "#d71920" },
+    background: {
+      default: "#f5f6f8",
+      paper: "#ffffff",
+    },
+  },
+  shape: { borderRadius: 14 },
+  typography: {
+    fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+    button: { textTransform: "none", fontWeight: 800 },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: { borderRadius: 10, minHeight: 42 },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          border: "1px solid #e8e9ed",
+          boxShadow: "0 8px 30px rgba(16,24,40,.05)",
+        },
+      },
+    },
+    MuiTextField: {
+      defaultProps: { size: "small" },
+    },
+  },
+});
+
+function landingPageForRole(role) {
+  if (role === "rep") return "Sales";
+  if (role === "staff") return "Front Desk";
+  return "Dashboard";
+}
+
+function PaymentMessage({ status }) {
+  const content = {
+    success: {
+      title: "Payment Successful",
+      text: "Welcome to TNG Boxing. Your membership payment was processed successfully.",
+      severity: "success",
+    },
+    cancelled: {
+      title: "Payment Cancelled",
+      text: "Your checkout was cancelled. You can restart your signup anytime.",
+      severity: "warning",
+    },
+    failed: {
+      title: "Payment Failed",
+      text: "Something went wrong with the payment. Please try again or contact TNG Boxing.",
+      severity: "error",
+    },
+  }[status];
+
+  if (!content) return null;
+
+  return (
+    <Box
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "#09090b",
+        display: "grid",
+        placeItems: "center",
+        p: 2,
+      }}
+    >
+      <Card sx={{ width: "100%", maxWidth: 520, borderRadius: 4 }}>
+        <CardContent sx={{ p: { xs: 3, sm: 5 }, textAlign: "center" }}>
+          <SportsMmaRoundedIcon color="error" sx={{ fontSize: 58, mb: 1 }} />
+          <Typography variant="h4" fontWeight={900} gutterBottom>
+            {content.title}
+          </Typography>
+          <Alert severity={content.severity} sx={{ my: 3, textAlign: "left" }}>
+            {content.text}
+          </Alert>
+          <Button variant="contained" fullWidth onClick={() => (window.location.href = "/")}>
+            Go to TNG OS
+          </Button>
+        </CardContent>
+      </Card>
+    </Box>
+  );
+}
+
 function App() {
   const params = new URLSearchParams(window.location.search);
   const paymentStatus = params.get("payment");
@@ -25,580 +132,347 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [role, setRole] = useState(localStorage.getItem("role") || "admin");
   const [userName, setUserName] = useState(localStorage.getItem("name") || "");
-
-  const [page, setPage] = useState(() => {
-    if (role === "rep") {
-      return "Sales";
-    }
-
-    if (role === "staff") {
-      return "Front Desk";
-    }
-
-    return "Dashboard";
-  });
-
+  const [page, setPage] = useState(() => landingPageForRole(localStorage.getItem("role") || "admin"));
   const [dash, setDash] = useState(null);
   const [reps, setReps] = useState([]);
   const [leader, setLeader] = useState([]);
   const [msg, setMsg] = useState("");
   const [qrCodes, setQrCodes] = useState({});
+  const [loginLoading, setLoginLoading] = useState(false);
 
   async function login() {
-    const response = await fetch(`${API}/api/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    });
+    setLoginLoading(true);
+    setMsg("");
 
-    const data = await response.json();
+    try {
+      const response = await fetch(`${API}/api/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    if (!response.ok || !data.token) {
-      setMsg(data.detail || "Login failed");
-      return;
-    }
+      const data = await response.json();
 
-    const loggedInRole = data.user?.role || "rep";
-    const loggedInName = data.user?.name || "";
+      if (!response.ok || !data.token) {
+        setMsg(data.detail || "Login failed");
+        return;
+      }
 
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("role", loggedInRole);
-    localStorage.setItem("name", loggedInName);
+      const loggedInRole = data.user?.role || "rep";
+      const loggedInName = data.user?.name || "";
 
-    setToken(data.token);
-    setRole(loggedInRole);
-    setUserName(loggedInName);
-    setMsg(`Logged in as ${loggedInName || loggedInRole}`);
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", loggedInRole);
+      localStorage.setItem("name", loggedInName);
 
-    if (loggedInRole === "admin") {
-      setPage("Dashboard");
-
-      setTimeout(() => {
-        syncTngOS();
-      }, 300);
-    } else if (loggedInRole === "staff") {
-      setPage("Front Desk");
-    } else {
-      setPage("Sales");
+      setToken(data.token);
+      setRole(loggedInRole);
+      setUserName(loggedInName);
+      setPage(landingPageForRole(loggedInRole));
+      setMsg("");
+    } catch (error) {
+      setMsg(error.message || "Login failed");
+    } finally {
+      setLoginLoading(false);
     }
   }
+
   async function load() {
-    const h = { Authorization: "Bearer " + localStorage.getItem("token") };
+    const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
     try {
       if (role !== "rep") {
-        setDash(await (await fetch(`${API}/api/dashboard`, { headers: h })).json());
+        const dashboardResponse = await fetch(`${API}/api/dashboard`, { headers });
+        if (dashboardResponse.ok) setDash(await dashboardResponse.json());
       }
 
       if (role === "admin") {
-        setReps(await (await fetch(`${API}/api/reps`, { headers: h })).json().catch(() => []));
-        setLeader(await (await fetch(`${API}/api/leaderboard`, { headers: h })).json().catch(() => []));
+        const [repsResponse, leaderResponse] = await Promise.all([
+          fetch(`${API}/api/reps`, { headers }),
+          fetch(`${API}/api/leaderboard`, { headers }),
+        ]);
+
+        if (repsResponse.ok) setReps(await repsResponse.json());
+        if (leaderResponse.ok) setLeader(await leaderResponse.json());
       }
-    } catch (err) {
-      console.error("Load failed", err);
+    } catch (error) {
+      console.error("Load failed", error);
     }
   }
 
   async function loadQr(repId) {
-    const h = { Authorization: "Bearer " + localStorage.getItem("token") };
-    const r = await fetch(`${API}/api/reps/${repId}/qr`, { headers: h });
-    const j = await r.json();
-    setQrCodes((old) => ({ ...old, [repId]: j }));
-  }
-
-  async function syncTngOS() {
-    const r = await fetch(`${API}/api/clover/sync-all`, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
+    const response = await fetch(`${API}/api/reps/${repId}/qr`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     });
+    const data = await response.json();
 
-    const j = await r.json();
-
-    if (!r.ok) {
-      alert(j.detail || "TNG OS Sync failed");
+    if (!response.ok) {
+      setMsg(data.detail || "Could not load QR code");
       return;
     }
 
-    alert(
-`✅ TNG OS Sync Complete
+    setQrCodes((old) => ({ ...old, [repId]: data }));
+  }
 
-Products Synced: ${j.products?.synced || 0}
+  async function syncTngOS() {
+    if (role !== "admin") return;
 
-Customers Added: ${j.customers?.synced || 0}
+    const response = await fetch(`${API}/api/clover/sync-all`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    });
+    const data = await response.json();
 
-Customers Updated: ${j.customers?.updated || 0}
+    if (!response.ok) {
+      setMsg(data.detail || "TNG OS sync failed");
+      return;
+    }
 
-Sales Imported: ${j.sales?.synced || 0}
-
-Sales Skipped: ${j.sales?.skipped || 0}`
+    setMsg(
+      `Sync complete: ${data.sales?.synced || 0} sales imported, ${data.customers?.synced || 0} customers added.`
     );
-
     load();
   }
 
-  async function addRep() {
-    const name = prompt("Rep name?");
-    const repEmail = prompt("Rep email?");
-    const slug = prompt("Referral slug? Example: mike");
-    const clover = prompt("Clover link?");
-
-    if (!name || !repEmail || !slug) return;
-
-    const r = await fetch(`${API}/api/reps`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token,
-      },
-      body: JSON.stringify({
-        name,
-        email: repEmail,
-        referral_slug: slug,
-        clover_link: clover || "",
-        password: "TNG12345",
-      }),
-    });
-
-    setMsg(JSON.stringify(await r.json()));
-    load();
+  function logout() {
+    localStorage.clear();
+    setToken("");
+    setRole("admin");
+    setUserName("");
+    setPage("Dashboard");
+    setDash(null);
+    setReps([]);
+    setLeader([]);
+    setMsg("");
   }
 
   useEffect(() => {
-    if (token) {
-      load();
-    }
+    if (token) load();
   }, [token, role]);
 
-  if (paymentStatus === "success") {
-    return (
-      <main style={styles.paymentPage}>
-        <div style={styles.paymentCard}>
-          <h1>🥊 Payment Successful!</h1>
-          <p>Welcome to TNG Boxing. Your membership payment was processed successfully.</p>
-          <p>Our team will follow up with your next steps.</p>
-          <button style={styles.primaryBtn} onClick={() => (window.location.href = "/")}>
-            Go to TNG CRM
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  if (paymentStatus === "cancelled") {
-    return (
-      <main style={styles.paymentPage}>
-        <div style={styles.paymentCard}>
-          <h1>Payment Cancelled</h1>
-          <p>Your checkout was cancelled. You can restart your signup anytime.</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (paymentStatus === "failed") {
-    return (
-      <main style={styles.paymentPage}>
-        <div style={styles.paymentCard}>
-          <h1>Payment Failed</h1>
-          <p>Something went wrong with the payment. Please try again or contact TNG Boxing.</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (params.has("join")) {
-    return <JoinPage />;
-  }
+  if (paymentStatus) return <PaymentMessage status={paymentStatus} />;
+  if (params.has("join")) return <JoinPage />;
 
   if (!token) {
     return (
-      <main style={styles.loginPage}>
-        <div style={styles.loginCard}>
-          <h1>🥊 TNG CRM</h1>
-          <p style={styles.sub}>Sales • Members • Commissions • Clover</p>
+      <Box
+        sx={{
+          minHeight: "100vh",
+          bgcolor: "#09090b",
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1.1fr .9fr" },
+        }}
+      >
+        <Box
+          sx={{
+            display: { xs: "none", md: "flex" },
+            flexDirection: "column",
+            justifyContent: "space-between",
+            p: 6,
+            color: "white",
+            background: "radial-gradient(circle at 30% 20%, #471015 0, #09090b 48%)",
+          }}
+        >
+          <Typography variant="h4" fontWeight={900}>
+            TNG <Box component="span" sx={{ color: "#e31b23" }}>OS</Box>
+          </Typography>
+          <Box>
+            <Typography variant="h2" fontWeight={950} sx={{ maxWidth: 650, lineHeight: 1 }}>
+              Run the gym. Build champions.
+            </Typography>
+            <Typography sx={{ mt: 3, color: "rgba(255,255,255,.7)", maxWidth: 580 }}>
+              Members, sales, attendance, staff, Clover, and AI training in one operating system.
+            </Typography>
+          </Box>
+          <Typography variant="body2" sx={{ color: "rgba(255,255,255,.45)" }}>
+            Earned Not Given
+          </Typography>
+        </Box>
 
-          <input
-            style={styles.input}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        <Box sx={{ display: "grid", placeItems: "center", p: 2 }}>
+          <Card sx={{ width: "100%", maxWidth: 440, borderRadius: 4 }}>
+            <CardContent sx={{ p: { xs: 3, sm: 5 } }}>
+              <Typography variant="h4" fontWeight={900}>
+                Sign in
+              </Typography>
+              <Typography color="text.secondary" sx={{ mb: 3 }}>
+                Access TNG Boxing operations.
+              </Typography>
 
-          <input
-            style={styles.input}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-
-          <button style={styles.primaryBtn} onClick={login}>
-            Login
-          </button>
-
-          <p>{msg}</p>
-        </div>
-      </main>
+              <Stack spacing={2}>
+                {msg && <Alert severity="error">{msg}</Alert>}
+                <TextField
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  fullWidth
+                />
+                <TextField
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") login();
+                  }}
+                  fullWidth
+                />
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={login}
+                  disabled={loginLoading}
+                  fullWidth
+                >
+                  {loginLoading ? <CircularProgress size={24} color="inherit" /> : "Login"}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Box>
+      </Box>
     );
   }
 
   return (
-    <div style={styles.app}>
-      <Sidebar role={role} page={page} setPage={setPage} styles={styles} />
+    <AppShell
+      role={role}
+      page={page}
+      setPage={setPage}
+      userName={userName}
+      onRefresh={load}
+      onSync={syncTngOS}
+      onLogout={logout}
+    >
+      {msg && (
+        <Alert severity="info" onClose={() => setMsg("")} sx={{ mb: 2 }}>
+          {msg}
+        </Alert>
+      )}
 
-      <main style={styles.main}>
-        <header style={styles.header}>
-          <div>
-            <h1>{page}</h1>
-            <p>
-              TNG Boxing sales and commission command center
-              {userName && (
-                <span style={{ marginLeft: 12 }}>
-                  | Logged in as <b>{userName}</b> ({role})
-                </span>
-              )}
-            </p>
-          </div>
+      {page === "Dashboard" && role !== "rep" && (
+        <Dashboard dash={dash} leader={leader} load={load} />
+      )}
+      {page === "Members" && role !== "rep" && <Members />}
+      {page === "Front Desk" && role !== "rep" && <FrontDesk />}
+      {page === "Sales" && <Sales />}
+      {page === "Products" && role === "admin" && <Products />}
+      {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
+      {page === "Leads" && <Leads />}
+      {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
+      {page === "AI Trainer" && role !== "rep" && <AITrainer />}
+      {page === "User Management" && role === "admin" && <UserManagement />}
 
-          <div>
-            <button style={styles.secondaryBtn} onClick={load}>
-              Refresh
-            </button>
+      {page === "QR Referrals" && (
+        <Card>
+          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+            <Typography variant="h5" fontWeight={900} gutterBottom>
+              QR Referrals
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 3 }}>
+              Referral links and QR codes for the sales team.
+            </Typography>
 
-            {role === "admin" && (
-              <>
-                <button
-                  style={{
-                    ...styles.primaryBtnSmall,
-                    background: "#111",
+            {role === "rep" ? (
+              <Alert severity="info">
+                Your personal referral QR will appear here after rep-specific access is connected.
+              </Alert>
+            ) : (
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 2,
+                }}
+              >
+                {Array.isArray(reps) && reps.map((rep) => (
+                  <Card key={rep.id} variant="outlined" sx={{ boxShadow: "none" }}>
+                    <CardContent>
+                      <Typography variant="h6" fontWeight={850}>{rep.name}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        /join/{rep.slug}
+                      </Typography>
+                      <Typography sx={{ my: 1.5 }}>
+                        {rep.clover_link ? "Clover connected" : "Clover not connected"}
+                      </Typography>
+                      <Button variant="outlined" onClick={() => loadQr(rep.id)}>
+                        Generate QR Code
+                      </Button>
+
+                      {qrCodes[rep.id] && (
+                        <Stack spacing={1.5} sx={{ mt: 2 }}>
+                          <Link href={qrCodes[rep.id].url} target="_blank" rel="noreferrer">
+                            Open referral link
+                          </Link>
+                          <Box
+                            component="img"
+                            src={`data:image/png;base64,${qrCodes[rep.id].qr_png_base64}`}
+                            alt={`${rep.name} QR code`}
+                            sx={{ width: 180, maxWidth: "100%", borderRadius: 2 }}
+                          />
+                        </Stack>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {page === "Clover" && role === "admin" && (
+        <Card>
+          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+            <Typography variant="h5" fontWeight={900}>Clover Integration</Typography>
+            <Typography color="text.secondary" sx={{ mt: 1, mb: 2 }}>
+              Payment synchronization and webhook configuration.
+            </Typography>
+            <Typography component="code" sx={{ display: "block", p: 2, bgcolor: "#f4f4f5", borderRadius: 2, overflowWrap: "anywhere" }}>
+              {API}/api/clover/webhook
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+
+      {page === "Reports" && role === "admin" && (
+        <Card>
+          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+            <Typography variant="h5" fontWeight={900} sx={{ mb: 2 }}>Sales Leaderboard</Typography>
+            <Stack spacing={1}>
+              {Array.isArray(leader) && leader.map((item, index) => (
+                <Box
+                  key={item.rep_id}
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr auto", md: "2fr 1fr 1fr 1fr" },
+                    gap: 1,
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: index === 0 ? "#fff4f4" : "#fafafa",
                   }}
-                  onClick={syncTngOS}
                 >
-                  🔄 TNG OS Sync
-                </button>
-
-                <button style={styles.primaryBtnSmall} onClick={addRep}>
-                  Add Rep
-                </button>
-              </>
-            )}
-
-            <button
-              style={styles.logoutBtn}
-              onClick={() => {
-                localStorage.clear();
-                setToken("");
-                setRole("admin");
-                setUserName("");
-                setPage("Dashboard");
-              }}
-            >
-              Logout
-            </button>
-          </div>
-        </header>
-
-        {msg && <p style={styles.notice}>{msg}</p>}
-
-        {page === "Dashboard" && role !== "rep" && (
-          <Dashboard dash={dash} leader={leader} load={load} />
-        )}
-
-        {page === "Members" && role !== "rep" && <Members />}
-
-        {page === "Front Desk" && role !== "rep" && <FrontDesk />}
-
-
-        {page === "Front Desk" && role !== "rep" && <FrontDesk />}
-
-        {page === "Sales" && <Sales />}
-
-        {page === "Products" && role === "admin" && <Products />}
-
-        {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
-
-        {page === "Leads" && <Leads />}
-
-        {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
-
-        {page === "AI Trainer" && role !== "rep" && <AITrainer />}
-
-        {page === "User Management" && role === "admin" && (
-          <UserManagement />
-        )}
-
-        {page === "QR Referrals" && (
-          <section style={styles.panel}>
-            <h2>QR Referrals</h2>
-            <p>Each sales rep has their own referral page and QR code.</p>
-
-            {role === "rep" && (
-              <p>
-                Your QR referral link will appear here once rep-specific QR access is connected.
-              </p>
-            )}
-
-            {role !== "rep" &&
-              Array.isArray(reps) &&
-              reps.map((r) => (
-                <div key={r.id} style={styles.repCard}>
-                  <h3>{r.name}</h3>
-
-                  <p>
-                    <b>Referral:</b> /join/{r.slug}
-                  </p>
-
-                  <p>{r.clover_link ? "✅ Clover Connected" : "❌ Clover Not Connected"}</p>
-
-                  <button style={styles.secondaryBtn} onClick={() => loadQr(r.id)}>
-                    Generate QR Code
-                  </button>
-
-                  {qrCodes[r.id] && (
-                    <>
-                      <p>
-                        <b>Referral URL</b>
-                      </p>
-
-                      <a href={qrCodes[r.id].url} target="_blank" rel="noreferrer">
-                        {qrCodes[r.id].url}
-                      </a>
-
-                      <br />
-                      <br />
-
-                      <img
-                        src={`data:image/png;base64,${qrCodes[r.id].qr_png_base64}`}
-                        alt="QR Code"
-                        style={{
-                          width: 180,
-                          border: "1px solid #ddd",
-                          borderRadius: 10,
-                        }}
-                      />
-                    </>
-                  )}
-                </div>
+                  <Typography fontWeight={850}>#{index + 1} {item.name}</Typography>
+                  <Typography>{item.sales} sales</Typography>
+                  <Typography sx={{ display: { xs: "none", md: "block" } }}>${Number(item.revenue || 0).toFixed(2)}</Typography>
+                  <Typography sx={{ display: { xs: "none", md: "block" } }}>{Number((item.rate || 0) * 100).toFixed(0)}%</Typography>
+                </Box>
               ))}
-          </section>
-        )}
-
-        {page === "Clover" && role === "admin" && (
-          <section style={styles.panel}>
-            <h2>Clover Integration</h2>
-            <p>Backend webhook is ready at:</p>
-            <code>{API}/api/clover/webhook</code>
-            <p>Next step: add Clover webhook secret and match payments to sales reps.</p>
-          </section>
-        )}
-
-        {page === "Reports" && role === "admin" && (
-          <section style={styles.panel}>
-            <h2>Leaderboard</h2>
-            {Array.isArray(leader) &&
-              leader.map((r, i) => (
-                <div key={r.rep_id} style={styles.row}>
-                  <b>
-                    #{i + 1} {r.name}
-                  </b>
-                  <span>{r.sales} sales</span>
-                  <span>${Number(r.revenue || 0).toFixed(2)}</span>
-                  <span>{Number((r.rate || 0) * 100).toFixed(0)}%</span>
-                </div>
-              ))}
-          </section>
-        )}
-      </main>
-    </div>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+    </AppShell>
   );
 }
 
-const styles = {
-  loginPage: {
-    minHeight: "100vh",
-    background: "#0b0b0f",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    fontFamily: "Arial",
-  },
-
-  paymentPage: {
-    minHeight: "100vh",
-    background: "#0b0b0f",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    fontFamily: "Arial",
-    padding: 20,
-  },
-
-  paymentCard: {
-    background: "white",
-    padding: 36,
-    borderRadius: 18,
-    maxWidth: 520,
-    textAlign: "center",
-    boxShadow: "0 20px 50px rgba(0,0,0,.3)",
-  },
-
-  loginCard: {
-    background: "white",
-    padding: 32,
-    borderRadius: 18,
-    width: 380,
-    boxShadow: "0 20px 50px rgba(0,0,0,.3)",
-  },
-
-  sub: {
-    color: "#666",
-    marginBottom: 20,
-  },
-
-  input: {
-    width: "100%",
-    padding: 14,
-    marginBottom: 12,
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    boxSizing: "border-box",
-  },
-
-  primaryBtn: {
-    width: "100%",
-    padding: 14,
-    background: "#d71920",
-    color: "white",
-    border: 0,
-    borderRadius: 10,
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
-
-  app: {
-    display: "flex",
-    minHeight: "100vh",
-    fontFamily: "Arial",
-    background: "#f5f5f7",
-  },
-
-  sidebar: {
-    width: 230,
-    background: "#0b0b0f",
-    color: "white",
-    padding: 24,
-  },
-
-  navBtn: {
-    display: "block",
-    width: "100%",
-    padding: "12px",
-    marginBottom: "8px",
-    border: 0,
-    borderRadius: 10,
-    color: "white",
-    textAlign: "left",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-
-  main: {
-    flex: 1,
-    padding: 28,
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-
-  secondaryBtn: {
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: "1px solid #ccc",
-    marginRight: 8,
-    cursor: "pointer",
-  },
-
-  primaryBtnSmall: {
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: 0,
-    background: "#d71920",
-    color: "white",
-    marginRight: 8,
-    cursor: "pointer",
-  },
-
-  logoutBtn: {
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: 0,
-    background: "#111",
-    color: "white",
-    cursor: "pointer",
-  },
-
-  notice: {
-    background: "#fff3cd",
-    padding: 12,
-    borderRadius: 10,
-  },
-
-  grid4: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 16,
-    marginBottom: 24,
-  },
-
-  card: {
-    background: "white",
-    padding: 22,
-    borderRadius: 16,
-    boxShadow: "0 8px 20px rgba(0,0,0,.06)",
-  },
-
-  panel: {
-    background: "white",
-    padding: 22,
-    borderRadius: 16,
-    marginBottom: 24,
-    boxShadow: "0 8px 20px rgba(0,0,0,.06)",
-  },
-
-  repGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-  },
-
-  repCard: {
-    border: "1px solid #eee",
-    borderRadius: 14,
-    padding: 16,
-    background: "#fafafa",
-  },
-
-  row: {
-    display: "grid",
-    gridTemplateColumns: "2fr 1fr 1fr 1fr",
-    padding: 12,
-    borderBottom: "1px solid #eee",
-  },
-};
-
 const host = window.location.hostname.toLowerCase();
+const root = createRoot(document.getElementById("root"));
 
-if (host === "display.tngboxinggym.com") {
-  createRoot(document.getElementById("root")).render(<AIDisplay />);
-} else {
-  createRoot(document.getElementById("root")).render(<App />);
-}
+root.render(
+  <ThemeProvider theme={theme}>
+    <CssBaseline />
+    {host === "display.tngboxinggym.com" ? <AIDisplay /> : <App />}
+  </ThemeProvider>
+);

@@ -1,74 +1,93 @@
-import React from "react";
-import {
-  Box,
-  Drawer,
-  List,
-  ListItemButton,
-  ListItemText,
-  Typography,
-  AppBar,
-  Toolbar,
-  Button,
-} from "@mui/material";
+import React, { useState } from "react";
+import { Box, Drawer } from "@mui/material";
+import Sidebar from "../components/Sidebar.jsx";
+import TopBar from "./TopBar.jsx";
 
-const pages = ["Dashboard", "Members", "Sales", "Sales Reps", "QR Referrals", "Clover", "Reports"];
+const DRAWER_WIDTH = 270;
 
-export default function AppShell({ page, setPage, children, onLogout }) {
+export default function AppShell({
+  role,
+  page,
+  setPage,
+  userName,
+  onRefresh,
+  onSync,
+  onLogout,
+  children,
+}) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const drawer = (
+    <Sidebar
+      role={role}
+      page={page}
+      setPage={setPage}
+      onNavigate={() => setMobileOpen(false)}
+    />
+  );
+
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#f5f5f7" }}>
+    <Box sx={{ minHeight: "100vh", bgcolor: "#f5f6f8" }}>
       <Drawer
         variant="permanent"
+        open
         sx={{
-          width: 240,
+          display: { xs: "none", lg: "block" },
+          width: DRAWER_WIDTH,
+          flexShrink: 0,
           "& .MuiDrawer-paper": {
-            width: 240,
-            bgcolor: "#0b0b0f",
-            color: "white",
-            p: 2,
+            width: DRAWER_WIDTH,
+            border: 0,
+            boxSizing: "border-box",
           },
         }}
       >
-        <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
-          🥊 TNG CRM
-        </Typography>
-
-        <List>
-          {pages.map((item) => (
-            <ListItemButton
-              key={item}
-              onClick={() => setPage(item)}
-              sx={{
-                borderRadius: 2,
-                mb: 1,
-                bgcolor: page === item ? "#d71920" : "transparent",
-                "&:hover": { bgcolor: "#d71920" },
-              }}
-            >
-              <ListItemText primary={item} />
-            </ListItemButton>
-          ))}
-        </List>
+        {drawer}
       </Drawer>
 
-      <Box sx={{ flex: 1 }}>
-        <AppBar position="static" elevation={0} sx={{ bgcolor: "white", color: "#111" }}>
-          <Toolbar sx={{ justifyContent: "space-between" }}>
-            <Box>
-              <Typography variant="h5" fontWeight="bold">
-                {page}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                TNG Boxing sales and commission command center
-              </Typography>
-            </Box>
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: "block", lg: "none" },
+          "& .MuiDrawer-paper": {
+            width: Math.min(DRAWER_WIDTH, 320),
+            border: 0,
+          },
+        }}
+      >
+        {drawer}
+      </Drawer>
 
-            <Button variant="contained" color="error" onClick={onLogout}>
-              Logout
-            </Button>
-          </Toolbar>
-        </AppBar>
+      <Box
+        sx={{
+          ml: { xs: 0, lg: `${DRAWER_WIDTH}px` },
+          minWidth: 0,
+        }}
+      >
+        <TopBar
+          page={page}
+          role={role}
+          userName={userName}
+          onMenu={() => setMobileOpen(true)}
+          onRefresh={onRefresh}
+          onSync={onSync}
+          onLogout={onLogout}
+        />
 
-        <Box sx={{ p: 3 }}>{children}</Box>
+        <Box
+          component="main"
+          sx={{
+            width: "100%",
+            maxWidth: 1600,
+            mx: "auto",
+            p: { xs: 1.5, sm: 2, md: 3 },
+          }}
+        >
+          {children}
+        </Box>
       </Box>
     </Box>
   );
