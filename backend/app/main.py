@@ -551,18 +551,10 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
 
 @app.get("/api/members")
 def list_members(db: Session = Depends(get_db), user: User = Depends(current_user)):
-
-    MEMBERSHIP_PRODUCTS = [
-        "month",
-        "monthly",
-        "3 month",
-        "annual",
-        "year",
-        "pre-sale",
-        "special",
-        "family",
-        "vip",
-        "non profit",
+    membership_terms = [
+        "month", "monthly", "3 month", "annual", "year", "pre-sale",
+        "special", "family", "vip", "non profit", "youth boxing",
+        "unlimited boxing", "membership",
     ]
 
     members = (
@@ -570,16 +562,17 @@ def list_members(db: Session = Depends(get_db), user: User = Depends(current_use
         .filter(
             or_(
                 *[
-                    Member.membership_type.ilike(f"%{p}%")
-                    for p in MEMBERSHIP_PRODUCTS
+                    Member.membership_type.ilike(f"%{term}%")
+                    for term in membership_terms
                 ]
             )
         )
+        .order_by(Member.last_name.asc(), Member.first_name.asc())
         .all()
     )
 
-    for m in members:
-        recalculate_member_from_payments(m, db)
+    for member in members:
+        recalculate_member_from_payments(member, db)
 
     db.commit()
 
@@ -600,9 +593,13 @@ def list_members(db: Session = Depends(get_db), user: User = Depends(current_use
             "membership_start": m.membership_start.isoformat() if m.membership_start else None,
             "membership_end": m.membership_end.isoformat() if m.membership_end else None,
             "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
+            "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
+            "billing_status": m.billing_status,
+            "monthly_rate": m.monthly_rate,
+            "assigned_coach": m.assigned_coach,
             "clover_customer_id": m.clover_customer_id,
             "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
-            "total_checkins": m.total_checkins,
+            "total_checkins": m.total_checkins or 0,
             "photo_url": m.photo_url,
             "created_at": m.created_at.isoformat() if m.created_at else None,
         }
@@ -1413,6 +1410,9 @@ def member_payments(member_id: int, db: Session = Depends(get_db), user: User = 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
+    recalculate_member_from_payments(member, db)
+    db.commit()
+
     sales = (
         db.query(Sale)
         .filter(Sale.member_id == member_id)
@@ -1602,52 +1602,50 @@ def member_attendance(member_id: int, db: Session = Depends(get_db), user: User 
     }
 @app.get("/api/members/{member_id}")
 def get_member(member_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    m = db.query(Member).filter(Member.id == member_id).first()
+    member = db.query(Member).filter(Member.id == member_id).first()
 
-    if not m:
+    if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    recalculate_member_from_payments(m, db)
+    recalculate_member_from_payments(member, db)
     db.commit()
-    db.refresh(m)
+    db.refresh(member)
 
     return {
-        "id": m.id,
-        "first_name": m.first_name,
-        "last_name": m.last_name,
-        "email": m.email,
-        "phone": m.phone,
-        "status": m.status,
-        "member_number": m.member_number,
-        "barcode": m.barcode,
-        "qr_code": m.qr_code,
-        "digital_member_id": m.digital_member_id,
-        "membership_type": m.membership_type,
-        "membership_status": m.membership_status,
-        "membership_start": m.membership_start.isoformat() if m.membership_start else None,
-        "membership_end": m.membership_end.isoformat() if m.membership_end else None,
-
-        "billing_cycle": m.billing_cycle,
-        "monthly_rate": m.monthly_rate,
-        "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
-        "autopay_enabled": m.autopay_enabled,
-        "billing_status": m.billing_status,
-        "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
-        "past_due_amount": m.past_due_amount,
-        "clover_customer_id": m.clover_customer_id,
-        "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
-        "total_checkins": m.total_checkins,
-        "photo_url": m.photo_url,
-        "billing_cycle": m.billing_cycle,
-        "monthly_rate": m.monthly_rate,
-        "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
-        "autopay_enabled": m.autopay_enabled,
-        "billing_status": m.billing_status,
-        "clover_subscription_id": m.clover_subscription_id,
-     
-        "past_due_amount": m.past_due_amount,
-        "created_at": m.created_at.isoformat() if m.created_at else None,
+        "id": member.id,
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "email": member.email,
+        "phone": member.phone,
+        "status": member.status,
+        "member_number": member.member_number,
+        "barcode": member.barcode,
+        "qr_code": member.qr_code,
+        "digital_member_id": member.digital_member_id,
+        "membership_type": member.membership_type,
+        "membership_status": member.membership_status,
+        "membership_start": member.membership_start.isoformat() if member.membership_start else None,
+        "membership_end": member.membership_end.isoformat() if member.membership_end else None,
+        "billing_cycle": member.billing_cycle,
+        "monthly_rate": member.monthly_rate,
+        "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
+        "autopay_enabled": member.autopay_enabled,
+        "billing_status": member.billing_status,
+        "clover_subscription_id": member.clover_subscription_id,
+        "last_payment_date": member.last_payment_date.isoformat() if member.last_payment_date else None,
+        "past_due_amount": member.past_due_amount,
+        "clover_customer_id": member.clover_customer_id,
+        "last_checkin": member.last_checkin.isoformat() if member.last_checkin else None,
+        "total_checkins": member.total_checkins or 0,
+        "photo_url": member.photo_url,
+        "assigned_coach": member.assigned_coach,
+        "emergency_contact": member.emergency_contact,
+        "emergency_phone": member.emergency_phone,
+        "waiver_signed": member.waiver_signed,
+        "notes": member.notes,
+        "created_at": member.created_at.isoformat() if member.created_at else None,
     }
+
 @app.put("/api/members/{member_id}")
 def update_member(member_id: int, data: dict, db: Session = Depends(get_db), user: User = Depends(current_user)):
     m = db.query(Member).filter(Member.id == member_id).first()

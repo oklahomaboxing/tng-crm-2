@@ -1,838 +1,230 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
+  Avatar,
   Box,
+  Button,
   Card,
   CardContent,
-  Typography,
   Chip,
-  Button,
-  Grid,
+  CircularProgress,
   Divider,
+  Grid,
   Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
 } from "@mui/material";
+import { API, authHeaders } from "../services/api";
 import MemberCard from "./MemberCard.jsx";
-const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+function formatDate(value, includeTime = false) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return includeTime ? date.toLocaleString() : date.toLocaleDateString();
+}
+
+function daysRemaining(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.ceil((date.getTime() - Date.now()) / 86400000);
+}
 
 export default function MemberProfile({ member, onBack }) {
-  const [tab, setTab] = useState("Profile");
   const [memberData, setMemberData] = useState(member);
-  const [attendance, setAttendance] = useState(null);
-  const [attendanceError, setAttendanceError] = useState("");
+  const [tab, setTab] = useState("overview");
   const [payments, setPayments] = useState(null);
-  const [paymentError, setPaymentError] = useState("");
+  const [attendance, setAttendance] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({});
   const [showCard, setShowCard] = useState(false);
-  if (!memberData) return null;
+  const [form, setForm] = useState({});
 
-  const fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim();
-  const isActive =
-    memberData.membership_status === "active" || memberData.status === "active";
-
-  function photoSrc() {
-    if (!memberData.photo_url) return "";
-    if (memberData.photo_url.startsWith("http")) return memberData.photo_url;
-    return `${API}${memberData.photo_url}`;
-  }
+  const fullName = useMemo(() => `${memberData?.first_name || ""} ${memberData?.last_name || ""}`.trim(), [memberData]);
+  const days = daysRemaining(memberData?.membership_end);
+  const isActive = memberData?.membership_status === "active" && (days === null || days >= 0);
 
   async function loadMember() {
-    const res = await fetch(`${API}/api/members/${memberData.id}`, {
-      headers: {
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
-    });
+    try {
+      setError("");
+      const response = await fetch(`${API}/api/members/${member.id}`, { headers: authHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not load member");
+      setMemberData(data);
+    } catch (err) {
+      setError(err.message || "Could not load member");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    const data = await res.json();
-    if (res.ok) setMemberData(data);
+  async function loadPayments() {
+    const response = await fetch(`${API}/api/members/${member.id}/payments`, { headers: authHeaders() });
+    const data = await response.json();
+    if (response.ok) setPayments(data);
   }
 
   async function loadAttendance() {
-    try {
-      setAttendanceError("");
-
-      const res = await fetch(`${API}/api/members/${memberData.id}/attendance`, {
-        headers: {
-          Authorization: "Bearer " + localStorage.getItem("token"),
-        },
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Could not load attendance");
-
-      setAttendance(data);
-    } catch (err) {
-      setAttendanceError(err.message);
-    }
+    const response = await fetch(`${API}/api/members/${member.id}/attendance`, { headers: authHeaders() });
+    const data = await response.json();
+    if (response.ok) setAttendance(data);
   }
 
-async function loadPayments() {
-  try {
-    setPaymentError("");
-
-    const res = await fetch(
-      `${API}/api/members/${memberData.id}/payments`,
-      {
-        headers: {
-          Authorization: "Bearer " + localStorage.getItem("token"),
-        },
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.detail || "Could not load payments");
-    }
-
-    setPayments(data);
-  } catch (err) {
-    setPaymentError(err.message);
-  }
-}
-  async function checkInMember() {
-    try {
-      const res = await fetch(`${API}/api/checkin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + localStorage.getItem("token"),
-        },
-        body: JSON.stringify({
-          code:
-            memberData.barcode ||
-            memberData.member_number ||
-            memberData.qr_code,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Check-in failed");
-
-      alert(`✅ ${data.member.name} checked in successfully`);
-
-      await loadMember();
-
-      if (tab === "Attendance") {
-        await loadAttendance();
-      }
-    } catch (err) {
-      alert(`❌ ${err.message}`);
-    }
-  }
-
-async function renewMembership() {
-  const monthsText = prompt(
-    "Renew membership for how many months?\n\nType 1 for 1 month\nType 3 for 3 months"
-  );
-
-  if (monthsText !== "1" && monthsText !== "3") {
-    return;
-  }
-
-  try {
-    const res = await fetch(
-      `${API}/api/members/${memberData.id}/renew`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + localStorage.getItem("token"),
-        },
-        body: JSON.stringify({
-          months: Number(monthsText),
-        }),
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.detail || "Renewal failed");
-    }
-
-    await loadMember();
-
-    alert(`✅ ${data.message}`);
-  } catch (err) {
-    alert(`❌ ${err.message}`);
-  }
-}
-
-async function recalculateMembership() {
-  try {
-    const res = await fetch(
-      `${API}/api/members/${memberData.id}/recalculate-membership`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + localStorage.getItem("token"),
-        },
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.detail || "Recalculation failed");
-    }
-
-    await loadMember();
-
-    alert("✅ Membership dates recalculated from payment history.");
-  } catch (err) {
-    alert(`❌ ${err.message}`);
-  }
-}
-
-async function uploadPhoto(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await fetch(`${API}/api/members/${memberData.id}/photo`, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-    body: formData,
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    alert(data.detail || "Photo upload failed");
-    return;
-  }
-
-  await loadMember();
-
-  alert("✅ Photo uploaded");
-}
-
-function startEdit() {
-  setEditForm({
-    first_name: memberData.first_name || "",
-    last_name: memberData.last_name || "",
-    email: memberData.email || "",
-    phone: memberData.phone || "",
-    membership_type: memberData.membership_type || "",
-    membership_status: memberData.membership_status || "active",
-    assigned_coach: memberData.assigned_coach || "",
-    emergency_contact: memberData.emergency_contact || "",
-    emergency_phone: memberData.emergency_phone || "",
-    membership_start: memberData.membership_start
-      ? memberData.membership_start.slice(0, 10)
-      : "",
-    membership_end: memberData.membership_end
-      ? memberData.membership_end.slice(0, 10)
-      : "",
-    billing_cycle: memberData.billing_cycle || "",
-    monthly_rate: memberData.monthly_rate || "",
-    next_billing_date: memberData.next_billing_date
-      ? memberData.next_billing_date.slice(0, 10)
-      : "",
-    billing_status: memberData.billing_status || "",
-    notes: memberData.notes || "",
-  });
-
-  setEditing(true);
-}
-
-async function saveEdit() {
-  const res = await fetch(`${API}/api/members/${memberData.id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-    body: JSON.stringify(editForm),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    alert(data.detail || "Could not update member");
-    return;
-  }
-
-  setMemberData(data);
-  setEditing(false);
-  alert("✅ Member updated");
-}
-
-async function deleteMember() {
-  const confirmText = prompt(
-    `Type DELETE to permanently delete ${fullName || "this member"}`
-  );
-
-  if (confirmText !== "DELETE") {
-    return;
-  }
-
-  const res = await fetch(`${API}/api/members/${memberData.id}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    },
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    alert(data.detail || "Could not delete member");
-    return;
-  }
-
-  alert("✅ Member deleted");
-  onBack();
-}
-
-useEffect(() => {
-  setMemberData(member);
-
-  if (member?.id) {
+  useEffect(() => {
     loadMember();
-  }
-}, [member?.id]);
-
-useEffect(() => {
-  if (tab === "Attendance") {
-    loadAttendance();
-  }
-
-  if (tab === "Payments") {
     loadPayments();
-  }
-}, [tab]);
-
-useEffect(() => {
-  if (tab === "Attendance") {
     loadAttendance();
+  }, [member.id]);
+
+  async function checkIn() {
+    const response = await fetch(`${API}/api/checkin`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ code: memberData.barcode || memberData.member_number || memberData.qr_code }),
+    });
+    const data = await response.json();
+    if (!response.ok) return alert(data.detail || "Check-in failed");
+    await Promise.all([loadMember(), loadAttendance()]);
+    alert(`${data.member.name} checked in successfully`);
   }
 
-  if (tab === "Payments") {
-    loadPayments();
+  async function uploadPhoto(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    const response = await fetch(`${API}/api/members/${member.id}/photo`, { method: "POST", headers: authHeaders(), body });
+    const data = await response.json();
+    if (!response.ok) return alert(data.detail || "Photo upload failed");
+    await loadMember();
   }
 
-  if (tab === "Membership") {
-    loadMember();
+  function startEdit() {
+    setForm({
+      first_name: memberData.first_name || "",
+      last_name: memberData.last_name || "",
+      email: memberData.email || "",
+      phone: memberData.phone || "",
+      assigned_coach: memberData.assigned_coach || "",
+      emergency_contact: memberData.emergency_contact || "",
+      emergency_phone: memberData.emergency_phone || "",
+      notes: memberData.notes || "",
+    });
+    setEditing(true);
   }
-}, [tab]);
 
-return (
-  <Box>
-      <Button variant="outlined" color="error" onClick={onBack} sx={{ mb: 2 }}>
-        ← Back to Members
-      </Button>
+  async function saveEdit() {
+    const response = await fetch(`${API}/api/members/${member.id}`, {
+      method: "PUT",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const data = await response.json();
+    if (!response.ok) return alert(data.detail || "Could not save member");
+    setEditing(false);
+    await loadMember();
+  }
+
+  if (loading) return <Box display="flex" justifyContent="center" py={8}><CircularProgress color="error" /></Box>;
+
+  return (
+    <Box>
+      <Button variant="outlined" color="error" onClick={onBack} sx={{ mb: 2 }}>← Back to Members</Button>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Card sx={{ borderRadius: 4, mb: 3, overflow: "hidden" }}>
-        <Box sx={{ background: "#0b0b0f", color: "white", p: 3 }}>
-          <Typography variant="h5" fontWeight="bold">
-            👤 MEMBER PROFILE
-          </Typography>
-        </Box>
-
-        <CardContent>
+        <Box sx={{ background: "linear-gradient(135deg,#09090b,#1d1d24)", color: "white", p: { xs: 2.5, md: 4 } }}>
           <Grid container spacing={3} alignItems="center">
-            <Grid item xs={12} md={3}>
-              <Box
-                sx={{
-                  width: 180,
-                  height: 180,
-                  borderRadius: "50%",
-                  background: "#111",
-                  color: "white",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 60,
-                  fontWeight: "bold",
-                  border: "5px solid #d71920",
-                  overflow: "hidden",
-                }}
-              >
-                {memberData.photo_url ? (
-                  <img
-                    src={photoSrc()}
-                    alt={fullName}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  fullName ? fullName[0].toUpperCase() : "?"
-                )}
-              </Box>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                color="error"
-                component="label"
-                sx={{ mt: 2 }}
-              >
-                📸 Upload Photo
-                <input
-                  hidden
-                  type="file"
-                  accept="image/*"
-                  onChange={uploadPhoto}
-                />
-              </Button>
+            <Grid item xs={12} md="auto">
+              <Avatar src={memberData.photo_url ? `${API}${memberData.photo_url}` : undefined} sx={{ width: { xs: 96, md: 132 }, height: { xs: 96, md: 132 }, border: "4px solid #d71920", bgcolor: "#222", fontSize: 44 }}>
+                {fullName.charAt(0).toUpperCase() || "?"}
+              </Avatar>
             </Grid>
-
-            <Grid item xs={12} md={5}>
-              <Typography variant="h4" fontWeight="bold">
-                {fullName || "Member"}
-              </Typography>
-
-              <Typography color="text.secondary" sx={{ mt: 1 }}>
-                Member # {memberData.member_number || "-"}
-              </Typography>
-
-              <Typography sx={{ mt: 1 }}>
-                {memberData.membership_type || "Clover Customer"}
-              </Typography>
-
-              <Box sx={{ mt: 2 }}>
-                <Chip
-                  color={isActive ? "success" : "warning"}
-                  label={
-                    isActive
-                      ? "ACTIVE MEMBER"
-                      : memberData.membership_status ||
-                        memberData.status ||
-                        "PENDING"
-                  }
-                  sx={{ fontWeight: "bold" }}
-                />
-              </Box>
+            <Grid item xs={12} md>
+              <Typography variant="h4" fontWeight={900}>{fullName || "Member"}</Typography>
+              <Typography sx={{ opacity: 0.7 }}>{memberData.member_number || "No member number"}</Typography>
+              <Stack direction="row" spacing={1} mt={2} flexWrap="wrap">
+                <Chip label={isActive ? "ACTIVE" : "INACTIVE"} color={isActive ? "success" : "error"} />
+                <Chip label={memberData.membership_type || "Membership"} sx={{ color: "white", borderColor: "rgba(255,255,255,.35)" }} variant="outlined" />
+                {days !== null && <Chip label={days >= 0 ? `${days} days left` : `${Math.abs(days)} days expired`} color={days >= 0 ? "warning" : "error"} />}
+              </Stack>
             </Grid>
-
-            <Grid item xs={12} md={4}>
-              <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
-                Quick Actions
-              </Typography>
-
-              <Stack spacing={1}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  color="success"
-                  onClick={checkInMember}
-                >
-                  ✅ Check In
-                </Button>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  color="error"
-                  onClick={renewMembership}
-                >
-                  💳 Renew Membership
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  fullWidth
-                  sx={{ mt: 1 }}
-                  onClick={recalculateMembership}
-                >
-                  🔄 Recalculate From Payments
-                </Button>
-
-
-                <Button fullWidth variant="outlined" color="error" onClick={() => setShowCard(true)}>
-                  🖨 Print Card
-                </Button>
-                <Button fullWidth variant="outlined" color="error">
-                  📷 Show QR Code
-                </Button>
-                <Button fullWidth variant="outlined" color="error" onClick={startEdit}>
-                 ✏ Edit Member
-               </Button>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  color="error"
-                  onClick={deleteMember}
-                >
-                  🗑 Delete Member
-                </Button>
+            <Grid item xs={12} md="auto">
+              <Stack spacing={1} minWidth={{ md: 210 }}>
+                <Button variant="contained" color="success" onClick={checkIn}>Check In</Button>
+                <Button variant="contained" color="error" onClick={startEdit}>Edit Member</Button>
+                <Button variant="outlined" component="label" sx={{ color: "white", borderColor: "rgba(255,255,255,.5)" }}>Upload Photo<input hidden type="file" accept="image/*" onChange={uploadPhoto} /></Button>
+                <Button variant="outlined" onClick={() => setShowCard((value) => !value)} sx={{ color: "white", borderColor: "rgba(255,255,255,.5)" }}>Membership Card</Button>
               </Stack>
             </Grid>
           </Grid>
-        </CardContent>
+        </Box>
       </Card>
 
-      <Card sx={{ borderRadius: 3, mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            {["Profile", "Attendance", "Payments", "Membership", "Documents", "Notes"].map((item) => (
-              <Button
-                key={item}
-                variant={tab === item ? "contained" : "outlined"}
-                color="error"
-                onClick={() => setTab(item)}
-                sx={{ mb: 1 }}
-              >
-                {item}
-              </Button>
-            ))}
-          </Stack>
-        </CardContent>
-      </Card>
-{editing && (
-  <Card sx={{ borderRadius: 3, mb: 3 }}>
-    <CardContent>
-      <Typography variant="h6" fontWeight="bold">
-        Edit Member
-      </Typography>
-      <Divider sx={{ my: 2 }} />
+      {showCard && <Card sx={{ mb: 3, borderRadius: 4 }}><CardContent><Stack direction="row" justifyContent="flex-end" mb={2}><Button onClick={() => window.print()} variant="contained" color="error">Print</Button></Stack><MemberCard member={memberData} /></CardContent></Card>}
 
-      <Grid container spacing={2}>
-        {[
-          ["first_name", "First Name"],
-          ["last_name", "Last Name"],
-          ["email", "Email"],
-          ["phone", "Phone"],
-          ["membership_type", "Membership Type"],
-          ["membership_status", "Membership Status"],
-          ["assigned_coach", "Assigned Coach"],
-          ["emergency_contact", "Emergency Contact"],
-          ["emergency_phone", "Emergency Phone"],
-          ["membership_start", "Membership Start"],
-          ["membership_end", "Membership Expiration"],
-          ["billing_cycle", "Billing Cycle"],
-          ["monthly_rate", "Monthly Rate"],
-          ["next_billing_date", "Next Billing Date"],
-          ["billing_status", "Billing Status"],
-          ["notes", "Notes"],
-        ].map(([field, label]) => (
-          <Grid item xs={12} md={6} key={field}>
-            <input
-              value={editForm[field] || ""}
-              onChange={(e) =>
-                setEditForm({ ...editForm, [field]: e.target.value })
-              }
-              placeholder={label}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 8,
-                border: "1px solid #ccc",
-                boxSizing: "border-box",
-              }}
-            />
-          </Grid>
-        ))}
-      </Grid>
-
-      <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-        <Button variant="contained" color="error" onClick={saveEdit}>
-          Save Changes
-        </Button>
-        <Button variant="outlined" color="error" onClick={() => setEditing(false)}>
-          Cancel
-        </Button>
-      </Stack>
-    </CardContent>
-  </Card>
-)}
-
-{showCard && (
-  <Card sx={{ borderRadius: 3, mb: 3 }}>
-    <CardContent>
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <Button variant="contained" color="error" onClick={() => window.print()}>
-          Print
-        </Button>
-        <Button variant="outlined" color="error" onClick={() => setShowCard(false)}>
-          Close
-        </Button>
-      </Stack>
-
-      <MemberCard member={memberData} />
-    </CardContent>
-  </Card>
-)}
-      {tab === "Profile" && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="h6" fontWeight="bold">
-                  Contact
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-                <Typography><b>Email:</b> {memberData.email || "-"}</Typography>
-                <Typography><b>Phone:</b> {memberData.phone || "-"}</Typography>
-                <Typography><b>Clover ID:</b> {memberData.clover_customer_id || "-"}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Card sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="h6" fontWeight="bold">
-                  Membership
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-                <Typography><b>Type:</b> {memberData.membership_type || "Clover Customer"}</Typography>
-                <Typography><b>Status:</b> {memberData.membership_status || memberData.status || "-"}</Typography>
-                <Typography>
-                  <b>Total Check-ins:</b> {memberData.total_checkins || 0}
-                </Typography>
-
-                <Typography>
-                  <b>Last Check-in:</b>{" "}
-                  {memberData.last_checkin
-                    ? new Date(memberData.last_checkin).toLocaleString()
-                    : "-"}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Card sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="h6" fontWeight="bold">
-                  Member Card Data
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-                <Typography><b>Barcode:</b> {memberData.barcode || "-"}</Typography>
-                <Typography><b>QR Code:</b> {memberData.qr_code || "-"}</Typography>
-                <Typography><b>Digital Member ID:</b> {memberData.digital_member_id || "-"}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-
-      {tab === "Attendance" && (
-        <Card sx={{ borderRadius: 3 }}>
+      {editing && (
+        <Card sx={{ borderRadius: 4, mb: 3 }}>
           <CardContent>
-            <Typography variant="h6" fontWeight="bold">
-              Attendance History
-            </Typography>
+            <Typography variant="h6" fontWeight={900}>Edit Member</Typography>
             <Divider sx={{ my: 2 }} />
-
-            {attendanceError && (
-              <Typography color="error">{attendanceError}</Typography>
-            )}
-
-            <Grid container spacing={2} sx={{ mb: 2 }}>
-              <Grid item xs={12} md={4}>
-                <Card sx={{ p: 2, background: "#f7f7f7" }}>
-                  <Typography color="text.secondary">Total Check-ins</Typography>
-                  <Typography variant="h4" fontWeight="bold">
-                    {attendance?.total_checkins ?? memberData.total_checkins ?? 0}
-                  </Typography>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} md={8}>
-                <Card sx={{ p: 2, background: "#f7f7f7" }}>
-                  <Typography color="text.secondary">Last Check-in</Typography>
-                  <Typography variant="h6" fontWeight="bold">
-                    {attendance?.last_checkin
-                      ? new Date(attendance.last_checkin).toLocaleString()
-                      : memberData.last_checkin
-                      ? new Date(memberData.last_checkin).toLocaleString()
-                      : "-"}
-                  </Typography>
-                </Card>
-              </Grid>
+            <Grid container spacing={2}>
+              {[
+                ["first_name", "First Name"], ["last_name", "Last Name"], ["email", "Email"], ["phone", "Phone"],
+                ["assigned_coach", "Assigned Coach"], ["emergency_contact", "Emergency Contact"], ["emergency_phone", "Emergency Phone"], ["notes", "Notes"],
+              ].map(([field, label]) => (
+                <Grid item xs={12} md={field === "notes" ? 12 : 6} key={field}>
+                  <TextField fullWidth multiline={field === "notes"} minRows={field === "notes" ? 3 : undefined} label={label} value={form[field] || ""} onChange={(event) => setForm({ ...form, [field]: event.target.value })} />
+                </Grid>
+              ))}
             </Grid>
-
-            {attendance?.attendance?.length > 0 ? (
-              <Stack spacing={1}>
-                {attendance.attendance.map((row) => (
-                  <Card key={row.id} sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography fontWeight="bold">
-                      ✅{" "}
-                      {row.checkin_time
-                        ? new Date(row.checkin_time).toLocaleString()
-                        : "-"}
-                    </Typography>
-                    <Typography color="text.secondary">
-                      Method: {row.method || "barcode"} • Location:{" "}
-                      {row.location || "Front Desk"}
-                    </Typography>
-                  </Card>
-                ))}
-              </Stack>
-            ) : (
-              <Typography color="text.secondary">
-                No attendance records yet.
-              </Typography>
-            )}
+            <Stack direction="row" spacing={1} mt={2}><Button variant="contained" color="error" onClick={saveEdit}>Save</Button><Button variant="outlined" onClick={() => setEditing(false)}>Cancel</Button></Stack>
           </CardContent>
         </Card>
       )}
 
-      {tab === "Payments" && (
-  <Card sx={{ borderRadius: 3 }}>
-    <CardContent>
-      <Typography variant="h6" fontWeight="bold">
-        Payment History
-      </Typography>
-      <Divider sx={{ my: 2 }} />
-
-      {paymentError && (
-        <Typography color="error">{paymentError}</Typography>
-      )}
-
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} md={6}>
-          <Card sx={{ p: 2, background: "#f7f7f7" }}>
-            <Typography color="text.secondary">Lifetime Value</Typography>
-            <Typography variant="h4" fontWeight="bold">
-              ${Number(payments?.lifetime_value || 0).toFixed(2)}
-            </Typography>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card sx={{ p: 2, background: "#f7f7f7" }}>
-            <Typography color="text.secondary">Total Payments</Typography>
-            <Typography variant="h4" fontWeight="bold">
-              {payments?.total_payments || 0}
-            </Typography>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {payments?.payments?.length > 0 ? (
-        <Stack spacing={1}>
-          {payments.payments.map((p) => (
-            <Card key={p.id} sx={{ p: 2, borderRadius: 2 }}>
-              <Typography fontWeight="bold">
-                💳 ${Number(p.amount || 0).toFixed(2)}
-              </Typography>
-
-              <Typography color="text.secondary">
-                {p.membership || "Membership"} • {p.payment_status || "paid"}
-              </Typography>
-
-              <Typography color="text.secondary">
-                {p.sale_date ? new Date(p.sale_date).toLocaleString() : ""}
-              </Typography>
-
-              <Typography variant="caption" color="text.secondary">
-                Clover Order: {p.clover_order_id || "-"}
-              </Typography>
-            </Card>
-          ))}
-        </Stack>
-      ) : (
-        <Typography color="text.secondary">
-          No payments found for this member.
-        </Typography>
-      )}
-    </CardContent>
-  </Card>
-)}
-
-{tab === "Membership" && (
-  <Card sx={{ borderRadius: 3 }}>
-    <CardContent>
-      <Typography variant="h6" fontWeight="bold">
-        Membership Billing
-      </Typography>
-      <Divider sx={{ my: 2 }} />
-
-      <Typography><b>Plan:</b> {memberData.membership_type || "-"}</Typography>
-      <Typography><b>Status:</b> {memberData.membership_status || "-"}</Typography>
-
-      <Typography>
-        <b>Membership Starts:</b>{" "}
-        {memberData.membership_start
-          ? new Date(memberData.membership_start).toLocaleDateString()
-          : "-"}
-      </Typography>
-
-      <Typography>
-        <b>Membership Expires:</b>{" "}
-        {memberData.membership_end
-          ? new Date(memberData.membership_end).toLocaleDateString()
-          : "-"}
-      </Typography>
-
-      <Typography><b>Billing Cycle:</b> {memberData.billing_cycle || "-"}</Typography>
-
-      <Typography>
-        <b>Monthly Rate:</b> ${Number(memberData.monthly_rate || 0).toFixed(2)}
-      </Typography>
-
-      <Typography>
-        <b>Next Billing:</b>{" "}
-        {memberData.next_billing_date
-          ? new Date(memberData.next_billing_date).toLocaleDateString()
-          : "Not Scheduled"}
-      </Typography>
-
-      <Typography>
-        <b>AutoPay:</b> {memberData.autopay_enabled ? "🟢 Enabled" : "⚪ Disabled"}
-      </Typography>
-      <Divider sx={{ my: 3 }} />
-
-      <Stack direction="row" spacing={2} flexWrap="wrap">
-        <Button
-          variant="contained"
-          color="success"
-          fullWidth
-        >
-          💳 Enable AutoPay
-        </Button>
-
-        <Button
-          variant="contained"
-          color="error"
-          fullWidth
-          onClick={renewMembership}
-        >
-          🔄 Renew Membership
-        </Button>
-
-        <Button
-          variant="outlined"
-          color="warning"
-          fullWidth
-        >
-          ⏸ Pause Membership
-        </Button>
-
-        <Button
-          variant="outlined"
-          color="error"
-          fullWidth
-        >
-          ❌ Cancel Membership
-        </Button>
-      </Stack>
-    </CardContent>
-  </Card>
-)}
-
-{tab !== "Profile" && tab !== "Attendance" && tab !== "Payments" && tab !== "Membership" && (  <Card sx={{ borderRadius: 3 }}>
-    <CardContent>
-      <Typography variant="h6" fontWeight="bold">
-        {tab}
-      </Typography>
-      <Divider sx={{ my: 2 }} />
-      <Typography color="text.secondary">
-        {tab} details coming next.
-      </Typography>
-    </CardContent>
-  </Card>
-)}
+      <Card sx={{ borderRadius: 4 }}>
+        <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto">
+          <Tab value="overview" label="Overview" /><Tab value="membership" label="Membership" /><Tab value="payments" label="Payments" /><Tab value="attendance" label="Attendance" /><Tab value="notes" label="Notes" />
+        </Tabs>
+        <Divider />
+        <CardContent>
+          {tab === "overview" && (
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}><InfoCard title="Contact" rows={[["Email", memberData.email], ["Phone", memberData.phone], ["Emergency Contact", memberData.emergency_contact], ["Emergency Phone", memberData.emergency_phone]]} /></Grid>
+              <Grid item xs={12} md={6}><InfoCard title="Gym Profile" rows={[["Assigned Coach", memberData.assigned_coach], ["Total Check-ins", memberData.total_checkins || 0], ["Last Check-in", formatDate(memberData.last_checkin, true)], ["Clover ID", memberData.clover_customer_id]]} /></Grid>
+            </Grid>
+          )}
+          {tab === "membership" && <InfoCard title="Membership Billing" rows={[["Plan", memberData.membership_type], ["Status", memberData.membership_status], ["Join Date", formatDate(memberData.membership_start)], ["Expiration", formatDate(memberData.membership_end)], ["Last Payment", formatDate(memberData.last_payment_date)], ["Next Billing", formatDate(memberData.next_billing_date)], ["Monthly Rate", `$${Number(memberData.monthly_rate || 0).toFixed(2)}`], ["Billing Status", memberData.billing_status]]} />}
+          {tab === "payments" && (
+            <Stack spacing={2}>
+              <Grid container spacing={2}><Grid item xs={6}><Metric label="Lifetime Value" value={`$${Number(payments?.lifetime_value || 0).toFixed(2)}`} /></Grid><Grid item xs={6}><Metric label="Payments" value={payments?.total_payments || 0} /></Grid></Grid>
+              {(payments?.payments || []).map((payment) => <Card key={payment.id} variant="outlined"><CardContent><Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between"><Box><Typography fontWeight={900}>{payment.membership || "Membership"}</Typography><Typography color="text.secondary">{formatDate(payment.sale_date, true)}</Typography></Box><Typography variant="h6" fontWeight={900}>${Number(payment.amount || 0).toFixed(2)}</Typography></Stack></CardContent></Card>)}
+              {!payments?.payments?.length && <Typography color="text.secondary">No payments found.</Typography>}
+            </Stack>
+          )}
+          {tab === "attendance" && (
+            <Stack spacing={2}>
+              <Grid container spacing={2}><Grid item xs={6}><Metric label="Total Check-ins" value={attendance?.total_checkins || 0} /></Grid><Grid item xs={6}><Metric label="Last Check-in" value={formatDate(attendance?.last_checkin, true)} /></Grid></Grid>
+              {(attendance?.attendance || []).map((row) => <Card key={row.id} variant="outlined"><CardContent><Typography fontWeight={800}>{formatDate(row.checkin_time, true)}</Typography><Typography color="text.secondary">{row.method || "barcode"} • {row.location || "Front Desk"}</Typography></CardContent></Card>)}
+              {!attendance?.attendance?.length && <Typography color="text.secondary">No attendance records found.</Typography>}
+            </Stack>
+          )}
+          {tab === "notes" && <Typography sx={{ whiteSpace: "pre-wrap" }}>{memberData.notes || "No notes saved."}</Typography>}
+        </CardContent>
+      </Card>
     </Box>
   );
+}
+
+function InfoCard({ title, rows }) {
+  return <Card variant="outlined" sx={{ borderRadius: 3, height: "100%" }}><CardContent><Typography fontWeight={900}>{title}</Typography><Divider sx={{ my: 2 }} />{rows.map(([label, value]) => <Stack key={label} direction="row" justifyContent="space-between" spacing={2} py={0.75}><Typography color="text.secondary">{label}</Typography><Typography fontWeight={700} textAlign="right">{value || "—"}</Typography></Stack>)}</CardContent></Card>;
+}
+
+function Metric({ label, value }) {
+  return <Card sx={{ borderRadius: 3, bgcolor: "#f6f6f8" }}><CardContent><Typography color="text.secondary">{label}</Typography><Typography variant="h5" fontWeight={900}>{value}</Typography></CardContent></Card>;
 }
