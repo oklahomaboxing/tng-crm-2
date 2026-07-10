@@ -25,7 +25,19 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [role, setRole] = useState(localStorage.getItem("role") || "admin");
   const [userName, setUserName] = useState(localStorage.getItem("name") || "");
-  const [page, setPage] = useState(role === "rep" ? "Sales" : "Dashboard");
+
+  const [page, setPage] = useState(() => {
+    if (role === "rep") {
+      return "Sales";
+    }
+
+    if (role === "staff") {
+      return "Front Desk";
+    }
+
+    return "Dashboard";
+  });
+
   const [dash, setDash] = useState(null);
   const [reps, setReps] = useState([]);
   const [leader, setLeader] = useState([]);
@@ -33,38 +45,48 @@ function App() {
   const [qrCodes, setQrCodes] = useState({});
 
   async function login() {
-    const r = await fetch(`${API}/api/login`, {
+    const response = await fetch(`${API}/api/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        password,
+      }),
     });
 
-    const j = await r.json();
+    const data = await response.json();
 
-    if (j.token) {
-      const nextRole = j.user?.role || "admin";
-      const nextName = j.user?.name || "";
+    if (!response.ok || !data.token) {
+      setMsg(data.detail || "Login failed");
+      return;
+    }
 
-      localStorage.setItem("token", j.token);
-      localStorage.setItem("role", nextRole);
-      localStorage.setItem("name", nextName);
+    const loggedInRole = data.user?.role || "rep";
+    const loggedInName = data.user?.name || "";
 
-      setToken(j.token);
-      setRole(nextRole);
-      setUserName(nextName);
-      setPage(nextRole === "rep" ? "Sales" : "Dashboard");
-      setMsg("Logged in");
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("role", loggedInRole);
+    localStorage.setItem("name", loggedInName);
 
-      if (nextRole === "admin") {
-        setTimeout(syncTngOS, 300);
-      } else {
-        setTimeout(load, 300);
-      }
+    setToken(data.token);
+    setRole(loggedInRole);
+    setUserName(loggedInName);
+    setMsg(`Logged in as ${loggedInName || loggedInRole}`);
+
+    if (loggedInRole === "admin") {
+      setPage("Dashboard");
+
+      setTimeout(() => {
+        syncTngOS();
+      }, 300);
+    } else if (loggedInRole === "staff") {
+      setPage("Front Desk");
     } else {
-      setMsg(j.detail || "Login failed");
+      setPage("Sales");
     }
   }
-
   async function load() {
     const h = { Authorization: "Bearer " + localStorage.getItem("token") };
 
