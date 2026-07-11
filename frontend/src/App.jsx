@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Alert,
@@ -30,6 +30,7 @@ import Products from "./pages/Products.jsx";
 import DuplicateReview from "./pages/DuplicateReview.jsx";
 import AITrainer from "./pages/AITrainer.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
+import QRReferrals from "./pages/QRReferrals.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -362,65 +363,7 @@ function App() {
       {page === "Leads" && <Leads />}
       {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
       {page === "AI Trainer" && role !== "rep" && <AITrainer />}
-      {page === "User Management" && role === "admin" && <UserManagement />}
-
-      {page === "QR Referrals" && (
-        <Card>
-          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-            <Typography variant="h5" fontWeight={900} gutterBottom>
-              QR Referrals
-            </Typography>
-            <Typography color="text.secondary" sx={{ mb: 3 }}>
-              Referral links and QR codes for the sales team.
-            </Typography>
-
-            {role === "rep" ? (
-              <Alert severity="info">
-                Your personal referral QR will appear here after rep-specific access is connected.
-              </Alert>
-            ) : (
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: 2,
-                }}
-              >
-                {Array.isArray(reps) && reps.map((rep) => (
-                  <Card key={rep.id} variant="outlined" sx={{ boxShadow: "none" }}>
-                    <CardContent>
-                      <Typography variant="h6" fontWeight={850}>{rep.name}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        /join/{rep.slug}
-                      </Typography>
-                      <Typography sx={{ my: 1.5 }}>
-                        {rep.clover_link ? "Clover connected" : "Clover not connected"}
-                      </Typography>
-                      <Button variant="outlined" onClick={() => loadQr(rep.id)}>
-                        Generate QR Code
-                      </Button>
-
-                      {qrCodes[rep.id] && (
-                        <Stack spacing={1.5} sx={{ mt: 2 }}>
-                          <Link href={qrCodes[rep.id].url} target="_blank" rel="noreferrer">
-                            Open referral link
-                          </Link>
-                          <Box
-                            component="img"
-                            src={`data:image/png;base64,${qrCodes[rep.id].qr_png_base64}`}
-                            alt={`${rep.name} QR code`}
-                            sx={{ width: 180, maxWidth: "100%", borderRadius: 2 }}
-                          />
-                        </Stack>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {page === "User Management" && role === "admin" && <UserManagement />}`r`n        {page === "QR Referrals" && <QRReferrals />}`r`n`r`n
 
       {page === "Clover" && role === "admin" && (
         <Card>
@@ -476,3 +419,4 @@ root.render(
     {host === "display.tngboxinggym.com" ? <AIDisplay /> : <App />}
   </ThemeProvider>
 );
+
