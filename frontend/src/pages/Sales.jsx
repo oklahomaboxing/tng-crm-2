@@ -1,174 +1,190 @@
 import React, { useEffect, useState } from "react";
 import {
-  Box, Card, CardContent, Typography, Button, Table, TableHead,
-  TableRow, TableCell, TableBody, Chip, TextField, CircularProgress, Alert
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
 } from "@mui/material";
 import { API, authHeaders } from "../services/api";
 
 export default function Sales() {
+  const role = localStorage.getItem("role") || "rep";
   const [sales, setSales] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    loadSales();
+  }, []);
 
   async function loadSales() {
     try {
       setLoading(true);
       setError("");
 
-      const res = await fetch(`${API}/api/sales`, { headers: authHeaders() });
+      const response = await fetch(`${API}/api/sales`, {
+        headers: authHeaders(),
+      });
+      const data = await response.json();
 
-      if (!res.ok) throw new Error("Could not load sales");
+      if (!response.ok) {
+        throw new Error(data.detail || "Could not load sales.");
+      }
 
-      const data = await res.json();
       setSales(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message || "Something went wrong loading sales");
+      setError(err.message || "Could not load sales.");
     } finally {
       setLoading(false);
     }
   }
+
   async function syncClover() {
     try {
       setLoading(true);
       setError("");
 
-      const res = await fetch(`${API}/api/clover/sync-all`, {
+      const response = await fetch(`${API}/api/clover/sync-all`, {
         method: "POST",
         headers: authHeaders(),
       });
+      const data = await response.json();
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Sync failed");
+      if (!response.ok) {
+        throw new Error(data.detail || "Clover sync failed.");
       }
 
-      alert(
-        `✅ Clover Sync Complete
-
-Products Synced: ${data.products.synced}
-Customers Added: ${data.customers.synced}
-Customers Updated: ${data.customers.updated}
-Sales Imported: ${data.sales.synced}
-Sales Skipped: ${data.sales.skipped}`
-      );
-
       await loadSales();
-
     } catch (err) {
-      setError(err.message || "Sync failed");
+      setError(err.message || "Clover sync failed.");
     } finally {
       setLoading(false);
     }
   }
 
-async function syncCloverSales() {
-  try {
-    setLoading(true);
-    setError("");
-
-    const res = await fetch(`${API}/api/clover/sync-sales`, {
-      method: "POST",
-      headers: authHeaders(),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.detail || "Could not sync Clover sales");
-    }
-
-    alert(`${data.message}\nSynced: ${data.synced}\nSkipped: ${data.skipped}`);
-    await loadSales();
-  } catch (err) {
-    setError(err.message || "Something went wrong syncing sales");
-  } finally {
-    setLoading(false);
-  }
-}
-  useEffect(() => {
-    loadSales();
-  }, []);
-
   const filteredSales = sales.filter((sale) => {
-    const q = search.toLowerCase();
-    return (
-      (sale.member || "").toLowerCase().includes(q) ||
-      (sale.rep || "").toLowerCase().includes(q) ||
-      (sale.membership || "").toLowerCase().includes(q) ||
-      (sale.payment_status || "").toLowerCase().includes(q)
-    );
+    const query = search.trim().toLowerCase();
+
+    if (!query) return true;
+
+    return [
+      sale.member,
+      sale.rep,
+      sale.membership,
+      sale.payment_status,
+    ].some((value) => (value || "").toLowerCase().includes(query));
   });
+
+  const totalRevenue = filteredSales.reduce(
+    (sum, sale) => sum + Number(sale.amount || 0),
+    0
+  );
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
-        <Typography variant="h4" fontWeight="bold">Sales</Typography>
-      <Button
-        variant="contained"
-        color="error"
-        onClick={syncClover}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          justifyContent: "space-between",
+          gap: 2,
+          mb: 3,
+        }}
       >
-        🔄 Sync Clover
-      </Button>
+        <Box>
+          <Typography variant="h4" fontWeight="bold">
+            {role === "rep" ? "My Sales" : "Sales"}
+          </Typography>
+          <Typography color="text.secondary">
+            {filteredSales.length} transactions · ${totalRevenue.toFixed(2)}
+          </Typography>
+        </Box>
+
+        {role === "admin" && (
+          <Button variant="contained" color="error" onClick={syncClover}>
+            Sync Clover
+          </Button>
+        )}
       </Box>
 
       <TextField
         fullWidth
-        label="Search sales by member, rep, membership, or status"
+        label="Search sales"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(event) => setSearch(event.target.value)}
         sx={{ mb: 3 }}
       />
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Card sx={{ borderRadius: 3 }}>
-        <CardContent>
+        <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
           {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+            <Box sx={{ display: "flex", justifyContent: "center", p: 5 }}>
               <CircularProgress color="error" />
             </Box>
           ) : (
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Member</TableCell>
-                  <TableCell>Sales Rep</TableCell>
-                  <TableCell>Membership</TableCell>
-                  <TableCell>Amount</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Date</TableCell>
-                </TableRow>
-              </TableHead>
-
-              <TableBody>
-                {filteredSales.map((sale) => (
-                  <TableRow key={sale.id}>
-                    <TableCell>{sale.member}</TableCell>
-                    <TableCell>{sale.rep}</TableCell>
-                    <TableCell>{sale.membership}</TableCell>
-                    <TableCell>${Number(sale.amount || 0).toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        color={sale.payment_status === "paid" ? "success" : "warning"}
-                        label={sale.payment_status || "pending"}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {sale.sale_date ? new Date(sale.sale_date).toLocaleDateString() : ""}
-                    </TableCell>
-                  </TableRow>
-                ))}
-
-                {filteredSales.length === 0 && (
+            <TableContainer sx={{ overflowX: "auto" }}>
+              <Table size="small" sx={{ minWidth: 760 }}>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={6}>No sales found.</TableCell>
+                    <TableCell>Member</TableCell>
+                    {role !== "rep" && <TableCell>Sales Rep</TableCell>}
+                    <TableCell>Membership</TableCell>
+                    <TableCell>Amount</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Date</TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHead>
+
+                <TableBody>
+                  {filteredSales.map((sale) => (
+                    <TableRow key={sale.id} hover>
+                      <TableCell>{sale.member || "-"}</TableCell>
+                      {role !== "rep" && <TableCell>{sale.rep || "-"}</TableCell>}
+                      <TableCell>{sale.membership || "-"}</TableCell>
+                      <TableCell>${Number(sale.amount || 0).toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={sale.payment_status === "paid" ? "success" : "warning"}
+                          label={sale.payment_status || "pending"}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {sale.sale_date
+                          ? new Date(sale.sale_date).toLocaleDateString()
+                          : "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+
+                  {filteredSales.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={role === "rep" ? 5 : 6}>
+                        No sales found for this account.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </CardContent>
       </Card>
