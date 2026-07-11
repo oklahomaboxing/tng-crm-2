@@ -78,12 +78,6 @@ def run_sqlite_migrations():
     add_column_if_missing("membership_products", "renews_monthly", "BOOLEAN DEFAULT 0")
     add_column_if_missing("membership_products", "autopay_allowed", "BOOLEAN DEFAULT 0")
     add_column_if_missing("membership_products", "default_membership_months", "INTEGER DEFAULT 1")
-    add_column_if_missing("membership_products", "sku", "VARCHAR")
-    add_column_if_missing("membership_products", "stock_quantity", "INTEGER DEFAULT 0")
-    add_column_if_missing("membership_products", "track_inventory", "BOOLEAN DEFAULT 0")
-    add_column_if_missing("sales", "quantity", "INTEGER DEFAULT 1")
-    add_column_if_missing("sales", "unit_price", "FLOAT DEFAULT 0")
-    add_column_if_missing("sales", "sale_type", "VARCHAR DEFAULT 'membership'")
     with engine.connect() as conn:
         conn.execute(text("""
         CREATE TABLE IF NOT EXISTS attendance (
@@ -187,9 +181,6 @@ def update_product(
         "renews_monthly",
         "autopay_allowed",
         "default_membership_months",
-        "sku",
-        "stock_quantity",
-        "track_inventory",
     ]
 
     for field in allowed_fields:
@@ -211,9 +202,6 @@ def update_product(
             "renews_monthly": product.renews_monthly,
             "autopay_allowed": product.autopay_allowed,
             "default_membership_months": product.default_membership_months,
-            "sku": product.sku,
-            "stock_quantity": product.stock_quantity,
-            "track_inventory": product.track_inventory,
         },
     }
 
@@ -280,49 +268,6 @@ def create_staff(
         "role": staff_user.role,
         "message": "Staff account created",
     }
-
-@app.get("/api/reps/me")
-def my_rep_profile(
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    if user.role != "rep" or not user.rep_profile:
-        raise HTTPException(status_code=404, detail="Sales rep profile not found")
-
-    rep = user.rep_profile
-
-    return {
-        "id": rep.id,
-        "name": user.name,
-        "email": user.email,
-        "phone": rep.phone,
-        "slug": rep.referral_slug,
-        "referral_url": f"https://tngos.tngboxinggym.com?join={rep.referral_slug}",
-    }
-
-
-@app.get("/api/reps/me/qr")
-def my_rep_qr(
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    if user.role != "rep" or not user.rep_profile:
-        raise HTTPException(status_code=404, detail="Sales rep profile not found")
-
-    rep = user.rep_profile
-    url = f"https://tngos.tngboxinggym.com?join={rep.referral_slug}"
-    img = qrcode.make(url)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-
-    return {
-        "rep_id": rep.id,
-        "name": user.name,
-        "slug": rep.referral_slug,
-        "url": url,
-        "qr_png_base64": base64.b64encode(buf.getvalue()).decode(),
-    }
-
 
 @app.get("/api/reps/{rep_id}/qr")
 def rep_qr(rep_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -606,18 +551,10 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
 
 @app.get("/api/members")
 def list_members(db: Session = Depends(get_db), user: User = Depends(current_user)):
-
-    MEMBERSHIP_PRODUCTS = [
-        "month",
-        "monthly",
-        "3 month",
-        "annual",
-        "year",
-        "pre-sale",
-        "special",
-        "family",
-        "vip",
-        "non profit",
+    membership_terms = [
+        "month", "monthly", "3 month", "annual", "year", "pre-sale",
+        "special", "family", "vip", "non profit", "youth boxing",
+        "unlimited boxing", "membership",
     ]
 
     members = (
@@ -625,16 +562,17 @@ def list_members(db: Session = Depends(get_db), user: User = Depends(current_use
         .filter(
             or_(
                 *[
-                    Member.membership_type.ilike(f"%{p}%")
-                    for p in MEMBERSHIP_PRODUCTS
+                    Member.membership_type.ilike(f"%{term}%")
+                    for term in membership_terms
                 ]
             )
         )
+        .order_by(Member.last_name.asc(), Member.first_name.asc())
         .all()
     )
 
-    for m in members:
-        recalculate_member_from_payments(m, db)
+    for member in members:
+        recalculate_member_from_payments(member, db)
 
     db.commit()
 
@@ -655,181 +593,38 @@ def list_members(db: Session = Depends(get_db), user: User = Depends(current_use
             "membership_start": m.membership_start.isoformat() if m.membership_start else None,
             "membership_end": m.membership_end.isoformat() if m.membership_end else None,
             "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
+            "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
+            "billing_status": m.billing_status,
+            "monthly_rate": m.monthly_rate,
+            "assigned_coach": m.assigned_coach,
             "clover_customer_id": m.clover_customer_id,
             "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
-            "total_checkins": m.total_checkins,
+            "total_checkins": m.total_checkins or 0,
             "photo_url": m.photo_url,
             "created_at": m.created_at.isoformat() if m.created_at else None,
         }
         for m in members
     ]
 
-
-@app.post("/api/products")
-def create_product(
-    data: dict,
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    require_admin(user)
-
-    name = (data.get("name") or "").strip()
-    price = float(data.get("price") or 0)
-    category = (data.get("category") or "other").strip().lower()
-
-    if not name:
-        raise HTTPException(status_code=400, detail="Product name is required")
-    if price < 0:
-        raise HTTPException(status_code=400, detail="Price cannot be negative")
-
-    existing = db.query(MembershipProduct).filter(
-        func.lower(MembershipProduct.name) == name.lower()
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="A product with this name already exists")
-
-    product = MembershipProduct(
-        name=name,
-        price=price,
-        category=category,
-        active=bool(data.get("active", True)),
-        is_membership=bool(data.get("is_membership", category == "membership")),
-        renews_monthly=bool(data.get("renews_monthly", False)),
-        autopay_allowed=bool(data.get("autopay_allowed", False)),
-        default_membership_months=int(data.get("default_membership_months") or 1),
-        sku=(data.get("sku") or "").strip() or None,
-        stock_quantity=max(0, int(data.get("stock_quantity") or 0)),
-        track_inventory=bool(data.get("track_inventory", category == "merchandise")),
-    )
-    db.add(product)
-    db.commit()
-    db.refresh(product)
-    return product
-
-
-@app.post("/api/merchandise-sales")
-def create_merchandise_sale(
-    data: dict,
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    customer_name = (data.get("customer_name") or "").strip()
-    customer_email = (data.get("customer_email") or "").strip().lower()
-    customer_phone = (data.get("customer_phone") or "").strip()
-    product_id = data.get("product_id")
-    quantity = max(1, int(data.get("quantity") or 1))
-    payment_status = (data.get("payment_status") or "paid").strip().lower()
-    payment_method = (data.get("payment_method") or "clover").strip().lower()
-
-    if not customer_name:
-        raise HTTPException(status_code=400, detail="Customer name is required")
-
-    product = db.query(MembershipProduct).filter(MembershipProduct.id == product_id).first()
-    if not product or product.category != "merchandise":
-        raise HTTPException(status_code=404, detail="Merchandise product not found")
-    if not product.active:
-        raise HTTPException(status_code=400, detail="This product is inactive")
-    if product.track_inventory and int(product.stock_quantity or 0) < quantity:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Only {int(product.stock_quantity or 0)} item(s) are in stock",
-        )
-
-    if user.role == "rep":
-        rep = user.rep_profile
-        if not rep:
-            raise HTTPException(status_code=403, detail="Sales rep profile not found")
-    else:
-        rep_id = data.get("sales_rep_id")
-        rep = db.query(SalesRep).filter(SalesRep.id == rep_id).first() if rep_id else db.query(SalesRep).first()
-        if not rep:
-            raise HTTPException(status_code=400, detail="No sales rep is available")
-
-    member = None
-    if customer_email:
-        member = db.query(Member).filter(func.lower(Member.email) == customer_email).first()
-    if not member and customer_phone:
-        member = db.query(Member).filter(Member.phone == customer_phone).first()
-
-    if not member:
-        name_parts = customer_name.split(maxsplit=1)
-        member = Member(
-            first_name=name_parts[0],
-            last_name=name_parts[1] if len(name_parts) > 1 else "Customer",
-            email=customer_email,
-            phone=customer_phone,
-            status="customer",
-            membership_status="not_applicable",
-            membership_type="Merchandise Customer",
-            member_type="CUSTOMER",
-        )
-        db.add(member)
-        db.flush()
-
-    unit_price = float(product.price or 0)
-    amount = unit_price * quantity
-    sale = Sale(
-        member_id=member.id,
-        sales_rep_id=rep.id,
-        product_id=product.id,
-        amount=amount,
-        payment_status=payment_status,
-        transaction_status=payment_status,
-        payment_method=payment_method,
-        sale_date=datetime.utcnow(),
-        quantity=quantity,
-        unit_price=unit_price,
-        sale_type="merchandise",
-    )
-    db.add(sale)
-
-    if product.track_inventory:
-        product.stock_quantity = int(product.stock_quantity or 0) - quantity
-
-    db.commit()
-    db.refresh(sale)
-    return {
-        "message": "Merchandise sale recorded",
-        "sale_id": sale.id,
-        "amount": sale.amount,
-        "quantity": sale.quantity,
-        "product": product.name,
-        "remaining_stock": product.stock_quantity,
-    }
-
 @app.get("/api/sales")
 def list_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    query = db.query(Sale)
-
-    if user.role == "rep":
-        if not user.rep_profile:
-            return []
-        query = query.filter(Sale.sales_rep_id == user.rep_profile.id)
-
-    sales = query.order_by(Sale.sale_date.desc()).all()
+    sales = db.query(Sale).all()
     results = []
 
-    for sale in sales:
-        rep = sale.sales_rep
-        member = sale.member
-        product = sale.product
-        category = product.category if product and product.category else "other"
+    for s in sales:
+        rep = db.query(SalesRep).filter(SalesRep.id == s.sales_rep_id).first()
+        member = db.query(Member).filter(Member.id == s.member_id).first()
+        product = db.query(MembershipProduct).filter(MembershipProduct.id == s.product_id).first()
 
         results.append({
-            "id": sale.id,
+            "id": s.id,
             "member": f"{member.first_name} {member.last_name}" if member else "",
             "rep": rep.user.name if rep and rep.user else "",
             "membership": product.name if product else "",
-            "product": product.name if product else "",
-            "category": category,
-            "sale_type": sale.sale_type or ("merchandise" if category == "merchandise" else "membership"),
-            "quantity": sale.quantity or 1,
-            "unit_price": sale.unit_price or (sale.amount or 0),
-            "amount": sale.amount,
-            "payment_status": sale.payment_status,
-            "payment_method": sale.payment_method,
-            "sale_date": sale.sale_date.isoformat() if sale.sale_date else None,
-            "clover_payment_id": sale.clover_payment_id,
+            "amount": s.amount,
+            "payment_status": s.payment_status,
+            "sale_date": s.sale_date.isoformat() if s.sale_date else None,
+            "clover_payment_id": s.clover_payment_id,
         })
 
     return results
@@ -1615,6 +1410,9 @@ def member_payments(member_id: int, db: Session = Depends(get_db), user: User = 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
+    recalculate_member_from_payments(member, db)
+    db.commit()
+
     sales = (
         db.query(Sale)
         .filter(Sale.member_id == member_id)
@@ -1804,52 +1602,50 @@ def member_attendance(member_id: int, db: Session = Depends(get_db), user: User 
     }
 @app.get("/api/members/{member_id}")
 def get_member(member_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    m = db.query(Member).filter(Member.id == member_id).first()
+    member = db.query(Member).filter(Member.id == member_id).first()
 
-    if not m:
+    if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    recalculate_member_from_payments(m, db)
+    recalculate_member_from_payments(member, db)
     db.commit()
-    db.refresh(m)
+    db.refresh(member)
 
     return {
-        "id": m.id,
-        "first_name": m.first_name,
-        "last_name": m.last_name,
-        "email": m.email,
-        "phone": m.phone,
-        "status": m.status,
-        "member_number": m.member_number,
-        "barcode": m.barcode,
-        "qr_code": m.qr_code,
-        "digital_member_id": m.digital_member_id,
-        "membership_type": m.membership_type,
-        "membership_status": m.membership_status,
-        "membership_start": m.membership_start.isoformat() if m.membership_start else None,
-        "membership_end": m.membership_end.isoformat() if m.membership_end else None,
-
-        "billing_cycle": m.billing_cycle,
-        "monthly_rate": m.monthly_rate,
-        "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
-        "autopay_enabled": m.autopay_enabled,
-        "billing_status": m.billing_status,
-        "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
-        "past_due_amount": m.past_due_amount,
-        "clover_customer_id": m.clover_customer_id,
-        "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
-        "total_checkins": m.total_checkins,
-        "photo_url": m.photo_url,
-        "billing_cycle": m.billing_cycle,
-        "monthly_rate": m.monthly_rate,
-        "next_billing_date": m.next_billing_date.isoformat() if m.next_billing_date else None,
-        "autopay_enabled": m.autopay_enabled,
-        "billing_status": m.billing_status,
-        "clover_subscription_id": m.clover_subscription_id,
-     
-        "past_due_amount": m.past_due_amount,
-        "created_at": m.created_at.isoformat() if m.created_at else None,
+        "id": member.id,
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "email": member.email,
+        "phone": member.phone,
+        "status": member.status,
+        "member_number": member.member_number,
+        "barcode": member.barcode,
+        "qr_code": member.qr_code,
+        "digital_member_id": member.digital_member_id,
+        "membership_type": member.membership_type,
+        "membership_status": member.membership_status,
+        "membership_start": member.membership_start.isoformat() if member.membership_start else None,
+        "membership_end": member.membership_end.isoformat() if member.membership_end else None,
+        "billing_cycle": member.billing_cycle,
+        "monthly_rate": member.monthly_rate,
+        "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
+        "autopay_enabled": member.autopay_enabled,
+        "billing_status": member.billing_status,
+        "clover_subscription_id": member.clover_subscription_id,
+        "last_payment_date": member.last_payment_date.isoformat() if member.last_payment_date else None,
+        "past_due_amount": member.past_due_amount,
+        "clover_customer_id": member.clover_customer_id,
+        "last_checkin": member.last_checkin.isoformat() if member.last_checkin else None,
+        "total_checkins": member.total_checkins or 0,
+        "photo_url": member.photo_url,
+        "assigned_coach": member.assigned_coach,
+        "emergency_contact": member.emergency_contact,
+        "emergency_phone": member.emergency_phone,
+        "waiver_signed": member.waiver_signed,
+        "notes": member.notes,
+        "created_at": member.created_at.isoformat() if member.created_at else None,
     }
+
 @app.put("/api/members/{member_id}")
 def update_member(member_id: int, data: dict, db: Session = Depends(get_db), user: User = Depends(current_user)):
     m = db.query(Member).filter(Member.id == member_id).first()

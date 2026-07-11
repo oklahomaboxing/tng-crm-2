@@ -77,9 +77,6 @@ class MembershipProduct(Base):
     renews_monthly = Column(Boolean, default=False)
     autopay_allowed = Column(Boolean, default=False)
     default_membership_months = Column(Integer, default=1)
-    sku = Column(String, nullable=True)
-    stock_quantity = Column(Integer, default=0)
-    track_inventory = Column(Boolean, default=False)
 
 
 class Sale(Base):
@@ -101,9 +98,6 @@ class Sale(Base):
     refunded = Column(Boolean, default=False)
     refund_amount = Column(Float, default=0)
     payment_method = Column(String, nullable=True)
-    quantity = Column(Integer, default=1)
-    unit_price = Column(Float, default=0)
-    sale_type = Column(String, default="membership")
 
 class CloverSetting(Base):
     __tablename__ = "clover_settings"
