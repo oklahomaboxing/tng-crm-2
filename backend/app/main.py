@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+
+load_dotenv()
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -19,6 +22,7 @@ from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
 from sqlalchemy import or_
+
 
 
 Base.metadata.create_all(bind=engine)
