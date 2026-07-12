@@ -31,6 +31,7 @@ import DuplicateReview from "./pages/DuplicateReview.jsx";
 import AITrainer from "./pages/AITrainer.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import QRReferrals from "./pages/QRReferrals.jsx";
+import MarketingCenter from "./pages/MarketingCenter.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -365,6 +366,10 @@ function App() {
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
       {page === "QR Referrals" && <QRReferrals />}
+
+      {page === "Marketing Center" && role === "admin" && (
+        <MarketingCenter />
+      )}
 
       {page === "Clover" && role === "admin" && (
         <Card>

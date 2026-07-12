@@ -21,7 +21,7 @@ import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import AssessmentRoundedIcon from "@mui/icons-material/AssessmentRounded";
 import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded";
-
+import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 export const ROLE_MENUS = {
   admin: [
     "Dashboard",
@@ -32,6 +32,7 @@ export const ROLE_MENUS = {
     "Leads",
     "Sales Reps",
     "QR Referrals",
+    "Marketing Center",
     "Clover",
     "Duplicate Review",
     "AI Trainer",
@@ -59,6 +60,7 @@ const ICONS = {
   Leads: <PersonSearchRoundedIcon />,
   "Sales Reps": <GroupsRoundedIcon />,
   "QR Referrals": <QrCode2RoundedIcon />,
+  "Marketing Center": <CampaignRoundedIcon />,
   Clover: <SyncAltRoundedIcon />,
   "Duplicate Review": <ContentCopyRoundedIcon />,
   "AI Trainer": <SportsMmaRoundedIcon />,

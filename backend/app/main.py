@@ -17,12 +17,25 @@ from fastapi import UploadFile, File
 import shutil
 from sqlalchemy import text
 from .database import Base, engine, get_db
-from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead, Attendance, MerchandiseCheckout,  SecurityLog
+from .models import (
+    User,
+    SalesRep,
+    Member,
+    MembershipProduct,
+    Sale,
+    CloverSetting,
+    Lead,
+    Attendance,
+    MerchandiseCheckout,
+    SecurityLog,
+    MarketingContact,
+)
 from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
 from sqlalchemy import or_
 import sqlite3
+import pandas as pd
 
 
 Base.metadata.create_all(bind=engine)
@@ -374,12 +387,13 @@ def security_overview(
     )
 
     return {
+        "security_score": 95,
         "failed_logins": failed_logins,
         "successful_logins": successful_logins,
         "locked_accounts": locked_accounts,
         "recent_events": [
             {
-                "time": log.created_at,
+                "time": log.created_at.isoformat() if log.created_at else None,
                 "action": log.action,
                 "description": log.description,
                 "ip": log.ip_address,
@@ -2806,3 +2820,269 @@ def delete_member(
     return {
         "message": "Member deleted successfully"
     }
+
+@app.post("/api/marketing/contacts/import")
+async def import_marketing_contacts(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    filename = (file.filename or "").lower()
+    contents = await file.read()
+
+    try:
+        if filename.endswith(".csv"):
+            dataframe = pd.read_csv(io.BytesIO(contents), dtype=str).fillna("")
+        elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+            dataframe = pd.read_excel(io.BytesIO(contents), dtype=str).fillna("")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Upload a CSV or Excel file",
+            )
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read spreadsheet: {error}",
+        )
+
+    def clean(value):
+        if value is None:
+            return ""
+        value = str(value).strip()
+        if value.lower() == "nan":
+            return ""
+        return value
+
+    def find_column(possible_names):
+        normalized = {
+            str(column).strip().lower(): column
+            for column in dataframe.columns
+        }
+
+        for name in possible_names:
+            if name in normalized:
+                return normalized[name]
+
+        return None
+
+    first_name_column = find_column([
+        "first name",
+        "firstname",
+        "given name",
+        "first_name",
+    ])
+
+    last_name_column = find_column([
+        "last name",
+        "lastname",
+        "family name",
+        "last_name",
+    ])
+
+    full_name_column = find_column([
+        "name",
+        "full name",
+        "display name",
+    ])
+
+    email_column = find_column([
+        "email",
+        "email address",
+        "e-mail",
+        "email 1 - value",
+    ])
+
+    phone_column = find_column([
+        "phone",
+        "phone number",
+        "mobile",
+        "mobile phone",
+        "phone 1 - value",
+    ])
+
+    company_column = find_column([
+        "company",
+        "organization",
+        "organization 1 - name",
+        "business",
+    ])
+
+    address_column = find_column([
+        "address",
+        "street",
+        "street address",
+    ])
+
+    city_column = find_column(["city"])
+    state_column = find_column(["state", "region"])
+    postal_column = find_column([
+        "postal code",
+        "zip",
+        "zip code",
+    ])
+
+    source_column = find_column(["source", "source file"])
+    tags_column = find_column(["tags", "tag", "labels"])
+
+    imported = 0
+    updated = 0
+    skipped = 0
+
+    for _, row in dataframe.iterrows():
+        first_name = clean(row.get(first_name_column, "")) if first_name_column else ""
+        last_name = clean(row.get(last_name_column, "")) if last_name_column else ""
+        full_name = clean(row.get(full_name_column, "")) if full_name_column else ""
+
+        if not first_name and not last_name and full_name:
+            name_parts = full_name.split(maxsplit=1)
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        email = clean(row.get(email_column, "")).lower() if email_column else ""
+        phone = clean(row.get(phone_column, "")) if phone_column else ""
+
+        company = clean(row.get(company_column, "")) if company_column else ""
+        address = clean(row.get(address_column, "")) if address_column else ""
+        city = clean(row.get(city_column, "")) if city_column else ""
+        state = clean(row.get(state_column, "")) if state_column else ""
+        postal_code = clean(row.get(postal_column, "")) if postal_column else ""
+        tags = clean(row.get(tags_column, "")) if tags_column else ""
+        source = clean(row.get(source_column, "")) if source_column else filename
+
+        if not first_name and not last_name and not email and not phone:
+            skipped += 1
+            continue
+
+        existing = None
+
+        if email:
+            existing = (
+                db.query(MarketingContact)
+                .filter(func.lower(MarketingContact.email) == email)
+                .first()
+            )
+
+        if not existing and phone:
+            existing = (
+                db.query(MarketingContact)
+                .filter(MarketingContact.phone == phone)
+                .first()
+            )
+
+        if existing:
+            if first_name and not existing.first_name:
+                existing.first_name = first_name
+            if last_name and not existing.last_name:
+                existing.last_name = last_name
+            if email and not existing.email:
+                existing.email = email
+            if phone and not existing.phone:
+                existing.phone = phone
+            if company and not existing.company:
+                existing.company = company
+            if address and not existing.address:
+                existing.address = address
+            if city and not existing.city:
+                existing.city = city
+            if state and not existing.state:
+                existing.state = state
+            if postal_code and not existing.postal_code:
+                existing.postal_code = postal_code
+            if tags and not existing.tags:
+                existing.tags = tags
+
+            existing.updated_at = datetime.utcnow()
+            updated += 1
+            continue
+
+        contact = MarketingContact(
+            first_name=first_name,
+            last_name=last_name,
+            email=email or None,
+            phone=phone or None,
+            company=company or None,
+            address=address or None,
+            city=city or None,
+            state=state or None,
+            postal_code=postal_code or None,
+            tags=tags,
+            source=source or filename,
+            email_opt_in=False,
+            sms_opt_in=False,
+            active=True,
+        )
+
+        db.add(contact)
+        imported += 1
+
+    db.commit()
+
+    return {
+        "message": "Contact import complete",
+        "imported": imported,
+        "updated": updated,
+        "skipped": skipped,
+        "total_rows": len(dataframe),
+    }
+@app.get("/api/marketing/contacts")
+def list_marketing_contacts(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    contacts = (
+        db.query(MarketingContact)
+        .filter(MarketingContact.active == True)
+        .order_by(
+            MarketingContact.last_name.asc(),
+            MarketingContact.first_name.asc(),
+        )
+        .all()
+    )
+
+    results = []
+
+    for contact in contacts:
+        tag_list = [
+            tag.strip()
+            for tag in (contact.tags or "").split(",")
+            if tag.strip()
+        ]
+
+        results.append({
+            "id": contact.id,
+            "first_name": contact.first_name or "",
+            "last_name": contact.last_name or "",
+            "email": contact.email or "",
+            "phone": contact.phone or "",
+            "company": contact.company or "",
+            "address": contact.address or "",
+            "city": contact.city or "",
+            "state": contact.state or "",
+            "postal_code": contact.postal_code or "",
+            "tags": tag_list,
+            "source": contact.source or "",
+            "email_opt_in": bool(contact.email_opt_in),
+            "sms_opt_in": bool(contact.sms_opt_in),
+            "email_unsubscribed": bool(contact.email_unsubscribed),
+            "sms_unsubscribed": bool(contact.sms_unsubscribed),
+            "active": bool(contact.active),
+            "created_at": (
+                contact.created_at.isoformat()
+                if contact.created_at
+                else None
+            ),
+            "updated_at": (
+                contact.updated_at.isoformat()
+                if contact.updated_at
+                else None
+            ),
+        })
+
+    return results

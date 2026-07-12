@@ -171,6 +171,7 @@ class MerchandiseCheckout(Base):
     clover_order_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     paid_at = Column(DateTime, nullable=True)
+
 class SecurityLog(Base):
     __tablename__ = "security_logs"
 
@@ -191,3 +192,34 @@ class SecurityLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")
+
+
+class MarketingContact(Base):
+    __tablename__ = "marketing_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    first_name = Column(String, default="")
+    last_name = Column(String, default="")
+    email = Column(String, nullable=True, index=True)
+    phone = Column(String, nullable=True, index=True)
+
+    company = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    state = Column(String, nullable=True)
+    postal_code = Column(String, nullable=True)
+
+    tags = Column(String, default="")
+    source = Column(String, default="manual")
+
+    email_opt_in = Column(Boolean, default=False)
+    sms_opt_in = Column(Boolean, default=False)
+
+    email_unsubscribed = Column(Boolean, default=False)
+    sms_unsubscribed = Column(Boolean, default=False)
+
+    active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
