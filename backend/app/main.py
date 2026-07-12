@@ -341,6 +341,53 @@ def login(
             "role": user.role,
         },
     }
+@app.get("/api/security/overview")
+def security_overview(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    failed_logins = (
+        db.query(SecurityLog)
+        .filter(SecurityLog.action == "LOGIN_FAILED")
+        .count()
+    )
+
+    successful_logins = (
+        db.query(SecurityLog)
+        .filter(SecurityLog.action == "LOGIN_SUCCESS")
+        .count()
+    )
+
+    locked_accounts = (
+        db.query(User)
+        .filter(User.locked_until != None)
+        .count()
+    )
+
+    recent = (
+        db.query(SecurityLog)
+        .order_by(SecurityLog.created_at.desc())
+        .limit(25)
+        .all()
+    )
+
+    return {
+        "failed_logins": failed_logins,
+        "successful_logins": successful_logins,
+        "locked_accounts": locked_accounts,
+        "recent_events": [
+            {
+                "time": log.created_at,
+                "action": log.action,
+                "description": log.description,
+                "ip": log.ip_address,
+                "success": log.success,
+            }
+            for log in recent
+        ],
+    }
 @app.get("/api/me")
 def me(user: User = Depends(current_user)):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role}
