@@ -22,7 +22,7 @@ from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
 from sqlalchemy import or_
-
+import sqlite3
 
 
 Base.metadata.create_all(bind=engine)
@@ -121,30 +121,6 @@ allow_origins=[
     allow_methods=["*"],
     allow_headers=["*"],
 )
-def seed_admin():
-    db = next(get_db())
-    existing = db.query(User).filter(User.email == "admin@tngboxinggym.com").first()
-    if not existing:
-        admin = User(
-            name="TNG Admin",
-            email="admin@tngboxinggym.com",
-            password_hash=hash_password("admin123"),
-            role="admin"
-        )
-        db.add(admin)
-        db.commit()
-
-seed_admin()
-def current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    payload = decode_token(authorization.split(" ", 1)[1])
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = db.query(User).filter(User.id == int(payload["sub"])).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
 
 def require_admin(user: User):
     if user.role != "admin":
@@ -152,7 +128,140 @@ def require_admin(user: User):
 def require_admin_or_staff(user: User):
     if user.role not in ["admin", "staff"]:
         raise HTTPException(status_code=403, detail="Admin or staff access required")
+def seed_admin():
+    db = next(get_db())
+    try:
+        existing = (
+            db.query(User)
+            .filter(User.email == "admin@tngboxinggym.com")
+            .first()
+        )
 
+        if not existing:
+            admin = User(
+                name="TNG Admin",
+                email="admin@tngboxinggym.com",
+                password_hash=hash_password("admin123"),
+                role="admin",
+                active=True,
+            )
+            db.add(admin)
+            db.commit()
+    finally:
+        db.close()
+
+
+Base.metadata.create_all(bind=engine)
+def ensure_security_schema():
+    database_path = engine.url.database
+
+    if not database_path:
+        raise RuntimeError("Could not determine SQLite database path")
+
+    connection = sqlite3.connect(database_path)
+
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS security_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                action VARCHAR NOT NULL,
+                description VARCHAR,
+                ip_address VARCHAR,
+                endpoint VARCHAR,
+                success BOOLEAN DEFAULT 1,
+                created_at DATETIME,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+
+        cursor.execute("PRAGMA table_info(users)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        if "failed_login_attempts" not in existing_columns:
+            cursor.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0
+                """
+            )
+
+        if "locked_until" not in existing_columns:
+            cursor.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN locked_until DATETIME
+                """
+            )
+
+        if "last_login" not in existing_columns:
+            cursor.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN last_login DATETIME
+                """
+            )
+
+        if "last_login_ip" not in existing_columns:
+            cursor.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN last_login_ip VARCHAR
+                """
+            )
+
+        connection.commit()
+    finally:
+        connection.close()
+
+def current_user(
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db),
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization.split(" ", 1)[1]
+    payload = decode_token(token)
+
+    if not payload or not payload.get("sub"):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    try:
+        user_id = int(payload["sub"])
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    if not user.active:
+        raise HTTPException(status_code=403, detail="Account is inactive")
+
+    return user
+
+
+def require_admin(user: User):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+
+def require_admin_or_staff(user: User):
+    if user.role not in ["admin", "staff"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin or staff access required",
+        )
+
+
+ensure_security_schema()
+seed_admin()
 @app.post("/api/login")
 def login(
     data: LoginIn,
