@@ -35,6 +35,7 @@ export const ROLE_MENUS = {
     "Clover",
     "Duplicate Review",
     "AI Trainer",
+    "Security Center",
     "Reports",
     "User Management",
   ],

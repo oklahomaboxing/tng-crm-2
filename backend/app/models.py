@@ -9,7 +9,12 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, default="rep")  # admin, staff, rep    active = Column(Boolean, default=True)
+    role = Column(String, default="rep")  # admin, staff, rep    
+    active = Column(Boolean, default=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime, nullable=True)
+    last_login = Column(DateTime, nullable=True)
+    last_login_ip = Column(String, nullable=True)
     rep_profile = relationship("SalesRep", back_populates="user", uselist=False)
 
 class SalesRep(Base):
@@ -166,3 +171,23 @@ class MerchandiseCheckout(Base):
     clover_order_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     paid_at = Column(DateTime, nullable=True)
+class SecurityLog(Base):
+    __tablename__ = "security_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    action = Column(String, nullable=False)
+
+    description = Column(String, nullable=True)
+
+    ip_address = Column(String, nullable=True)
+
+    endpoint = Column(String, nullable=True)
+
+    success = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")

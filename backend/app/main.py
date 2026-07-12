@@ -5,7 +5,7 @@ from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import base64, io, qrcode
 import os
@@ -17,7 +17,7 @@ from fastapi import UploadFile, File
 import shutil
 from sqlalchemy import text
 from .database import Base, engine, get_db
-from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead, Attendance, MerchandiseCheckout
+from .models import User, SalesRep, Member, MembershipProduct, Sale, CloverSetting, Lead, Attendance, MerchandiseCheckout,  SecurityLog
 from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
@@ -154,12 +154,84 @@ def require_admin_or_staff(user: User):
         raise HTTPException(status_code=403, detail="Admin or staff access required")
 
 @app.post("/api/login")
-def login(data: LoginIn, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    return {"token": create_token({"sub": str(user.id), "role": user.role}), "user": {"id": user.id, "name": user.name, "email": user.email, "role": user.role}}
+def login(
+    data: LoginIn,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    email = data.email.strip().lower()
+    ip_address = request.client.host if request.client else "unknown"
+    now = datetime.utcnow()
 
+    user = db.query(User).filter(User.email == email).first()
+
+    if user and user.locked_until and user.locked_until > now:
+        raise HTTPException(
+            status_code=423,
+            detail="Account temporarily locked. Try again later.",
+        )
+
+    if not user or not verify_password(data.password, user.password_hash):
+        if user:
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+
+            if user.failed_login_attempts >= 5:
+                user.locked_until = now + timedelta(minutes=15)
+
+        security_log = SecurityLog(
+            user_id=user.id if user else None,
+            action="LOGIN_FAILED",
+            description=f"Failed login attempt for {email}",
+            ip_address=ip_address,
+            endpoint="/api/login",
+            success=False,
+        )
+
+        db.add(security_log)
+        db.commit()
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password",
+        )
+
+    if not user.active:
+        raise HTTPException(
+            status_code=403,
+            detail="Account is inactive",
+        )
+
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.last_login = now
+    user.last_login_ip = ip_address
+
+    security_log = SecurityLog(
+        user_id=user.id,
+        action="LOGIN_SUCCESS",
+        description=f"{user.name} logged in",
+        ip_address=ip_address,
+        endpoint="/api/login",
+        success=True,
+    )
+
+    db.add(security_log)
+    db.commit()
+
+    return {
+        "token": create_token(
+            {
+                "sub": str(user.id),
+                "role": user.role,
+            }
+        ),
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+        },
+    }
 @app.get("/api/me")
 def me(user: User = Depends(current_user)):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role}

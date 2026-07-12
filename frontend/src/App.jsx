@@ -16,7 +16,7 @@ import {
   createTheme,
 } from "@mui/material";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
-
+import SecurityCenter from "./pages/SecurityCenter";
 import AppShell from "./layout/AppShell.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import AIDisplay from "./pages/AIDisplay.jsx";
@@ -93,7 +93,6 @@ function PaymentMessage({ status }) {
       severity: "error",
     },
   }[status];
-
   if (!content) return null;
 
   return (
@@ -363,7 +362,9 @@ function App() {
       {page === "Leads" && <Leads />}
       {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
       {page === "AI Trainer" && role !== "rep" && <AITrainer />}
-      {page === "User Management" && role === "admin" && <UserManagement />}        {page === "QR Referrals" && <QRReferrals />}
+      {page === "User Management" && role === "admin" && <UserManagement />}
+      {page === "Security Center" && role === "admin" && <SecurityCenter />}
+      {page === "QR Referrals" && <QRReferrals />}
 
       {page === "Clover" && role === "admin" && (
         <Card>
