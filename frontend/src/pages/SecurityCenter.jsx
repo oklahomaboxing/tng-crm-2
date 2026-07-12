@@ -98,13 +98,13 @@ export default function SecurityCenter() {
           </Typography>
 
           <Stack spacing={1.5}>
-            {data.recent_logs.length === 0 && (
+            {data.recent_events.length === 0 && (
               <Typography color="text.secondary">
                 No security events recorded yet.
               </Typography>
             )}
 
-            {data.recent_logs.map((log, index) => (
+            {data.recent_events.map((log, index) => (
               <Box
                 key={`${log.action}-${log.created_at}-${index}`}
                 sx={{
@@ -119,8 +119,8 @@ export default function SecurityCenter() {
                 <Typography>{log.description}</Typography>
 
                 <Typography variant="body2" color="text.secondary">
-                  IP: {log.ip_address || "Unknown"} ·{" "}
-                  {log.created_at
+                  IP: {log.ip || "Unknown"}
+                  {log.time
                     ? new Date(log.created_at).toLocaleString()
                     : "Unknown time"}
                 </Typography>
