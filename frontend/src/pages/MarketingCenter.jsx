@@ -61,11 +61,9 @@ export default function MarketingCenter() {
     message: "",
   });
 
-  const [aiPrompt, setAiPrompt] = useState("");
-
   const [aiLoading, setAiLoading] = useState(false);
   const [generatedSubject, setGeneratedSubject] = useState("");
-
+  const [aiPrompt, setAiPrompt] = useState("");
   const [generatedEmail, setGeneratedEmail] = useState("");
 
   const [generatedSms, setGeneratedSms] = useState("");
@@ -262,7 +260,64 @@ export default function MarketingCenter() {
 
     setSmsDialogOpen(false);
   }
+ async function generateCampaign() {
+    if (!aiPrompt.trim()) {
+      setError("Describe the campaign you want to create.");
+      return;
+    }
 
+    setAiLoading(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `${API}/api/marketing/generate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            prompt: aiPrompt,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "AI campaign generation failed."
+        );
+      }
+
+      setGeneratedSubject(data.subject || "");
+      setGeneratedEmail(data.email || "");
+      setGeneratedSms(data.sms || "");
+      setGeneratedSocial(data.social || "");
+
+      setEmailCampaign((current) => ({
+        ...current,
+        subject: data.subject || "",
+        body: data.email || "",
+      }));
+
+      setSmsCampaign((current) => ({
+        ...current,
+        message: data.sms || "",
+      }));
+
+      setNotice("AI campaign generated successfully.");
+    } catch (err) {
+      setError(
+        err.message || "AI campaign generation failed."
+      );
+    } finally {
+      setAiLoading(false);
+    }
+  }
   return (
     <Box>
       <Typography variant="h4" fontWeight={900}>
@@ -934,61 +989,4 @@ function EmptyState({
     </Box>
   );
 }
-  async function generateCampaign() {
-    if (!aiPrompt.trim()) {
-      setError("Describe the campaign you want to create.");
-      return;
-    }
-
-    setAiLoading(true);
-    setError("");
-    setNotice("");
-
-    try {
-      const response = await fetch(
-        `${API}/api/marketing/generate`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            prompt: aiPrompt,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail || "AI campaign generation failed."
-        );
-      }
-
-      setGeneratedSubject(data.subject || "");
-      setGeneratedEmail(data.email || "");
-      setGeneratedSms(data.sms || "");
-      setGeneratedSocial(data.social || "");
-
-      setEmailCampaign((current) => ({
-        ...current,
-        subject: data.subject || "",
-        body: data.email || "",
-      }));
-
-      setSmsCampaign((current) => ({
-        ...current,
-        message: data.sms || "",
-      }));
-
-      setNotice("AI campaign generated successfully.");
-    } catch (err) {
-      setError(
-        err.message || "AI campaign generation failed."
-      );
-    } finally {
-      setAiLoading(false);
-    }
-  }
+ 
