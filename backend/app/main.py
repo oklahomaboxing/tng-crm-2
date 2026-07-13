@@ -871,9 +871,25 @@ def list_members(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    cutoff_date = datetime(2026, 7, 20, 23, 59, 59)
+
+    paid_sale_member_ids = (
+        db.query(Sale.member_id)
+        .filter(
+            Sale.payment_status == "paid",
+            Sale.member_id != None,
+        )
+        .distinct()
+        .subquery()
+    )
 
     members = (
         db.query(Member)
+        .filter(
+            Member.id.in_(
+                db.query(paid_sale_member_ids.c.member_id)
+            )
+        )
         .order_by(
             Member.last_name.asc(),
             Member.first_name.asc(),
@@ -881,35 +897,70 @@ def list_members(
         .all()
     )
 
+    results = []
+
     for member in members:
         recalculate_member_from_payments(member, db)
 
-    db.commit()
+        # Exclude memberships expiring July 20, 2026 or earlier.
+        if (
+            member.membership_end
+            and member.membership_end <= cutoff_date
+        ):
+            continue
 
-    active_members = [
-        m for m in members
-        if m.membership_status == "active"
-    ]
-
-    return [
-        {
+        results.append({
             "id": member.id,
             "first_name": member.first_name,
             "last_name": member.last_name,
             "email": member.email,
             "phone": member.phone,
+            "status": member.status,
+            "member_number": member.member_number,
+            "barcode": member.barcode,
+            "qr_code": member.qr_code,
+            "digital_member_id": member.digital_member_id,
             "membership_type": member.membership_type,
             "membership_status": member.membership_status,
-            "membership_start": member.membership_start.isoformat() if member.membership_start else None,
-            "membership_end": member.membership_end.isoformat() if member.membership_end else None,
-            "last_payment_date": member.last_payment_date.isoformat() if member.last_payment_date else None,
+            "membership_start": (
+                member.membership_start.isoformat()
+                if member.membership_start
+                else None
+            ),
+            "membership_end": (
+                member.membership_end.isoformat()
+                if member.membership_end
+                else None
+            ),
+            "last_payment_date": (
+                member.last_payment_date.isoformat()
+                if member.last_payment_date
+                else None
+            ),
+            "next_billing_date": (
+                member.next_billing_date.isoformat()
+                if member.next_billing_date
+                else None
+            ),
             "billing_status": member.billing_status,
+            "clover_customer_id": member.clover_customer_id,
+            "last_checkin": (
+                member.last_checkin.isoformat()
+                if member.last_checkin
+                else None
+            ),
             "total_checkins": member.total_checkins or 0,
             "photo_url": member.photo_url,
-        }
-        for member in active_members
-    ]
+            "created_at": (
+                member.created_at.isoformat()
+                if member.created_at
+                else None
+            ),
+        })
 
+    db.commit()
+
+    return results
 @app.post("/api/products")
 def create_product(
     data: dict,
