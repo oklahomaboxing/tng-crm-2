@@ -877,14 +877,21 @@ def list_members(
             MembershipProduct,
             Sale.product_id == MembershipProduct.id,
         )
+
+    membership_member_ids = (
+        db.query(Sale.member_id)
+        .join(
+            MembershipProduct,
+            Sale.product_id == MembershipProduct.id,
+        )
         .filter(
             Sale.payment_status == "paid",
-            ~Sale.amount.in_([10.0, 25.0, 50.0]),
-            or_(
-                MembershipProduct.is_membership == True,
-                func.lower(MembershipProduct.category) == "membership",
-            ),
+            MembershipProduct.is_membership == True,
+            func.lower(MembershipProduct.category) == "membership",
         )
+        .distinct()
+        .subquery()
+    )
         .distinct()
         .subquery()
     )
