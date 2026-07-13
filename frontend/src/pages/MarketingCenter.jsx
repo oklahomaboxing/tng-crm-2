@@ -33,6 +33,50 @@ import {
 
 const API =
   import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const CAMPAIGN_PRESETS = [
+  {
+    id: "youth-boxing",
+    name: "Youth Boxing",
+    prompt:
+      "Create a marketing campaign promoting TNG Youth Boxing for children ages 8 through 14. Focus on confidence, discipline, fitness, self-defense, and positive coaching. Include the TNG Boxing slogan Earned Not Given.",
+  },
+  {
+    id: "adult-boxing",
+    name: "Adult Boxing",
+    prompt:
+      "Create a marketing campaign promoting TNG adult boxing classes. Focus on fitness, boxing skills, stress relief, discipline, weight loss, and beginner-friendly training. Include the slogan Earned Not Given.",
+  },
+  {
+    id: "fight-night",
+    name: "Fight Night",
+    prompt:
+      "Create an exciting marketing campaign promoting an upcoming TNG Boxing fight night. Encourage people to purchase tickets, bring friends and family, and support local fighters. Make the message exciting and professional.",
+  },
+  {
+    id: "membership",
+    name: "Membership Special",
+    prompt:
+      "Create a marketing campaign promoting a limited-time TNG Boxing membership special. Emphasize professional coaching, boxing classes, fitness, youth programs, and the slogan Earned Not Given.",
+  },
+  {
+    id: "grand-opening",
+    name: "Grand Opening",
+    prompt:
+      "Create a marketing campaign promoting the TNG Boxing grand opening at 8416 NW Expressway in Oklahoma City, next to Crunch Fitness. Invite families, athletes, beginners, and community supporters. Include the slogan Earned Not Given.",
+  },
+  {
+    id: "sponsorship",
+    name: "Sponsorship",
+    prompt:
+      "Create a professional sponsorship campaign for TNG Boxing. Explain that sponsors support youth development, amateur and professional boxing, community programs, uniforms, equipment, and events. Include a strong call to action for local businesses.",
+  },
+  {
+    id: "nexgen-nutrition",
+    name: "NexGen Nutrition",
+    prompt:
+      "Create a marketing campaign promoting NexGen Nutrition inside TNG Boxing. Promote healthy shakes, energizing teas, fitness support, and convenient service next to Crunch Fitness.",
+  },
+];
 
 export default function MarketingCenter() {
   const [tab, setTab] = useState(0);
@@ -64,6 +108,7 @@ export default function MarketingCenter() {
   const [aiLoading, setAiLoading] = useState(false);
   const [generatedSubject, setGeneratedSubject] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState("");
   const [generatedEmail, setGeneratedEmail] = useState("");
 
   const [generatedSms, setGeneratedSms] = useState("");
@@ -260,6 +305,19 @@ export default function MarketingCenter() {
 
     setSmsDialogOpen(false);
   }
+
+  function selectCampaignPreset(presetId) {
+  const preset = CAMPAIGN_PRESETS.find(
+    (item) => item.id === presetId
+  );
+
+  setSelectedPreset(presetId);
+
+  if (preset) {
+    setAiPrompt(preset.prompt);
+  }
+}
+
  async function generateCampaign() {
     if (!aiPrompt.trim()) {
       setError("Describe the campaign you want to create.");
@@ -669,17 +727,45 @@ export default function MarketingCenter() {
       </Typography>
 
       <Typography sx={{ mb: 3 }}>
-        Describe the campaign you want.
-      </Typography>
+  Choose a campaign type or describe your own campaign.
+</Typography>
 
-      <TextField
-        fullWidth
-        multiline
-        minRows={5}
-        label="Example: Promote youth boxing camp for ages 8-14."
-        value={aiPrompt}
-        onChange={(e) => setAiPrompt(e.target.value)}
-      />
+<FormControl fullWidth sx={{ mb: 3 }}>
+  <InputLabel>Campaign Type</InputLabel>
+
+  <Select
+    value={selectedPreset}
+    label="Campaign Type"
+    onChange={(event) =>
+      selectCampaignPreset(event.target.value)
+    }
+  >
+    <MenuItem value="">
+      Custom Campaign
+    </MenuItem>
+
+    {CAMPAIGN_PRESETS.map((preset) => (
+      <MenuItem
+        key={preset.id}
+        value={preset.id}
+      >
+        {preset.name}
+      </MenuItem>
+    ))}
+  </Select>
+</FormControl>
+
+<TextField
+  fullWidth
+  multiline
+  minRows={5}
+  label="Describe the campaign"
+  value={aiPrompt}
+  onChange={(event) => {
+    setAiPrompt(event.target.value);
+    setSelectedPreset("");
+  }}
+/>
 
       <Button
         sx={{ mt: 3 }}
