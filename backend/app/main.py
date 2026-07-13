@@ -871,12 +871,7 @@ def list_members(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    membership_member_ids = (
-        db.query(Sale.member_id)
-        .join(
-            MembershipProduct,
-            Sale.product_id == MembershipProduct.id,
-        )
+
 
     membership_member_ids = (
         db.query(Sale.member_id)
@@ -889,9 +884,6 @@ def list_members(
             MembershipProduct.is_membership == True,
             func.lower(MembershipProduct.category) == "membership",
         )
-        .distinct()
-        .subquery()
-    )
         .distinct()
         .subquery()
     )
