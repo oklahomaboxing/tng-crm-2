@@ -687,6 +687,22 @@ def is_membership_product(product):
         product.is_membership is True
         or category == "membership"
     )
+EVENT_TICKET_AMOUNTS = {10.00, 25.00, 50.00}
+
+
+def is_membership_sale(sale):
+    if not sale:
+        return False
+
+    if not is_membership_product(sale.product):
+        return False
+
+    amount = round(float(sale.amount or 0), 2)
+
+    if amount in EVENT_TICKET_AMOUNTS:
+        return False
+
+    return sale.payment_status == "paid"
 
 def apply_membership(member, product):
     membership_start = member.membership_start or datetime.utcnow()
@@ -731,8 +747,9 @@ def recalculate_member_from_payments(member, db: Session):
     )
 
     membership_sales = [
-        s for s in sales
-        if s.product and is_membership_product(s.product)
+        sale
+        for sale in sales
+        if is_membership_sale(sale)
     ]
 
     if not membership_sales:
@@ -861,6 +878,7 @@ def list_members(
         )
         .filter(
             Sale.payment_status == "paid",
+            ~Sale.amount.in_([10.0, 25.0, 50.0]),
             or_(
                 MembershipProduct.is_membership == True,
                 func.lower(MembershipProduct.category) == "membership",
@@ -873,7 +891,10 @@ def list_members(
     members = (
         db.query(Member)
         .filter(Member.id.in_(membership_member_ids))
-        .order_by(Member.last_name.asc(), Member.first_name.asc())
+        .order_by(
+            Member.last_name.asc(),
+            Member.first_name.asc(),
+        )
         .all()
     )
 
