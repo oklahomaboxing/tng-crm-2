@@ -594,43 +594,55 @@ def rep_qr(rep_id: int, db: Session = Depends(get_db), user: User = Depends(curr
     img = qrcode.make(url)
     buf = io.BytesIO(); img.save(buf, format="PNG")
     return {"url": url, "qr_png_base64": base64.b64encode(buf.getvalue()).decode()}
+
 @app.get("/api/dashboard")
 def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
     today = datetime.utcnow().date()
     now = datetime.utcnow()
 
-    MEMBERSHIP_PRODUCTS = [
-        "month",
-        "monthly",
-        "3 month",
-        "annual",
-        "year",
-        "pre-sale",
-        "special",
-        "family",
-        "vip",
-        "non profit",
-        "registration",
+    cutoff_date = datetime(2026, 7, 20, 23, 59, 59)
+
+    paid_member_ids = (
+        db.query(Sale.member_id)
+        .filter(
+            Sale.payment_status == "paid",
+            Sale.member_id != None,
+        )
+        .distinct()
+        .all()
+    )
+
+    paid_member_ids = [
+        row[0]
+        for row in paid_member_ids
+        if row[0] is not None
     ]
 
-    member_filter = or_(
-        *[
-            Member.membership_type.ilike(f"%{p}%")
-            for p in MEMBERSHIP_PRODUCTS
-        ]
-    )
-
-    total_members = db.query(Member).filter(member_filter).count()
-
-    active_members = (
+    paid_members = (
         db.query(Member)
-        .filter(
-            member_filter,
-            Member.membership_status == "active",
-        )
-        .count()
+        .filter(Member.id.in_(paid_member_ids))
+        .all()
+        if paid_member_ids
+        else []
     )
 
+    visible_members = []
+
+    for member in paid_members:
+        recalculate_member_from_payments(member, db)
+
+        if (
+            member.membership_end
+            and member.membership_end <= cutoff_date
+        ):
+            continue
+
+        visible_members.append(member)
+
+    db.commit()
+
+    total_members = len(visible_members)
+    active_members = len(visible_members)
     total_leads = db.query(Lead).count()
 
     today_checkins = (
@@ -961,6 +973,7 @@ def list_members(
     db.commit()
 
     return results
+
 @app.post("/api/products")
 def create_product(
     data: dict,
