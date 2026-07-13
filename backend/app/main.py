@@ -442,6 +442,17 @@ def update_product(
     for field in allowed_fields:
         if field in data:
             setattr(product, field, data[field])
+    if "category" in data:
+        product.category = (data["category"] or "other").strip().lower()
+        product.is_membership = product.category == "membership"
+
+    elif "is_membership" in data:
+        product.is_membership = bool(data["is_membership"])
+
+        if product.is_membership:
+            product.category = "membership"
+        elif product.category == "membership":
+            product.category = "other"
 
     db.commit()
     db.refresh(product)
@@ -667,29 +678,15 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
     }
 
 def is_membership_product(product):
-    if not product or not product.name:
+    if not product:
         return False
 
-    name = product.name.lower()
+    category = (product.category or "").strip().lower()
 
-    non_membership_words = [
-        "ga",
-        "general admission",
-        "table",
-        "table seat",
-        "seat",
-        "vip table",
-        "ringside",
-        "ticket",
-        "fight night",
-        "admission",
-    ]
-
-    for word in non_membership_words:
-        if word in name:
-            return False
-
-    return True
+    return bool(
+        product.is_membership is True
+        or category == "membership"
+    )
 
 def apply_membership(member, product):
     membership_start = member.membership_start or datetime.utcnow()
@@ -852,66 +849,90 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
     return {"rep_id": rep.id, "rep_name": rep.user.name, "clover_link": rep.clover_link, "products": db.query(MembershipProduct).filter(MembershipProduct.active == True).all()}
 
 @app.get("/api/members")
-def list_members(db: Session = Depends(get_db), user: User = Depends(current_user)):
-
-    MEMBERSHIP_PRODUCTS = [
-        "month",
-        "monthly",
-        "3 month",
-        "annual",
-        "year",
-        "pre-sale",
-        "special",
-        "family",
-        "vip",
-        "non profit",
-    ]
+def list_members(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    membership_member_ids = (
+        db.query(Sale.member_id)
+        .join(
+            MembershipProduct,
+            Sale.product_id == MembershipProduct.id,
+        )
+        .filter(
+            Sale.payment_status == "paid",
+            or_(
+                MembershipProduct.is_membership == True,
+                func.lower(MembershipProduct.category) == "membership",
+            ),
+        )
+        .distinct()
+        .subquery()
+    )
 
     members = (
         db.query(Member)
-        .filter(
-            or_(
-                *[
-                    Member.membership_type.ilike(f"%{p}%")
-                    for p in MEMBERSHIP_PRODUCTS
-                ]
-            )
-        )
+        .filter(Member.id.in_(membership_member_ids))
+        .order_by(Member.last_name.asc(), Member.first_name.asc())
         .all()
     )
 
-    for m in members:
-        recalculate_member_from_payments(m, db)
+    for member in members:
+        recalculate_member_from_payments(member, db)
 
     db.commit()
 
     return [
         {
-            "id": m.id,
-            "first_name": m.first_name,
-            "last_name": m.last_name,
-            "email": m.email,
-            "phone": m.phone,
-            "status": m.status,
-            "member_number": m.member_number,
-            "barcode": m.barcode,
-            "qr_code": m.qr_code,
-            "digital_member_id": m.digital_member_id,
-            "membership_type": m.membership_type,
-            "membership_status": m.membership_status,
-            "membership_start": m.membership_start.isoformat() if m.membership_start else None,
-            "membership_end": m.membership_end.isoformat() if m.membership_end else None,
-            "last_payment_date": m.last_payment_date.isoformat() if m.last_payment_date else None,
-            "clover_customer_id": m.clover_customer_id,
-            "last_checkin": m.last_checkin.isoformat() if m.last_checkin else None,
-            "total_checkins": m.total_checkins,
-            "photo_url": m.photo_url,
-            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "id": member.id,
+            "first_name": member.first_name,
+            "last_name": member.last_name,
+            "email": member.email,
+            "phone": member.phone,
+            "status": member.status,
+            "member_number": member.member_number,
+            "barcode": member.barcode,
+            "qr_code": member.qr_code,
+            "digital_member_id": member.digital_member_id,
+            "membership_type": member.membership_type,
+            "membership_status": member.membership_status,
+            "membership_start": (
+                member.membership_start.isoformat()
+                if member.membership_start
+                else None
+            ),
+            "membership_end": (
+                member.membership_end.isoformat()
+                if member.membership_end
+                else None
+            ),
+            "last_payment_date": (
+                member.last_payment_date.isoformat()
+                if member.last_payment_date
+                else None
+            ),
+            "next_billing_date": (
+                member.next_billing_date.isoformat()
+                if member.next_billing_date
+                else None
+            ),
+            "billing_status": member.billing_status,
+            "clover_customer_id": member.clover_customer_id,
+            "last_checkin": (
+                member.last_checkin.isoformat()
+                if member.last_checkin
+                else None
+            ),
+            "total_checkins": member.total_checkins or 0,
+            "photo_url": member.photo_url,
+            "created_at": (
+                member.created_at.isoformat()
+                if member.created_at
+                else None
+            ),
         }
-        for m in members
+        for member in members
     ]
-
-
 @app.post("/api/products")
 def create_product(
     data: dict,
