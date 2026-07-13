@@ -908,7 +908,9 @@ def list_members(
             "photo_url": member.photo_url,
         }
         for member in active_members
-    ]@app.post("/api/products")
+    ]
+
+@app.post("/api/products")
 def create_product(
     data: dict,
     db: Session = Depends(get_db),
