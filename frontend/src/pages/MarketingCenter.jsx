@@ -98,6 +98,18 @@ export default function MarketingCenter() {
     loadContacts();
   }, []);
 
+  const [aiPrompt, setAiPrompt] = useState("");
+
+const [aiLoading, setAiLoading] = useState(false);
+
+const [generatedSubject, setGeneratedSubject] = useState("");
+
+const [generatedEmail, setGeneratedEmail] = useState("");
+
+const [generatedSms, setGeneratedSms] = useState("");
+
+const [generatedSocial, setGeneratedSocial] = useState("");
+
   const availableTags = useMemo(() => {
     const tags = new Set();
 
@@ -380,17 +392,20 @@ export default function MarketingCenter() {
       </Card>
 
       <Card sx={{ mt: 3 }}>
-        <Tabs
-          value={tab}
-          onChange={(_, value) => setTab(value)}
-          variant="scrollable"
-          scrollButtons="auto"
-        >
-          <Tab label="Contacts" />
-          <Tab label="Email Campaigns" />
-          <Tab label="Text Campaigns" />
-          <Tab label="Campaign History" />
-        </Tabs>
+<Tabs
+  value={tab}
+  onChange={(_, value) => setTab(value)}
+  variant="scrollable"
+  scrollButtons="auto"
+>
+  <Tab label="Contacts" />
+  <Tab label="AI Generator" />
+  <Tab label="Email" />
+  <Tab label="Text" />
+  <Tab label="Templates" />
+  <Tab label="History" />
+  <Tab label="Analytics" />
+</Tabs>
 
         <Divider />
 
@@ -589,34 +604,87 @@ export default function MarketingCenter() {
             </>
           )}
 
-          {tab === 1 && (
-            <EmptyState
-              title="Email Campaigns"
-              text="Create email campaigns for selected contacts."
-              buttonText="Create Email"
-              onClick={() =>
-                setEmailDialogOpen(true)
-              }
-            />
-          )}
+         {tab === 1 && (
+  <Card>
+    <CardContent>
 
-          {tab === 2 && (
-            <EmptyState
-              title="Text Campaigns"
-              text="Create SMS drafts for contacts who have provided consent."
-              buttonText="Create Text"
-              onClick={() =>
-                setSmsDialogOpen(true)
-              }
-            />
-          )}
+      <Typography variant="h5" fontWeight="bold">
+        TNG AI Marketing Assistant
+      </Typography>
 
-          {tab === 3 && (
-            <EmptyState
-              title="Campaign History"
-              text="Sent and scheduled campaigns will appear here."
-            />
-          )}
+      <Typography sx={{ mb: 3 }}>
+        Describe the campaign you want.
+      </Typography>
+
+      <TextField
+        fullWidth
+        multiline
+        minRows={5}
+        label="Example: Promote youth boxing camp for ages 8-14."
+        value={aiPrompt}
+        onChange={(e) => setAiPrompt(e.target.value)}
+      />
+
+      <Button
+        sx={{ mt: 3 }}
+        variant="contained"
+        color="error"
+        onClick={generateCampaign}
+        disabled={aiLoading || !aiPrompt.trim()}
+      >
+        {aiLoading ? "Generating..." : "Generate Campaign"}
+      </Button>
+
+      <Divider sx={{ my: 4 }} />
+
+      <TextField
+        fullWidth
+        label="Subject"
+        value={generatedSubject}
+        onChange={(event) =>
+          setGeneratedSubject(event.target.value)
+        }
+        sx={{ mb: 2 }}
+      />
+
+      <TextField
+        fullWidth
+        multiline
+        minRows={8}
+        label="Email"
+        value={generatedEmail}
+        onChange={(event) =>
+          setGeneratedEmail(event.target.value)
+        }
+        sx={{ mb: 2 }}
+      />
+
+      <TextField
+        fullWidth
+        multiline
+        minRows={4}
+        label="SMS"
+        value={generatedSms}
+        onChange={(event) =>
+          setGeneratedSms(event.target.value)
+        }
+        sx={{ mb: 2 }}
+      />
+
+      <TextField
+        fullWidth
+        multiline
+        minRows={5}
+        label="Social Post"
+        value={generatedSocial}
+        onChange={(event) =>
+          setGeneratedSocial(event.target.value)
+        }
+      />
+
+    </CardContent>
+  </Card>
+)}
         </CardContent>
       </Card>
 
@@ -865,3 +933,61 @@ function EmptyState({
     </Box>
   );
 }
+  async function generateCampaign() {
+    if (!aiPrompt.trim()) {
+      setError("Describe the campaign you want to create.");
+      return;
+    }
+
+    setAiLoading(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `${API}/api/marketing/generate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            prompt: aiPrompt,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "AI campaign generation failed."
+        );
+      }
+
+      setGeneratedSubject(data.subject || "");
+      setGeneratedEmail(data.email || "");
+      setGeneratedSms(data.sms || "");
+      setGeneratedSocial(data.social || "");
+
+      setEmailCampaign((current) => ({
+        ...current,
+        subject: data.subject || "",
+        body: data.email || "",
+      }));
+
+      setSmsCampaign((current) => ({
+        ...current,
+        message: data.sms || "",
+      }));
+
+      setNotice("AI campaign generated successfully.");
+    } catch (err) {
+      setError(
+        err.message || "AI campaign generation failed."
+      );
+    } finally {
+      setAiLoading(false);
+    }
+  }

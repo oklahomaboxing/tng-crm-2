@@ -8,6 +8,7 @@ from sqlalchemy import func, extract
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import base64, io, qrcode
+from openai import OpenAI
 import os
 import json
 import requests
@@ -36,7 +37,7 @@ from .commission import commission_rate
 from sqlalchemy import or_
 import sqlite3
 import pandas as pd
-
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 Base.metadata.create_all(bind=engine)
 def add_column_if_missing(table, column, column_type):
@@ -3128,3 +3129,47 @@ def list_marketing_contacts(
         })
 
     return results
+from pydantic import BaseModel
+
+class MarketingPrompt(BaseModel):
+    prompt: str
+
+
+@app.post("/api/marketing/generate")
+def generate_marketing(
+    request: MarketingPrompt,
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    response = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[
+            {
+                "role": "system",
+                "content": """
+You are the TNG Boxing Marketing AI.
+
+Return ONLY valid JSON.
+
+{
+ "subject":"",
+ "email":"",
+ "sms":"",
+ "social":""
+}
+                """,
+            },
+            {
+                "role": "user",
+                "content": request.prompt,
+            },
+        ],
+        temperature=0.8,
+    )
+
+    import json
+
+    return json.loads(
+        response.choices[0].message.content
+    )
