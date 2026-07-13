@@ -1979,10 +1979,14 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
                 if matched_product:
                     product = matched_product
-        if product.category == "event_ticket":
-            skipped += 1
-            continue
-
+        is_membership_product = (
+            (product.category or "").strip().lower()
+            in {
+                "membership",
+                "monthly_membership",
+                "annual_membership",
+            }
+        )
 
         sale = Sale(
             member_id=member.id,
@@ -1995,33 +1999,43 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             clover_payment_id=payment_id,
             payment_method="clover",
             sale_date=sale_date,
+            sale_type=(
+                "membership"
+                if is_membership_product
+                else (product.category or "other")
+            ),
         )
 
-
-        if not member.membership_start:
-            member.membership_start = sale_date
-
-        member = apply_membership(member, product)
-
-        member.last_payment_date = sale_date
-
         db.add(sale)
+
+        if is_membership_product:
+            if not member.membership_start:
+                member.membership_start = sale_date
+
+            apply_membership(member, product)
+            member.last_payment_date = sale_date
 
         synced += 1
 
     db.commit()
-    members_with_sales = db.query(Member).join(Sale).distinct().all()
+
+    members_with_sales = (
+        db.query(Member)
+        .join(Sale)
+        .distinct()
+        .all()
+    )
 
     for member in members_with_sales:
         recalculate_member_from_payments(member, db)
 
     db.commit()
+
     return {
         "message": "Clover sales synced",
         "synced": synced,
         "skipped": skipped,
     }
-
 
 @app.post("/api/clover/sync-all")
 def sync_all_clover(
