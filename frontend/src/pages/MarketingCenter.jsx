@@ -61,6 +61,18 @@ export default function MarketingCenter() {
     message: "",
   });
 
+  const [aiPrompt, setAiPrompt] = useState("");
+
+  const [aiLoading, setAiLoading] = useState(false);
+  const [generatedSubject, setGeneratedSubject] = useState("");
+
+  const [generatedEmail, setGeneratedEmail] = useState("");
+
+  const [generatedSms, setGeneratedSms] = useState("");
+
+  const [generatedSocial, setGeneratedSocial] = useState("");
+
+
   const token = localStorage.getItem("token");
 
   async function loadContacts() {
@@ -98,17 +110,6 @@ export default function MarketingCenter() {
     loadContacts();
   }, []);
 
-  const [aiPrompt, setAiPrompt] = useState("");
-
-const [aiLoading, setAiLoading] = useState(false);
-
-const [generatedSubject, setGeneratedSubject] = useState("");
-
-const [generatedEmail, setGeneratedEmail] = useState("");
-
-const [generatedSms, setGeneratedSms] = useState("");
-
-const [generatedSocial, setGeneratedSocial] = useState("");
 
   const availableTags = useMemo(() => {
     const tags = new Set();
