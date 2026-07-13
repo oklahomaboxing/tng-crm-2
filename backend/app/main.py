@@ -872,25 +872,8 @@ def list_members(
     user: User = Depends(current_user),
 ):
 
-
-    membership_member_ids = (
-        db.query(Sale.member_id)
-        .join(
-            MembershipProduct,
-            Sale.product_id == MembershipProduct.id,
-        )
-        .filter(
-            Sale.payment_status == "paid",
-            MembershipProduct.is_membership == True,
-            func.lower(MembershipProduct.category) == "membership",
-        )
-        .distinct()
-        .subquery()
-    )
-
     members = (
         db.query(Member)
-        .filter(Member.id.in_(membership_member_ids))
         .order_by(
             Member.last_name.asc(),
             Member.first_name.asc(),
@@ -903,6 +886,11 @@ def list_members(
 
     db.commit()
 
+    active_members = [
+        m for m in members
+        if m.membership_status == "active"
+    ]
+
     return [
         {
             "id": member.id,
@@ -910,51 +898,17 @@ def list_members(
             "last_name": member.last_name,
             "email": member.email,
             "phone": member.phone,
-            "status": member.status,
-            "member_number": member.member_number,
-            "barcode": member.barcode,
-            "qr_code": member.qr_code,
-            "digital_member_id": member.digital_member_id,
             "membership_type": member.membership_type,
             "membership_status": member.membership_status,
-            "membership_start": (
-                member.membership_start.isoformat()
-                if member.membership_start
-                else None
-            ),
-            "membership_end": (
-                member.membership_end.isoformat()
-                if member.membership_end
-                else None
-            ),
-            "last_payment_date": (
-                member.last_payment_date.isoformat()
-                if member.last_payment_date
-                else None
-            ),
-            "next_billing_date": (
-                member.next_billing_date.isoformat()
-                if member.next_billing_date
-                else None
-            ),
+            "membership_start": member.membership_start.isoformat() if member.membership_start else None,
+            "membership_end": member.membership_end.isoformat() if member.membership_end else None,
+            "last_payment_date": member.last_payment_date.isoformat() if member.last_payment_date else None,
             "billing_status": member.billing_status,
-            "clover_customer_id": member.clover_customer_id,
-            "last_checkin": (
-                member.last_checkin.isoformat()
-                if member.last_checkin
-                else None
-            ),
             "total_checkins": member.total_checkins or 0,
             "photo_url": member.photo_url,
-            "created_at": (
-                member.created_at.isoformat()
-                if member.created_at
-                else None
-            ),
         }
-        for member in members
-    ]
-@app.post("/api/products")
+        for member in active_members
+    ]@app.post("/api/products")
 def create_product(
     data: dict,
     db: Session = Depends(get_db),
@@ -1573,13 +1527,16 @@ def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(cur
             existing.price = price_cents / 100
             existing.active = True
             existing.category = category
+            existing.is_membership = (category == "membership")
         else:
             product = MembershipProduct(
                 name=name,
                 price=price_cents / 100,
                 active=True,
                 category=category,
+                is_membership=(category == "membership"),
             )
+
             db.add(product)
 
         synced += 1
@@ -1697,10 +1654,10 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
             email=email,
             phone=phone,
             status="active",
-            membership_status="active",
+            membership_status="inactive",
             clover_customer_id=c.get("id"),
-            membership_type="Clover Customer",
-            membership_start=datetime.utcnow(),
+            membership_type="Prospect",
+            membership_start=None,
             waiver_signed=False,
         )
 
