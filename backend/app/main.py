@@ -717,103 +717,6 @@ def is_membership_sale(sale):
 
     return sale.payment_status == "paid"
 
-def apply_membership(member, product):
-    membership_start = member.membership_start or datetime.utcnow()
-    if not is_membership_product(product):
-        return member
-
-    if (
-        product
-        and (
-            "3 month" in product.name.lower()
-            or "3-month" in product.name.lower()
-            or product.price == 300
-        )
-    ):
-        membership_end = membership_start + relativedelta(months=3)
-        billing_cycle = "3_month_prepaid"
-        monthly_rate = 0
-        next_billing = None
-    else:
-        membership_end = membership_start + relativedelta(months=1)
-        billing_cycle = "monthly"
-        monthly_rate = product.price if product else 0
-        next_billing = membership_end
-
-    member.membership_type = product.name if product else "Membership"
-    member.membership_status = "active"
-    member.membership_start = membership_start
-    member.membership_end = membership_end
-    member.billing_cycle = billing_cycle
-    member.monthly_rate = monthly_rate
-    member.next_billing_date = next_billing
-    member.autopay_enabled = False
-    member.billing_status = "active"
-
-    return member
-def recalculate_member_from_payments(member, db: Session):
-    sales = (
-        db.query(Sale)
-        .filter(Sale.member_id == member.id)
-        .order_by(Sale.sale_date.asc())
-        .all()
-    )
-
-    membership_sales = [
-        sale
-        for sale in sales
-        if is_membership_sale(sale)
-    ]
-
-    if not membership_sales:
-        return member
-
-    first_sale = membership_sales[0]
-    last_sale = membership_sales[-1]
-
-    member.membership_start = first_sale.sale_date or datetime.utcnow()
-    member.membership_end = member.membership_start
-
-    for sale in membership_sales:
-        product = sale.product
-        sale_date = sale.sale_date or member.membership_end
-
-        if sale_date > member.membership_end:
-            member.membership_end = sale_date
-
-        product_name = product.name.lower() if product and product.name else ""
-
-        if (
-            "3 month" in product_name
-            or "3 months" in product_name
-            or "3-month" in product_name
-            or (product and product.price == 300)
-        ):
-            member.membership_end = member.membership_end + relativedelta(months=3)
-            member.billing_cycle = "3_month_prepaid"
-            member.monthly_rate = 0
-            member.next_billing_date = None
-            member.autopay_enabled = False
-        else:
-            member.membership_end = member.membership_end + relativedelta(months=1)
-            member.billing_cycle = "monthly"
-            member.monthly_rate = product.price if product else 0
-            member.next_billing_date = member.membership_end
-            member.autopay_enabled = False
-
-        member.membership_type = product.name if product else member.membership_type
-
-    member.last_payment_date = last_sale.sale_date
-    member.past_due_amount = 0
-
-    if member.membership_end and member.membership_end < datetime.utcnow():
-        member.membership_status = "inactive"
-        member.billing_status = "expired"
-    else:
-        member.membership_status = "active"
-        member.billing_status = "active"
-
-    return member
 @app.post("/api/sales")
 def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     if user.role == "rep" and user.rep_profile.id != data.sales_rep_id:
@@ -834,7 +737,12 @@ def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = De
         membership_status="active" if data.payment_status == "paid" else "pending",
             )
     if data.payment_status == "paid":
-        member = apply_membership(member, product)
+
+            apply_membership(
+                member,
+                product,
+                purchase_date=sale_date,
+            )
     else:
         member.membership_status = "pending"
         member.billing_status = "pending"
@@ -1747,6 +1655,7 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
         "updated": updated,
         "skipped": skipped,
     }
+
 @app.post("/api/members/activate-prospects")
 def activate_prospects(
     db: Session = Depends(get_db),
@@ -2062,7 +1971,11 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             if not member.membership_start:
                 member.membership_start = sale_date
 
-            apply_membership(member, product)
+            apply_membership(
+    member,
+    product,
+    purchase_date=sale_date,
+)
             member.last_payment_date = sale_date
 
         synced += 1
@@ -2277,6 +2190,47 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         "member_id": member.id,
         "member_number": member.member_number,
     }
+def apply_membership(member, product, purchase_date=None):
+    if not is_membership_product(product):
+        return member
+
+    purchase_date = purchase_date or datetime.utcnow()
+    product_name = (product.name or "").lower()
+    product_price = round(float(product.price or 0), 2)
+
+    is_three_month_membership = (
+        product_price == 300.00
+        or "3 month" in product_name
+        or "3-month" in product_name
+        or "three month" in product_name
+    )
+
+    if is_three_month_membership:
+        membership_end = purchase_date + relativedelta(months=3)
+        billing_cycle = "3_month_prepaid"
+        monthly_rate = 0
+        next_billing_date = None
+    else:
+        membership_end = purchase_date + timedelta(days=30)
+        billing_cycle = "30_day"
+        monthly_rate = product_price
+        next_billing_date = membership_end
+
+    member.status = "active"
+    member.membership_status = "active"
+    member.membership_type = product.name
+    member.membership_start = purchase_date
+    member.membership_end = membership_end
+    member.last_payment_date = purchase_date
+    member.billing_cycle = billing_cycle
+    member.monthly_rate = monthly_rate
+    member.next_billing_date = next_billing_date
+    member.autopay_enabled = False
+    member.billing_status = "active"
+    member.past_due_amount = 0
+
+    return member
+
 @app.post("/api/checkin")
 def checkin(data: dict, db: Session = Depends(get_db)):
     code = data.get("code", "").replace("-", "").upper()
@@ -2653,10 +2607,19 @@ def recalculate_all_memberships(
     for member in members:
         before_start = member.membership_start
         before_end = member.membership_end
+        before_status = member.membership_status
+        before_billing_status = member.billing_status
 
         recalculate_member_from_payments(member, db)
 
-        if member.membership_start != before_start or member.membership_end != before_end:
+        changed = (
+            member.membership_start != before_start
+            or member.membership_end != before_end
+            or member.membership_status != before_status
+            or member.billing_status != before_billing_status
+        )
+
+        if changed:
             updated += 1
         else:
             skipped += 1
@@ -2777,7 +2740,9 @@ def find_duplicate_members(
                     "recommended_merge_id": recommended_merge_id,
                 })
 
-    return results@app.post("/api/duplicates/members/merge")
+    return results
+
+@app.post("/api/duplicates/members/merge")
 def merge_duplicate_members(
     data: dict,
     db: Session = Depends(get_db),
