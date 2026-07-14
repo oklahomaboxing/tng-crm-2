@@ -694,14 +694,52 @@ def is_membership_product(product):
     if not product:
         return False
 
-    category = (product.category or "").strip().lower()
+    name = (product.name or "").lower()
 
-    return bool(
-        product.is_membership is True
-        or category == "membership"
-    )
-EVENT_TICKET_AMOUNTS = {10.00, 25.00, 50.00}
+    membership_keywords = [
+        "membership",
+        "monthly",
+        "month",
+        "3 month",
+        "3-month",
+        "three month",
+        "annual",
+        "year",
+        "yearly",
+        "youth",
+        "adult",
+        "family",
+        "unlimited",
+        "boxing",
+    ]
 
+    if any(keyword in name for keyword in membership_keywords):
+        return True
+
+    if getattr(product, "category", "").lower() == "membership":
+        return True
+
+    return False
+def is_event_product(product):
+    if not product:
+        return False
+
+    name = (product.name or "").lower()
+
+    event_keywords = [
+        "ticket",
+        "general admission",
+        "ga",
+        "ringside",
+        "vip",
+        "table",
+        "admission",
+        "event",
+        "show",
+        "fight",
+    ]
+
+    return any(keyword in name for keyword in event_keywords)
 
 def is_membership_sale(sale):
     if not sale:
@@ -1412,41 +1450,39 @@ def categorize_clover_product(name):
     if not name:
         return "other"
 
-    n = name.lower()
+    product_name = name.strip().lower()
 
-    event_words = [
-        "ga",
-        "general admission",
-        "kids under",
-        "kid",
-        "table",
-        "table seat",
-        "seat",
-        "vip",
-        "ringside",
+    event_keywords = [
         "ticket",
+        "general admission",
+        "ringside",
+        "table seat",
         "admission",
         "fight night",
+        "event",
+        "kids under",
     ]
 
-    membership_words = [
+    membership_keywords = [
+        "membership",
         "month to month",
         "monthly",
-        "membership",
         "3 month",
         "3-month",
+        "three month",
+        "annual",
+        "yearly",
         "unlimited boxing",
         "youth boxing",
-        "annual",
+        "adult boxing",
+        "family membership",
     ]
 
-    for word in event_words:
-        if word in n:
-            return "event_ticket"
+    if any(keyword in product_name for keyword in event_keywords):
+        return "event_ticket"
 
-    for word in membership_words:
-        if word in n:
-            return "membership"
+    if any(keyword in product_name for keyword in membership_keywords):
+        return "membership"
 
     return "other"
 
@@ -1497,20 +1533,21 @@ def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(cur
             MembershipProduct.name == name
         ).first()
 
+        is_membership = category == "membership"
+
         if existing:
             existing.price = price_cents / 100
             existing.active = True
             existing.category = category
-            existing.is_membership = (category == "membership")
+            existing.is_membership = is_membership
         else:
             product = MembershipProduct(
                 name=name,
                 price=price_cents / 100,
                 active=True,
                 category=category,
-                is_membership=(category == "membership"),
+                is_membership=is_membership,
             )
-
             db.add(product)
 
         synced += 1
@@ -2231,6 +2268,7 @@ def apply_membership(member, product, purchase_date=None):
     member.past_due_amount = 0
 
     return member
+
 def recalculate_member_from_payments(member, db: Session):
     membership_sales = (
         db.query(Sale)
@@ -2245,8 +2283,13 @@ def recalculate_member_from_payments(member, db: Session):
     membership_sales = [
         sale
         for sale in membership_sales
-        if is_membership_sale(sale)
+        if (
+            sale.product
+            and is_membership_product(sale.product)
+            and not is_event_product(sale.product)
+        )
     ]
+
 
     if not membership_sales:
         return member
