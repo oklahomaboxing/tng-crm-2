@@ -1720,10 +1720,10 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
             email=email,
             phone=phone,
             status="active",
-            membership_status="inactive",
+            membership_status="active",
             clover_customer_id=c.get("id"),
-            membership_type="Prospect",
-            membership_start=None,
+            membership_type="Active Member",
+            membership_start=datetime.utcnow(),
             waiver_signed=False,
         )
 
@@ -1746,6 +1746,33 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
         "synced": synced,
         "updated": updated,
         "skipped": skipped,
+    }
+@app.post("/api/members/activate-prospects")
+def activate_prospects(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    prospects = (
+        db.query(Member)
+        .filter(Member.membership_type == "Prospect")
+        .all()
+    )
+
+    for member in prospects:
+        member.status = "active"
+        member.membership_status = "active"
+        member.membership_type = "Active Member"
+
+        if not member.membership_start:
+            member.membership_start = datetime.utcnow()
+
+    db.commit()
+
+    return {
+        "message": "Prospects changed to active members",
+        "updated": len(prospects),
     }
 @app.get("/api/users")
 def list_users(
