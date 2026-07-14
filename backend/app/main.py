@@ -2190,6 +2190,7 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         "member_id": member.id,
         "member_number": member.member_number,
     }
+
 def apply_membership(member, product, purchase_date=None):
     if not is_membership_product(product):
         return member
@@ -2228,6 +2229,43 @@ def apply_membership(member, product, purchase_date=None):
     member.autopay_enabled = False
     member.billing_status = "active"
     member.past_due_amount = 0
+
+    return member
+def recalculate_member_from_payments(member, db: Session):
+    membership_sales = (
+        db.query(Sale)
+        .filter(
+            Sale.member_id == member.id,
+            Sale.payment_status == "paid",
+        )
+        .order_by(Sale.sale_date.desc())
+        .all()
+    )
+
+    membership_sales = [
+        sale
+        for sale in membership_sales
+        if is_membership_sale(sale)
+    ]
+
+    if not membership_sales:
+        return member
+
+    last_sale = membership_sales[0]
+    purchase_date = last_sale.sale_date or datetime.utcnow()
+
+    apply_membership(
+        member,
+        last_sale.product,
+        purchase_date=purchase_date,
+    )
+
+    if member.membership_end and member.membership_end < datetime.utcnow():
+        member.membership_status = "inactive"
+        member.billing_status = "expired"
+    else:
+        member.membership_status = "active"
+        member.billing_status = "active"
 
     return member
 
