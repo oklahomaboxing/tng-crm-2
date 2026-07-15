@@ -1572,6 +1572,76 @@ def generate_barcode(member_number: str):
 
 def generate_qr_code(member_number: str):
     return f"member:{member_number}"
+
+def sync_clover_customer_to_marketing(
+    db: Session,
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone: str,
+):
+    normalized_email = normalize_marketing_email(email)
+    normalized_phone = normalize_marketing_phone(phone)
+
+    existing = find_marketing_contact(
+        db,
+        normalized_email,
+        phone,
+        first_name,
+        last_name,
+    )
+
+    if existing:
+        if first_name:
+            existing.first_name = first_name
+
+        if last_name:
+            existing.last_name = last_name
+
+        if normalized_email:
+            existing.email = normalized_email
+
+        if phone:
+            existing.phone = phone
+
+        existing.tags = merge_marketing_tags(
+            existing.tags,
+            [
+                "Clover Customer",
+            ],
+        )
+
+        existing.active = True
+        existing.updated_at = datetime.utcnow()
+
+        return "updated"
+
+    if not normalized_email and not normalized_phone:
+        return "skipped"
+
+    contact = MarketingContact(
+        first_name=first_name or "",
+        last_name=last_name or "",
+        email=normalized_email or None,
+        phone=phone or None,
+        tags=merge_marketing_tags(
+            "",
+            [
+                "Clover Customer",
+            ],
+        ),
+        source="Clover",
+        email_opt_in=False,
+        sms_opt_in=False,
+        email_unsubscribed=False,
+        sms_unsubscribed=False,
+        active=True,
+    )
+
+    db.add(contact)
+
+    return "created"
+
 @app.post("/api/clover/sync-customers")
 def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
@@ -1608,6 +1678,10 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
     skipped = 0
     updated = 0
 
+    marketing_created = 0
+    marketing_updated = 0
+    marketing_skipped = 0
+
     for c in customers:
         first_name = c.get("firstName") or ""
         last_name = c.get("lastName") or ""
@@ -1618,6 +1692,9 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
         if emails:
             email = emails[0].get("emailAddress") or ""
 
+        phones = c.get("phoneNumbers", {}).get("elements", [])
+        if phones:
+            phone = phones[0].get("phoneNumber") or ""
         phones = c.get("phoneNumbers", {}).get("elements", [])
         if phones:
             phone = phones[0].get("phoneNumber") or ""
