@@ -290,21 +290,77 @@ export default function MarketingCenter() {
     }
   }
 
-  function saveEmailDraft() {
-    setNotice(
-      `Email draft "${emailCampaign.name || "Untitled"}" prepared for ${selectedContacts.length} selected contacts.`
+async function saveEmailDraft() {
+  try {
+    const response = await fetch(
+      `${API}/api/marketing/campaigns`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: emailCampaign.name,
+          campaign_type: "email",
+          subject: emailCampaign.subject,
+          message: emailCampaign.body,
+          contact_ids: selectedIds,
+        }),
+      }
     );
 
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail || "Unable to save campaign."
+      );
+    }
+
+    setNotice("Email draft saved successfully.");
     setEmailDialogOpen(false);
+  } catch (err) {
+    console.error(err);
+    setError(err.message);
   }
+}
 
-  function saveSmsDraft() {
-    setNotice(
-      `Text draft "${smsCampaign.name || "Untitled"}" prepared for ${selectedContacts.length} selected contacts.`
+async function saveSmsDraft() {
+  try {
+    const response = await fetch(
+      `${API}/api/marketing/campaigns`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: smsCampaign.name,
+          campaign_type: "sms",
+          subject: "",
+          message: smsCampaign.message,
+          contact_ids: selectedIds,
+        }),
+      }
     );
 
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail || "Unable to save campaign."
+      );
+    }
+
+    setNotice("SMS draft saved successfully.");
     setSmsDialogOpen(false);
+  } catch (err) {
+    console.error(err);
+    setError(err.message);
   }
+}
 
   function selectCampaignPreset(presetId) {
   const preset = CAMPAIGN_PRESETS.find(
