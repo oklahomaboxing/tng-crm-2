@@ -1661,7 +1661,11 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
     }
 
     response = requests.get(
-        f"{base_url}/v3/merchants/{merchant_id}/customers",
+(
+    f"{base_url}/v3/merchants/{merchant_id}/customers"
+    "?expand=emailAddresses,phoneNumbers"
+    "&limit=1000"
+),
         headers=headers,
         timeout=20,
     )
@@ -1719,24 +1723,44 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
                 func.lower(Member.last_name) == last_name.lower(),
             ).first()
 
-        if existing:
-            existing.clover_customer_id = c.get("id")
-            if email and not existing.email:
-                existing.email = email
-            if phone and not existing.phone:
-                existing.phone = phone
-            if first_name:
-                existing.first_name = first_name
+if existing:
+    existing.clover_customer_id = c.get("id")
 
-            if last_name:
-                existing.last_name = last_name
-            if not existing.member_number:
-                existing.member_number = f"TNG-{existing.id:06d}"
-                existing.digital_member_id = generate_digital_member_id()
-                existing.barcode = generate_barcode(existing.member_number)
-                existing.qr_code = generate_qr_code(existing.member_number)
-            updated += 1
-            continue
+    if first_name:
+        existing.first_name = first_name
+
+    if last_name:
+        existing.last_name = last_name
+
+    if email:
+        existing.email = email.strip().lower()
+
+    if phone:
+        existing.phone = phone.strip()
+
+    if not existing.member_number:
+        existing.member_number = f"TNG-{existing.id:06d}"
+        existing.digital_member_id = generate_digital_member_id()
+        existing.barcode = generate_barcode(existing.member_number)
+        existing.qr_code = generate_qr_code(existing.member_number)
+
+    marketing_result = sync_clover_customer_to_marketing(
+        db,
+        first_name,
+        last_name,
+        email,
+        phone,
+    )
+
+    if marketing_result == "created":
+        marketing_created += 1
+    elif marketing_result == "updated":
+        marketing_updated += 1
+    else:
+        marketing_skipped += 1
+
+    updated += 1
+    continue
 
         member = Member(
             first_name=first_name or "Clover",
@@ -1759,18 +1783,36 @@ def sync_clover_customers(db: Session = Depends(get_db), user: User = Depends(cu
         member.digital_member_id = generate_digital_member_id()
         member.barcode = generate_barcode(member.member_number)
         member.qr_code = generate_qr_code(member.member_number)
+marketing_result = sync_clover_customer_to_marketing(
+    db,
+    first_name,
+    last_name,
+    email,
+    phone,
+)
 
+if marketing_result == "created":
+    marketing_created += 1
+elif marketing_result == "updated":
+    marketing_updated += 1
+else:
+    marketing_skipped += 1
         db.commit()
         synced += 1
 
     db.commit()
 
-    return {
-        "message": "Clover customers synced",
-        "synced": synced,
-        "updated": updated,
-        "skipped": skipped,
-    }
+return {
+    "message": "Clover customers synced",
+    "synced": synced,
+    "updated": updated,
+    "skipped": skipped,
+    "marketing": {
+        "created": marketing_created,
+        "updated": marketing_updated,
+        "skipped": marketing_skipped,
+    },
+}
 
 @app.post("/api/members/activate-prospects")
 def activate_prospects(
