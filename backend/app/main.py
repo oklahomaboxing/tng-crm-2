@@ -2974,6 +2974,277 @@ def delete_member(
     return {
         "message": "Member deleted successfully"
     }
+def normalize_marketing_email(value):
+    return (value or "").strip().lower()
+
+
+def normalize_marketing_phone(value):
+    return "".join(
+        character
+        for character in (value or "")
+        if character.isdigit()
+    )
+
+
+def merge_marketing_tags(existing_tags, new_tags):
+    combined = []
+
+    for tag in (existing_tags or "").split(","):
+        clean_tag = tag.strip()
+
+        if clean_tag and clean_tag not in combined:
+            combined.append(clean_tag)
+
+    for tag in new_tags:
+        clean_tag = (tag or "").strip()
+
+        if clean_tag and clean_tag not in combined:
+            combined.append(clean_tag)
+
+    return ",".join(combined)
+
+
+def find_marketing_contact(
+    db: Session,
+    email: str,
+    phone: str,
+):
+    normalized_email = normalize_marketing_email(email)
+    normalized_phone = normalize_marketing_phone(phone)
+
+    if normalized_email:
+        existing = (
+            db.query(MarketingContact)
+            .filter(
+                func.lower(MarketingContact.email)
+                == normalized_email
+            )
+            .first()
+        )
+
+        if existing:
+            return existing
+
+    if normalized_phone:
+        contacts_with_phone = (
+            db.query(MarketingContact)
+            .filter(MarketingContact.phone != None)
+            .all()
+        )
+
+        for contact in contacts_with_phone:
+            if (
+                normalize_marketing_phone(contact.phone)
+                == normalized_phone
+            ):
+                return contact
+
+    return None
+
+
+@app.post("/api/marketing/sync-audiences")
+def sync_marketing_audiences(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    created = 0
+    updated = 0
+    skipped = 0
+
+    member_created = 0
+    member_updated = 0
+    lead_created = 0
+    lead_updated = 0
+
+    members = db.query(Member).all()
+
+    for member in members:
+        email = normalize_marketing_email(member.email)
+        phone = (member.phone or "").strip()
+
+        if not email and not normalize_marketing_phone(phone):
+            skipped += 1
+            continue
+
+        member_status = (
+            member.membership_status or ""
+        ).strip().lower()
+
+        if member_status == "active":
+            audience_tag = "Active Member"
+        elif member_status in {
+            "inactive",
+            "expired",
+            "cancelled",
+            "canceled",
+        }:
+            audience_tag = "Expired Member"
+        else:
+            audience_tag = "Member"
+
+        existing = find_marketing_contact(
+            db,
+            email,
+            phone,
+        )
+
+        if existing:
+            if member.first_name:
+                existing.first_name = member.first_name
+
+            if member.last_name:
+                existing.last_name = member.last_name
+
+            if email:
+                existing.email = email
+
+            if phone:
+                existing.phone = phone
+
+            existing.tags = merge_marketing_tags(
+                existing.tags,
+                [
+                    "Member",
+                    audience_tag,
+                ],
+            )
+
+            existing.source = (
+                existing.source or "TNG OS"
+            )
+
+            existing.active = True
+            existing.updated_at = datetime.utcnow()
+
+            updated += 1
+            member_updated += 1
+        else:
+            contact = MarketingContact(
+                first_name=member.first_name or "",
+                last_name=member.last_name or "",
+                email=email or None,
+                phone=phone or None,
+                tags=merge_marketing_tags(
+                    "",
+                    [
+                        "Member",
+                        audience_tag,
+                    ],
+                ),
+                source="TNG Members",
+                email_opt_in=False,
+                sms_opt_in=False,
+                email_unsubscribed=False,
+                sms_unsubscribed=False,
+                active=True,
+            )
+
+            db.add(contact)
+
+            created += 1
+            member_created += 1
+
+    leads = db.query(Lead).all()
+
+    for lead in leads:
+        email = normalize_marketing_email(lead.email)
+        phone = (lead.phone or "").strip()
+
+        if not email and not normalize_marketing_phone(phone):
+            skipped += 1
+            continue
+
+        lead_status = (
+            lead.status or "new"
+        ).strip().lower()
+
+        status_tag = (
+            f"Lead - {lead_status.title()}"
+        )
+
+        existing = find_marketing_contact(
+            db,
+            email,
+            phone,
+        )
+
+        if existing:
+            if lead.first_name and not existing.first_name:
+                existing.first_name = lead.first_name
+
+            if lead.last_name and not existing.last_name:
+                existing.last_name = lead.last_name
+
+            if email and not existing.email:
+                existing.email = email
+
+            if phone and not existing.phone:
+                existing.phone = phone
+
+            existing.tags = merge_marketing_tags(
+                existing.tags,
+                [
+                    "Lead",
+                    status_tag,
+                ],
+            )
+
+            existing.active = True
+            existing.updated_at = datetime.utcnow()
+
+            updated += 1
+            lead_updated += 1
+        else:
+            contact = MarketingContact(
+                first_name=lead.first_name or "",
+                last_name=lead.last_name or "",
+                email=email or None,
+                phone=phone or None,
+                tags=merge_marketing_tags(
+                    "",
+                    [
+                        "Lead",
+                        status_tag,
+                    ],
+                ),
+                source="TNG Leads",
+                email_opt_in=False,
+                sms_opt_in=False,
+                email_unsubscribed=False,
+                sms_unsubscribed=False,
+                active=True,
+            )
+
+            db.add(contact)
+
+            created += 1
+            lead_created += 1
+
+    db.commit()
+
+    total_contacts = (
+        db.query(MarketingContact)
+        .filter(MarketingContact.active == True)
+        .count()
+    )
+
+    return {
+        "message": "Marketing audiences synced.",
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "members": {
+            "created": member_created,
+            "updated": member_updated,
+        },
+        "leads": {
+            "created": lead_created,
+            "updated": lead_updated,
+        },
+        "total_marketing_contacts": total_contacts,
+    }
 
 @app.post("/api/marketing/contacts/import")
 async def import_marketing_contacts(
@@ -3284,3 +3555,139 @@ Return ONLY valid JSON.
     return json.loads(
         response.choices[0].message.content
     )
+
+@app.post("/api/marketing/campaigns")
+def create_marketing_campaign(
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    name = (data.get("name") or "").strip()
+    campaign_type = (
+        data.get("campaign_type") or ""
+    ).strip().lower()
+    subject = (data.get("subject") or "").strip()
+    message = (data.get("message") or "").strip()
+    contact_ids = data.get("contact_ids") or []
+
+    if campaign_type not in [
+        "email",
+        "sms",
+        "social",
+    ]:
+        raise HTTPException(
+            status_code=400,
+            detail="Campaign type must be email, sms, or social.",
+        )
+
+    if not name:
+        raise HTTPException(
+            status_code=400,
+            detail="Campaign name is required.",
+        )
+
+    if not message:
+        raise HTTPException(
+            status_code=400,
+            detail="Campaign message is required.",
+        )
+
+    if campaign_type == "email" and not subject:
+        raise HTTPException(
+            status_code=400,
+            detail="Email subject is required.",
+        )
+
+    clean_contact_ids = []
+
+    for contact_id in contact_ids:
+        try:
+            clean_contact_ids.append(int(contact_id))
+        except (TypeError, ValueError):
+            continue
+
+    campaign = MarketingCampaign(
+        name=name,
+        campaign_type=campaign_type,
+        status="draft",
+        subject=subject or None,
+        message=message,
+        selected_contact_ids=json.dumps(
+            clean_contact_ids
+        ),
+        recipient_count=len(clean_contact_ids),
+        created_by_user_id=user.id,
+    )
+
+    db.add(campaign)
+    db.commit()
+    db.refresh(campaign)
+
+    return {
+        "message": "Campaign draft saved.",
+        "campaign": {
+            "id": campaign.id,
+            "name": campaign.name,
+            "campaign_type": campaign.campaign_type,
+            "status": campaign.status,
+            "subject": campaign.subject,
+            "message": campaign.message,
+            "recipient_count": campaign.recipient_count,
+            "created_at": (
+                campaign.created_at.isoformat()
+                if campaign.created_at
+                else None
+            ),
+        },
+    }
+
+
+@app.get("/api/marketing/campaigns")
+def list_marketing_campaigns(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    campaigns = (
+        db.query(MarketingCampaign)
+        .order_by(MarketingCampaign.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": campaign.id,
+            "name": campaign.name,
+            "campaign_type": campaign.campaign_type,
+            "status": campaign.status,
+            "subject": campaign.subject or "",
+            "message": campaign.message,
+            "recipient_count": campaign.recipient_count or 0,
+            "sent_count": campaign.sent_count or 0,
+            "delivered_count": (
+                campaign.delivered_count or 0
+            ),
+            "opened_count": campaign.opened_count or 0,
+            "clicked_count": campaign.clicked_count or 0,
+            "failed_count": campaign.failed_count or 0,
+            "scheduled_at": (
+                campaign.scheduled_at.isoformat()
+                if campaign.scheduled_at
+                else None
+            ),
+            "sent_at": (
+                campaign.sent_at.isoformat()
+                if campaign.sent_at
+                else None
+            ),
+            "created_at": (
+                campaign.created_at.isoformat()
+                if campaign.created_at
+                else None
+            ),
+        }
+        for campaign in campaigns
+    ]
