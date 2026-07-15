@@ -29,6 +29,7 @@ import {
   Search,
   Send,
   Sms,
+  Sync,
 } from "@mui/icons-material";
 
 const API =
@@ -152,7 +153,51 @@ export default function MarketingCenter() {
   useEffect(() => {
     loadContacts();
   }, []);
+async function syncAudiences() {
+  setLoading(true);
+  setNotice("");
+  setError("");
 
+  try {
+    const response = await fetch(
+      `${API}/api/marketing/sync-audiences`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail ||
+          "Members and leads could not be synced."
+      );
+    }
+
+    setNotice(
+      `Audience sync complete: ${
+        data.created || 0
+      } created, ${data.updated || 0} updated, and ${
+        data.skipped || 0
+      } skipped.`
+    );
+
+    await loadContacts();
+  } catch (err) {
+    console.error(err);
+
+    setError(
+      err.message ||
+        "Members and leads could not be synced."
+    );
+  } finally {
+    setLoading(false);
+  }
+}
 
   const availableTags = useMemo(() => {
     const tags = new Set();
@@ -535,6 +580,15 @@ async function saveSmsDraft() {
                   accept=".csv,.xlsx,.xls"
                   onChange={importContacts}
                 />
+              </Button>
+              
+              <Button
+                variant="outlined"
+                startIcon={<Sync />}
+                onClick={syncAudiences}
+                disabled={loading}
+>
+                        Sync Members & Leads
               </Button>
 
               <Button
