@@ -77,7 +77,6 @@ class MembershipProduct(Base):
     recurring = Column(Boolean, default=False)
     active = Column(Boolean, default=True)
     category = Column(String, nullable=True)
-    category = Column(String, nullable=True)
     is_membership = Column(Boolean, default=False)
     renews_monthly = Column(Boolean, default=False)
     autopay_allowed = Column(Boolean, default=False)
@@ -223,3 +222,65 @@ class MarketingContact(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+class MarketingCampaign(Base):
+    __tablename__ = "marketing_campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String, nullable=False)
+    campaign_type = Column(String, nullable=False)
+    status = Column(String, default="draft")
+
+    subject = Column(String, nullable=True)
+    message = Column(String, nullable=False)
+
+    audience_tag = Column(String, nullable=True)
+    selected_contact_ids = Column(String, default="[]")
+
+    recipient_count = Column(Integer, default=0)
+    sent_count = Column(Integer, default=0)
+    delivered_count = Column(Integer, default=0)
+    opened_count = Column(Integer, default=0)
+    clicked_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+
+    scheduled_at = Column(DateTime, nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+
+    created_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    created_by = relationship("User")
+
+
+class MarketingTemplate(Base):
+    __tablename__ = "marketing_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String, nullable=False)
+    template_type = Column(String, nullable=False)
+
+    subject = Column(String, nullable=True)
+    message = Column(String, nullable=False)
+
+    category = Column(String, default="general")
+    active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )

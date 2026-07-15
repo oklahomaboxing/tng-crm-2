@@ -30,6 +30,8 @@ from .models import (
     MerchandiseCheckout,
     SecurityLog,
     MarketingContact,
+    MarketingCampaign,
+    MarketingTemplate,
 )
 from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
 from .auth import verify_password, hash_password, create_token, decode_token
