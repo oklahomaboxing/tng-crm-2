@@ -3217,11 +3217,12 @@ def merge_marketing_tags(existing_tags, new_tags):
 
     return ",".join(combined)
 
-
 def find_marketing_contact(
     db: Session,
     email: str,
     phone: str,
+    first_name: str = "",
+    last_name: str = "",
 ):
     normalized_email = normalize_marketing_email(email)
     normalized_phone = normalize_marketing_phone(phone)
@@ -3253,8 +3254,30 @@ def find_marketing_contact(
             ):
                 return contact
 
-    return None
+    clean_first_name = (
+        first_name or ""
+    ).strip().lower()
 
+    clean_last_name = (
+        last_name or ""
+    ).strip().lower()
+
+    if clean_first_name and clean_last_name:
+        existing = (
+            db.query(MarketingContact)
+            .filter(
+                func.lower(MarketingContact.first_name)
+                == clean_first_name,
+                func.lower(MarketingContact.last_name)
+                == clean_last_name,
+            )
+            .first()
+        )
+
+        if existing:
+            return existing
+
+    return None
 
 @app.post("/api/marketing/sync-audiences")
 def sync_marketing_audiences(
