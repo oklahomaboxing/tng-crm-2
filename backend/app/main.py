@@ -620,17 +620,18 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         if row[0] is not None
     ]
 
-    paid_members = (
+    dashboard_members = (
         db.query(Member)
-        .filter(Member.id.in_(paid_member_ids))
+        .filter(
+            or_(
+                Member.id.in_(paid_member_ids),
+                Member.membership_status == "active",
+            )
+        )
         .all()
-        if paid_member_ids
-        else []
     )
 
-    visible_members = []
-
-    for member in paid_members:
+    for member in dashboard_members:
         recalculate_member_from_payments(member, db)
 
         if (
@@ -642,7 +643,6 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         visible_members.append(member)
 
     db.commit()
-
     total_members = len(visible_members)
     active_members = len(visible_members)
     total_leads = db.query(Lead).count()
