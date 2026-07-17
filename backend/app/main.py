@@ -630,7 +630,7 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         )
         .all()
     )
-
+    visible_members = []
     for member in dashboard_members:
         recalculate_member_from_payments(member, db)
 
@@ -1909,7 +1909,9 @@ def sync_clover_customers(
             "updated": marketing_updated,
             "skipped": marketing_skipped,
         },
-    }@app.post("/api/members/activate-prospects")
+    }
+
+@app.post("/api/members/activate-prospects")
 def activate_prospects(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
