@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-
+import os
 load_dotenv()
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,10 +9,12 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import base64, io, qrcode
 from openai import OpenAI
-import os
+import resend
 import json
 import requests
 import uuid
+import resend
+import html
 from fastapi.staticfiles import StaticFiles
 from fastapi import UploadFile, File
 import shutil
@@ -41,7 +43,10 @@ import sqlite3
 import pandas as pd
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+resend.api_key = os.getenv("RESEND_API_KEY")
+
 Base.metadata.create_all(bind=engine)
+
 def add_column_if_missing(table, column, column_type):
     with engine.connect() as conn:
         existing = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
@@ -3882,6 +3887,137 @@ def create_marketing_campaign(
         },
     }
 
+@app.post("/api/marketing/campaigns/{campaign_id}/send")
+def send_marketing_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    campaign = (
+        db.query(MarketingCampaign)
+        .filter(MarketingCampaign.id == campaign_id)
+        .first()
+    )
+
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail="Campaign not found.",
+        )
+
+    if campaign.campaign_type != "email":
+        raise HTTPException(
+            status_code=400,
+            detail="Only email campaigns can be sent right now.",
+        )
+
+    if not resend.api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="RESEND_API_KEY is not configured.",
+        )
+
+    try:
+        selected_contact_ids = json.loads(
+            campaign.selected_contact_ids or "[]"
+        )
+    except json.JSONDecodeError:
+        selected_contact_ids = []
+
+    if not selected_contact_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="No contacts were selected for this campaign.",
+        )
+
+    contacts = (
+        db.query(MarketingContact)
+        .filter(
+            MarketingContact.id.in_(selected_contact_ids),
+            MarketingContact.email != None,
+            MarketingContact.email != "",
+        )
+        .all()
+    )
+
+    if not contacts:
+        raise HTTPException(
+            status_code=400,
+            detail="No selected contacts have valid email addresses.",
+        )
+
+    sender_email = os.getenv(
+        "RESEND_FROM_EMAIL",
+        "TNG Boxing <marketing@tngboxinggym.com>",
+    )
+
+    sent_count = 0
+    failed_count = 0
+
+    campaign.status = "sending"
+    db.commit()
+
+    for contact in contacts:
+        contact_name = (
+            getattr(contact, "first_name", None)
+            or getattr(contact, "name", None)
+            or "TNG Member"
+        )
+
+        personalized_message = campaign.message.replace(
+            "{{first_name}}",
+            contact_name,
+        )
+
+        html_message = "<br>".join(
+            html.escape(personalized_message).splitlines()
+        )
+
+        try:
+            resend.Emails.send(
+                {
+                    "from": sender_email,
+                    "to": [contact.email],
+                    "subject": campaign.subject,
+                    "html": html_message,
+                }
+            )
+
+            sent_count += 1
+
+        except Exception as exc:
+            print(
+                f"Resend failed for {contact.email}: {exc}"
+            )
+            failed_count += 1
+
+    campaign.sent_count = sent_count
+    campaign.failed_count = failed_count
+    campaign.recipient_count = len(contacts)
+    campaign.status = (
+        "sent"
+        if sent_count > 0 and failed_count == 0
+        else "partially_sent"
+        if sent_count > 0
+        else "failed"
+    )
+
+    if hasattr(campaign, "sent_at"):
+        campaign.sent_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(campaign)
+
+    return {
+        "message": "Campaign sending completed.",
+        "campaign_id": campaign.id,
+        "status": campaign.status,
+        "recipient_count": len(contacts),
+        "sent_count": sent_count,
+        "failed_count": failed_count,
+    }
 
 @app.get("/api/marketing/campaigns")
 def list_marketing_campaigns(
@@ -3930,3 +4066,55 @@ def list_marketing_campaigns(
         }
         for campaign in campaigns
     ]
+
+@app.post("/api/email/test")
+def send_test_email():
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    email_from = os.getenv(
+        "EMAIL_FROM",
+        "TNG Boxing <onboarding@resend.dev>",
+    )
+    test_email_to = os.getenv("TEST_EMAIL_TO")
+
+    if not resend_api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="RESEND_API_KEY is not configured.",
+        )
+
+    if not test_email_to:
+        raise HTTPException(
+            status_code=500,
+            detail="TEST_EMAIL_TO is not configured.",
+        )
+
+    try:
+        resend.api_key = resend_api_key
+
+        response = resend.Emails.send(
+            {
+                "from": email_from,
+                "to": [test_email_to],
+                "subject": "TNG OS Test Email",
+                "html": """
+                    <div style="font-family: Arial, sans-serif; max-width: 600px;">
+                        <h1>TNG OS Email Test</h1>
+                        <p>Congratulations!</p>
+                        <p>Your TNG OS Resend integration is working.</p>
+                        <p><strong>TNG Boxing — Earned Not Given</strong></p>
+                    </div>
+                """,
+            }
+        )
+
+        return {
+            "success": True,
+            "message": "Test email submitted to Resend.",
+            "resend_response": response,
+        }
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Resend failed: {str(exc)}",
+        )
