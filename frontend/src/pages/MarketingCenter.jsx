@@ -117,6 +117,8 @@ export default function MarketingCenter() {
 
   const [generatedSocial, setGeneratedSocial] = useState("");
 
+  const [campaigns, setCampaigns] = useState([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
 
   const token = localStorage.getItem("token");
 
@@ -151,8 +153,47 @@ export default function MarketingCenter() {
     }
   }
 
+  async function loadCampaigns() {
+    setCampaignsLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API}/api/marketing/campaigns`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Campaign history could not be loaded."
+        );
+      }
+
+      const campaignList = Array.isArray(data)
+        ? data
+        : Array.isArray(data.campaigns)
+        ? data.campaigns
+        : [];
+
+      setCampaigns(campaignList);
+    } catch (err) {
+      console.error(err);
+      setError(
+        err.message || "Campaign history could not be loaded."
+      );
+    } finally {
+      setCampaignsLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadContacts();
+    loadCampaigns();
   }, []);
 async function syncAudiences() {
   setLoading(true);
@@ -366,6 +407,7 @@ async function saveEmailDraft() {
 
     setNotice("Email draft saved successfully.");
     setEmailDialogOpen(false);
+    await loadCampaigns();
   } catch (err) {
     console.error(err);
     setError(err.message);
@@ -458,6 +500,9 @@ async function saveAndSendEmail() {
       subject: "",
       body: "",
     });
+
+    await loadCampaigns();
+    setTab(5);
   } catch (err) {
     console.error(err);
     setError(
@@ -574,6 +619,61 @@ async function saveSmsDraft() {
       setAiLoading(false);
     }
   }
+
+  const emailCampaigns = campaigns.filter(
+    (campaign) =>
+      (campaign.campaign_type || campaign.type) === "email"
+  );
+
+  const totalRecipients = campaigns.reduce(
+    (sum, campaign) =>
+      sum + Number(campaign.recipient_count || 0),
+    0
+  );
+
+  const totalSent = campaigns.reduce(
+    (sum, campaign) =>
+      sum + Number(campaign.sent_count || 0),
+    0
+  );
+
+  const totalFailed = campaigns.reduce(
+    (sum, campaign) =>
+      sum + Number(campaign.failed_count || 0),
+    0
+  );
+
+  const deliveryRate = totalRecipients
+    ? ((totalSent / totalRecipients) * 100).toFixed(1)
+    : "0.0";
+
+  function formatCampaignDate(value) {
+    if (!value) return "—";
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? String(value)
+      : date.toLocaleString();
+  }
+
+  function campaignStatusColor(status) {
+    const value = String(status || "draft").toLowerCase();
+
+    if (["sent", "completed", "success"].includes(value)) {
+      return "success";
+    }
+
+    if (["failed", "error"].includes(value)) {
+      return "error";
+    }
+
+    if (["sending", "processing"].includes(value)) {
+      return "warning";
+    }
+
+    return "default";
+  }
+
   return (
     <Box>
       <Typography variant="h4" fontWeight={900}>
@@ -1034,6 +1134,213 @@ async function saveSmsDraft() {
     </CardContent>
   </Card>
 )}
+
+          {tab === 2 && (
+            <Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 2,
+                  flexWrap: "wrap",
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography variant="h5" fontWeight={900}>
+                    Email Campaigns
+                  </Typography>
+                  <Typography color="text.secondary">
+                    Create new email campaigns and review recent sends.
+                  </Typography>
+                </Box>
+
+                <Button
+                  variant="contained"
+                  startIcon={<Email />}
+                  onClick={() => setEmailDialogOpen(true)}
+                >
+                  New Email
+                </Button>
+              </Box>
+
+              {campaignsLoading ? (
+                <Box sx={{ py: 6, textAlign: "center" }}>
+                  <CircularProgress />
+                </Box>
+              ) : emailCampaigns.length === 0 ? (
+                <EmptyState
+                  title="No email campaigns yet"
+                  text="Create your first email campaign or refresh after sending."
+                  buttonText="Create Email"
+                  onClick={() => setEmailDialogOpen(true)}
+                />
+              ) : (
+                <CampaignTable
+                  campaigns={emailCampaigns.slice(0, 10)}
+                  formatDate={formatCampaignDate}
+                  statusColor={campaignStatusColor}
+                />
+              )}
+            </Box>
+          )}
+
+          {tab === 3 && (
+            <EmptyState
+              title="Text Campaigns"
+              text="SMS sending will remain disabled until consent, STOP, and HELP handling are connected. Drafts can still be created."
+              buttonText="Create Text Draft"
+              onClick={() => setSmsDialogOpen(true)}
+            />
+          )}
+
+          {tab === 4 && (
+            <Box>
+              <Typography variant="h5" fontWeight={900}>
+                Campaign Templates
+              </Typography>
+              <Typography color="text.secondary" sx={{ mb: 3 }}>
+                Start with a TNG campaign preset, then customize it with the AI Generator.
+              </Typography>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    md: "repeat(2, 1fr)",
+                    lg: "repeat(3, 1fr)",
+                  },
+                  gap: 2,
+                }}
+              >
+                {CAMPAIGN_PRESETS.map((preset) => (
+                  <Card key={preset.id} variant="outlined">
+                    <CardContent>
+                      <Typography variant="h6" fontWeight={900}>
+                        {preset.name}
+                      </Typography>
+                      <Typography
+                        color="text.secondary"
+                        sx={{ mt: 1, mb: 2 }}
+                      >
+                        {preset.prompt}
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          selectCampaignPreset(preset.id);
+                          setTab(1);
+                        }}
+                      >
+                        Use Template
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          {tab === 5 && (
+            <Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 2,
+                  flexWrap: "wrap",
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography variant="h5" fontWeight={900}>
+                    Campaign History
+                  </Typography>
+                  <Typography color="text.secondary">
+                    Sent, failed, and draft campaigns saved in TNG OS.
+                  </Typography>
+                </Box>
+
+                <Button
+                  variant="outlined"
+                  startIcon={<Sync />}
+                  onClick={loadCampaigns}
+                  disabled={campaignsLoading}
+                >
+                  Refresh History
+                </Button>
+              </Box>
+
+              {campaignsLoading ? (
+                <Box sx={{ py: 6, textAlign: "center" }}>
+                  <CircularProgress />
+                </Box>
+              ) : campaigns.length === 0 ? (
+                <EmptyState
+                  title="No campaign history found"
+                  text="Campaigns will appear here after they are saved or sent."
+                />
+              ) : (
+                <CampaignTable
+                  campaigns={campaigns}
+                  formatDate={formatCampaignDate}
+                  statusColor={campaignStatusColor}
+                />
+              )}
+            </Box>
+          )}
+
+          {tab === 6 && (
+            <Box>
+              <Typography variant="h5" fontWeight={900}>
+                Marketing Analytics
+              </Typography>
+              <Typography color="text.secondary" sx={{ mb: 3 }}>
+                Campaign totals currently recorded in TNG OS.
+              </Typography>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: "repeat(2, 1fr)",
+                    lg: "repeat(4, 1fr)",
+                  },
+                  gap: 2,
+                  mb: 3,
+                }}
+              >
+                <StatCard
+                  title="Total Campaigns"
+                  value={campaigns.length}
+                  icon={<Send />}
+                />
+                <StatCard
+                  title="Recipients"
+                  value={totalRecipients}
+                  icon={<Group />}
+                />
+                <StatCard
+                  title="Sent"
+                  value={totalSent}
+                  icon={<Email />}
+                />
+                <StatCard
+                  title="Delivery Rate"
+                  value={`${deliveryRate}%`}
+                  icon={<Sync />}
+                />
+              </Box>
+
+              <Alert severity={totalFailed > 0 ? "warning" : "success"}>
+                {totalSent} sent, {totalFailed} failed, and {totalRecipients} total recipient attempts are currently recorded.
+              </Alert>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -1272,6 +1579,96 @@ function StatCard({ title, value, icon }) {
   );
 }
 
+function CampaignTable({
+  campaigns,
+  formatDate,
+  statusColor,
+}) {
+  return (
+    <Box
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2,
+        overflowX: "auto",
+      }}
+    >
+      <Box sx={{ minWidth: 980 }}>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns:
+              "1.5fr 1.4fr 1fr 0.7fr 0.7fr 0.7fr 0.9fr",
+            gap: 1,
+            px: 2,
+            py: 1.25,
+            bgcolor: "action.hover",
+            fontWeight: 900,
+          }}
+        >
+          <span>Campaign</span>
+          <span>Date</span>
+          <span>Type</span>
+          <span>Recipients</span>
+          <span>Sent</span>
+          <span>Failed</span>
+          <span>Status</span>
+        </Box>
+
+        {campaigns.map((campaign) => (
+          <Box
+            key={campaign.id}
+            sx={{
+              display: "grid",
+              gridTemplateColumns:
+                "1.5fr 1.4fr 1fr 0.7fr 0.7fr 0.7fr 0.9fr",
+              gap: 1,
+              px: 2,
+              py: 1.25,
+              alignItems: "center",
+              borderTop: "1px solid",
+              borderColor: "divider",
+            }}
+          >
+            <Box>
+              <Typography fontWeight={800}>
+                {campaign.name || "Unnamed Campaign"}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {campaign.subject || "No subject"}
+              </Typography>
+            </Box>
+            <Typography>
+              {formatDate(
+                campaign.sent_at ||
+                  campaign.completed_at ||
+                  campaign.created_at
+              )}
+            </Typography>
+            <Typography sx={{ textTransform: "capitalize" }}>
+              {campaign.campaign_type || campaign.type || "—"}
+            </Typography>
+            <Typography>
+              {campaign.recipient_count ?? 0}
+            </Typography>
+            <Typography>
+              {campaign.sent_count ?? 0}
+            </Typography>
+            <Typography>
+              {campaign.failed_count ?? 0}
+            </Typography>
+            <Chip
+              size="small"
+              label={campaign.status || "draft"}
+              color={statusColor(campaign.status)}
+            />
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 function EmptyState({
   title,
   text,
@@ -1305,4 +1702,3 @@ function EmptyState({
     </Box>
   );
 }
- 
