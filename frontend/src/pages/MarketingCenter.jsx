@@ -86,6 +86,7 @@ export default function MarketingCenter() {
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -368,6 +369,102 @@ async function saveEmailDraft() {
   } catch (err) {
     console.error(err);
     setError(err.message);
+  }
+}
+
+async function saveAndSendEmail() {
+  if (selectedIds.length === 0) {
+    setError("Select at least one email contact.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Send this email campaign to ${selectedIds.length} selected contacts?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setEmailSending(true);
+  setError("");
+  setNotice("");
+
+  try {
+    const createResponse = await fetch(
+      `${API}/api/marketing/campaigns`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: emailCampaign.name,
+          campaign_type: "email",
+          subject: emailCampaign.subject,
+          message: emailCampaign.body,
+          contact_ids: selectedIds,
+        }),
+      }
+    );
+
+    const createData = await createResponse.json();
+
+    if (!createResponse.ok) {
+      throw new Error(
+        createData.detail || "Unable to create campaign."
+      );
+    }
+
+    const campaignId = createData.campaign?.id;
+
+    if (!campaignId) {
+      throw new Error(
+        "Campaign was saved, but no campaign ID was returned."
+      );
+    }
+
+    const sendResponse = await fetch(
+      `${API}/api/marketing/campaigns/${campaignId}/send`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const sendData = await sendResponse.json();
+
+    if (!sendResponse.ok) {
+      throw new Error(
+        sendData.detail || "Campaign could not be sent."
+      );
+    }
+
+    setNotice(
+      `Campaign completed: ${
+        sendData.sent_count || 0
+      } sent and ${
+        sendData.failed_count || 0
+      } failed.`
+    );
+
+    setEmailDialogOpen(false);
+
+    setEmailCampaign({
+      name: "",
+      subject: "",
+      body: "",
+    });
+  } catch (err) {
+    console.error(err);
+    setError(
+      err.message || "Campaign could not be sent."
+    );
+  } finally {
+    setEmailSending(false);
   }
 }
 
@@ -952,12 +1049,12 @@ async function saveSmsDraft() {
 
         <DialogContent>
           <Alert
-            severity="warning"
+            severity="info"
             sx={{ mb: 2 }}
           >
-            Sending will remain disabled until an email
-            provider, unsubscribe handling, and bounce
-            processing are connected.
+            Review your recipients, subject, and message carefully
+            before sending. Only email contacts who have agreed to
+            receive marketing messages.
           </Alert>
 
           <Typography sx={{ mb: 2 }}>
@@ -1009,26 +1106,49 @@ async function saveSmsDraft() {
           />
         </DialogContent>
 
-        <DialogActions>
-          <Button
-            onClick={() =>
-              setEmailDialogOpen(false)
-            }
-          >
-            Cancel
-          </Button>
+<DialogActions>
+    <Button
+        onClick={() => setEmailDialogOpen(false)}
+    >
+        Cancel
+    </Button>
 
-          <Button
-            variant="contained"
-            onClick={saveEmailDraft}
-            disabled={
-              !emailCampaign.subject.trim() ||
-              !emailCampaign.body.trim()
-            }
-          >
-            Save Draft
-          </Button>
-        </DialogActions>
+    <Button
+        variant="outlined"
+        onClick={saveEmailDraft}
+        disabled={
+            emailSending ||
+            !emailCampaign.name.trim() ||
+            !emailCampaign.subject.trim() ||
+            !emailCampaign.body.trim()
+        }
+    >
+        Save Draft
+    </Button>
+
+    <Button
+        variant="contained"
+        color="error"
+        startIcon={
+            emailSending ? (
+                <CircularProgress size={18} />
+            ) : (
+                <Send />
+            )
+        }
+        onClick={saveAndSendEmail}
+        disabled={
+            emailSending ||
+            selectedIds.length === 0 ||
+            !emailCampaign.name.trim() ||
+            !emailCampaign.subject.trim() ||
+            !emailCampaign.body.trim()
+        }
+    >
+        {emailSending ? "Sending..." : "Save & Send"}
+    </Button>
+
+</DialogActions>
       </Dialog>
 
       <Dialog
