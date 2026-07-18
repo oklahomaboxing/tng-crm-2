@@ -28,6 +28,7 @@ from .models import (
     Sale,
     CloverSetting,
     Lead,
+    WaiverSubmission,
     Attendance,
     MerchandiseCheckout,
     SecurityLog,
@@ -35,14 +36,24 @@ from .models import (
     MarketingCampaign,
     MarketingTemplate,
 )
-from .schemas import LoginIn, RepCreate, SaleCreate, LeadCreate
+from .schemas import (
+    LoginIn,
+    RepCreate,
+    SaleCreate,
+    LeadCreate,
+    WaiverSubmissionCreate,
+)
+
 from .auth import verify_password, hash_password, create_token, decode_token
 from .commission import commission_rate
 from sqlalchemy import or_
 import sqlite3
 import pandas as pd
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+client = None
+if OPENAI_API_KEY:
+    client = OpenAI(api_key=OPENAI_API_KEY)
 resend.api_key = os.getenv("RESEND_API_KEY")
 
 Base.metadata.create_all(bind=engine)
@@ -66,6 +77,8 @@ def run_sqlite_migrations():
     add_column_if_missing("members", "assigned_coach", "VARCHAR")
     add_column_if_missing("members", "waiver_signed", "BOOLEAN DEFAULT 0")
 
+
+
     add_column_if_missing("sales", "clover_checkout_id", "VARCHAR")
     add_column_if_missing("sales", "transaction_status", "VARCHAR")
     add_column_if_missing("sales", "refunded", "BOOLEAN DEFAULT 0")
@@ -78,6 +91,14 @@ def run_sqlite_migrations():
     add_column_if_missing("leads", "paid_at", "DATETIME")
     add_column_if_missing("leads", "converted_at", "DATETIME")
     add_column_if_missing("leads", "conversion_source", "VARCHAR")
+    add_column_if_missing("members", "address", "VARCHAR")
+    add_column_if_missing("members", "city", "VARCHAR")
+    add_column_if_missing("members", "state", "VARCHAR")
+    add_column_if_missing("members", "zip_code", "VARCHAR")
+    add_column_if_missing("members", "address", "VARCHAR")
+    add_column_if_missing("members", "city", "VARCHAR")
+    add_column_if_missing("members", "state", "VARCHAR")
+    add_column_if_missing("members", "zip_code", "VARCHAR")
     add_column_if_missing("members", "digital_member_id", "VARCHAR")
     add_column_if_missing("members", "qr_code", "VARCHAR")
     add_column_if_missing("members", "photo_url", "VARCHAR")
@@ -824,12 +845,58 @@ def leaderboard(db: Session = Depends(get_db), user: User = Depends(current_user
     rows = db.query(SalesRep.id, User.name, func.count(Sale.id), func.sum(Sale.amount)).join(User).outerjoin(Sale).filter((Sale.id == None) | ((extract('month', Sale.sale_date) == now.month) & (extract('year', Sale.sale_date) == now.year))).group_by(SalesRep.id, User.name).all()
     return [{"rep_id": r[0], "name": r[1], "sales": r[2] or 0, "revenue": float(r[3] or 0), "rate": commission_rate(r[2] or 0)} for r in rows]
 
+@app.get("/api/join/front-desk")
+def front_desk_join_page_data(db: Session = Depends(get_db)):
+    products = (
+        db.query(MembershipProduct)
+        .filter(
+            MembershipProduct.active == True,
+            MembershipProduct.is_membership == True,
+        )
+        .order_by(MembershipProduct.name.asc())
+        .all()
+    )
+
+    return {
+        "rep_id": None,
+        "rep_name": "TNG Boxing",
+        "clover_link": "",
+        "registration_source": "front_desk",
+        "products": products,
+    }
+
+
 @app.get("/api/join/{slug}")
 def join_page_data(slug: str, db: Session = Depends(get_db)):
-    rep = db.query(SalesRep).filter(SalesRep.referral_slug == slug).first()
+    rep = (
+        db.query(SalesRep)
+        .filter(SalesRep.referral_slug == slug)
+        .first()
+    )
+
     if not rep:
-        raise HTTPException(status_code=404, detail="Rep link not found")
-    return {"rep_id": rep.id, "rep_name": rep.user.name, "clover_link": rep.clover_link, "products": db.query(MembershipProduct).filter(MembershipProduct.active == True).all()}
+        raise HTTPException(
+            status_code=404,
+            detail="Rep link not found",
+        )
+
+    products = (
+        db.query(MembershipProduct)
+        .filter(
+            MembershipProduct.active == True,
+            MembershipProduct.is_membership == True,
+        )
+        .order_by(MembershipProduct.name.asc())
+        .all()
+    )
+
+    return {
+        "rep_id": rep.id,
+        "rep_name": rep.user.name,
+        "clover_link": rep.clover_link,
+        "registration_source": "sales_rep",
+        "products": products,
+    }
 
 @app.get("/api/members")
 def list_members(
@@ -1328,13 +1395,24 @@ def create_lead(data: LeadCreate, db: Session = Depends(get_db)):
     rep = None
 
     if data.referral_slug:
-        rep = db.query(SalesRep).filter(SalesRep.referral_slug == data.referral_slug).first()
+        rep = (
+            db.query(SalesRep)
+            .filter(SalesRep.referral_slug == data.referral_slug)
+            .first()
+        )
 
     lead = Lead(
-        first_name=data.first_name,
-        last_name=data.last_name,
-        email=data.email,
-        phone=data.phone,
+        first_name=data.first_name.strip(),
+        last_name=data.last_name.strip(),
+        email=data.email.strip().lower(),
+        phone=(data.phone or "").strip(),
+
+        # NEW ADDRESS FIELDS
+        address=(data.address or "").strip(),
+        city=(data.city or "").strip(),
+        state=(data.state or "").strip().upper(),
+        zip_code=(data.zip_code or "").strip(),
+
         product_id=data.product_id,
         sales_rep_id=rep.id if rep else None,
         referral_slug=data.referral_slug,
@@ -1350,7 +1428,6 @@ def create_lead(data: LeadCreate, db: Session = Depends(get_db)):
         "status": lead.status,
         "message": "Lead created",
     }
-
 @app.get("/api/leads")
 def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)):
     leads = db.query(Lead).order_by(Lead.created_at.desc()).all()
@@ -1373,6 +1450,162 @@ def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)
         })
 
     return results
+WAIVER_VERSION = "2026-07-18-v1"
+
+WAIVER_TEXT = """
+I understand that boxing, fitness training, sparring, strength training,
+conditioning, and related activities involve inherent risks of injury.
+
+I voluntarily choose to participate and accept all risks associated with
+participation. I confirm that the participant is physically able to take
+part in these activities and will disclose any relevant medical condition
+to TNG Boxing staff.
+
+I release and hold harmless TNG Boxing, TNG Foundation, their owners,
+employees, coaches, volunteers, representatives, and affiliates from claims
+arising from ordinary risks associated with participation, except where
+prohibited by law.
+
+I authorize TNG Boxing staff to contact emergency services when reasonably
+necessary. I understand that I am responsible for medical expenses incurred
+for the participant.
+
+By signing electronically, I confirm that I have read, understood, and
+accepted this waiver.
+""".strip()
+
+
+@app.post("/api/waiver-submissions")
+def create_waiver_submission(
+    data: WaiverSubmissionCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    lead = db.query(Lead).filter(Lead.id == data.lead_id).first()
+
+    if not lead:
+        raise HTTPException(
+            status_code=404,
+            detail="Lead not found",
+        )
+
+    if not data.waiver_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Waiver acceptance is required",
+        )
+
+    if not data.medical_acknowledgment:
+        raise HTTPException(
+            status_code=400,
+            detail="Medical acknowledgment is required",
+        )
+
+    if not data.signature_name.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Electronic signature is required",
+        )
+
+    existing = (
+        db.query(WaiverSubmission)
+        .filter(WaiverSubmission.lead_id == lead.id)
+        .order_by(WaiverSubmission.submitted_at.desc())
+        .first()
+    )
+
+    now = datetime.utcnow()
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    if existing:
+        existing.participant_first_name = data.participant_first_name.strip()
+        existing.participant_last_name = data.participant_last_name.strip()
+        existing.participant_date_of_birth = data.participant_date_of_birth
+        existing.guardian_name = (
+            data.guardian_name.strip()
+            if data.guardian_name
+            else None
+        )
+        existing.signer_relationship = data.signer_relationship
+        existing.emergency_contact_name = data.emergency_contact_name.strip()
+        existing.emergency_contact_phone = data.emergency_contact_phone.strip()
+        existing.waiver_accepted = data.waiver_accepted
+        existing.medical_acknowledgment = data.medical_acknowledgment
+        existing.waiver_version = WAIVER_VERSION
+        existing.waiver_text_snapshot = WAIVER_TEXT
+        existing.signature_name = data.signature_name.strip()
+        existing.signature_data = data.signature_data
+        existing.photo_release = data.photo_release
+        existing.sms_consent = data.sms_consent
+        existing.sms_consent_at = now if data.sms_consent else None
+        existing.sms_disclosure_version = (
+            WAIVER_VERSION if data.sms_consent else None
+        )
+        existing.email_consent = data.email_consent
+        existing.email_consent_at = now if data.email_consent else None
+        existing.email_disclosure_version = (
+            WAIVER_VERSION if data.email_consent else None
+        )
+        existing.signed_at = now
+        existing.submitted_at = now
+        existing.ip_address = ip_address
+        existing.user_agent = user_agent
+
+        waiver = existing
+    else:
+        waiver = WaiverSubmission(
+            lead_id=lead.id,
+            participant_first_name=data.participant_first_name.strip(),
+            participant_last_name=data.participant_last_name.strip(),
+            participant_date_of_birth=data.participant_date_of_birth,
+            guardian_name=(
+                data.guardian_name.strip()
+                if data.guardian_name
+                else None
+            ),
+            signer_relationship=data.signer_relationship,
+            emergency_contact_name=data.emergency_contact_name.strip(),
+            emergency_contact_phone=data.emergency_contact_phone.strip(),
+            waiver_accepted=data.waiver_accepted,
+            medical_acknowledgment=data.medical_acknowledgment,
+            waiver_version=WAIVER_VERSION,
+            waiver_text_snapshot=WAIVER_TEXT,
+            signature_name=data.signature_name.strip(),
+            signature_data=data.signature_data,
+            photo_release=data.photo_release,
+            sms_consent=data.sms_consent,
+            sms_consent_at=now if data.sms_consent else None,
+            sms_disclosure_version=(
+                WAIVER_VERSION if data.sms_consent else None
+            ),
+            email_consent=data.email_consent,
+            email_consent_at=now if data.email_consent else None,
+            email_disclosure_version=(
+                WAIVER_VERSION if data.email_consent else None
+            ),
+            signed_at=now,
+            submitted_at=now,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            submission_uuid=str(uuid.uuid4()),
+        )
+
+        db.add(waiver)
+
+    lead.status = "waiver_completed"
+    db.commit()
+    db.refresh(waiver)
+
+    return {
+        "id": waiver.id,
+        "lead_id": waiver.lead_id,
+        "status": "completed",
+        "submission_uuid": waiver.submission_uuid,
+        "message": "Waiver and consent information saved",
+    }
+
+
 @app.post("/api/clover/create-checkout/{lead_id}")
 def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
@@ -2392,31 +2625,151 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
 
     product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
 
-    existing_member = db.query(Member).filter(Member.email == lead.email).first()
-    
+    # Prevent duplicate members by matching email first, then phone.
+    normalized_email = (lead.email or "").strip().lower()
+    normalized_phone = "".join(
+        character for character in (lead.phone or "") if character.isdigit()
+    )
+
+    existing_member = None
+
+    if normalized_email:
+        existing_member = (
+            db.query(Member)
+            .filter(Member.email == normalized_email)
+            .first()
+        )
+
+    if not existing_member and normalized_phone:
+        possible_phone_matches = (
+            db.query(Member)
+            .filter(Member.phone.isnot(None))
+            .all()
+        )
+
+        existing_member = next(
+            (
+                possible_member
+                for possible_member in possible_phone_matches
+                if "".join(
+                    character
+                    for character in (possible_member.phone or "")
+                    if character.isdigit()
+                ) == normalized_phone
+            ),
+            None,
+        )
+
     if existing_member:
         member = existing_member
+
+        # Update the existing member with the newest registration details.
+        member.first_name = lead.first_name or member.first_name
+        member.last_name = lead.last_name or member.last_name
+        member.email = normalized_email or member.email
+        member.phone = lead.phone or member.phone
+
+        member.address = lead.address or member.address
+        member.city = lead.city or member.city
+        member.state = lead.state or member.state
+        member.zip_code = lead.zip_code or member.zip_code
+
+        member.status = "active"
+        member.membership_status = "active"
+        member.membership_type = (
+            product.name
+            if product
+            else member.membership_type or "Membership"
+        )
+
+        product_name = (product.name if product else "").lower()
+        start_date = datetime.utcnow()
+
+        member.membership_start = start_date
+
+        if (
+            "annual" in product_name
+            or "yearly" in product_name
+            or "year" in product_name
+            or "$999" in product_name
+        ):
+            member.membership_end = start_date + timedelta(days=365)
+
+        elif (
+            "3 month" in product_name
+            or "3-month" in product_name
+            or "three month" in product_name
+            or "$300" in product_name
+        ):
+            member.membership_end = start_date + timedelta(days=90)
+
+        else:
+            member.membership_end = start_date + timedelta(days=30)
+
     else:
+        start_date = datetime.utcnow()
+
+        if product:
+            product_name = (product.name or "").lower()
+        else:
+            product_name = ""
+
+        if (
+            "annual" in product_name
+            or "yearly" in product_name
+            or "year" in product_name
+            or "$999" in product_name
+        ):
+            membership_end = start_date + timedelta(days=365)
+
+        elif (
+            "3 month" in product_name
+            or "3-month" in product_name
+            or "three month" in product_name
+            or "$300" in product_name
+        ):
+            membership_end = start_date + timedelta(days=90)
+
+        else:
+            membership_end = start_date + timedelta(days=30)
+
         member = Member(
             first_name=lead.first_name,
             last_name=lead.last_name,
-            email=lead.email,
+            email=normalized_email or lead.email,
             phone=lead.phone,
+
+            address=lead.address,
+            city=lead.city,
+            state=lead.state,
+            zip_code=lead.zip_code,
+
             status="active",
             membership_status="active",
-            membership_start=datetime.utcnow(),
+            membership_start=start_date,
+            membership_end=membership_end,
             membership_type=product.name if product else "Membership",
             waiver_signed=False,
         )
 
         db.add(member)
-        db.commit()
-        db.refresh(member)
+        db.flush()
 
+    # Create missing membership credentials for new or existing members.
+    if not member.member_number:
         member.member_number = f"TNG-{member.id:06d}"
+
+    if not member.digital_member_id:
         member.digital_member_id = generate_digital_member_id()
+
+    if not member.barcode:
         member.barcode = generate_barcode(member.member_number)
+
+    if not member.qr_code:
         member.qr_code = generate_qr_code(member.member_number)
+
+    db.commit()
+    db.refresh(member)
 
     existing_sale = db.query(Sale).filter(
         Sale.clover_checkout_id == lead.clover_checkout_id
