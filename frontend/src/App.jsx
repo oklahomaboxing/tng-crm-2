@@ -252,8 +252,8 @@ function App() {
   }, [token, role]);
 
   if (paymentStatus) return <PaymentMessage status={paymentStatus} />;
-  if (params.has("join")) return <JoinPage />;
-
+if (params.has("join")) return <JoinPage />;
+if (window.location.pathname === "/register") return <JoinPage />;
   if (!token) {
     return (
       <Box

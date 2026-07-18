@@ -1,4 +1,14 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    Date,
+    DateTime,
+    ForeignKey,
+    Boolean,
+    Text,
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -138,6 +148,57 @@ class Lead(Base):
     paid_at = Column(DateTime, nullable=True)
     converted_at = Column(DateTime, nullable=True)
     conversion_source = Column(String, default="qr_referral")
+
+class WaiverSubmission(Base):
+    __tablename__ = "waiver_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    lead_id = Column(
+        Integer,
+        ForeignKey("leads.id"),
+        nullable=True,
+        index=True,
+    )
+
+    participant_first_name = Column(String, nullable=False)
+    participant_last_name = Column(String, nullable=False)
+    participant_date_of_birth = Column(Date, nullable=False)
+
+    guardian_name = Column(String, nullable=True)
+    signer_relationship = Column(String, nullable=False, default="self")
+
+    emergency_contact_name = Column(String, nullable=False)
+    emergency_contact_phone = Column(String, nullable=False)
+
+    waiver_accepted = Column(Boolean, nullable=False, default=False)
+    medical_acknowledgment = Column(Boolean, nullable=False, default=False)
+
+    waiver_version = Column(String, nullable=False)
+    waiver_text_snapshot = Column(Text, nullable=False)
+
+    signature_name = Column(String, nullable=False)
+    signature_data = Column(Text, nullable=True)
+
+    photo_release = Column(Boolean, nullable=False, default=False)
+
+    sms_consent = Column(Boolean, nullable=False, default=False)
+    sms_consent_at = Column(DateTime, nullable=True)
+    sms_disclosure_version = Column(String, nullable=True)
+
+    email_consent = Column(Boolean, nullable=False, default=False)
+    email_consent_at = Column(DateTime, nullable=True)
+    email_disclosure_version = Column(String, nullable=True)
+
+    signed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    submitted_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(Text, nullable=True)
+
+    submission_uuid = Column(String, unique=True, nullable=False, index=True)
+
+    lead = relationship("Lead")
 
 class Attendance(Base):
     __tablename__ = "attendance"
