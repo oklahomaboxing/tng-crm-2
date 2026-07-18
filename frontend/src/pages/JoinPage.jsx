@@ -47,8 +47,8 @@ export default function JoinPage() {
           last_name: form.last_name,
           email: form.email,
           phone: form.phone,
-          product_id: selectedProduct,
-          referral_slug: slug,
+          product_id: selectedProduct ? Number(selectedProduct) : null,
+          referral_slug: slug || null,
         }),
       });
 
