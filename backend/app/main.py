@@ -91,10 +91,10 @@ def run_sqlite_migrations():
     add_column_if_missing("leads", "paid_at", "DATETIME")
     add_column_if_missing("leads", "converted_at", "DATETIME")
     add_column_if_missing("leads", "conversion_source", "VARCHAR")
-    add_column_if_missing("members", "address", "VARCHAR")
-    add_column_if_missing("members", "city", "VARCHAR")
-    add_column_if_missing("members", "state", "VARCHAR")
-    add_column_if_missing("members", "zip_code", "VARCHAR")
+    add_column_if_missing("leads", "address", "VARCHAR")
+    add_column_if_missing("leads", "city", "VARCHAR")
+    add_column_if_missing("leads", "state", "VARCHAR")
+    add_column_if_missing("leads", "zip_code", "VARCHAR")
     add_column_if_missing("members", "address", "VARCHAR")
     add_column_if_missing("members", "city", "VARCHAR")
     add_column_if_missing("members", "state", "VARCHAR")
@@ -1675,17 +1675,168 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         )
 
     lead.status = "started_checkout"
-    lead.clover_checkout_id = checkout.get("id") or checkout.get("checkoutSessionId")
-    lead.clover_order_id = checkout.get("id") or checkout.get("checkoutSessionId")
+
+    checkout_id = (
+        checkout.get("id")
+        or checkout.get("checkoutSessionId")
+    )
+
+    lead.clover_checkout_id = checkout_id
+    lead.clover_order_id = checkout_id
+
     db.commit()
 
-    checkout_url = checkout.get("href") or checkout.get("url") or checkout.get("checkoutUrl")
+    checkout_url = (
+        checkout.get("href")
+        or checkout.get("url")
+        or checkout.get("checkoutUrl")
+        or checkout.get("checkout_url")
+        or checkout.get("paymentLink")
+    )
+
+    if not checkout_url:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "Clover did not return a checkout URL",
+                "clover_response": checkout,
+            },
+        )
 
     return {
+        "success": True,
         "lead_id": lead.id,
+        "checkout_id": checkout_id,
         "checkout_url": checkout_url,
-        "checkout": checkout,
     }
+
+@app.post("/api/clover/create-checkout/{lead_id}")
+def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    product = (
+        db.query(MembershipProduct)
+        .filter(MembershipProduct.id == lead.product_id)
+        .first()
+    )
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Membership product not found",
+        )
+
+    merchant_id = os.getenv("CLOVER_MERCHANT_ID")
+    api_token = os.getenv("CLOVER_API_TOKEN")
+    clover_env = os.getenv("CLOVER_ENV", "production")
+
+    if not merchant_id or not api_token:
+        raise HTTPException(
+            status_code=500,
+            detail="Clover credentials missing",
+        )
+
+    base_url = (
+        "https://api.clover.com"
+        if clover_env == "production"
+        else "https://apisandbox.dev.clover.com"
+    )
+
+    payload = {
+        "customer": {
+            "firstName": lead.first_name,
+            "lastName": lead.last_name,
+            "email": lead.email,
+            "phoneNumber": lead.phone or "",
+        },
+        "shoppingCart": {
+            "lineItems": [
+                {
+                    "name": product.name,
+                    "price": int(product.price * 100),
+                    "unitQty": 1,
+                }
+            ]
+        },
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "X-Clover-Merchant-Id": merchant_id,
+        "Content-Type": "application/json",
+    }
+
+    response = requests.post(
+        f"{base_url}/invoicingcheckoutservice/v1/checkouts",
+        json=payload,
+        headers=headers,
+        timeout=20,
+    )
+
+    print("========== CLOVER RESPONSE ==========")
+    print(response.status_code)
+    print(response.text)
+    print("=====================================")
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clover error {response.status_code}: {response.text}",
+        )
+
+    try:
+        checkout = response.json()
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Clover returned non-JSON response: "
+                f"{response.status_code} {response.text}"
+            ),
+        )
+
+    lead.status = "started_checkout"
+
+    checkout_id = (
+        checkout.get("id")
+        or checkout.get("checkoutSessionId")
+    )
+
+    lead.clover_checkout_id = checkout_id
+    lead.clover_order_id = checkout_id
+
+    db.commit()
+    db.refresh(lead)
+
+    checkout_url = (
+        checkout.get("href")
+        or checkout.get("url")
+        or checkout.get("checkoutUrl")
+        or checkout.get("checkout_url")
+        or checkout.get("paymentLink")
+    )
+
+    print("Checkout URL:", checkout_url)
+    print("Full Clover Response:", checkout)
+
+    if not checkout_url:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "Clover did not return a checkout URL",
+                "clover_response": checkout,
+            },
+        )
+
+    return {
+        "success": True,
+        "lead_id": lead.id,
+        "checkout_id": checkout_id,
+        "checkout_url": checkout_url,
+    }
+
+
 def categorize_clover_product(name):
     if not name:
         return "other"
@@ -1725,7 +1876,6 @@ def categorize_clover_product(name):
         return "membership"
 
     return "other"
-
 @app.post("/api/clover/sync-products")
 def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
