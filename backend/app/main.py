@@ -1606,109 +1606,6 @@ def create_waiver_submission(
     }
 
 
-@app.post("/api/clover/create-checkout/{lead_id}")
-def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
-
-    product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Membership product not found")
-
-    merchant_id = os.getenv("CLOVER_MERCHANT_ID")
-    api_token = os.getenv("CLOVER_API_TOKEN")
-    clover_env = os.getenv("CLOVER_ENV", "production")
-
-    if not merchant_id or not api_token:
-        raise HTTPException(status_code=500, detail="Clover credentials missing")
-
-    base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
-    payload = {
-        "customer": {
-            "firstName": lead.first_name,
-            "lastName": lead.last_name,
-            "email": lead.email,
-            "phoneNumber": lead.phone or "",
-        },
-
-        "shoppingCart": {
-            "lineItems": [
-                {
-                    "name": product.name,
-                    "price": int(product.price * 100),
-                    "unitQty": 1,
-                }
-            ]
-        },
-      
-    }
-
-    headers = {
-        "Authorization": f"Bearer {api_token}",
-        "X-Clover-Merchant-Id": merchant_id,
-        "Content-Type": "application/json",
-    }
-    response = requests.post(
-        f"{base_url}/invoicingcheckoutservice/v1/checkouts",
-        json=payload,
-        headers=headers,
-        timeout=20,
-    )
-    print("========== CLOVER RESPONSE ==========")
-    print(response.status_code)
-    print(response.text)
-    print("=====================================")
-
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Clover error {response.status_code}: {response.text}"
-        )
-
-    try:
-        checkout = response.json()
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Clover returned non-JSON response: {response.status_code} {response.text}"
-        )
-
-    lead.status = "started_checkout"
-
-    checkout_id = (
-        checkout.get("id")
-        or checkout.get("checkoutSessionId")
-    )
-
-    lead.clover_checkout_id = checkout_id
-    lead.clover_order_id = checkout_id
-
-    db.commit()
-
-    checkout_url = (
-        checkout.get("href")
-        or checkout.get("url")
-        or checkout.get("checkoutUrl")
-        or checkout.get("checkout_url")
-        or checkout.get("paymentLink")
-    )
-
-    if not checkout_url:
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "message": "Clover did not return a checkout URL",
-                "clover_response": checkout,
-            },
-        )
-
-    return {
-        "success": True,
-        "lead_id": lead.id,
-        "checkout_id": checkout_id,
-        "checkout_url": checkout_url,
-    }
 
 @app.post("/api/clover/create-checkout/{lead_id}")
 def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
@@ -2730,6 +2627,38 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     checkout_id = payload.get("checkoutId") or payload.get("checkoutSessionId") or payload.get("orderId")
     hosted_checkout_id = payload.get("data") or payload.get("Data") or checkout_id
     webhook_status = str(payload.get("status") or payload.get("Status") or "").upper()
+    event_type_upper = str(event_type).upper()
+
+    if event_type_upper != "PAYMENT":
+        return {
+            "received": True,
+            "message": f"Ignored non-payment event: {event_type}",
+        }
+
+    if webhook_status in ["DECLINED", "FAILED"]:
+        matching_checkout_id = str(hosted_checkout_id or checkout_id or "")
+
+        if matching_checkout_id:
+            failed_lead = db.query(Lead).filter(
+                (Lead.clover_checkout_id == matching_checkout_id)
+                | (Lead.clover_order_id == matching_checkout_id)
+            ).first()
+
+            if failed_lead:
+                failed_lead.status = "payment_failed"
+                db.commit()
+
+        return {
+            "received": True,
+            "message": "Payment was not approved",
+            "status": webhook_status,
+        }
+
+    if webhook_status != "APPROVED":
+        return {
+            "received": True,
+            "message": f"Ignored unsupported payment status: {webhook_status}",
+        }
 
     merchandise_checkout = None
     if hosted_checkout_id:
@@ -2758,19 +2687,21 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
 
     lead = None
 
-    if checkout_id:
+    matching_checkout_id = str(hosted_checkout_id or checkout_id or "")
+
+    if matching_checkout_id:
         lead = db.query(Lead).filter(
-            (Lead.clover_checkout_id == checkout_id) |
-            (Lead.clover_order_id == checkout_id)
+            (Lead.clover_checkout_id == matching_checkout_id)
+            | (Lead.clover_order_id == matching_checkout_id)
         ).first()
 
-    if not lead:
-        lead = db.query(Lead).filter(Lead.status == "started_checkout").order_by(Lead.created_at.desc()).first()
+
 
     if not lead:
         return {
             "received": True,
-            "message": "No matching lead found"
+            "message": "No matching lead found",
+            "checkout_id": matching_checkout_id,
         }
 
     product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
@@ -2835,53 +2766,13 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         product_name = (product.name if product else "").lower()
         start_date = datetime.utcnow()
 
-        member.membership_start = start_date
-
-        if (
-            "annual" in product_name
-            or "yearly" in product_name
-            or "year" in product_name
-            or "$999" in product_name
-        ):
-            member.membership_end = start_date + timedelta(days=365)
-
-        elif (
-            "3 month" in product_name
-            or "3-month" in product_name
-            or "three month" in product_name
-            or "$300" in product_name
-        ):
-            member.membership_end = start_date + timedelta(days=90)
-
-        else:
-            member.membership_end = start_date + timedelta(days=30)
-
-    else:
-        start_date = datetime.utcnow()
 
         if product:
-            product_name = (product.name or "").lower()
-        else:
-            product_name = ""
-
-        if (
-            "annual" in product_name
-            or "yearly" in product_name
-            or "year" in product_name
-            or "$999" in product_name
-        ):
-            membership_end = start_date + timedelta(days=365)
-
-        elif (
-            "3 month" in product_name
-            or "3-month" in product_name
-            or "three month" in product_name
-            or "$300" in product_name
-        ):
-            membership_end = start_date + timedelta(days=90)
-
-        else:
-            membership_end = start_date + timedelta(days=30)
+            apply_membership(
+                member=member,
+                product=product,
+                purchase_date=datetime.utcnow(),
+            )
 
         member = Member(
             first_name=lead.first_name,
