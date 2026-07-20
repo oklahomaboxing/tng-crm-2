@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import os
-load_dotenv()
+load_dotenv(override=True)
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -20,6 +20,7 @@ from fastapi import UploadFile, File
 import shutil
 from sqlalchemy import text
 from .database import Base, engine, get_db
+from .services.sms_service import send_sms
 from .models import (
     User,
     SalesRep,
@@ -4512,3 +4513,13 @@ def send_test_email():
             status_code=500,
             detail=f"Resend failed: {str(exc)}",
         )
+@app.get("/test-sms")
+def test_sms():
+    result = send_sms(
+        to_phone="+16512390916",
+        message="🎉 TNG OS is now connected to Twilio!"
+    )
+    return {
+        "success": True,
+        "result": result
+    }
