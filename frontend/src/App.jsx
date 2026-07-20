@@ -128,12 +128,14 @@ function App() {
   const params = new URLSearchParams(window.location.search);
   const paymentStatus = params.get("payment");
 
-  const [email, setEmail] = useState("admin@tngboxinggym.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [token, setToken] = useState(localStorage.getItem("token") || "");
-  const [role, setRole] = useState(localStorage.getItem("role") || "admin");
+  const [role, setRole] = useState(localStorage.getItem("role") || "");
   const [userName, setUserName] = useState(localStorage.getItem("name") || "");
-  const [page, setPage] = useState(() => landingPageForRole(localStorage.getItem("role") || "admin"));
+  const [page, setPage] = useState(() =>
+    landingPageForRole(localStorage.getItem("role") || "")
+  );
   const [dash, setDash] = useState(null);
   const [reps, setReps] = useState([]);
   const [leader, setLeader] = useState([]);
@@ -237,13 +239,17 @@ function App() {
 
   function logout() {
     localStorage.clear();
+
+    setEmail("");
+    setPassword("");
     setToken("");
-    setRole("admin");
+    setRole("");
     setUserName("");
     setPage("Dashboard");
     setDash(null);
     setReps([]);
     setLeader([]);
+    setQrCodes({});
     setMsg("");
   }
 
@@ -300,35 +306,69 @@ if (window.location.pathname === "/register") return <JoinPage />;
                 Access TNG Boxing operations.
               </Typography>
 
-              <Stack spacing={2}>
-                {msg && <Alert severity="error">{msg}</Alert>}
-                <TextField
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  fullWidth
-                />
-                <TextField
-                  label="Password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") login();
-                  }}
-                  fullWidth
-                />
-                <Button
-                  variant="contained"
-                  size="large"
-                  onClick={login}
-                  disabled={loginLoading}
-                  fullWidth
-                >
-                  {loginLoading ? <CircularProgress size={24} color="inherit" /> : "Login"}
-                </Button>
-              </Stack>
+              <form
+                autoComplete="username"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  login();
+                }}
+              >
+                <Stack spacing={2}>
+                  {msg && <Alert severity="error">{msg}</Alert>}
+
+                  <TextField
+                    id="tng-login-email"
+                    name="tng-login-email"
+                    label="Email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    autoComplete="off"
+                    fullWidth
+                    required
+                    inputProps={{
+                      autoComplete: "off",
+                      spellCheck: false,
+                      autoCapitalize: "none",
+                    }}
+                  />
+
+                  <TextField
+                    id="tng-login-password"
+                    name="tng-login-password"
+                    label="Password"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete="current-password"
+                    fullWidth
+                    required
+                    inputProps={{
+                      autoComplete: "new-password",
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        login();
+                      }
+                    }}
+                  />
+
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    size="large"
+                    disabled={loginLoading}
+                    fullWidth
+                  >
+                    {loginLoading ? (
+                      <CircularProgress size={24} color="inherit" />
+                    ) : (
+                      "Login"
+                    )}
+                  </Button>
+                </Stack>
+              </form>
             </CardContent>
           </Card>
         </Box>
