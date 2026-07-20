@@ -1,5 +1,8 @@
 from dotenv import load_dotenv
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 load_dotenv(override=True)
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +21,15 @@ import html
 from fastapi.staticfiles import StaticFiles
 from fastapi import UploadFile, File
 import shutil
+import re
+
+from pydantic import BaseModel, EmailStr
+
+from .services.password_reset_service import (
+    create_password_reset_token,
+    send_password_reset_email,
+    verify_password_reset_token,
+)
 from sqlalchemy import text
 from .database import Base, engine, get_db
 from .services.sms_service import send_sms
@@ -192,7 +204,36 @@ def seed_admin():
             db.commit()
     finally:
         db.close()
+def validate_new_password(password: str) -> None:
+    if len(password) < 12:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least 12 characters.",
+        )
 
+    if not re.search(r"[A-Z]", password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must include an uppercase letter.",
+        )
+
+    if not re.search(r"[a-z]", password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must include a lowercase letter.",
+        )
+
+    if not re.search(r"\d", password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must include a number.",
+        )
+
+    if not re.search(r"[^A-Za-z0-9]", password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must include a symbol.",
+        )
 
 Base.metadata.create_all(bind=engine)
 def ensure_security_schema():
@@ -260,6 +301,7 @@ def ensure_security_schema():
         connection.commit()
     finally:
         connection.close()
+
 
 def current_user(
     authorization: str = Header(default=""),
@@ -384,6 +426,111 @@ def login(
             "role": user.role,
         },
     }
+@app.post("/api/auth/forgot-password")
+def forgot_password(
+    data: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    generic_response = {
+        "message": (
+            "If an account exists for that email, "
+            "a password reset link has been sent."
+        )
+    }
+
+    normalized_email = data.email.strip().lower()
+
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == normalized_email)
+        .first()
+    )
+
+    if not user or user.active is False:
+        return generic_response
+
+    try:
+        reset_token = create_password_reset_token(
+            user_id=user.id,
+            password_hash=user.password_hash,
+        )
+
+        send_password_reset_email(
+            recipient_email=user.email,
+            recipient_name=user.name or "",
+            token=reset_token,
+        )
+    except Exception:
+        logger.exception(
+            "Password reset email failed for user ID %s",
+            user.id,
+        )
+
+    return generic_response
+
+@app.post("/api/auth/reset-password")
+def reset_password(
+    data: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    if data.password != data.confirm_password:
+        raise HTTPException(
+            status_code=400,
+            detail="Passwords do not match.",
+        )
+
+    validate_new_password(data.password)
+
+    try:
+        encoded_payload = data.token.split(".", 1)[0]
+
+        padding = "=" * (-len(encoded_payload) % 4)
+
+        token_payload = json.loads(
+            base64.urlsafe_b64decode(
+                encoded_payload + padding
+            ).decode("utf-8")
+        )
+
+        user_id = int(token_payload.get("user_id"))
+    except (ValueError, TypeError, json.JSONDecodeError):
+        raise HTTPException(
+            status_code=400,
+            detail="The password reset link is invalid or expired.",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail="The password reset link is invalid or expired.",
+        )
+
+    verified_payload = verify_password_reset_token(
+        token=data.token,
+        password_hash=user.password_hash,
+    )
+
+    if not verified_payload:
+        raise HTTPException(
+            status_code=400,
+            detail="The password reset link is invalid or expired.",
+        )
+
+    user.password_hash = hash_password(data.password)
+    user.failed_login_attempts = 0
+    user.locked_until = None
+
+    db.commit()
+
+    return {
+        "message": (
+            "Your password was reset successfully. "
+            "You may now sign in."
+        )
+    }
+
 @app.get("/api/security/overview")
 def security_overview(
     db: Session = Depends(get_db),
@@ -4154,7 +4301,14 @@ from pydantic import BaseModel
 
 class MarketingPrompt(BaseModel):
     prompt: str
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
 
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+    confirm_password: str
 
 @app.post("/api/marketing/generate")
 def generate_marketing(
