@@ -336,10 +336,11 @@ async function submitPasswordReset() {
       return;
     }
 
-    setMsg(
-      `Sync complete: ${data.sales?.synced || 0} sales imported, ${data.customers?.synced || 0} customers added.`
-    );
-    load();
+setMsg(
+  `TNG OS is up to date. ${data.sales?.synced || 0} sales imported and ${
+    data.customers?.synced || 0
+  } customers added.`
+);
   }
 
   function logout() {
@@ -359,7 +360,13 @@ async function submitPasswordReset() {
   }
 
   useEffect(() => {
-    if (token) load();
+    if (!token) return;
+
+    if (role === "admin") {
+      syncTngOS();
+    } else {
+      load();
+    }
   }, [token, role]);
 
   useEffect(() => {
