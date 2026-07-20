@@ -426,6 +426,15 @@ def login(
             "role": user.role,
         },
     }
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+    confirm_password: str
+
 @app.post("/api/auth/forgot-password")
 def forgot_password(
     data: ForgotPasswordRequest,
