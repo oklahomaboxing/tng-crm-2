@@ -127,7 +127,18 @@ function PaymentMessage({ status }) {
 function App() {
   const params = new URLSearchParams(window.location.search);
   const paymentStatus = params.get("payment");
-
+  const passwordResetToken = params.get("token");
+  const isResetPasswordPage =
+    window.location.pathname === "/reset-password" &&
+    Boolean(passwordResetToken);
+  const [authView, setAuthView] = useState("login");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -179,6 +190,100 @@ function App() {
       setLoginLoading(false);
     }
   }
+async function requestPasswordReset() {
+  setAuthLoading(true);
+  setAuthMessage("");
+  setAuthError("");
+
+  try {
+    const response = await fetch(`${API}/api/auth/forgot-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: resetEmail.trim(),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setAuthError(
+        data.detail || "Unable to send the password reset email."
+      );
+      return;
+    }
+
+    setAuthMessage(
+      data.message ||
+        "If an account exists for that email, a password reset link has been sent."
+    );
+  } catch (error) {
+    setAuthError(
+      error.message || "Unable to send the password reset email."
+    );
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function submitPasswordReset() {
+  setAuthLoading(true);
+  setAuthMessage("");
+  setAuthError("");
+
+  if (newPassword !== confirmPassword) {
+    setAuthError("Passwords do not match.");
+    setAuthLoading(false);
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API}/api/auth/reset-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        token: resetToken,
+        password: newPassword,
+        confirm_password: confirmPassword,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setAuthError(
+        data.detail || "Unable to reset your password."
+      );
+      return;
+    }
+
+    setAuthMessage(
+      data.message ||
+        "Your password was reset successfully."
+    );
+
+    setNewPassword("");
+    setConfirmPassword("");
+
+    window.history.replaceState({}, "", "/");
+
+    setTimeout(() => {
+      setAuthView("login");
+      setAuthMessage("");
+      setEmail(resetEmail);
+    }, 1500);
+  } catch (error) {
+    setAuthError(
+      error.message || "Unable to reset your password."
+    );
+  } finally {
+    setAuthLoading(false);
+  }
+}
 
   async function load() {
     const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
@@ -257,6 +362,13 @@ function App() {
     if (token) load();
   }, [token, role]);
 
+  useEffect(() => {
+    if (isResetPasswordPage) {
+      setResetToken(passwordResetToken);
+      setAuthView("reset");
+    }
+  }, [isResetPasswordPage, passwordResetToken]);
+
   if (paymentStatus) return <PaymentMessage status={paymentStatus} />;
 if (params.has("join")) return <JoinPage />;
 if (window.location.pathname === "/register") return <JoinPage />;
@@ -299,76 +411,225 @@ if (window.location.pathname === "/register") return <JoinPage />;
         <Box sx={{ display: "grid", placeItems: "center", p: 2 }}>
           <Card sx={{ width: "100%", maxWidth: 440, borderRadius: 4 }}>
             <CardContent sx={{ p: { xs: 3, sm: 5 } }}>
-              <Typography variant="h4" fontWeight={900}>
-                Sign in
-              </Typography>
-              <Typography color="text.secondary" sx={{ mb: 3 }}>
-                Access TNG Boxing operations.
-              </Typography>
+{authView === "login" && (
+  <>
+    <Typography variant="h4" fontWeight={900}>
+      Sign in
+    </Typography>
 
-              <form
-                autoComplete="username"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  login();
-                }}
-              >
-                <Stack spacing={2}>
-                  {msg && <Alert severity="error">{msg}</Alert>}
+    <Typography color="text.secondary" sx={{ mb: 3 }}>
+      Access TNG Boxing operations.
+    </Typography>
 
-                  <TextField
-                    id="tng-login-email"
-                    name="tng-login-email"
-                    label="Email"
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    autoComplete="off"
-                    fullWidth
-                    required
-                    inputProps={{
-                      autoComplete: "off",
-                      spellCheck: false,
-                      autoCapitalize: "none",
-                    }}
-                  />
+    <form
+      autoComplete="on"
+      onSubmit={(event) => {
+        event.preventDefault();
+        login();
+      }}
+    >
+      <Stack spacing={2}>
+        {msg && <Alert severity="error">{msg}</Alert>}
 
-                  <TextField
-                    id="tng-login-password"
-                    name="tng-login-password"
-                    label="Password"
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete="current-password"
-                    fullWidth
-                    required
-                    inputProps={{
-                      autoComplete: "new-password",
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        login();
-                      }
-                    }}
-                  />
+        {authMessage && (
+          <Alert severity="success">{authMessage}</Alert>
+        )}
 
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    size="large"
-                    disabled={loginLoading}
-                    fullWidth
-                  >
-                    {loginLoading ? (
-                      <CircularProgress size={24} color="inherit" />
-                    ) : (
-                      "Login"
-                    )}
-                  </Button>
-                </Stack>
-              </form>
+        <TextField
+          id="tng-login-email"
+          name="username"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          autoComplete="username"
+          fullWidth
+          required
+          inputProps={{
+            spellCheck: false,
+            autoCapitalize: "none",
+          }}
+        />
+
+        <TextField
+          id="tng-login-password"
+          name="password"
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          autoComplete="current-password"
+          fullWidth
+          required
+        />
+
+        <Button
+          type="submit"
+          variant="contained"
+          size="large"
+          disabled={loginLoading}
+          fullWidth
+        >
+          {loginLoading ? (
+            <CircularProgress size={24} color="inherit" />
+          ) : (
+            "Login"
+          )}
+        </Button>
+
+        <Button
+          type="button"
+          variant="text"
+          onClick={() => {
+            setResetEmail(email);
+            setAuthView("forgot");
+            setMsg("");
+            setAuthMessage("");
+            setAuthError("");
+          }}
+        >
+          Forgot your password?
+        </Button>
+      </Stack>
+    </form>
+  </>
+)}
+
+{authView === "forgot" && (
+  <>
+    <Typography variant="h4" fontWeight={900}>
+      Reset password
+    </Typography>
+
+    <Typography color="text.secondary" sx={{ mb: 3 }}>
+      Enter your account email and we will send you a secure
+      password reset link.
+    </Typography>
+
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        requestPasswordReset();
+      }}
+    >
+      <Stack spacing={2}>
+        {authError && (
+          <Alert severity="error">{authError}</Alert>
+        )}
+
+        {authMessage && (
+          <Alert severity="success">{authMessage}</Alert>
+        )}
+
+        <TextField
+          label="Email"
+          type="email"
+          value={resetEmail}
+          onChange={(event) =>
+            setResetEmail(event.target.value)
+          }
+          autoComplete="email"
+          fullWidth
+          required
+        />
+
+        <Button
+          type="submit"
+          variant="contained"
+          size="large"
+          disabled={authLoading}
+          fullWidth
+        >
+          {authLoading ? (
+            <CircularProgress size={24} color="inherit" />
+          ) : (
+            "Send Reset Link"
+          )}
+        </Button>
+
+        <Button
+          type="button"
+          variant="text"
+          onClick={() => {
+            setAuthView("login");
+            setAuthMessage("");
+            setAuthError("");
+          }}
+        >
+          Back to login
+        </Button>
+      </Stack>
+    </form>
+  </>
+)}
+
+{authView === "reset" && (
+  <>
+    <Typography variant="h4" fontWeight={900}>
+      Choose new password
+    </Typography>
+
+    <Typography color="text.secondary" sx={{ mb: 3 }}>
+      Use at least 12 characters with uppercase, lowercase,
+      a number, and a symbol.
+    </Typography>
+
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        submitPasswordReset();
+      }}
+    >
+      <Stack spacing={2}>
+        {authError && (
+          <Alert severity="error">{authError}</Alert>
+        )}
+
+        {authMessage && (
+          <Alert severity="success">{authMessage}</Alert>
+        )}
+
+        <TextField
+          label="New Password"
+          type="password"
+          value={newPassword}
+          onChange={(event) =>
+            setNewPassword(event.target.value)
+          }
+          autoComplete="new-password"
+          fullWidth
+          required
+        />
+
+        <TextField
+          label="Confirm Password"
+          type="password"
+          value={confirmPassword}
+          onChange={(event) =>
+            setConfirmPassword(event.target.value)
+          }
+          autoComplete="new-password"
+          fullWidth
+          required
+        />
+
+        <Button
+          type="submit"
+          variant="contained"
+          size="large"
+          disabled={authLoading}
+          fullWidth
+        >
+          {authLoading ? (
+            <CircularProgress size={24} color="inherit" />
+          ) : (
+            "Reset Password"
+          )}
+        </Button>
+      </Stack>
+    </form>
+  </>
+)}
             </CardContent>
           </Card>
         </Box>
