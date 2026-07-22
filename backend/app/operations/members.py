@@ -1,7 +1,8 @@
-
+import os
+import shutil
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from ..core.dependencies import current_user
@@ -303,4 +304,79 @@ def update_member(
             else None
         ),
         "past_due_amount": member.past_due_amount,
+    }
+@router.post("/api/members/{member_id}/photo")
+def upload_member_photo(
+    member_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    member = (
+        db.query(Member)
+        .filter(Member.id == member_id)
+        .first()
+    )
+
+    if not member:
+        raise HTTPException(
+            status_code=404,
+            detail="Member not found",
+        )
+
+    if not file.filename or "." not in file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file must have a valid extension",
+        )
+
+    extension = file.filename.rsplit(".", 1)[-1].lower()
+
+    allowed_extensions = {
+        "jpg",
+        "jpeg",
+        "png",
+        "webp",
+    }
+
+    if extension not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPG, PNG, and WEBP files are allowed",
+        )
+
+    upload_directory = os.path.join(
+        "uploads",
+        "members",
+    )
+
+    os.makedirs(
+        upload_directory,
+        exist_ok=True,
+    )
+
+    filename = f"{member_id}.{extension}"
+
+    filepath = os.path.join(
+        upload_directory,
+        filename,
+    )
+
+    try:
+        with open(filepath, "wb") as buffer:
+            shutil.copyfileobj(
+                file.file,
+                buffer,
+            )
+    finally:
+        file.file.close()
+
+    member.photo_url = f"/uploads/members/{filename}"
+
+    db.commit()
+    db.refresh(member)
+
+    return {
+        "message": "Photo uploaded successfully",
+        "photo_url": member.photo_url,
     }
