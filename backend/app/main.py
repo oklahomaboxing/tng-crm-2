@@ -19,6 +19,7 @@ import base64, io, qrcode
 from openai import OpenAI
 import resend
 import json
+from app.ai import router as ai_router
 import requests
 import uuid
 import resend
@@ -171,6 +172,7 @@ run_sqlite_migrations()
 app = FastAPI(title="TNG CRM 2.0")
 
 app.include_router(operations_router)
+app.include_router(ai_router)
 os.makedirs("uploads/members", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.add_middleware(
