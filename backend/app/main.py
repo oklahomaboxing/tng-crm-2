@@ -58,6 +58,8 @@ from .schemas import (
 )
 
 from .auth import verify_password, hash_password, create_token, decode_token
+from .core.dependencies import current_user
+from .core.permissions import require_admin, require_admin_or_staff
 from .commission import commission_rate
 from sqlalchemy import or_
 import sqlite3
@@ -177,12 +179,7 @@ allow_origins=[
     allow_headers=["*"],
 )
 
-def require_admin(user: User):
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-def require_admin_or_staff(user: User):
-    if user.role not in ["admin", "staff"]:
-        raise HTTPException(status_code=403, detail="Admin or staff access required")
+
 def seed_admin():
     db = next(get_db())
     try:
@@ -303,46 +300,7 @@ def ensure_security_schema():
         connection.close()
 
 
-def current_user(
-    authorization: str = Header(default=""),
-    db: Session = Depends(get_db),
-):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
 
-    token = authorization.split(" ", 1)[1]
-    payload = decode_token(token)
-
-    if not payload or not payload.get("sub"):
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    try:
-        user_id = int(payload["sub"])
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if not user.active:
-        raise HTTPException(status_code=403, detail="Account is inactive")
-
-    return user
-
-
-def require_admin(user: User):
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-
-
-def require_admin_or_staff(user: User):
-    if user.role not in ["admin", "staff"]:
-        raise HTTPException(
-            status_code=403,
-            detail="Admin or staff access required",
-        )
 
 
 ensure_security_schema()
