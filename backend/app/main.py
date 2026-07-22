@@ -2842,56 +2842,7 @@ def clover_settings(db: Session = Depends(get_db), user: User = Depends(current_
     settings = db.query(CloverSetting).first()
     return settings or {"merchant_id": "", "environment": "sandbox", "webhook_secret": ""}
 
-@app.post("/api/members/{member_id}/renew")
-def renew_member(
-    member_id: int,
-    data: dict,
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    require_admin(user)
 
-    member = db.query(Member).filter(Member.id == member_id).first()
-
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
-
-    months = int(data.get("months", 1))
-
-    if months not in [1, 3]:
-        raise HTTPException(status_code=400, detail="Renewal must be 1 or 3 months")
-
-    today = datetime.utcnow()
-    current_end = member.membership_end if member.membership_end and member.membership_end > today else today
-
-    new_end = current_end + relativedelta(months=months)
-
-    member.membership_start = member.membership_start or today
-    member.membership_end = new_end
-    member.membership_status = "active"
-    member.billing_status = "active"
-    member.past_due_amount = 0
-
-    if months == 3:
-        member.billing_cycle = "3_month_prepaid"
-        member.next_billing_date = None
-        member.autopay_enabled = False
-    else:
-        member.billing_cycle = "monthly"
-        member.next_billing_date = new_end
-
-    db.commit()
-    db.refresh(member)
-
-    return {
-        "message": f"Membership renewed for {months} month(s)",
-        "membership_start": member.membership_start.isoformat() if member.membership_start else None,
-        "membership_end": member.membership_end.isoformat() if member.membership_end else None,
-        "billing_cycle": member.billing_cycle,
-        "next_billing_date": member.next_billing_date.isoformat() if member.next_billing_date else None,
-        "membership_status": member.membership_status,
-        "billing_status": member.billing_status,
-    }
 @app.post("/api/members/{member_id}/recalculate-membership")
 def recalculate_membership(
     member_id: int,
