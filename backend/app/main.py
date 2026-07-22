@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import UploadFile, File
 import shutil
 import re
-
+from .operations.router import router as operations_router
 from pydantic import BaseModel, EmailStr, Field
 
 from .services.password_reset_service import (
@@ -65,6 +65,8 @@ from sqlalchemy import or_
 import sqlite3
 import pandas as pd
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+
 
 client = None
 if OPENAI_API_KEY:
@@ -162,6 +164,8 @@ def run_sqlite_migrations():
 
 run_sqlite_migrations()
 app = FastAPI(title="TNG CRM 2.0")
+
+app.include_router(operations_router)
 os.makedirs("uploads/members", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.add_middleware(
@@ -549,75 +553,6 @@ def security_overview(
 @app.get("/api/me")
 def me(user: User = Depends(current_user)):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role}
-
-@app.get("/api/products")
-def products(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return db.query(MembershipProduct).order_by(MembershipProduct.name.asc()).all()
-@app.put("/api/products/{product_id}")
-def update_product(
-    product_id: int,
-    data: dict,
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    require_admin(user)
-
-    product = db.query(MembershipProduct).filter(
-        MembershipProduct.id == product_id
-    ).first()
-
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    allowed_fields = [
-        "name",
-        "price",
-        "active",
-        "category",
-        "is_membership",
-        "renews_monthly",
-        "autopay_allowed",
-        "default_membership_months",
-        "sku",
-        "stock_quantity",
-        "track_inventory",
-    ]
-
-    for field in allowed_fields:
-        if field in data:
-            setattr(product, field, data[field])
-    if "category" in data:
-        product.category = (data["category"] or "other").strip().lower()
-        product.is_membership = product.category == "membership"
-
-    elif "is_membership" in data:
-        product.is_membership = bool(data["is_membership"])
-
-        if product.is_membership:
-            product.category = "membership"
-        elif product.category == "membership":
-            product.category = "other"
-
-    db.commit()
-    db.refresh(product)
-
-    return {
-        "message": "Product updated",
-        "product": {
-            "id": product.id,
-            "name": product.name,
-            "price": product.price,
-            "active": product.active,
-            "category": product.category,
-            "is_membership": product.is_membership,
-            "renews_monthly": product.renews_monthly,
-            "autopay_allowed": product.autopay_allowed,
-            "default_membership_months": product.default_membership_months,
-            "sku": product.sku,
-            "stock_quantity": product.stock_quantity,
-            "track_inventory": product.track_inventory,
-        },
-    }
 
 
 @app.post("/api/reps")
