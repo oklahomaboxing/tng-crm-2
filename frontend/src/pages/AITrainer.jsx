@@ -344,11 +344,19 @@ export default function AITrainer() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+
+      console.log("AI RESPONSE STATUS:", response.status);
+      console.log("AI RESPONSE DATA:", data);
 
       if (!response.ok) {
+        const errorMessage =
+          typeof data.detail === "string"
+            ? data.detail
+            : JSON.stringify(data.detail || data);
+
         throw new Error(
-          data.detail || "The AI workout could not be generated."
+          errorMessage || `AI request failed with status ${response.status}`
         );
       }
 
@@ -615,6 +623,12 @@ export default function AITrainer() {
   }
 
   function startRound(roundNumber) {
+    console.log("6. startRound called", {
+      roundNumber,
+      plan: aiPlanRef.current,
+      running: runningRef.current,
+    });
+
     clearTimers();
 
     commandIndexRef.current = 0;
@@ -690,6 +704,8 @@ export default function AITrainer() {
   }
 
   async function startSession() {
+    console.log("1. Start button clicked");
+
     clearTimers();
 
     runningRef.current = true;
@@ -707,22 +723,33 @@ export default function AITrainer() {
       opponentTrigger: "",
       correctExit: "",
     });
+
     setRunning(true);
     setPaused(false);
     setCurrentRound(1);
 
-    setAiPlan(null);
-    aiPlanRef.current = null;
-
-    setCommandIndex(0);
-    commandIndexRef.current = 0;
-
     try {
-      await generateAIPlan();
+      console.log("2. Generating AI plan");
+
+      const generatedPlan = await generateAIPlan();
+
+      console.log("3. AI plan generated", generatedPlan);
+      console.log("4. AI plan ref", aiPlanRef.current);
     } catch (err) {
       console.error("AI workout generation failed.", err);
+
+      runningRef.current = false;
+      pausedRef.current = false;
+
+      setRunning(false);
+      setPaused(false);
+      setPrompt("AI workout could not start");
+      setSubPrompt(err.message || "Please try again.");
+
+      return;
     }
 
+    console.log("5. Starting round one");
     startRound(1);
   }
 
@@ -982,14 +1009,17 @@ export default function AITrainer() {
 
                 <Stack direction="row" spacing={1} flexWrap="wrap">
                   <Button
+                    type="button"
                     variant="contained"
                     color="error"
                     onClick={startSession}
+                    disabled={aiLoading || running}
                   >
-                    Start
+                    {aiLoading ? "Generating..." : "Start"}
                   </Button>
 
                   <Button
+                    type="button"
                     variant="outlined"
                     color="error"
                     onClick={pauseSession}
@@ -998,6 +1028,7 @@ export default function AITrainer() {
                   </Button>
 
                   <Button
+                    type="button"
                     variant="outlined"
                     color="success"
                     onClick={resumeSession}
@@ -1006,6 +1037,7 @@ export default function AITrainer() {
                   </Button>
 
                   <Button
+                    type="button"
                     variant="outlined"
                     color="warning"
                     onClick={resetSession}
@@ -1014,6 +1046,7 @@ export default function AITrainer() {
                   </Button>
 
                   <Button
+                    type="button"
                     variant="contained"
                     color="success"
                     onClick={() => callPrompt(true)}
