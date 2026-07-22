@@ -1,7 +1,12 @@
 from dotenv import load_dotenv
 import os
 import logging
-
+from .services.memberships import (
+    apply_membership,
+    is_event_product,
+    is_membership_product,
+    recalculate_member_from_payments,
+)
 logger = logging.getLogger(__name__)
 load_dotenv(override=True)
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
@@ -673,151 +678,8 @@ def rep_qr(rep_id: int, db: Session = Depends(get_db), user: User = Depends(curr
     buf = io.BytesIO(); img.save(buf, format="PNG")
     return {"url": url, "qr_png_base64": base64.b64encode(buf.getvalue()).decode()}
 
-@app.get("/api/dashboard")
-def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    today = datetime.utcnow().date()
-    now = datetime.utcnow()
 
-    cutoff_date = datetime(2026, 7, 20, 23, 59, 59)
 
-    paid_member_ids = (
-        db.query(Sale.member_id)
-        .filter(
-            Sale.payment_status == "paid",
-            Sale.member_id != None,
-        )
-        .distinct()
-        .all()
-    )
-
-    paid_member_ids = [
-        row[0]
-        for row in paid_member_ids
-        if row[0] is not None
-    ]
-
-    dashboard_members = (
-        db.query(Member)
-        .filter(
-            or_(
-                Member.id.in_(paid_member_ids),
-                Member.membership_status == "active",
-            )
-        )
-        .all()
-    )
-    visible_members = []
-    for member in dashboard_members:
-        recalculate_member_from_payments(member, db)
-
-        if (
-            member.membership_end
-            and member.membership_end <= cutoff_date
-        ):
-            continue
-
-        visible_members.append(member)
-
-    db.commit()
-    total_members = len(visible_members)
-    active_members = len(visible_members)
-    total_leads = db.query(Lead).count()
-
-    today_checkins = (
-        db.query(Attendance)
-        .filter(func.date(Attendance.checkin_time) == today)
-        .count()
-    )
-
-    month_sales = (
-        db.query(Sale)
-        .filter(
-            extract("month", Sale.sale_date) == now.month,
-            extract("year", Sale.sale_date) == now.year,
-        )
-        .all()
-    )
-
-    revenue_this_month = sum(s.amount or 0 for s in month_sales)
-
-    recent_checkins = (
-        db.query(Attendance)
-        .order_by(Attendance.checkin_time.desc())
-        .limit(10)
-        .all()
-    )
-
-    recent = []
-
-    for a in recent_checkins:
-        member = db.query(Member).filter(Member.id == a.member_id).first()
-
-        recent.append({
-            "member": f"{member.first_name} {member.last_name}" if member else "Unknown",
-            "time": a.checkin_time.isoformat() if a.checkin_time else None,
-            "method": a.method,
-        })
-
-    return {
-        "total_members": total_members,
-        "active_members": active_members,
-        "total_leads": total_leads,
-        "today_checkins": today_checkins,
-        "sales_this_month": len(month_sales),
-        "revenue_this_month": revenue_this_month,
-        "recent_checkins": recent,
-    }
-
-def is_membership_product(product):
-    if not product:
-        return False
-
-    name = (product.name or "").lower()
-
-    membership_keywords = [
-        "membership",
-        "monthly",
-        "month",
-        "3 month",
-        "3-month",
-        "three month",
-        "annual",
-        "year",
-        "yearly",
-        "youth",
-        "adult",
-        "family",
-        "unlimited",
-        "boxing",
-    ]
-
-    if any(keyword in name for keyword in membership_keywords):
-        return True
-
-    if getattr(product, "category", "").lower() == "membership":
-        return True
-
-    return False
-def is_event_product(product):
-    if not product:
-        return False
-
-    name = (product.name or "").lower()
-
-    event_keywords = [
-        "ticket",
-        "general admission",
-        "ga",
-        "ringside",
-        "vip",
-        "table",
-        "admission",
-        "event",
-        "show",
-        "fight",
-    ]
-
-    return any(keyword in name for keyword in event_keywords)
 
 def is_membership_sale(sale):
     if not sale:
@@ -2896,89 +2758,9 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         "member_number": member.member_number,
     }
 
-def apply_membership(member, product, purchase_date=None):
-    if not is_membership_product(product):
-        return member
-
-    purchase_date = purchase_date or datetime.utcnow()
-    product_name = (product.name or "").lower()
-    product_price = round(float(product.price or 0), 2)
-
-    is_three_month_membership = (
-        product_price == 300.00
-        or "3 month" in product_name
-        or "3-month" in product_name
-        or "three month" in product_name
-    )
-
-    if is_three_month_membership:
-        membership_end = purchase_date + relativedelta(months=3)
-        billing_cycle = "3_month_prepaid"
-        monthly_rate = 0
-        next_billing_date = None
-    else:
-        membership_end = purchase_date + timedelta(days=30)
-        billing_cycle = "30_day"
-        monthly_rate = product_price
-        next_billing_date = membership_end
-
-    member.status = "active"
-    member.membership_status = "active"
-    member.membership_type = product.name
-    member.membership_start = purchase_date
-    member.membership_end = membership_end
-    member.last_payment_date = purchase_date
-    member.billing_cycle = billing_cycle
-    member.monthly_rate = monthly_rate
-    member.next_billing_date = next_billing_date
-    member.autopay_enabled = False
-    member.billing_status = "active"
-    member.past_due_amount = 0
-
-    return member
-
-def recalculate_member_from_payments(member, db: Session):
-    membership_sales = (
-        db.query(Sale)
-        .filter(
-            Sale.member_id == member.id,
-            Sale.payment_status == "paid",
-        )
-        .order_by(Sale.sale_date.desc())
-        .all()
-    )
-
-    membership_sales = [
-        sale
-        for sale in membership_sales
-        if (
-            sale.product
-            and is_membership_product(sale.product)
-            and not is_event_product(sale.product)
-        )
-    ]
 
 
-    if not membership_sales:
-        return member
 
-    last_sale = membership_sales[0]
-    purchase_date = last_sale.sale_date or datetime.utcnow()
-
-    apply_membership(
-        member,
-        last_sale.product,
-        purchase_date=purchase_date,
-    )
-
-    if member.membership_end and member.membership_end < datetime.utcnow():
-        member.membership_status = "inactive"
-        member.billing_status = "expired"
-    else:
-        member.membership_status = "active"
-        member.billing_status = "active"
-
-    return member
 
 @app.post("/api/checkin")
 def checkin(data: dict, db: Session = Depends(get_db)):
