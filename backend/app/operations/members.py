@@ -8,8 +8,10 @@ from ..core.permissions import require_admin
 from ..core.dependencies import current_user
 from ..database import get_db
 from ..models import Member, Sale, User
-from ..services.memberships import recalculate_member_from_payments
-
+from ..services.memberships import (
+    is_membership_product,
+    recalculate_member_from_payments,
+)
 
 router = APIRouter()
 
@@ -461,4 +463,167 @@ def renew_member(
         ),
         "membership_status": member.membership_status,
         "billing_status": member.billing_status,
+    }
+@router.post("/api/members/{member_id}/recalculate-membership")
+def recalculate_membership(
+    member_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    member = (
+        db.query(Member)
+        .filter(Member.id == member_id)
+        .first()
+    )
+
+    if not member:
+        raise HTTPException(
+            status_code=404,
+            detail="Member not found",
+        )
+
+    sales = (
+        db.query(Sale)
+        .filter(Sale.member_id == member_id)
+        .order_by(Sale.sale_date.asc())
+        .all()
+    )
+
+    membership_sales = [
+        sale
+        for sale in sales
+        if sale.product and is_membership_product(sale.product)
+    ]
+
+    if not membership_sales:
+        raise HTTPException(
+            status_code=404,
+            detail="No membership payments found",
+        )
+
+    first_sale = membership_sales[0]
+    last_sale = membership_sales[-1]
+
+    member.membership_start = (
+        first_sale.sale_date or datetime.utcnow()
+    )
+    member.membership_end = member.membership_start
+
+    for sale in membership_sales:
+        product = sale.product
+        sale_date = sale.sale_date or member.membership_end
+
+        if sale_date > member.membership_end:
+            member.membership_end = sale_date
+
+        product_name = (
+            product.name.lower()
+            if product and product.name
+            else ""
+        )
+
+        if product and (
+            "3 month" in product_name
+            or "3 months" in product_name
+            or "3-month" in product_name
+            or product.price == 300
+        ):
+            member.membership_end = (
+                member.membership_end
+                + relativedelta(months=3)
+            )
+            member.billing_cycle = "3_month_prepaid"
+            member.monthly_rate = 0
+            member.next_billing_date = None
+            member.autopay_enabled = False
+        else:
+            member.membership_end = (
+                member.membership_end
+                + relativedelta(months=1)
+            )
+            member.billing_cycle = "monthly"
+            member.monthly_rate = (
+                product.price
+                if product
+                else 0
+            )
+            member.next_billing_date = member.membership_end
+
+        if product:
+            member.membership_type = product.name
+
+    member.membership_status = "active"
+    member.billing_status = "active"
+    member.last_payment_date = last_sale.sale_date
+    member.past_due_amount = 0
+
+    db.commit()
+    db.refresh(member)
+
+    return {
+        "message": "Membership recalculated",
+        "membership_start": (
+            member.membership_start.isoformat()
+            if member.membership_start
+            else None
+        ),
+        "membership_end": (
+            member.membership_end.isoformat()
+            if member.membership_end
+            else None
+        ),
+        "billing_cycle": member.billing_cycle,
+        "next_billing_date": (
+            member.next_billing_date.isoformat()
+            if member.next_billing_date
+            else None
+        ),
+        "last_payment_date": (
+            member.last_payment_date.isoformat()
+            if member.last_payment_date
+            else None
+        ),
+    }
+
+
+@router.post("/api/members/recalculate-all")
+def recalculate_all_memberships(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    members = db.query(Member).all()
+
+    updated = 0
+    skipped = 0
+
+    for member in members:
+        before_start = member.membership_start
+        before_end = member.membership_end
+        before_status = member.membership_status
+        before_billing_status = member.billing_status
+
+        recalculate_member_from_payments(member, db)
+
+        changed = (
+            member.membership_start != before_start
+            or member.membership_end != before_end
+            or member.membership_status != before_status
+            or member.billing_status != before_billing_status
+        )
+
+        if changed:
+            updated += 1
+        else:
+            skipped += 1
+
+    db.commit()
+
+    return {
+        "message": "All memberships recalculated",
+        "updated": updated,
+        "skipped": skipped,
     }
