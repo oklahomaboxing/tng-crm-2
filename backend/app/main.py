@@ -23,7 +23,7 @@ from fastapi import UploadFile, File
 import shutil
 import re
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from .services.password_reset_service import (
     create_password_reset_token,
@@ -1351,7 +1351,8 @@ def create_merchandise_checkout(
     db.refresh(checkout)
 
     merchant_id = os.getenv("CLOVER_MERCHANT_ID")
-    api_token = os.getenv("CLOVER_ECOMMERCE_PRIVATE_KEY") or os.getenv("CLOVER_API_TOKEN")
+    api_token = os.getenv("CLOVER_API_TOKEN")
+
     clover_env = os.getenv("CLOVER_ENV", "production")
 
     if not merchant_id or not api_token:
@@ -3668,6 +3669,244 @@ def merge_duplicate_members(
         "kept_member_id": keep.id,
         "deleted_member_id": merge_id,
     }
+
+class AIWorkoutRequest(BaseModel):
+    module: str
+    level: str
+    stance: str
+    rounds: int = Field(default=6)
+    round_time: int = Field(default=180)
+    pace_seconds: int = Field(default=10)
+@app.post("/api/ai/training-plan")
+def generate_ai_training_plan(
+    data: AIWorkoutRequest,
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    if not client:
+        raise HTTPException(
+            status_code=503,
+            detail="OpenAI is not configured on the backend.",
+        )
+
+    allowed_modules = {
+        "Heavy Bag",
+        "Shadowboxing",
+        "Defense / Reaction",
+        "Footwork",
+        "Boxing Conditioning",
+        "Dynamic Warm-Up",
+        "Core",
+        "Fight Camp Progressive",
+        "Ring IQ",
+    }
+
+    allowed_levels = {
+        "beginner",
+        "intermediate",
+        "advanced",
+    }
+
+    allowed_stances = {
+        "orthodox",
+        "southpaw",
+    }
+
+    if data.module not in allowed_modules:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid training module.",
+        )
+
+    if data.level not in allowed_levels:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid training level.",
+        )
+
+    if data.stance not in allowed_stances:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid boxing stance.",
+        )
+
+    safe_rounds = max(1, min(int(data.rounds), 20))
+    safe_round_time = max(30, min(int(data.round_time), 600))
+    safe_pace = max(5, min(int(data.pace_seconds), 60))
+
+    commands_per_round = max(
+        3,
+        min(
+            18,
+            safe_round_time // safe_pace,
+        ),
+    )
+
+    system_prompt = """
+You are TNG Coach AI, an expert boxing training and tactical-development
+assistant for TNG Boxing.
+
+Create practical boxing workouts that can be spoken aloud while an athlete
+is actively training.
+
+The three levels must be clearly different.
+
+BEGINNER:
+- One simple decision at a time.
+- Basic stance, balance, guard, jab, cross, simple defense and movement.
+- Short combinations.
+- Direct and easy-to-understand instructions.
+- Core exercises must be stable and controlled.
+
+INTERMEDIATE:
+- Two-part tactical decisions.
+- Pattern recognition, feints, body-head attacks, counters, angles and exits.
+- Moderate combinations with defensive responsibility.
+- Core exercises should include rotation, anti-extension and lateral control.
+
+ADVANCED:
+- Do not merely make combinations longer.
+- Use layered tactical decisions.
+- Include trap setting, false openings, rhythm changes, opponent tendencies,
+  counter-counters, ring position, score awareness and time awareness.
+- Require the athlete to recognize a trigger, respond correctly and finish
+  in a superior position.
+- Core exercises should use advanced anti-rotation, rotational control,
+  unilateral stability and boxing-specific movement.
+
+RING IQ:
+- State what the opponent is doing.
+- State what the athlete should recognize.
+- Give the tactical response.
+- Finish with the correct exit or ring position.
+
+CORE:
+- Change exercises throughout the workout.
+- Match exercise difficulty to the selected level.
+- Include a short technique cue.
+- Prioritize safe trunk control over uncontrolled speed.
+
+FIGHT CAMP PROGRESSIVE:
+- Every round must build on the previous round.
+- Early rounds establish technique and reads.
+- Middle rounds increase tactical pressure.
+- Final rounds include fatigue, score, time and opponent adjustments.
+
+Keep every spoken command concise enough to understand during training.
+Return JSON only.
+"""
+
+    user_prompt = f"""
+Create a boxing workout using these settings:
+
+Module: {data.module}
+Level: {data.level}
+Stance: {data.stance}
+Rounds: {safe_rounds}
+Round duration: {safe_round_time} seconds
+Commands per round: approximately {commands_per_round}
+
+Return exactly this JSON structure:
+
+{{
+  "title": "Workout title",
+  "module": "{data.module}",
+  "level": "{data.level}",
+  "stance": "{data.stance}",
+  "progression_summary": "Short explanation of the workout progression",
+  "rounds": [
+    {{
+      "round_number": 1,
+      "module": "Module used during this round",
+      "title": "Round title",
+      "objective": "Main objective",
+      "commands": [
+        {{
+          "prompt": "Short spoken training command",
+          "coaching_cue": "Short technical coaching reminder",
+          "objective": "Purpose of the command",
+          "opponent_trigger": "Opponent action or situation, or null",
+          "correct_exit": "Correct final position or exit"
+        }}
+      ]
+    }}
+  ]
+}}
+
+Create exactly {safe_rounds} rounds.
+Make the rounds progressive rather than random.
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv(
+                "OPENAI_TRAINER_MODEL",
+                "gpt-4.1-mini",
+            ),
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
+            ],
+            response_format={
+                "type": "json_object",
+            },
+        )
+
+        raw_content = response.choices[0].message.content
+
+        if not raw_content:
+            raise ValueError("OpenAI returned an empty response.")
+
+        workout = json.loads(raw_content)
+
+        generated_rounds = workout.get("rounds")
+
+        if not isinstance(generated_rounds, list):
+            raise ValueError(
+                "OpenAI response did not include a valid rounds list."
+            )
+
+        if len(generated_rounds) != safe_rounds:
+            raise ValueError(
+                "OpenAI returned the wrong number of rounds."
+            )
+
+        return workout
+
+    except json.JSONDecodeError as error:
+        logger.exception(
+            "AI Trainer returned invalid JSON: %s",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail="OpenAI returned an invalid workout format.",
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        logger.exception(
+            "AI Trainer generation failed: %s",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail="The AI workout could not be generated.",
+        )
+
+
+
 LIVE_AI_SESSION = {
     "active": False,
     "phase": "Ready",

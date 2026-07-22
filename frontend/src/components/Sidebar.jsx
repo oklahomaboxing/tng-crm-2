@@ -22,10 +22,12 @@ import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import AssessmentRoundedIcon from "@mui/icons-material/AssessmentRounded";
 import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
+import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 export const ROLE_MENUS = {
   admin: [
     "Dashboard",
     "Members",
+    "TNG Academy",
     "Products",
     "Front Desk",
     "Sales",
@@ -54,6 +56,7 @@ export const ROLE_MENUS = {
 const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
   Members: <PeopleAltRoundedIcon />,
+  "TNG Academy": <SchoolRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
   "Front Desk": <QrCodeScannerRoundedIcon />,
   Sales: <PointOfSaleRoundedIcon />,
@@ -132,7 +135,13 @@ export default function Sidebar({
               </ListItemIcon>
               <ListItemText
                 primary={item}
-                primaryTypographyProps={{ fontWeight: active ? 800 : 650 }}
+                slotProps={{
+                  primary: {
+                    sx: {
+                      fontWeight: active ? 800 : 650,
+                    },
+                  },
+                }}
               />
             </ListItemButton>
           );

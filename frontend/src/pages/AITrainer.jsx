@@ -296,14 +296,97 @@ export default function AITrainer() {
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [promptLog, setPromptLog] = useState([]);
+  const [aiPlan, setAiPlan] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [commandIndex, setCommandIndex] = useState(0);
+  const [aiDetails, setAiDetails] = useState({
+    objective: "",
+    opponentTrigger: "",
+    correctExit: "",
+  });
 
   const timerRef = useRef(null);
   const promptRef = useRef(null);
   const pausedRef = useRef(false);
   const runningRef = useRef(false);
   const currentModuleRef = useRef(selectedModule);
-
+  const aiPlanRef = useRef(null);
+  const commandIndexRef = useRef(0);
+  const currentRoundRef = useRef(0);
+  const phaseRef = useRef("Ready");
   const moduleConfig = TRAINING_MODULES[selectedModule];
+
+  async function generateAIPlan() {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      throw new Error("You must be signed in to generate an AI workout.");
+    }
+
+    setAiLoading(true);
+    setAiError("");
+
+    try {
+      const response = await fetch(`${API}/api/ai/training-plan`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          module: selectedModule,
+          level,
+          stance,
+          rounds: Number(rounds),
+          round_time: Number(roundTime),
+          pace_seconds: Number(paceSeconds),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "The AI workout could not be generated."
+        );
+      }
+
+      aiPlanRef.current = data;
+      setAiPlan(data);
+
+      return data;
+    } catch (error) {
+      setAiError(error.message);
+      throw error;
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function getAIRound(roundNumber) {
+    return aiPlanRef.current?.rounds?.find(
+      (item) => Number(item.round_number) === Number(roundNumber)
+    );
+  }
+
+  function getNextAICommand(roundNumber) {
+    const activeRound = getAIRound(roundNumber);
+    const commands = activeRound?.commands || [];
+
+    if (commands.length === 0) {
+      return null;
+    }
+
+    const index = commandIndexRef.current % commands.length;
+    const command = commands[index];
+    const nextIndex = index + 1;
+
+    commandIndexRef.current = nextIndex;
+    setCommandIndex(nextIndex);
+
+    return command;
+  }
 
   async function updateLiveDisplay(extra = {}) {
     const token = localStorage.getItem("token");
@@ -425,10 +508,24 @@ export default function AITrainer() {
     if (!runningRef.current) return;
 
     const activeModule = currentModuleRef.current;
-    const next = generatePrompt(activeModule);
+    const activeRoundNumber = currentRoundRef.current || 1;
+    const aiCommand = getNextAICommand(activeRoundNumber);
+
+    const next = aiCommand?.prompt || generatePrompt(activeModule);
+
+    const coachingCue =
+      aiCommand?.coaching_cue ||
+      (manual ? "Manual coach command." : moduleConfig.focus);
 
     setPrompt(next);
-    setSubPrompt(manual ? "Manual coach command." : moduleConfig.focus);
+    setSubPrompt(coachingCue);
+
+    setAiDetails({
+      objective: aiCommand?.objective || "",
+      opponentTrigger: aiCommand?.opponent_trigger || "",
+      correctExit: aiCommand?.correct_exit || "",
+    });
+
     logPrompt(next);
     speak(next);
   }
@@ -520,6 +617,15 @@ export default function AITrainer() {
   function startRound(roundNumber) {
     clearTimers();
 
+    commandIndexRef.current = 0;
+    setCommandIndex(0);
+
+    setAiDetails({
+      objective: "",
+      opponentTrigger: "",
+      correctExit: "",
+    });
+
     const activeModule = resolveActiveModule(roundNumber);
     currentModuleRef.current = activeModule;
 
@@ -583,16 +689,39 @@ export default function AITrainer() {
     }, 1000);
   }
 
-  function startSession() {
+  async function startSession() {
     clearTimers();
 
     runningRef.current = true;
     pausedRef.current = false;
 
     setPromptLog([]);
+    setAiPlan(null);
+    aiPlanRef.current = null;
+
+    setCommandIndex(0);
+    commandIndexRef.current = 0;
+
+    setAiDetails({
+      objective: "",
+      opponentTrigger: "",
+      correctExit: "",
+    });
     setRunning(true);
     setPaused(false);
     setCurrentRound(1);
+
+    setAiPlan(null);
+    aiPlanRef.current = null;
+
+    setCommandIndex(0);
+    commandIndexRef.current = 0;
+
+    try {
+      await generateAIPlan();
+    } catch (err) {
+      console.error("AI workout generation failed.", err);
+    }
 
     startRound(1);
   }
@@ -684,12 +813,29 @@ export default function AITrainer() {
   }, [selectedModule]);
 
   useEffect(() => {
+    aiPlanRef.current = aiPlan;
+  }, [aiPlan]);
+
+  useEffect(() => {
+    commandIndexRef.current = commandIndex;
+  }, [commandIndex]);
+
+  useEffect(() => {
+    currentRoundRef.current = currentRound;
+  }, [currentRound]);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
 
   useEffect(() => {
     runningRef.current = running;
   }, [running]);
+
 
   useEffect(() => {
     return () => clearTimers();
@@ -952,9 +1098,78 @@ export default function AITrainer() {
                 </Typography>
               </Box>
 
-              <Typography sx={{ color: "#bdbdbd" }}>
+              <Typography sx={{ color: "#bdbdbd", mb: 2 }}>
                 {subPrompt}
               </Typography>
+
+              {(aiDetails.objective ||
+                aiDetails.opponentTrigger ||
+                aiDetails.correctExit) && (
+                <Stack spacing={1} sx={{ textAlign: "left", mt: 2 }}>
+                  {aiDetails.opponentTrigger && (
+                    <Box
+                      sx={{
+                        background: "#171820",
+                        borderRadius: 2,
+                        p: 1.5,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#ef5350", fontWeight: "bold" }}
+                      >
+                        OPPONENT TRIGGER
+                      </Typography>
+
+                      <Typography>
+                        {aiDetails.opponentTrigger}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {aiDetails.objective && (
+                    <Box
+                      sx={{
+                        background: "#171820",
+                        borderRadius: 2,
+                        p: 1.5,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#ffb74d", fontWeight: "bold" }}
+                      >
+                        OBJECTIVE
+                      </Typography>
+
+                      <Typography>
+                        {aiDetails.objective}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {aiDetails.correctExit && (
+                    <Box
+                      sx={{
+                        background: "#171820",
+                        borderRadius: 2,
+                        p: 1.5,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#66bb6a", fontWeight: "bold" }}
+                      >
+                        CORRECT EXIT
+                      </Typography>
+
+                      <Typography>
+                        {aiDetails.correctExit}
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
+              )}
             </CardContent>
           </Card>
         </Grid>

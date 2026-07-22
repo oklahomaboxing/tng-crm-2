@@ -70,7 +70,13 @@ export default function TopBar({
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: "center",
+          }}
+        >
           <Tooltip title="Refresh page data">
             <IconButton onClick={onRefresh}>
               <RefreshRoundedIcon />
