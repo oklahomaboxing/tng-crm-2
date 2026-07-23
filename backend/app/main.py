@@ -922,11 +922,20 @@ def list_members(
 ):
     cutoff_date = datetime(2026, 7, 20, 23, 59, 59)
 
-    paid_sale_member_ids = (
+    paid_membership_member_ids = (
         db.query(Sale.member_id)
+        .join(
+            MembershipProduct,
+            MembershipProduct.id == Sale.product_id,
+        )
         .filter(
             Sale.payment_status == "paid",
             Sale.member_id != None,
+            or_(
+                Sale.sale_type == "membership",
+                MembershipProduct.is_membership == True,
+                MembershipProduct.category == "membership",
+            ),
         )
         .distinct()
         .subquery()
@@ -936,8 +945,11 @@ def list_members(
         db.query(Member)
         .filter(
             Member.id.in_(
-                db.query(paid_sale_member_ids.c.member_id)
-            )
+                db.query(
+                    paid_membership_member_ids.c.member_id
+                )
+            ),
+            Member.member_type == "MEMBER",
         )
         .order_by(
             Member.last_name.asc(),
@@ -950,6 +962,12 @@ def list_members(
 
     for member in members:
         recalculate_member_from_payments(member, db)
+
+        if member.member_type != "MEMBER":
+            continue
+
+        if member.membership_status != "active":
+            continue
 
         # Exclude memberships expiring July 20, 2026 or earlier.
         if (
@@ -1953,7 +1971,10 @@ def sync_clover_customers(
     require_admin(user)
 
     merchant_id = os.getenv("CLOVER_MERCHANT_ID")
-    api_token = os.getenv("CLOVER_API_TOKEN")
+    api_token = (
+        os.getenv("CLOVER_ECOMMERCE_PRIVATE_KEY")
+        or os.getenv("CLOVER_API_TOKEN")
+    )
     clover_env = os.getenv("CLOVER_ENV", "production")
 
     if not merchant_id or not api_token:
@@ -1994,201 +2015,87 @@ def sync_clover_customers(
 
     customers = response.json().get("elements", [])
 
-    synced = 0
-    updated = 0
-    skipped = 0
-
+    linked_members = 0
     marketing_created = 0
     marketing_updated = 0
     marketing_skipped = 0
 
     for customer in customers:
-        clover_customer_id = customer.get("id")
-
-        first_name = (
-            customer.get("firstName") or ""
-        ).strip()
-
-        last_name = (
-            customer.get("lastName") or ""
-        ).strip()
-
-        email = ""
-        phone = ""
+        clover_customer_id = (customer.get("id") or "").strip()
+        first_name = (customer.get("firstName") or "").strip()
+        last_name = (customer.get("lastName") or "").strip()
 
         emails = (
             customer.get("emailAddresses", {})
             .get("elements", [])
         )
-
-        if emails:
-            email = (
-                emails[0].get("emailAddress") or ""
-            ).strip().lower()
+        email = (
+            (emails[0].get("emailAddress") or "").strip().lower()
+            if emails
+            else ""
+        )
 
         phones = (
             customer.get("phoneNumbers", {})
             .get("elements", [])
         )
+        phone = (
+            (phones[0].get("phoneNumber") or "").strip()
+            if phones
+            else ""
+        )
 
-        if phones:
-            phone = (
-                phones[0].get("phoneNumber") or ""
-            ).strip()
-
-        if (
-            not first_name
-            and not last_name
-            and not email
-            and not phone
-        ):
-            skipped += 1
+        if not first_name and not last_name and not email and not phone:
             marketing_skipped += 1
             continue
 
-        existing = None
+        existing_member = None
+
+        member_query = db.query(Member).filter(
+            or_(
+                Member.member_type == "MEMBER",
+                Member.membership_start != None,
+                Member.membership_end != None,
+                Member.membership_status.in_(
+                    ["active", "expired", "past_due"]
+                ),
+            )
+        )
 
         if clover_customer_id:
-            existing = (
-                db.query(Member)
-                .filter(
-                    Member.clover_customer_id
-                    == clover_customer_id
-                )
-                .first()
-            )
+            existing_member = member_query.filter(
+                Member.clover_customer_id == clover_customer_id
+            ).first()
 
-        if not existing and email:
-            existing = (
-                db.query(Member)
-                .filter(
-                    func.lower(Member.email)
-                    == email.lower()
-                )
-                .first()
-            )
+        if not existing_member and email:
+            existing_member = member_query.filter(
+                func.lower(Member.email) == email
+            ).first()
 
-        if not existing and phone:
-            existing = (
-                db.query(Member)
-                .filter(Member.phone == phone)
-                .first()
-            )
+        if not existing_member and phone:
+            existing_member = member_query.filter(
+                Member.phone == phone
+            ).first()
 
-        if (
-            not existing
-            and first_name
-            and last_name
-        ):
-            existing = (
-                db.query(Member)
-                .filter(
-                    func.lower(Member.first_name)
-                    == first_name.lower(),
-                    func.lower(Member.last_name)
-                    == last_name.lower(),
-                )
-                .first()
-            )
-
-        if existing:
+        if existing_member:
             if clover_customer_id:
-                existing.clover_customer_id = (
-                    clover_customer_id
-                )
-
+                existing_member.clover_customer_id = clover_customer_id
             if first_name:
-                existing.first_name = first_name
-
+                existing_member.first_name = first_name
             if last_name:
-                existing.last_name = last_name
-
+                existing_member.last_name = last_name
             if email:
-                existing.email = email
-
+                existing_member.email = email
             if phone:
-                existing.phone = phone
+                existing_member.phone = phone
+            linked_members += 1
 
-            if not existing.member_number:
-                existing.member_number = (
-                    f"TNG-{existing.id:06d}"
-                )
-
-            if not existing.digital_member_id:
-                existing.digital_member_id = (
-                    generate_digital_member_id()
-                )
-
-            if not existing.barcode:
-                existing.barcode = generate_barcode(
-                    existing.member_number
-                )
-
-            if not existing.qr_code:
-                existing.qr_code = generate_qr_code(
-                    existing.member_number
-                )
-
-            marketing_result = (
-                sync_clover_customer_to_marketing(
-                    db,
-                    first_name,
-                    last_name,
-                    email,
-                    phone,
-                )
-            )
-
-            if marketing_result == "created":
-                marketing_created += 1
-            elif marketing_result == "updated":
-                marketing_updated += 1
-            else:
-                marketing_skipped += 1
-
-            updated += 1
-            continue
-
-        member = Member(
-            first_name=first_name or "Clover",
-            last_name=last_name or "Customer",
-            email=email,
-            phone=phone,
-            status="customer",
-            membership_status="not_applicable",
-            clover_customer_id=clover_customer_id,
-            membership_type="Clover Customer",
-            member_type="CUSTOMER",
-            waiver_signed=False,
-        )
-
-        db.add(member)
-        db.flush()
-
-        member.member_number = (
-            f"TNG-{member.id:06d}"
-        )
-
-        member.digital_member_id = (
-            generate_digital_member_id()
-        )
-
-        member.barcode = generate_barcode(
-            member.member_number
-        )
-
-        member.qr_code = generate_qr_code(
-            member.member_number
-        )
-
-        marketing_result = (
-            sync_clover_customer_to_marketing(
-                db,
-                first_name,
-                last_name,
-                email,
-                phone,
-            )
+        marketing_result = sync_clover_customer_to_marketing(
+            db,
+            first_name,
+            last_name,
+            email,
+            phone,
         )
 
         if marketing_result == "created":
@@ -2198,15 +2105,13 @@ def sync_clover_customers(
         else:
             marketing_skipped += 1
 
-        synced += 1
-
     db.commit()
 
     return {
-        "message": "Clover customers synced",
-        "synced": synced,
-        "updated": updated,
-        "skipped": skipped,
+        "message": "Clover customers synced to marketing contacts",
+        "customers_received": len(customers),
+        "members_linked": linked_members,
+        "members_created": 0,
         "marketing": {
             "created": marketing_created,
             "updated": marketing_updated,
