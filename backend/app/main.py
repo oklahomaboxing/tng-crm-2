@@ -2299,6 +2299,9 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
     synced = 0
     skipped = 0
+    already_imported = 0
+    missing_member = 0
+    invalid_order = 0
 
     default_rep = db.query(SalesRep).first()
     default_product = db.query(MembershipProduct).first()
@@ -2315,6 +2318,7 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
         if not order_id or total_cents <= 0:
             skipped += 1
+            invalid_order += 1
             continue
 
         payment_id = ""
@@ -2322,13 +2326,24 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
         if payments:
             payment_id = payments[0].get("id") or ""
 
-        existing_sale = db.query(Sale).filter(
-            (Sale.clover_order_id == order_id) |
-            (Sale.clover_payment_id == payment_id)
-        ).first()
+        duplicate_filters = [
+            Sale.clover_order_id == order_id,
+        ]
+
+        if payment_id:
+            duplicate_filters.append(
+                Sale.clover_payment_id == payment_id
+            )
+
+        existing_sale = (
+            db.query(Sale)
+            .filter(or_(*duplicate_filters))
+            .first()
+        )
 
         if existing_sale:
             skipped += 1
+            already_imported += 1
             continue
 
         customer_id = ""
@@ -2370,6 +2385,7 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
         if not member:
             skipped += 1
+            missing_member += 1
             continue
 
         created_time = order.get("createdTime") or order.get("clientCreatedTime")
@@ -2451,8 +2467,12 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
 
     return {
         "message": "Clover sales synced",
+        "orders_received": len(orders),
         "synced": synced,
         "skipped": skipped,
+        "already_imported": already_imported,
+        "missing_member": missing_member,
+        "invalid_order": invalid_order,
     }
 
 @app.post("/api/clover/sync-all")
