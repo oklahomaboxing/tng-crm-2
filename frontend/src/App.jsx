@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Alert,
@@ -153,6 +153,7 @@ function App() {
   const [msg, setMsg] = useState("");
   const [qrCodes, setQrCodes] = useState({});
   const [loginLoading, setLoginLoading] = useState(false);
+  const autoSyncStarted = useRef(false);
 
   async function login() {
     setLoginLoading(true);
@@ -322,25 +323,39 @@ async function submitPasswordReset() {
     setQrCodes((old) => ({ ...old, [repId]: data }));
   }
 
-  async function syncTngOS() {
+  async function syncTngOS({ refreshAfter = true } = {}) {
     if (role !== "admin") return;
 
-    const response = await fetch(`${API}/api/clover/sync-all`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    });
-    const data = await response.json();
+    try {
+      const response = await fetch(`${API}/api/clover/sync-all`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
 
-    if (!response.ok) {
-      setMsg(data.detail || "TNG OS sync failed");
-      return;
+      const data = await response.json();
+
+      if (!response.ok) {
+        setMsg(data.detail || "TNG OS sync failed");
+        return;
+      }
+
+      setMsg(
+        `TNG OS is up to date. ${data.sales?.synced || 0} sales imported, ${
+          data.customers?.synced || 0
+        } customers added, and ${
+          data.customers?.updated || 0
+        } customers updated.`
+      );
+
+      if (refreshAfter) {
+        await load();
+      }
+    } catch (error) {
+      console.error("TNG OS sync failed", error);
+      setMsg(error.message || "TNG OS sync failed");
     }
-
-setMsg(
-  `TNG OS is up to date. ${data.sales?.synced || 0} sales imported and ${
-    data.customers?.synced || 0
-  } customers added.`
-);
   }
 
   function logout() {
@@ -357,16 +372,29 @@ setMsg(
     setLeader([]);
     setQrCodes({});
     setMsg("");
+    autoSyncStarted.current = false;
   }
 
   useEffect(() => {
-    if (!token) return;
-
-    if (role === "admin") {
-      syncTngOS();
-    } else {
-      load();
+    if (!token) {
+      autoSyncStarted.current = false;
+      return;
     }
+
+    if (role !== "admin") {
+      load();
+      return;
+    }
+
+    if (autoSyncStarted.current) return;
+
+    autoSyncStarted.current = true;
+
+    async function runAutomaticSync() {
+      await syncTngOS();
+    }
+
+    runAutomaticSync();
   }, [token, role]);
 
   useEffect(() => {
@@ -733,5 +761,3 @@ root.render(
     {host === "display.tngboxinggym.com" ? <AIDisplay /> : <App />}
   </ThemeProvider>
 );
-
-
