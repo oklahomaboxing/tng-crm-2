@@ -706,6 +706,8 @@ def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = De
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    sale_date = datetime.utcnow()
+
 
 
     member = Member(
@@ -737,7 +739,7 @@ def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = De
         payment_status=data.payment_status,
         clover_order_id=data.clover_order_id,
         clover_payment_id=data.clover_payment_id,
-        sale_date=datetime.utcnow(),
+        sale_date=sale_date,
     )
 
     db.add(sale)
@@ -759,8 +761,102 @@ def leaderboard(db: Session = Depends(get_db), user: User = Depends(current_user
     rows = db.query(SalesRep.id, User.name, func.count(Sale.id), func.sum(Sale.amount)).join(User).outerjoin(Sale).filter((Sale.id == None) | ((extract('month', Sale.sale_date) == now.month) & (extract('year', Sale.sale_date) == now.year))).group_by(SalesRep.id, User.name).all()
     return [{"rep_id": r[0], "name": r[1], "sales": r[2] or 0, "revenue": float(r[3] or 0), "rate": commission_rate(r[2] or 0)} for r in rows]
 
+def get_or_create_front_desk_rep(db: Session) -> SalesRep:
+    """Return the permanent Front Desk sales rep, creating it when needed."""
+    front_desk_rep = (
+        db.query(SalesRep)
+        .filter(
+            func.lower(SalesRep.referral_slug) == "front-desk"
+        )
+        .first()
+    )
+
+    if front_desk_rep:
+        return front_desk_rep
+
+    front_desk_email = "frontdesk@tngboxinggym.com"
+
+    front_desk_user = (
+        db.query(User)
+        .filter(
+            func.lower(User.email) == front_desk_email
+        )
+        .first()
+    )
+
+    if not front_desk_user:
+        front_desk_user = User(
+            name="TNG Front Desk",
+            email=front_desk_email,
+            password_hash=hash_password(
+                os.getenv(
+                    "FRONT_DESK_TEMP_PASSWORD",
+                    f"TNG-{uuid.uuid4().hex}-FrontDesk!",
+                )
+            ),
+            role="staff",
+            active=True,
+        )
+        db.add(front_desk_user)
+        db.flush()
+    else:
+        front_desk_user.active = True
+
+    front_desk_rep = SalesRep(
+        user_id=front_desk_user.id,
+        phone="",
+        referral_slug="front-desk",
+        clover_link="",
+    )
+
+    db.add(front_desk_rep)
+    db.flush()
+
+    return front_desk_rep
+
+
+def get_or_create_clover_fallback_product(
+    db: Session,
+) -> MembershipProduct:
+    """Provide a valid product FK when a Clover order has no matched item."""
+    fallback_name = "Clover Sale (Uncategorized)"
+
+    product = (
+        db.query(MembershipProduct)
+        .filter(
+            func.lower(MembershipProduct.name)
+            == fallback_name.lower()
+        )
+        .first()
+    )
+
+    if product:
+        product.active = True
+        return product
+
+    product = MembershipProduct(
+        name=fallback_name,
+        price=0,
+        active=True,
+        category="other",
+        is_membership=False,
+        renews_monthly=False,
+        autopay_allowed=False,
+        default_membership_months=1,
+    )
+
+    db.add(product)
+    db.flush()
+
+    return product
+
+
 @app.get("/api/join/front-desk")
-def front_desk_join_page_data(db: Session = Depends(get_db)):
+def front_desk_join_page_data(
+    db: Session = Depends(get_db),
+):
+    front_desk_rep = get_or_create_front_desk_rep(db)
+
     products = (
         db.query(MembershipProduct)
         .filter(
@@ -771,10 +867,17 @@ def front_desk_join_page_data(db: Session = Depends(get_db)):
         .all()
     )
 
+    db.commit()
+    db.refresh(front_desk_rep)
+
     return {
-        "rep_id": None,
-        "rep_name": "TNG Boxing",
-        "clover_link": "",
+        "rep_id": front_desk_rep.id,
+        "rep_name": (
+            front_desk_rep.user.name
+            if front_desk_rep.user
+            else "TNG Front Desk"
+        ),
+        "clover_link": front_desk_rep.clover_link or "",
         "registration_source": "front_desk",
         "products": products,
     }
@@ -2266,7 +2369,10 @@ def create_user_account(
     }
 
 @app.post("/api/clover/sync-sales")
-def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
+def sync_clover_sales(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     require_admin(user)
 
     merchant_id = os.getenv("CLOVER_MERCHANT_ID")
@@ -2274,9 +2380,16 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
     clover_env = os.getenv("CLOVER_ENV", "production")
 
     if not merchant_id or not api_token:
-        raise HTTPException(status_code=500, detail="Clover credentials missing")
+        raise HTTPException(
+            status_code=500,
+            detail="Clover credentials missing",
+        )
 
-    base_url = "https://api.clover.com" if clover_env == "production" else "https://apisandbox.dev.clover.com"
+    base_url = (
+        "https://api.clover.com"
+        if clover_env == "production"
+        else "https://apisandbox.dev.clover.com"
+    )
 
     headers = {
         "Authorization": f"Bearer {api_token}",
@@ -2284,7 +2397,11 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
     }
 
     response = requests.get(
-        f"{base_url}/v3/merchants/{merchant_id}/orders?expand=payments,lineItems,customers&limit=1000",
+        (
+            f"{base_url}/v3/merchants/{merchant_id}/orders"
+            "?expand=payments,lineItems,customers"
+            "&limit=1000"
+        ),
         headers=headers,
         timeout=30,
     )
@@ -2292,7 +2409,10 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
     if response.status_code >= 400:
         raise HTTPException(
             status_code=500,
-            detail=f"Clover sales sync error {response.status_code}: {response.text}"
+            detail=(
+                f"Clover sales sync error "
+                f"{response.status_code}: {response.text}"
+            ),
         )
 
     orders = response.json().get("elements", [])
@@ -2300,20 +2420,31 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
     synced = 0
     skipped = 0
     already_imported = 0
-    missing_member = 0
+    members_created = 0
+    missing_customer = 0
     invalid_order = 0
+    membership_sales = 0
+    non_membership_sales = 0
 
-    default_rep = db.query(SalesRep).first()
-    default_product = db.query(MembershipProduct).first()
+    default_rep = get_or_create_front_desk_rep(db)
 
-    if not default_rep or not default_product:
-        raise HTTPException(
-            status_code=400,
-            detail="Need at least one sales rep and one membership product before syncing sales"
+    default_product = (
+        db.query(MembershipProduct)
+        .filter(MembershipProduct.active == True)
+        .order_by(
+            MembershipProduct.is_membership.desc(),
+            MembershipProduct.id.asc(),
         )
+        .first()
+    )
+
+    if not default_product:
+        default_product = get_or_create_clover_fallback_product(db)
+
+    db.commit()
 
     for order in orders:
-        order_id = order.get("id")
+        order_id = (order.get("id") or "").strip()
         total_cents = order.get("total", 0) or 0
 
         if not order_id or total_cents <= 0:
@@ -2321,10 +2452,15 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             invalid_order += 1
             continue
 
-        payment_id = ""
-        payments = order.get("payments", {}).get("elements", [])
-        if payments:
-            payment_id = payments[0].get("id") or ""
+        payments = (
+            order.get("payments", {})
+            .get("elements", [])
+        )
+        payment_id = (
+            (payments[0].get("id") or "").strip()
+            if payments
+            else ""
+        )
 
         duplicate_filters = [
             Sale.clover_order_id == order_id,
@@ -2346,76 +2482,182 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             already_imported += 1
             continue
 
-        customer_id = ""
-        customers = order.get("customers", {}).get("elements", [])
-        if customers:
-            customer_id = customers[0].get("id") or ""
+        customers = (
+            order.get("customers", {})
+            .get("elements", [])
+        )
+        customer = customers[0] if customers else {}
+
+        customer_id = (
+            customer.get("id") or ""
+        ).strip()
+
+        first_name = (
+            customer.get("firstName") or ""
+        ).strip()
+        last_name = (
+            customer.get("lastName") or ""
+        ).strip()
+
+        emails = (
+            customer.get("emailAddresses", {})
+            .get("elements", [])
+        )
+        email = (
+            (emails[0].get("emailAddress") or "")
+            .strip()
+            .lower()
+            if emails
+            else ""
+        )
+
+        phones = (
+            customer.get("phoneNumbers", {})
+            .get("elements", [])
+        )
+        phone = (
+            (phones[0].get("phoneNumber") or "").strip()
+            if phones
+            else ""
+        )
 
         member = None
 
-        # Match by Clover Customer ID
         if customer_id:
-            member = db.query(Member).filter(
-                Member.clover_customer_id == customer_id
-            ).first()
+            member = (
+                db.query(Member)
+                .filter(
+                    Member.clover_customer_id == customer_id
+                )
+                .first()
+            )
 
-        # If not found, try matching by email
-        if not member:
-            customers = order.get("customers", {}).get("elements", [])
-            if customers:
-                emails = customers[0].get("emailAddresses", {}).get("elements", [])
-                if emails:
-                    email = emails[0].get("emailAddress")
-                    if email:
-                        member = db.query(Member).filter(
-                            Member.email == email
-                        ).first()
+        if not member and email:
+            member = (
+                db.query(Member)
+                .filter(
+                    func.lower(Member.email) == email
+                )
+                .first()
+            )
 
-        # If still not found, try matching by phone
-        if not member:
-            customers = order.get("customers", {}).get("elements", [])
-            if customers:
-                phones = customers[0].get("phoneNumbers", {}).get("elements", [])
-                if phones:
-                    phone = phones[0].get("phoneNumber")
-                    if phone:
-                        member = db.query(Member).filter(
-                            Member.phone == phone
-                        ).first()
+        if not member and phone:
+            member = (
+                db.query(Member)
+                .filter(Member.phone == phone)
+                .first()
+            )
+
+        if not member and customer_id:
+            member = Member(
+                first_name=first_name or "Clover",
+                last_name=last_name or "Customer",
+                email=email,
+                phone=phone,
+                status="customer",
+                membership_status="not_applicable",
+                clover_customer_id=customer_id,
+                membership_type="Clover Customer",
+                member_type="CUSTOMER",
+                waiver_signed=False,
+            )
+            db.add(member)
+            db.flush()
+
+            member.member_number = f"TNG-{member.id:06d}"
+            member.digital_member_id = generate_digital_member_id()
+            member.barcode = generate_barcode(
+                member.member_number
+            )
+            member.qr_code = generate_qr_code(
+                member.member_number
+            )
+            members_created += 1
 
         if not member:
             skipped += 1
-            missing_member += 1
+            missing_customer += 1
             continue
 
-        created_time = order.get("createdTime") or order.get("clientCreatedTime")
+        if customer_id and not member.clover_customer_id:
+            member.clover_customer_id = customer_id
+        if first_name:
+            member.first_name = first_name
+        if last_name:
+            member.last_name = last_name
+        if email:
+            member.email = email
+        if phone:
+            member.phone = phone
+
+        created_time = (
+            order.get("createdTime")
+            or order.get("clientCreatedTime")
+        )
 
         sale_date = datetime.utcnow()
+
         if created_time:
             try:
-                sale_date = datetime.fromtimestamp(int(created_time) / 1000)
-            except Exception:
+                sale_date = datetime.fromtimestamp(
+                    int(created_time) / 1000
+                )
+            except (TypeError, ValueError, OSError):
                 sale_date = datetime.utcnow()
+
         product = default_product
 
-        line_items = order.get("lineItems", {}).get("elements", [])
+        line_items = (
+            order.get("lineItems", {})
+            .get("elements", [])
+        )
+
         if line_items:
-            clover_item_name = line_items[0].get("name") or ""
+            clover_item_name = (
+                line_items[0].get("name") or ""
+            ).strip()
 
             if clover_item_name:
-                matched_product = db.query(MembershipProduct).filter(
-                    MembershipProduct.name == clover_item_name
-                ).first()
+                matched_product = (
+                    db.query(MembershipProduct)
+                    .filter(
+                        func.lower(MembershipProduct.name)
+                        == clover_item_name.lower()
+                    )
+                    .first()
+                )
 
                 if matched_product:
                     product = matched_product
-        is_membership_product = (
-            (product.category or "").strip().lower()
-            in {
-                "membership",
-                "monthly_membership",
-                "annual_membership",
-            }
+                else:
+                    category = categorize_clover_product(
+                        clover_item_name
+                    )
+
+                    product = MembershipProduct(
+                        name=clover_item_name,
+                        price=total_cents / 100,
+                        active=True,
+                        category=category,
+                        is_membership=(
+                            category == "membership"
+                        ),
+                    )
+                    db.add(product)
+                    db.flush()
+
+        membership_purchase = bool(
+            product.is_membership
+            or (
+                (product.category or "")
+                .strip()
+                .lower()
+                in {
+                    "membership",
+                    "monthly_membership",
+                    "annual_membership",
+                }
+            )
         )
 
         sale = Sale(
@@ -2429,50 +2671,76 @@ def sync_clover_sales(db: Session = Depends(get_db), user: User = Depends(curren
             clover_payment_id=payment_id,
             payment_method="clover",
             sale_date=sale_date,
+            quantity=1,
+            unit_price=total_cents / 100,
             sale_type=(
                 "membership"
-                if is_membership_product
+                if membership_purchase
                 else (product.category or "other")
             ),
         )
 
         db.add(sale)
 
-        if is_membership_product:
-            if not member.membership_start:
-                member.membership_start = sale_date
-
+        if membership_purchase:
             apply_membership(
-    member,
-    product,
-    purchase_date=sale_date,
-)
+                member,
+                product,
+                purchase_date=sale_date,
+            )
+            member.status = "active"
+            member.member_type = "MEMBER"
             member.last_payment_date = sale_date
+            membership_sales += 1
+        else:
+            non_membership_sales += 1
 
         synced += 1
 
     db.commit()
 
-    members_with_sales = (
-        db.query(Member)
-        .join(Sale)
-        .distinct()
-        .all()
-    )
+    affected_member_ids = [
+        row[0]
+        for row in (
+            db.query(Sale.member_id)
+            .filter(
+                Sale.payment_method == "clover",
+                Sale.member_id != None,
+            )
+            .distinct()
+            .all()
+        )
+    ]
 
-    for member in members_with_sales:
-        recalculate_member_from_payments(member, db)
+    if affected_member_ids:
+        affected_members = (
+            db.query(Member)
+            .filter(Member.id.in_(affected_member_ids))
+            .all()
+        )
 
-    db.commit()
+        for member in affected_members:
+            recalculate_member_from_payments(member, db)
+
+        db.commit()
 
     return {
         "message": "Clover sales synced",
+        "front_desk_rep_id": default_rep.id,
+        "front_desk_rep": (
+            default_rep.user.name
+            if default_rep.user
+            else "TNG Front Desk"
+        ),
         "orders_received": len(orders),
         "synced": synced,
         "skipped": skipped,
         "already_imported": already_imported,
-        "missing_member": missing_member,
+        "members_created": members_created,
+        "missing_customer": missing_customer,
         "invalid_order": invalid_order,
+        "membership_sales": membership_sales,
+        "non_membership_sales": non_membership_sales,
     }
 
 @app.post("/api/clover/sync-all")
@@ -2482,31 +2750,52 @@ def sync_all_clover(
 ):
     require_admin(user)
 
+    started_at = datetime.utcnow()
     results = {}
 
     try:
+        front_desk_rep = get_or_create_front_desk_rep(db)
+        db.commit()
+
+        results["setup"] = {
+            "front_desk_rep_id": front_desk_rep.id,
+            "front_desk_rep": (
+                front_desk_rep.user.name
+                if front_desk_rep.user
+                else "TNG Front Desk"
+            ),
+            "referral_slug": front_desk_rep.referral_slug,
+        }
+
         results["products"] = sync_clover_products(db, user)
-        print("✓ Products synced", flush=True)
-    except Exception as e:
-        print(f"PRODUCT SYNC ERROR: {e}", flush=True)
-        raise
+        print("Products synced", flush=True)
 
-    try:
         results["customers"] = sync_clover_customers(db, user)
-        print("✓ Customers synced", flush=True)
-    except Exception as e:
-        print(f"CUSTOMER SYNC ERROR: {e}", flush=True)
-        raise
+        print("Customers synced", flush=True)
 
-    try:
         results["sales"] = sync_clover_sales(db, user)
-        print("✓ Sales synced", flush=True)
-    except Exception as e:
-        print(f"SALES SYNC ERROR: {e}", flush=True)
+        print("Sales synced", flush=True)
+    except HTTPException:
+        db.rollback()
         raise
+    except Exception as error:
+        db.rollback()
+        logger.exception("Clover full sync failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clover sync failed: {error}",
+        )
+
+    completed_at = datetime.utcnow()
 
     return {
         "message": "Clover sync complete",
+        "started_at": started_at.isoformat(),
+        "completed_at": completed_at.isoformat(),
+        "duration_seconds": round(
+            (completed_at - started_at).total_seconds(),
+            2,
+        ),
         **results,
     }
 
