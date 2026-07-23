@@ -8,7 +8,7 @@ from .services.memberships import (
     recalculate_member_from_payments,
 )
 logger = logging.getLogger(__name__)
-load_dotenv(override=True)
+load_dotenv()
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
