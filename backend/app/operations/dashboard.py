@@ -26,26 +26,19 @@ def dashboard(
 
     cutoff_date = datetime(2026, 7, 20, 23, 59, 59)
 
+    paid_member_ids = (
+        db.query(Sale.member_id)
+        .filter(
+            Sale.payment_status == "paid",
+            Sale.member_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+
     paid_member_ids = [
         row[0]
-        for row in (
-            db.query(Sale.member_id)
-            .join(
-                MembershipProduct,
-                MembershipProduct.id == Sale.product_id,
-            )
-            .filter(
-                Sale.payment_status == "paid",
-                Sale.member_id != None,
-                or_(
-                    Sale.sale_type == "membership",
-                    MembershipProduct.is_membership == True,
-                    MembershipProduct.category == "membership",
-                ),
-            )
-            .distinct()
-            .all()
-        )
+        for row in paid_member_ids
         if row[0] is not None
     ]
 
