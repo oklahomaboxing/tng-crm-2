@@ -2595,6 +2595,19 @@ def sync_clover_sales(
             member.status = "active"
             member.member_type = "MEMBER"
             member.last_payment_date = sale_date
+
+            if not member.member_number:
+                member.member_number = f"TNG-{member.id:06d}"
+
+            if not member.digital_member_id:
+                member.digital_member_id = generate_digital_member_id()
+
+            if not member.barcode:
+                member.barcode = generate_barcode(member.member_number)
+
+            if not member.qr_code:
+                member.qr_code = generate_qr_code(member.member_number)
+
             membership_sales += 1
         else:
             non_membership_sales += 1
@@ -2646,25 +2659,6 @@ def sync_clover_sales(
         "membership_sales": membership_sales,
         "non_membership_sales": non_membership_sales,
     }
-if is_membership_product(product):
-    apply_membership(
-        member,
-        product,
-        purchase_date=sale_date,
-    )
-
-    if not member.member_number:
-        member.member_number = f"TNG-{member.id:06d}"
-
-    if not member.digital_member_id:
-        member.digital_member_id = generate_digital_member_id()
-
-    if not member.barcode:
-        member.barcode = generate_barcode(member.member_number)
-
-    if not member.qr_code:
-        member.qr_code = generate_qr_code(member.member_number)
-
 @app.post("/api/clover/sync-all")
 def sync_all_clover(
     db: Session = Depends(get_db),
