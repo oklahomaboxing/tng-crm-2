@@ -29,6 +29,7 @@ from fastapi import UploadFile, File
 import shutil
 import re
 from .operations.router import router as operations_router
+from .academy.routes import router as academy_router
 from pydantic import BaseModel, EmailStr, Field
 
 from .services.password_reset_service import (
@@ -172,7 +173,11 @@ run_sqlite_migrations()
 app = FastAPI(title="TNG CRM 2.0")
 
 app.include_router(operations_router)
+
 app.include_router(ai_router)
+
+app.include_router(academy_router)
+
 os.makedirs("uploads/members", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.add_middleware(
