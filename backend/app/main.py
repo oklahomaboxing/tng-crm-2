@@ -2460,8 +2460,8 @@ def sync_clover_sales(
 
         if not member and customer_id:
             member = Member(
-                first_name=first_name or "Clover",
-                last_name=last_name or "Customer",
+                first_name=first_name,
+                last_name=last_name,
                 email=email,
                 phone=phone,
                 status="customer",
@@ -2471,17 +2471,11 @@ def sync_clover_sales(
                 member_type="CUSTOMER",
                 waiver_signed=False,
             )
+
             db.add(member)
             db.flush()
 
-            member.member_number = f"TNG-{member.id:06d}"
-            member.digital_member_id = generate_digital_member_id()
-            member.barcode = generate_barcode(
-                member.member_number
-            )
-            member.qr_code = generate_qr_code(
-                member.member_number
-            )
+            # Do NOT assign a member number or IDs here.
             members_created += 1
 
         if not member:
@@ -2652,6 +2646,24 @@ def sync_clover_sales(
         "membership_sales": membership_sales,
         "non_membership_sales": non_membership_sales,
     }
+if is_membership_product(product):
+    apply_membership(
+        member,
+        product,
+        purchase_date=sale_date,
+    )
+
+    if not member.member_number:
+        member.member_number = f"TNG-{member.id:06d}"
+
+    if not member.digital_member_id:
+        member.digital_member_id = generate_digital_member_id()
+
+    if not member.barcode:
+        member.barcode = generate_barcode(member.member_number)
+
+    if not member.qr_code:
+        member.qr_code = generate_qr_code(member.member_number)
 
 @app.post("/api/clover/sync-all")
 def sync_all_clover(
