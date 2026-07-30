@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Alert,
@@ -16,6 +16,7 @@ import {
   createTheme,
 } from "@mui/material";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
+
 import SecurityCenter from "./pages/SecurityCenter";
 import AppShell from "./layout/AppShell.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
@@ -29,6 +30,7 @@ import FrontDesk from "./pages/FrontDesk.jsx";
 import Products from "./pages/Products.jsx";
 import DuplicateReview from "./pages/DuplicateReview.jsx";
 import AITrainer from "./pages/AITrainer.jsx";
+import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import QRReferrals from "./pages/QRReferrals.jsx";
 import MarketingCenter from "./pages/MarketingCenter.jsx";
@@ -698,7 +700,7 @@ if (window.location.pathname === "/register") return <JoinPage />;
       {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
       {page === "Leads" && <Leads />}
       {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
-      {page === "AI Trainer" && role !== "rep" && <AITrainer />}
+      {page === "TNG Academy" && role !== "rep" && <TNGAcademy />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
       {page === "QR Referrals" && <QRReferrals />}
@@ -761,3 +763,4 @@ root.render(
     {host === "display.tngboxinggym.com" ? <AIDisplay /> : <App />}
   </ThemeProvider>
 );
+
