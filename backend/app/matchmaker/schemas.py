@@ -20,6 +20,14 @@ class FighterCreate(BaseModel):
     amateur_record: str = ""
     boxrec_id: str = ""
     boxrec_url: str = ""
+    instagram: str = ""
+    facebook: str = ""
+    tiktok: str = ""
+    twitter: str = ""
+    submitted_by_name: str = ""
+    submitted_by_role: str = ""
+    submitted_by_phone: str = ""
+    submitted_by_email: str = ""
     manager_name: str = ""
     manager_phone: str = ""
     manager_email: str = ""
@@ -51,3 +59,33 @@ class BoutCreate(BaseModel):
     blue_purse: float = 0
     match_score: Optional[int] = None
     notes: str = ""
+
+
+class PublicFighterRegistration(BaseModel):
+    submitted_by_role: str = "boxer"
+    submitted_by_name: str = ""
+    submitted_by_phone: str = ""
+    submitted_by_email: str = ""
+
+    boxrec_id: str = ""
+    legal_name: str
+
+    pro_record: str = ""
+    stance: str = ""
+    gym: str = ""
+
+    city: str = ""
+    state: str = ""
+    country: str = "USA"
+
+    phone: str = ""
+    email: str = ""
+
+    instagram: str = ""
+    facebook: str = ""
+    tiktok: str = ""
+    twitter: str = ""
+
+    available_weight_min: Optional[float] = None
+    available_weight_max: Optional[float] = None
+    fight_weight: Optional[float] = None

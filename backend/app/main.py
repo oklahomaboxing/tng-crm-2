@@ -157,6 +157,17 @@ def run_sqlite_migrations():
     add_column_if_missing("sales", "quantity", "INTEGER DEFAULT 1")
     add_column_if_missing("sales", "unit_price", "FLOAT DEFAULT 0")
     add_column_if_missing("sales", "sale_type", "VARCHAR DEFAULT 'membership'")
+
+    # Boxing registration/contact fields
+    add_column_if_missing("boxing_fighters", "instagram", "VARCHAR DEFAULT ''")
+    add_column_if_missing("boxing_fighters", "facebook", "VARCHAR DEFAULT ''")
+    add_column_if_missing("boxing_fighters", "tiktok", "VARCHAR DEFAULT ''")
+    add_column_if_missing("boxing_fighters", "twitter", "VARCHAR DEFAULT ''")
+
+    add_column_if_missing("boxing_fighters", "submitted_by_name", "VARCHAR DEFAULT ''")
+    add_column_if_missing("boxing_fighters", "submitted_by_role", "VARCHAR DEFAULT ''")
+    add_column_if_missing("boxing_fighters", "submitted_by_phone", "VARCHAR DEFAULT ''")
+    add_column_if_missing("boxing_fighters", "submitted_by_email", "VARCHAR DEFAULT ''")
     with engine.connect() as conn:
         conn.execute(text("""
         CREATE TABLE IF NOT EXISTS attendance (

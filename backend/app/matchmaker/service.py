@@ -53,6 +53,15 @@ def fighter_dict(f):
         "amateur_record": f.amateur_record,
         "boxrec_id": f.boxrec_id,
         "boxrec_url": f.boxrec_url,
+        "boxrec_id": getattr(f, "boxrec_id", "") or "",
+        "instagram": getattr(f, "instagram", "") or "",
+        "facebook": getattr(f, "facebook", "") or "",
+        "tiktok": getattr(f, "tiktok", "") or "",
+        "twitter": getattr(f, "twitter", "") or "",
+        "submitted_by_name": getattr(f, "submitted_by_name", "") or "",
+        "submitted_by_role": getattr(f, "submitted_by_role", "") or "",
+        "submitted_by_phone": getattr(f, "submitted_by_phone", "") or "",
+        "submitted_by_email": getattr(f, "submitted_by_email", "") or "",
         "manager_name": f.manager_name,
         "manager_phone": f.manager_phone,
         "manager_email": f.manager_email,
@@ -90,6 +99,76 @@ def prior_bouts(db, a_id, b_id):
         )
     ).count()
 
+def fighter_weight_range(fighter):
+    low = fighter.available_weight_min
+    high = fighter.available_weight_max
+    fight = fighter.fight_weight
+
+    if low is None and fight is not None:
+        low = float(fight)
+
+    if high is None and fight is not None:
+        high = float(fight)
+
+    if low is None or high is None:
+        return None
+
+    low = float(low)
+    high = float(high)
+
+    if low > high:
+        low, high = high, low
+
+    return low, high
+
+
+def weight_compatibility(base, candidate):
+    a = fighter_weight_range(base)
+    b = fighter_weight_range(candidate)
+
+    if not a or not b:
+        return {
+            "has_ranges": False,
+            "overlap": False,
+            "overlap_low": None,
+            "overlap_high": None,
+            "suggested_weight": None,
+            "gap": None,
+        }
+
+    a_low, a_high = a
+    b_low, b_high = b
+
+    overlap_low = max(a_low, b_low)
+    overlap_high = min(a_high, b_high)
+
+    if overlap_low <= overlap_high:
+        suggested = round((overlap_low + overlap_high) / 2, 1)
+
+        return {
+            "has_ranges": True,
+            "overlap": True,
+            "overlap_low": round(overlap_low, 1),
+            "overlap_high": round(overlap_high, 1),
+            "suggested_weight": suggested,
+            "gap": 0,
+        }
+
+    if a_high < b_low:
+        gap = b_low - a_high
+    else:
+        gap = a_low - b_high
+
+    return {
+        "has_ranges": True,
+        "overlap": False,
+        "overlap_low": None,
+        "overlap_high": None,
+        "suggested_weight": None,
+        "gap": round(abs(gap), 1),
+    }
+
+
 def score_candidate(db, base, candidate, event_id=None):
     if candidate.id == base.id or not is_eligible(candidate):
         return None
@@ -100,36 +179,74 @@ def score_candidate(db, base, candidate, event_id=None):
     if base.gym and candidate.gym and base.gym.strip().lower() == candidate.gym.strip().lower():
         return None
 
-    bw = float(base.fight_weight or 0)
-    cw = float(candidate.fight_weight or 0)
-    if bw <= 0 or cw <= 0:
-        return None
-
-    if candidate.available_weight_min and bw < candidate.available_weight_min:
-        return None
-    if candidate.available_weight_max and bw > candidate.available_weight_max:
-        return None
+    compatibility = weight_compatibility(base, candidate)
 
     score = 100.0
     reasons = []
     warnings = []
 
-    wd = abs(bw - cw)
-    if wd <= 1:
-        penalty = 0
-    elif wd <= 2:
-        penalty = 3
-    elif wd <= 3:
-        penalty = 7
-    elif wd <= 5:
-        penalty = 14
-    elif wd <= 8:
-        penalty = 24
+    bw = float(base.fight_weight or 0)
+    cw = float(candidate.fight_weight or 0)
+
+    if compatibility["has_ranges"]:
+        if compatibility["overlap"]:
+            overlap_size = (
+                compatibility["overlap_high"]
+                - compatibility["overlap_low"]
+            )
+
+            reasons.append(
+                f'Weight overlap: {compatibility["overlap_low"]}-'
+                f'{compatibility["overlap_high"]} lb'
+            )
+
+            reasons.append(
+                f'Suggested weight: '
+                f'{compatibility["suggested_weight"]} lb'
+            )
+
+            if overlap_size >= 3:
+                score += 3
+            elif overlap_size < 1:
+                score -= 2
+        else:
+            gap = compatibility["gap"] or 0
+
+            reasons.append(f"Weight range gap: {gap:.1f} lb")
+
+            if gap <= 1:
+                score -= 8
+            elif gap <= 2:
+                score -= 15
+            elif gap <= 3:
+                score -= 25
+                warnings.append("Weight ranges do not overlap")
+            elif gap <= 5:
+                score -= 40
+                warnings.append("Large weight range gap")
+            else:
+                return None
+
+    elif bw > 0 and cw > 0:
+        wd = abs(bw - cw)
+
+        if wd <= 1:
+            penalty = 0
+        elif wd <= 2:
+            penalty = 3
+        elif wd <= 3:
+            penalty = 7
+        elif wd <= 5:
+            penalty = 14
+        elif wd <= 8:
+            penalty = 24
+        else:
+            return None
+
+        score -= penalty
+        reasons.append(f"Fight weight difference: {wd:.1f} lb")
     else:
-        penalty = 40
-        warnings.append("Large weight gap")
-    score -= penalty
-    reasons.append(f"Weight difference: {wd:.1f} lb")
+        return None
 
     br = parse_record(base.pro_record)
     cr = parse_record(candidate.pro_record)
@@ -189,7 +306,12 @@ def score_candidate(db, base, candidate, event_id=None):
         "fighter": fighter_dict(candidate),
         "score": score,
         "tier": tier,
-        "weight_diff": round(wd, 1),
+        "weight_diff": round(abs(bw - cw), 1) if bw and cw else None,
+        "weight_overlap": compatibility.get("overlap"),
+        "overlap_low": compatibility.get("overlap_low"),
+        "overlap_high": compatibility.get("overlap_high"),
+        "suggested_weight": compatibility.get("suggested_weight"),
+        "weight_gap": compatibility.get("gap"),
         "age": ca,
         "reasons": reasons,
         "warnings": warnings,
@@ -206,5 +328,13 @@ def ranked_matches(db, fighter_id, event_id=None, limit=40):
         if item:
             results.append(item)
 
-    results.sort(key=lambda x: (-x["score"], x["weight_diff"], x["fighter"]["legal_name"]))
+    results.sort(
+        key=lambda x: (
+            -x["score"],
+            0 if x.get("weight_overlap") else 1,
+            x.get("weight_gap") or 0,
+            x.get("weight_diff") or 999,
+            x["fighter"]["legal_name"],
+        )
+    )
     return fighter_dict(base), results[:limit]

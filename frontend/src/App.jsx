@@ -32,6 +32,7 @@ import DuplicateReview from "./pages/DuplicateReview.jsx";
 import AITrainer from "./pages/AITrainer.jsx";
 import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
 import Matchmaker from "./pages/Matchmaker.jsx";
+import FighterRegistration from "./pages/FighterRegistration.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import QRReferrals from "./pages/QRReferrals.jsx";
 import MarketingCenter from "./pages/MarketingCenter.jsx";
@@ -408,6 +409,10 @@ async function submitPasswordReset() {
   }, [isResetPasswordPage, passwordResetToken]);
 
   if (paymentStatus) return <PaymentMessage status={paymentStatus} />;
+
+  if (params.has("fighter-register")) {
+    return <FighterRegistration />;
+  }
 if (params.has("join")) return <JoinPage />;
 if (window.location.pathname === "/register") return <JoinPage />;
   if (!token) {

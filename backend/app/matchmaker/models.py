@@ -28,6 +28,16 @@ class BoxingFighter(Base):
     boxrec_url = Column(String, default="")
     boxrec_id = Column(String, default="")
 
+    instagram = Column(String, default="")
+    facebook = Column(String, default="")
+    tiktok = Column(String, default="")
+    twitter = Column(String, default="")
+
+    submitted_by_name = Column(String, default="")
+    submitted_by_role = Column(String, default="")
+    submitted_by_phone = Column(String, default="")
+    submitted_by_email = Column(String, default="")
+
     manager_name = Column(String, default="")
     manager_phone = Column(String, default="")
     manager_email = Column(String, default="")
