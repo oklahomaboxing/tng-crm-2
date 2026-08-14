@@ -8,6 +8,7 @@ import {
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import EventRoundedIcon from "@mui/icons-material/EventRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
+import EventWorkspace from "./EventWorkspace.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -76,6 +77,7 @@ export default function Matchmaker() {
   const [events, setEvents] = useState([]);
   const [fighterId, setFighterId] = useState("");
   const [eventId, setEventId] = useState("");
+  const [eventWorkspaceId, setEventWorkspaceId] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -346,6 +348,15 @@ export default function Matchmaker() {
     [fighters]
   );
 
+  if (eventWorkspaceId) {
+    return (
+      <EventWorkspace
+        eventId={eventWorkspaceId}
+        onBack={() => setEventWorkspaceId("")}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <Box sx={{ p: 3 }}>
@@ -460,6 +471,15 @@ export default function Matchmaker() {
                   ))}
                 </Select>
               </FormControl>
+
+              <Button
+                variant="outlined"
+                disabled={!eventId}
+                onClick={() => setEventWorkspaceId(eventId)}
+                sx={{ minWidth: 130 }}
+              >
+                Open Event
+              </Button>
 
               <Button
                 variant="contained"

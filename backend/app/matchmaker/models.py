@@ -93,3 +93,33 @@ class BoxingBout(Base):
     event = relationship("BoxingEvent")
     red_fighter = relationship("BoxingFighter", foreign_keys=[red_fighter_id])
     blue_fighter = relationship("BoxingFighter", foreign_keys=[blue_fighter_id])
+
+
+class BoxingEventChecklist(Base):
+    __tablename__ = "boxing_event_checklist"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(
+        Integer,
+        ForeignKey("boxing_events.id"),
+        nullable=False,
+        index=True,
+    )
+
+    section = Column(String, nullable=False)
+    item_key = Column(String, nullable=False)
+    label = Column(Text, nullable=False)
+
+    status = Column(String, default="not_started")
+    due_date = Column(String, default="")
+    assigned_to = Column(String, default="")
+    notes = Column(Text, default="")
+
+    sort_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )

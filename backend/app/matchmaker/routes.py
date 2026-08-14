@@ -2,9 +2,211 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from ..database import get_db
-from .models import BoxingFighter, BoxingEvent, BoxingBout
+from .models import BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
+
+
+PROMOTER_CHECKLIST = [
+    (
+        "promoter_license",
+        "Promoter License Application, Payment & Surety Bond current."
+    ),
+    (
+        "event_permit",
+        "Event Permit to Commission and Payment."
+    ),
+    (
+        "ticket_disclosure",
+        "Disclosure of ticket prices, sponsorships, VIP tables, etc."
+    ),
+    (
+        "insurance",
+        "$10,000 Medical and $10,000 accidental death insurance submitted to Commission at least 24-48 hours prior to event."
+    ),
+    (
+        "official_fees",
+        "Official fees and other fees provided to Commission at weigh-in."
+    ),
+    (
+        "ring_inspection",
+        "Ring/cage set up for inspection a minimum of 2 hours prior to start."
+    ),
+    (
+        "tickets_credentials",
+        "Everyone entering venue has a ticket with price clearly marked or a Commission-issued credential."
+    ),
+    (
+        "vip_sponsorship",
+        "VIP and sponsorship table prices disclosed for assessment."
+    ),
+    (
+        "canvas_cleaning",
+        "Individuals assigned to wipe blood and clean canvas between rounds and bouts."
+    ),
+    (
+        "safety_barrier",
+        "Bicycle rack or other Commission-acceptable barrier between spectators and ringside."
+    ),
+    (
+        "security",
+        "Commission briefed on security measures; security posted at entrances, exits and dressing rooms."
+    ),
+    (
+        "pregnancy_tests",
+        "Pregnancy tests purchased and available for female fighters at pre-fight physicals."
+    ),
+    (
+        "fighter_restrooms",
+        "Restrooms accessible to fighters."
+    ),
+    (
+        "dressing_room_water",
+        "Water available in dressing rooms and at ringside."
+    ),
+    (
+        "ringside_towels",
+        "Towels available at ringside."
+    ),
+    (
+        "ringside_tables",
+        "Tables and chairs completely around ring for official use only; no ticketed seating inside safety barrier."
+    ),
+    (
+        "corner_chairs",
+        "Four chairs in each corner for Commission Inspector and three corners."
+    ),
+    (
+        "judge_stools",
+        "Three raised stools centered between corners for judges."
+    ),
+    (
+        "ring_setup_brief",
+        "Commission briefed on ring/cage setup and authorized apron personnel."
+    ),
+    (
+        "commission_contact",
+        "Individuals appointed to handle Commission concerns and available immediately."
+    ),
+    (
+        "ambulance",
+        "Ambulance with licensed transport/resuscitation medical personnel on site before and during event."
+    ),
+]
+
+
+MATCHMAKER_CHECKLIST = [
+    (
+        "matchmaker_license",
+        "Matchmaker License Application and Payment."
+    ),
+    (
+        "bout_submission",
+        "Bout information submitted to Commission at least 7-14 business days prior, including legal names, DOB, location, order, corner, sport, rounds and weight class."
+    ),
+    (
+        "weigh_in_info",
+        "Weigh-in time and location submitted to Commission."
+    ),
+    (
+        "bout_contracts",
+        "Bout contracts prepared for Commission at weigh-in."
+    ),
+    (
+        "bloodwork",
+        "All fighter bloodwork results turned into Commission prior to weigh-in."
+    ),
+    (
+        "youth_release",
+        "Special parent release form for youth kickboxers under 18 received by Commission 7-10 days before event when applicable."
+    ),
+    (
+        "age_40_medicals",
+        "Special medical exams for fighters age 40 and older received by Commission 7-10 days before event when applicable."
+    ),
+]
+
+
+EVENT_FEES = [
+    {
+        "name": "Promoter License",
+        "amount": "$250 + $10,000 Surety Bond",
+    },
+    {
+        "name": "Matchmaker License",
+        "amount": "$150",
+    },
+    {
+        "name": "Event Permit",
+        "amount": "$50 or $100 depending on event type",
+    },
+    {
+        "name": "Sport Permits",
+        "amount": "Permit required for each sport on card",
+    },
+    {
+        "name": "Fighter Insurance",
+        "amount": "Depends on carrier and number of bouts",
+    },
+    {
+        "name": "Officials",
+        "amount": "Promoter responsibility; varies by bouts, rounds, title fights and travel",
+    },
+    {
+        "name": "Assessment",
+        "amount": "5% gross ticket sales or $450 minimum",
+    },
+    {
+        "name": "Vendor Assessment",
+        "amount": "5% gross vendor sales",
+    },
+    {
+        "name": "Streaming / Broadcast",
+        "amount": "5% assessment",
+    },
+]
+
+
+def seed_event_checklist(db, event_id):
+    existing = (
+        db.query(BoxingEventChecklist)
+        .filter(BoxingEventChecklist.event_id == event_id)
+        .count()
+    )
+
+    if existing:
+        return
+
+    order = 0
+
+    for key, label in PROMOTER_CHECKLIST:
+        db.add(
+            BoxingEventChecklist(
+                event_id=event_id,
+                section="promoter",
+                item_key=key,
+                label=label,
+                sort_order=order,
+            )
+        )
+        order += 1
+
+    order = 0
+
+    for key, label in MATCHMAKER_CHECKLIST:
+        db.add(
+            BoxingEventChecklist(
+                event_id=event_id,
+                section="matchmaker",
+                item_key=key,
+                label=label,
+                sort_order=order,
+            )
+        )
+        order += 1
+
+    db.commit()
+
 
 def build_matchmaker_router(current_user_dependency):
     router = APIRouter(prefix="/api/boxing", tags=["boxing-matchmaker"])
@@ -297,6 +499,183 @@ def build_matchmaker_router(current_user_dependency):
             }
             for e in rows
         ]
+
+    @router.get("/events/{event_id}/workspace")
+    def get_event_workspace(
+        event_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(BoxingEvent.id == event_id)
+            .first()
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found",
+            )
+
+        seed_event_checklist(db, event_id)
+
+        bouts = (
+            db.query(BoxingBout)
+            .filter(BoxingBout.event_id == event_id)
+            .order_by(BoxingBout.id.asc())
+            .all()
+        )
+
+        bout_rows = []
+
+        fighter_ids = set()
+
+        for bout in bouts:
+            fighter_ids.add(bout.red_fighter_id)
+            fighter_ids.add(bout.blue_fighter_id)
+
+            bout_rows.append({
+                "id": bout.id,
+                "status": bout.status,
+                "weight_agreed": bout.weight_agreed,
+                "rounds": bout.rounds,
+                "bout_type": bout.bout_type,
+                "red_purse": bout.red_purse,
+                "blue_purse": bout.blue_purse,
+                "match_score": bout.match_score,
+                "notes": bout.notes,
+                "red": fighter_dict(bout.red_fighter),
+                "blue": fighter_dict(bout.blue_fighter),
+            })
+
+        fighters = []
+
+        if fighter_ids:
+            fighter_rows = (
+                db.query(BoxingFighter)
+                .filter(BoxingFighter.id.in_(fighter_ids))
+                .all()
+            )
+
+            fighters = [
+                fighter_dict(f)
+                for f in fighter_rows
+            ]
+
+        checklist = (
+            db.query(BoxingEventChecklist)
+            .filter(BoxingEventChecklist.event_id == event_id)
+            .order_by(
+                BoxingEventChecklist.section.asc(),
+                BoxingEventChecklist.sort_order.asc(),
+            )
+            .all()
+        )
+
+        checklist_rows = [
+            {
+                "id": row.id,
+                "section": row.section,
+                "item_key": row.item_key,
+                "label": row.label,
+                "status": row.status,
+                "due_date": row.due_date,
+                "assigned_to": row.assigned_to,
+                "notes": row.notes,
+            }
+            for row in checklist
+        ]
+
+        return {
+            "event": {
+                "id": event.id,
+                "slug": event.slug,
+                "name": event.name,
+                "venue": event.venue,
+                "venue_address": event.venue_address,
+                "event_date": event.event_date,
+                "status": event.status,
+            },
+            "bouts": bout_rows,
+            "fighters": fighters,
+            "checklist": checklist_rows,
+            "fees": EVENT_FEES,
+        }
+
+
+    @router.patch("/events/{event_id}/checklist/{item_id}")
+    def update_event_checklist(
+        event_id: int,
+        item_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        row = (
+            db.query(BoxingEventChecklist)
+            .filter(
+                BoxingEventChecklist.id == item_id,
+                BoxingEventChecklist.event_id == event_id,
+            )
+            .first()
+        )
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="Checklist item not found",
+            )
+
+        allowed_statuses = {
+            "not_started",
+            "in_progress",
+            "submitted",
+            "complete",
+            "needs_attention",
+        }
+
+        if "status" in data:
+            status = str(data.get("status") or "").strip()
+
+            if status not in allowed_statuses:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid checklist status",
+                )
+
+            row.status = status
+
+        if "due_date" in data:
+            row.due_date = str(
+                data.get("due_date") or ""
+            ).strip()
+
+        if "assigned_to" in data:
+            row.assigned_to = str(
+                data.get("assigned_to") or ""
+            ).strip()
+
+        if "notes" in data:
+            row.notes = str(
+                data.get("notes") or ""
+            ).strip()
+
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "id": row.id,
+            "status": row.status,
+            "due_date": row.due_date,
+            "assigned_to": row.assigned_to,
+            "notes": row.notes,
+        }
+
 
     @router.post("/events")
     def create_event(data: EventCreate, db: Session = Depends(get_db), user=Depends(current_user_dependency)):

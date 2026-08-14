@@ -180,6 +180,30 @@ def run_sqlite_migrations():
             FOREIGN KEY(member_id) REFERENCES members(id)
         )
         """))
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS boxing_event_checklist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL,
+            section VARCHAR NOT NULL,
+            item_key VARCHAR NOT NULL,
+            label TEXT NOT NULL,
+            status VARCHAR DEFAULT 'not_started',
+            due_date VARCHAR DEFAULT '',
+            assigned_to VARCHAR DEFAULT '',
+            notes TEXT DEFAULT '',
+            sort_order INTEGER DEFAULT 0,
+            created_at DATETIME,
+            updated_at DATETIME,
+            FOREIGN KEY(event_id) REFERENCES boxing_events(id)
+        )
+        """))
+
+        conn.execute(text("""
+        CREATE INDEX IF NOT EXISTS
+        ix_boxing_event_checklist_event_id
+        ON boxing_event_checklist(event_id)
+        """))
+
         conn.commit()
 
 run_sqlite_migrations()
