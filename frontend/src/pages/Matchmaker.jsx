@@ -632,21 +632,42 @@ export default function Matchmaker() {
         )}
       </Stack>
 
-      <Dialog open={fighterOpen} onClose={() => !working && setFighterOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Add Fighter</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Typography variant="subtitle2" fontWeight={900}>
-              BoxRec Fighter Lookup
-            </Typography>
+      <Dialog
+        open={fighterOpen}
+        onClose={() => !working && setFighterOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          <Typography variant="h5" fontWeight={950}>
+            Add Fighter
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Add only what you need for matchmaking. More details can be completed later.
+          </Typography>
+        </DialogTitle>
 
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={8}>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ pt: 1 }}>
+
+            {/* BOXREC LOOKUP */}
+            <Box>
+              <Typography
+                variant="subtitle2"
+                fontWeight={900}
+                sx={{ mb: 1 }}
+              >
+                BoxRec
+              </Typography>
+
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+              >
                 <TextField
                   fullWidth
                   label="BoxRec ID"
                   placeholder="Example: 123456"
-                  helperText="Enter the fighter's BoxRec ID. TNG will first check whether this fighter is already in your database."
                   value={fighterForm.boxrec_id}
                   onChange={(e) => {
                     setExistingFighterId("");
@@ -662,339 +683,273 @@ export default function Matchmaker() {
                     }
                   }}
                 />
-              </Grid>
 
-              <Grid item xs={12} md={4}>
                 <Button
-                  fullWidth
-                  variant="contained"
+                  variant="outlined"
                   disabled={boxrecSearching || !fighterForm.boxrec_id}
                   onClick={lookupBoxRec}
                   sx={{
-                    bgcolor: "#111",
+                    minWidth: 120,
                     minHeight: 56,
-                    "&:hover": { bgcolor: "#222" },
+                    fontWeight: 900,
                   }}
                 >
-                  {boxrecSearching ? "Searching..." : "Find Fighter"}
+                  {boxrecSearching ? "Finding..." : "Find"}
                 </Button>
-              </Grid>
-            </Grid>
+              </Stack>
 
-            {existingFighterId && (
-              <Alert severity="success">
-                Fighter found in TNG. The information below was populated from the saved fighter record.
-              </Alert>
-            )}
+              {existingFighterId && (
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  Fighter already exists in TNG. Saved information has been loaded.
+                </Alert>
+              )}
+            </Box>
+
+            <Divider />
+
+            {/* FIGHTER */}
+            <Box>
+              <Typography
+                variant="subtitle2"
+                fontWeight={900}
+                sx={{ mb: 1.5 }}
+              >
+                Fighter
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    required
+                    autoFocus={!fighterForm.boxrec_id}
+                    label="Fighter Name"
+                    placeholder="First and last name"
+                    value={fighterForm.legal_name}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        legal_name: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Pro Record"
+                    placeholder="5-1-0"
+                    value={fighterForm.pro_record}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        pro_record: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Fight Weight"
+                    placeholder="140"
+                    value={fighterForm.fight_weight}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        fight_weight: e.target.value,
+                      })
+                    }
+                    InputProps={{
+                      endAdornment: (
+                        <Typography color="text.secondary">
+                          lb
+                        </Typography>
+                      ),
+                    }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Stance</InputLabel>
+                    <Select
+                      value={fighterForm.stance}
+                      label="Stance"
+                      onChange={(e) =>
+                        setFighterForm({
+                          ...fighterForm,
+                          stance: e.target.value,
+                        })
+                      }
+                    >
+                      <MenuItem value="">Unknown</MenuItem>
+                      <MenuItem value="orthodox">Orthodox</MenuItem>
+                      <MenuItem value="southpaw">Southpaw</MenuItem>
+                      <MenuItem value="switch">Switch</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Gym"
+                    value={fighterForm.gym}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        gym: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Box>
 
             <Divider />
 
-            <Typography variant="subtitle2" fontWeight={900}>Basic Information</Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  required
-                  label="Legal Name"
-                  value={fighterForm.legal_name}
-                  onChange={(e) => setFighterForm({ ...fighterForm, legal_name: e.target.value })}
-                />
+            {/* LOCATION */}
+            <Box>
+              <Typography
+                variant="subtitle2"
+                fontWeight={900}
+                sx={{ mb: 1.5 }}
+              >
+                Location
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="City"
+                    value={fighterForm.city}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        city: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    fullWidth
+                    label="State"
+                    value={fighterForm.state}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        state: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    fullWidth
+                    label="Country"
+                    value={fighterForm.country}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        country: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
               </Grid>
-              <Grid item xs={12} md={3}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Date of Birth"
-                  InputLabelProps={{ shrink: true }}
-                  value={fighterForm.dob}
-                  onChange={(e) => setFighterForm({ ...fighterForm, dob: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <FormControl fullWidth>
-                  <InputLabel>Stance</InputLabel>
-                  <Select
-                    value={fighterForm.stance}
-                    label="Stance"
-                    onChange={(e) => setFighterForm({ ...fighterForm, stance: e.target.value })}
-                  >
-                    <MenuItem value="">Unknown</MenuItem>
-                    <MenuItem value="orthodox">Orthodox</MenuItem>
-                    <MenuItem value="southpaw">Southpaw</MenuItem>
-                    <MenuItem value="switch">Switch</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Phone"
-                  value={fighterForm.phone}
-                  onChange={(e) => setFighterForm({ ...fighterForm, phone: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  value={fighterForm.email}
-                  onChange={(e) => setFighterForm({ ...fighterForm, email: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Gym"
-                  value={fighterForm.gym}
-                  onChange={(e) => setFighterForm({ ...fighterForm, gym: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Coach"
-                  value={fighterForm.coach}
-                  onChange={(e) => setFighterForm({ ...fighterForm, coach: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="City"
-                  value={fighterForm.city}
-                  onChange={(e) => setFighterForm({ ...fighterForm, city: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={2}>
-                <TextField
-                  fullWidth
-                  label="State"
-                  value={fighterForm.state}
-                  onChange={(e) => setFighterForm({ ...fighterForm, state: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={2}>
-                <TextField
-                  fullWidth
-                  label="Country"
-                  value={fighterForm.country}
-                  onChange={(e) => setFighterForm({ ...fighterForm, country: e.target.value })}
-                />
-              </Grid>
-            </Grid>
+            </Box>
 
             <Divider />
-            <Typography variant="subtitle2" fontWeight={900}>Boxing Profile</Typography>
 
-            <Grid container spacing={2}>
-              <Grid item xs={6} md={3}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Fight Weight"
-                  value={fighterForm.fight_weight}
-                  onChange={(e) => setFighterForm({ ...fighterForm, fight_weight: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={6} md={3}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Walk Weight"
-                  value={fighterForm.walk_weight}
-                  onChange={(e) => setFighterForm({ ...fighterForm, walk_weight: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={6} md={3}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Height (in)"
-                  value={fighterForm.height_in}
-                  onChange={(e) => setFighterForm({ ...fighterForm, height_in: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={6} md={3}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Reach (in)"
-                  value={fighterForm.reach_in}
-                  onChange={(e) => setFighterForm({ ...fighterForm, reach_in: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Pro Record (W-L-D)"
-                  placeholder="5-1-0"
-                  value={fighterForm.pro_record}
-                  onChange={(e) => setFighterForm({ ...fighterForm, pro_record: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Amateur Record"
-                  value={fighterForm.amateur_record}
-                  onChange={(e) => setFighterForm({ ...fighterForm, amateur_record: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="BoxRec URL"
-                  value={fighterForm.boxrec_url}
-                  onChange={(e) => setFighterForm({ ...fighterForm, boxrec_url: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={6} md={3}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Available Min Weight"
-                  value={fighterForm.available_weight_min}
-                  onChange={(e) => setFighterForm({ ...fighterForm, available_weight_min: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={6} md={3}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Available Max Weight"
-                  value={fighterForm.available_weight_max}
-                  onChange={(e) => setFighterForm({ ...fighterForm, available_weight_max: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Last Fight"
-                  InputLabelProps={{ shrink: true }}
-                  value={fighterForm.last_fight_date}
-                  onChange={(e) => setFighterForm({ ...fighterForm, last_fight_date: e.target.value })}
-                />
-              </Grid>
-            </Grid>
+            {/* AVAILABLE WEIGHT */}
+            <Box>
+              <Typography
+                variant="subtitle2"
+                fontWeight={900}
+                sx={{ mb: 0.5 }}
+              >
+                Available Weight Range
+              </Typography>
 
-            <Divider />
-            <Typography variant="subtitle2" fontWeight={900}>Eligibility / Commission Status</Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 1.5 }}
+              >
+                Optional — useful when searching for opponents.
+              </Typography>
 
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Suspension</InputLabel>
-                  <Select
-                    value={fighterForm.suspension_status}
-                    label="Suspension"
-                    onChange={(e) => setFighterForm({ ...fighterForm, suspension_status: e.target.value })}
-                  >
-                    <MenuItem value="verified_clear">Verified Clear</MenuItem>
-                    <MenuItem value="needs_review">Needs Review</MenuItem>
-                    <MenuItem value="suspended">Suspended</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Bloodwork</InputLabel>
-                  <Select
-                    value={fighterForm.bloodwork_status}
-                    label="Bloodwork"
-                    onChange={(e) => setFighterForm({ ...fighterForm, bloodwork_status: e.target.value })}
-                  >
-                    <MenuItem value="verified">Verified</MenuItem>
-                    <MenuItem value="missing">Missing</MenuItem>
-                    <MenuItem value="expired">Expired</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>OK License</InputLabel>
-                  <Select
-                    value={fighterForm.ok_license_status}
-                    label="OK License"
-                    onChange={(e) => setFighterForm({ ...fighterForm, ok_license_status: e.target.value })}
-                  >
-                    <MenuItem value="active">Active</MenuItem>
-                    <MenuItem value="pending">Pending</MenuItem>
-                    <MenuItem value="unknown">Unknown</MenuItem>
-                    <MenuItem value="expired">Expired</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Federal ID</InputLabel>
-                  <Select
-                    value={fighterForm.federal_id_status}
-                    label="Federal ID"
-                    onChange={(e) => setFighterForm({ ...fighterForm, federal_id_status: e.target.value })}
-                  >
-                    <MenuItem value="active">Active</MenuItem>
-                    <MenuItem value="pending">Pending</MenuItem>
-                    <MenuItem value="unknown">Unknown</MenuItem>
-                    <MenuItem value="expired">Expired</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Bloodwork Expires"
-                  InputLabelProps={{ shrink: true }}
-                  value={fighterForm.bloodwork_expires}
-                  onChange={(e) => setFighterForm({ ...fighterForm, bloodwork_expires: e.target.value })}
-                />
-              </Grid>
-            </Grid>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Minimum"
+                    placeholder="138"
+                    value={fighterForm.available_weight_min}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        available_weight_min: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
 
-            <Divider />
-            <Typography variant="subtitle2" fontWeight={900}>Manager</Typography>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Maximum"
+                    placeholder="143"
+                    value={fighterForm.available_weight_max}
+                    onChange={(e) =>
+                      setFighterForm({
+                        ...fighterForm,
+                        available_weight_max: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Box>
 
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Manager Name"
-                  value={fighterForm.manager_name}
-                  onChange={(e) => setFighterForm({ ...fighterForm, manager_name: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Manager Phone"
-                  value={fighterForm.manager_phone}
-                  onChange={(e) => setFighterForm({ ...fighterForm, manager_phone: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Manager Email"
-                  value={fighterForm.manager_email}
-                  onChange={(e) => setFighterForm({ ...fighterForm, manager_email: e.target.value })}
-                />
-              </Grid>
-            </Grid>
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button disabled={working} onClick={() => setFighterOpen(false)}>Cancel</Button>
+
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            disabled={working}
+            onClick={() => {
+              setFighterOpen(false);
+              setExistingFighterId("");
+            }}
+          >
+            Cancel
+          </Button>
+
           <Button
             variant="contained"
-            disabled={working}
+            disabled={working || !fighterForm.legal_name.trim()}
             onClick={createFighter}
-            sx={{ bgcolor: "#e31b23" }}
+            sx={{
+              bgcolor: "#e31b23",
+              fontWeight: 900,
+              px: 3,
+            }}
           >
             {working
               ? "Saving..."
               : existingFighterId
-                ? "Use Existing Fighter"
+                ? "Use Fighter"
                 : "Add Fighter"}
           </Button>
         </DialogActions>
