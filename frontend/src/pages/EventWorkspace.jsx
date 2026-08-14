@@ -210,6 +210,59 @@ export default function EventWorkspace({
     }));
   }
 
+  async function updateBoutOrder(bout, value) {
+    const order = Number(value);
+
+    if (!Number.isInteger(order) || order < 1) {
+      setMessage("Bout order must be 1 or higher.");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/bouts/${bout.id}/order`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            bout_order: order,
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not update bout order"
+        );
+      }
+
+      setData((old) => ({
+        ...old,
+        bouts: old.bouts
+          .map((row) =>
+            row.id === bout.id
+              ? { ...row, bout_order: order }
+              : row
+          )
+          .sort(
+            (a, b) =>
+              Number(a.bout_order || 999) -
+              Number(b.bout_order || 999)
+          ),
+      }));
+
+      setMessage(`Bout moved to #${order}`);
+    } catch (error) {
+      setMessage(
+        error.message || "Could not update bout order"
+      );
+    }
+  }
+
   const promoterItems = useMemo(
     () =>
       (data?.checklist || []).filter(
@@ -817,12 +870,36 @@ export default function EventWorkspace({
             {bouts.map((bout, index) => (
               <Card key={bout.id}>
                 <CardContent>
-                  <Typography
-                    variant="h5"
-                    fontWeight={950}
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={2}
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    justifyContent="space-between"
                   >
-                    Bout Sheet #{index + 1}
-                  </Typography>
+                    <Typography
+                      variant="h5"
+                      fontWeight={950}
+                    >
+                      Bout Sheet #{bout.bout_order || index + 1}
+                    </Typography>
+
+                    <TextField
+                      label="Bout Order"
+                      type="number"
+                      size="small"
+                      defaultValue={
+                        bout.bout_order || index + 1
+                      }
+                      inputProps={{ min: 1 }}
+                      onBlur={(e) =>
+                        updateBoutOrder(
+                          bout,
+                          e.target.value
+                        )
+                      }
+                      sx={{ width: 130 }}
+                    />
+                  </Stack>
 
                   <Divider sx={{ my: 2 }} />
 

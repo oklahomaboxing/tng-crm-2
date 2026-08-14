@@ -765,7 +765,7 @@ def build_matchmaker_router(current_user_dependency):
         bouts = (
             db.query(BoxingBout)
             .filter(BoxingBout.event_id == event_id)
-            .order_by(BoxingBout.id.asc())
+            .order_by(BoxingBout.bout_order.asc(), BoxingBout.id.asc())
             .all()
         )
 
@@ -779,6 +779,7 @@ def build_matchmaker_router(current_user_dependency):
 
             bout_rows.append({
                 "id": bout.id,
+                "bout_order": bout.bout_order or 0,
                 "status": bout.status,
                 "weight_agreed": bout.weight_agreed,
                 "rounds": bout.rounds,
@@ -1025,6 +1026,51 @@ def build_matchmaker_router(current_user_dependency):
         if not base:
             raise HTTPException(status_code=404, detail="Fighter not found")
         return {"fighter": base, "event_id": event_id, "matches": matches}
+
+    @router.patch("/bouts/{bout_id}/order")
+    def update_bout_order(
+        bout_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        bout = (
+            db.query(BoxingBout)
+            .filter(BoxingBout.id == bout_id)
+            .first()
+        )
+
+        if not bout:
+            raise HTTPException(
+                status_code=404,
+                detail="Bout not found",
+            )
+
+        try:
+            order = int(data.get("bout_order"))
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Bout order must be a number",
+            )
+
+        if order < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Bout order must be 1 or higher",
+            )
+
+        bout.bout_order = order
+        db.commit()
+        db.refresh(bout)
+
+        return {
+            "id": bout.id,
+            "bout_order": bout.bout_order,
+        }
+
 
     @router.post("/bouts")
     def create_bout(data: BoutCreate, db: Session = Depends(get_db), user=Depends(current_user_dependency)):

@@ -82,6 +82,7 @@ class BoxingBout(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(Integer, ForeignKey("boxing_events.id"), nullable=True, index=True)
+    bout_order = Column(Integer, default=0)
     red_fighter_id = Column(Integer, ForeignKey("boxing_fighters.id"), nullable=False)
     blue_fighter_id = Column(Integer, ForeignKey("boxing_fighters.id"), nullable=False)
     weight_agreed = Column(Float, nullable=True)

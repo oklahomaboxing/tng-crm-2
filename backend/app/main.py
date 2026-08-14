@@ -254,6 +254,8 @@ def run_sqlite_migrations():
         """))
 
         conn.commit()
+    add_column_if_missing("boxing_bouts", "bout_order", "INTEGER DEFAULT 0")
+
 
 run_sqlite_migrations()
 app = FastAPI(title="TNG CRM 2.0")
