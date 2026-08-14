@@ -170,7 +170,18 @@ def weight_compatibility(base, candidate):
 
 
 def score_candidate(db, base, candidate, event_id=None):
-    if candidate.id == base.id or not is_eligible(candidate):
+    # Matchmaking and commission readiness are different things.
+    # A fighter can be a good potential opponent even if bloodwork,
+    # license, or other paperwork still needs to be completed.
+
+    if candidate.id == base.id:
+        return None
+
+    # Hard blocks only.
+    if candidate.available is False:
+        return None
+
+    if (candidate.suspension_status or "") == "suspended":
         return None
 
     if event_id and already_booked(db, candidate.id, event_id):
@@ -184,6 +195,20 @@ def score_candidate(db, base, candidate, event_id=None):
     score = 100.0
     reasons = []
     warnings = []
+
+    # Commission readiness warnings should NOT remove a fighter
+    # from matchmaking recommendations.
+    if (candidate.suspension_status or "") != "verified_clear":
+        warnings.append("Suspension status needs review")
+
+    if (candidate.bloodwork_status or "") != "verified":
+        warnings.append("Bloodwork not verified")
+
+    if (candidate.ok_license_status or "") not in ("active", "pending"):
+        warnings.append("OK license needs review")
+
+    if (candidate.federal_id_status or "") not in ("active", "pending"):
+        warnings.append("Federal ID needs review")
 
     bw = float(base.fight_weight or 0)
     cw = float(candidate.fight_weight or 0)
