@@ -91,6 +91,10 @@ export default function Matchmaker() {
 
   const boxrecWindowRef = useRef(null);
   const [fighterForm, setFighterForm] = useState(emptyFighter);
+
+  const [editFighterOpen, setEditFighterOpen] = useState(false);
+  const [editFighterId, setEditFighterId] = useState("");
+  const [editFighterForm, setEditFighterForm] = useState(emptyFighter);
   const [eventForm, setEventForm] = useState(emptyEvent);
 
   async function readJson(response) {
@@ -314,6 +318,128 @@ export default function Matchmaker() {
       setWorking(false);
     }
   }
+
+  function openEditFighter(fighter) {
+    setEditFighterId(fighter.id);
+
+    setEditFighterForm({
+      ...emptyFighter,
+      ...fighter,
+
+      boxrec_id: fighter.boxrec_id || "",
+
+      fight_weight:
+        fighter.fight_weight ?? "",
+
+      walk_weight:
+        fighter.walk_weight ?? "",
+
+      height_in:
+        fighter.height_in ?? "",
+
+      reach_in:
+        fighter.reach_in ?? "",
+
+      available_weight_min:
+        fighter.available_weight_min ?? "",
+
+      available_weight_max:
+        fighter.available_weight_max ?? "",
+    });
+
+    setEditFighterOpen(true);
+  }
+
+  async function saveFighterEdits() {
+    if (!editFighterId) return;
+
+    if (!editFighterForm.legal_name?.trim()) {
+      setMsgType("warning");
+      setMsg("Fighter name is required.");
+      return;
+    }
+
+    setWorking(true);
+
+    try {
+      const payload = {
+        ...editFighterForm,
+
+        legal_name:
+          editFighterForm.legal_name.trim(),
+
+        boxrec_id:
+          (editFighterForm.boxrec_id || "").trim(),
+
+        height_in:
+          numberOrNull(editFighterForm.height_in),
+
+        reach_in:
+          numberOrNull(editFighterForm.reach_in),
+
+        walk_weight:
+          numberOrNull(editFighterForm.walk_weight),
+
+        fight_weight:
+          numberOrNull(editFighterForm.fight_weight),
+
+        available_weight_min:
+          numberOrNull(
+            editFighterForm.available_weight_min
+          ),
+
+        available_weight_max:
+          numberOrNull(
+            editFighterForm.available_weight_max
+          ),
+      };
+
+      const response = await fetch(
+        `${API}/api/boxing/fighters/${editFighterId}`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not update fighter"
+        );
+      }
+
+      setEditFighterOpen(false);
+      setEditFighterId("");
+      setEditFighterForm(emptyFighter);
+
+      setMsgType("success");
+      setMsg(
+        `${data.legal_name || payload.legal_name} updated.`
+      );
+
+      await load();
+
+      if (
+        fighterId &&
+        Number(fighterId) === Number(data.id)
+      ) {
+        setResult(null);
+      }
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message || "Could not update fighter"
+      );
+    } finally {
+      setWorking(false);
+    }
+  }
+
 
   async function createEvent() {
     if (!eventForm.name.trim()) {
@@ -652,6 +778,19 @@ export default function Matchmaker() {
                             label={f.eligible ? "Eligible" : "Needs review"}
                             color={f.eligible ? "success" : "default"}
                           />
+                        </TableCell>
+
+                        <TableCell align="right">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditFighter(f);
+                            }}
+                          >
+                            Edit
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1105,6 +1244,410 @@ export default function Matchmaker() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog
+        open={editFighterOpen}
+        onClose={() => !working && setEditFighterOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          <Typography variant="h5" fontWeight={950}>
+            Edit Fighter
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary">
+            Update the information used for matchmaking and event operations.
+          </Typography>
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={3} sx={{ pt: 1 }}>
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1.5 }}>
+                Fighter
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={8}>
+                  <TextField
+                    fullWidth
+                    required
+                    label="Fighter Name"
+                    value={editFighterForm.legal_name || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        legal_name: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    label="BoxRec ID"
+                    value={editFighterForm.boxrec_id || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        boxrec_id:
+                          e.target.value.replace(/[^0-9]/g, ""),
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    label="Pro Record"
+                    placeholder="8-2-0"
+                    value={editFighterForm.pro_record || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        pro_record: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Stance</InputLabel>
+
+                    <Select
+                      label="Stance"
+                      value={editFighterForm.stance || ""}
+                      onChange={(e) =>
+                        setEditFighterForm({
+                          ...editFighterForm,
+                          stance: e.target.value,
+                        })
+                      }
+                    >
+                      <MenuItem value="">Unknown</MenuItem>
+                      <MenuItem value="orthodox">Orthodox</MenuItem>
+                      <MenuItem value="southpaw">Southpaw</MenuItem>
+                      <MenuItem value="switch">Switch</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    label="Gym"
+                    value={editFighterForm.gym || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        gym: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Divider />
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1.5 }}>
+                Matchmaking Weight
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={6} md={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Low Weight"
+                    value={editFighterForm.available_weight_min ?? ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        available_weight_min: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={6} md={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="High Weight"
+                    value={editFighterForm.available_weight_max ?? ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        available_weight_max: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Preferred Fight Weight"
+                    value={editFighterForm.fight_weight ?? ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        fight_weight: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Divider />
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1.5 }}>
+                Contact
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Phone"
+                    value={editFighterForm.phone || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        phone: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    type="email"
+                    label="Email"
+                    value={editFighterForm.email || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        email: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    label="Instagram"
+                    value={editFighterForm.instagram || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        instagram: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    label="Facebook"
+                    value={editFighterForm.facebook || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        facebook: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    label="TikTok"
+                    value={editFighterForm.tiktok || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        tiktok: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Divider />
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1.5 }}>
+                Location
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={5}>
+                  <TextField
+                    fullWidth
+                    label="City"
+                    value={editFighterForm.city || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        city: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={6} md={3}>
+                  <TextField
+                    fullWidth
+                    label="State"
+                    value={editFighterForm.state || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        state: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={6} md={4}>
+                  <TextField
+                    fullWidth
+                    label="Country"
+                    value={editFighterForm.country || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        country: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Divider />
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1.5 }}>
+                Commission / Medical
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Bloodwork</InputLabel>
+
+                    <Select
+                      label="Bloodwork"
+                      value={editFighterForm.bloodwork_status || "missing"}
+                      onChange={(e) =>
+                        setEditFighterForm({
+                          ...editFighterForm,
+                          bloodwork_status: e.target.value,
+                        })
+                      }
+                    >
+                      <MenuItem value="missing">Missing</MenuItem>
+                      <MenuItem value="verified">Verified</MenuItem>
+                      <MenuItem value="expired">Expired</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="Bloodwork Expires"
+                    InputLabelProps={{ shrink: true }}
+                    value={editFighterForm.bloodwork_expires || ""}
+                    onChange={(e) =>
+                      setEditFighterForm({
+                        ...editFighterForm,
+                        bloodwork_expires: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Suspension</InputLabel>
+
+                    <Select
+                      label="Suspension"
+                      value={
+                        editFighterForm.suspension_status ||
+                        "needs_review"
+                      }
+                      onChange={(e) =>
+                        setEditFighterForm({
+                          ...editFighterForm,
+                          suspension_status: e.target.value,
+                        })
+                      }
+                    >
+                      <MenuItem value="needs_review">
+                        Needs Review
+                      </MenuItem>
+
+                      <MenuItem value="verified_clear">
+                        Verified Clear
+                      </MenuItem>
+
+                      <MenuItem value="suspended">
+                        Suspended
+                      </MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </Box>
+
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            disabled={working}
+            onClick={() => setEditFighterOpen(false)}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            disabled={
+              working ||
+              !editFighterForm.legal_name?.trim()
+            }
+            onClick={saveFighterEdits}
+            sx={{
+              bgcolor: "#e31b23",
+              fontWeight: 900,
+            }}
+          >
+            {working ? "Saving..." : "Save Changes"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
 
       <Dialog open={eventOpen} onClose={() => !working && setEventOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Add Boxing Event</DialogTitle>

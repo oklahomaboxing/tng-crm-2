@@ -483,6 +483,151 @@ def build_matchmaker_router(current_user_dependency):
         db.refresh(row)
         return fighter_dict(row)
 
+    @router.patch("/fighters/{fighter_id}")
+    def update_fighter(
+        fighter_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        allowed = {
+            "legal_name",
+            "dob",
+            "phone",
+            "email",
+            "city",
+            "state",
+            "country",
+            "stance",
+            "gym",
+            "coach",
+
+            "height_in",
+            "reach_in",
+
+            "walk_weight",
+            "fight_weight",
+            "available_weight_min",
+            "available_weight_max",
+
+            "pro_record",
+            "amateur_record",
+
+            "boxrec_id",
+            "boxrec_url",
+
+            "instagram",
+            "facebook",
+            "tiktok",
+            "twitter",
+
+            "manager_name",
+            "manager_phone",
+            "manager_email",
+
+            "ok_license_status",
+            "federal_id_status",
+            "suspension_status",
+
+            "bloodwork_status",
+            "bloodwork_expires",
+
+            "last_fight_date",
+            "available",
+        }
+
+        if "boxrec_id" in data:
+            boxrec_id = str(
+                data.get("boxrec_id") or ""
+            ).strip()
+
+            if boxrec_id:
+                duplicate = (
+                    db.query(BoxingFighter)
+                    .filter(
+                        BoxingFighter.boxrec_id == boxrec_id,
+                        BoxingFighter.id != fighter_id,
+                    )
+                    .first()
+                )
+
+                if duplicate:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"BoxRec ID {boxrec_id} is already "
+                            f"assigned to {duplicate.legal_name}"
+                        ),
+                    )
+
+        numeric_fields = {
+            "height_in",
+            "reach_in",
+            "walk_weight",
+            "fight_weight",
+            "available_weight_min",
+            "available_weight_max",
+        }
+
+        for key, value in data.items():
+            if key not in allowed:
+                continue
+
+            if key in numeric_fields:
+                if value in ("", None):
+                    setattr(fighter, key, None)
+                else:
+                    try:
+                        setattr(fighter, key, float(value))
+                    except (TypeError, ValueError):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Invalid value for {key}",
+                        )
+
+                continue
+
+            if key == "available":
+                setattr(
+                    fighter,
+                    key,
+                    bool(value),
+                )
+                continue
+
+            setattr(
+                fighter,
+                key,
+                value if value is not None else "",
+            )
+
+        # Keep BoxRec URL synced with BoxRec ID.
+        if fighter.boxrec_id:
+            fighter.boxrec_url = (
+                f"https://boxrec.com/en/box-pro/"
+                f"{fighter.boxrec_id}"
+            )
+
+        db.commit()
+        db.refresh(fighter)
+
+        return fighter_dict(fighter)
+
+
     @router.get("/events")
     def list_events(db: Session = Depends(get_db), user=Depends(current_user_dependency)):
         require_staff(user)
