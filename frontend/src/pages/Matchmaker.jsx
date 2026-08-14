@@ -33,6 +33,7 @@ const emptyFighter = {
   fight_weight: "",
   pro_record: "",
   amateur_record: "",
+  boxrec_id: "",
   boxrec_url: "",
   manager_name: "",
   manager_phone: "",
@@ -78,6 +79,8 @@ export default function Matchmaker() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [boxrecSearching, setBoxrecSearching] = useState(false);
+  const [existingFighterId, setExistingFighterId] = useState("");
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("info");
 
@@ -123,7 +126,69 @@ export default function Matchmaker() {
     load();
   }, []);
 
+  async function lookupBoxRec() {
+    const boxrecId = (fighterForm.boxrec_id || "").trim();
+
+    if (!boxrecId) {
+      setMsgType("warning");
+      setMsg("Enter a BoxRec ID first.");
+      return;
+    }
+
+    setBoxrecSearching(true);
+    setExistingFighterId("");
+    setMsg("");
+
+    try {
+      const r = await fetch(
+        `${API}/api/boxing/fighters/by-boxrec/${encodeURIComponent(boxrecId)}`,
+        { headers: authHeaders() }
+      );
+
+      const d = await readJson(r);
+
+      if (r.status === 404) {
+        setMsgType("info");
+        setMsg(
+          `BoxRec ID ${boxrecId} is not in TNG yet. Enter or verify the fighter information below, then click Add Fighter.`
+        );
+        return;
+      }
+
+      if (!r.ok) {
+        throw new Error(d.detail || "Could not search BoxRec ID");
+      }
+
+      setFighterForm({
+        ...emptyFighter,
+        ...d,
+        boxrec_id: boxrecId,
+        available: d.available ?? true,
+      });
+
+      setExistingFighterId(d.id || "");
+
+      setMsgType("success");
+      setMsg(
+        `${d.legal_name || "Fighter"} already exists in TNG. Their information has been loaded.`
+      );
+    } catch (e) {
+      setMsgType("error");
+      setMsg(e.message || "Could not search BoxRec ID");
+    } finally {
+      setBoxrecSearching(false);
+    }
+  }
+
   async function createFighter() {
+    if (existingFighterId) {
+      setFighterId(existingFighterId);
+      setFighterOpen(false);
+      setMsgType("success");
+      setMsg("Existing fighter selected for matchmaking.");
+      return;
+    }
+
     if (!fighterForm.legal_name.trim()) {
       setMsgType("warning");
       setMsg("Fighter name is required.");
@@ -153,6 +218,7 @@ export default function Matchmaker() {
       if (!r.ok) throw new Error(d.detail || "Could not add fighter");
 
       setFighterForm(emptyFighter);
+      setExistingFighterId("");
       setFighterOpen(false);
       setMsgType("success");
       setMsg(`${d.legal_name || payload.legal_name} added to the fighter pool.`);
@@ -570,6 +636,59 @@ export default function Matchmaker() {
         <DialogTitle>Add Fighter</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography variant="subtitle2" fontWeight={900}>
+              BoxRec Fighter Lookup
+            </Typography>
+
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={8}>
+                <TextField
+                  fullWidth
+                  label="BoxRec ID"
+                  placeholder="Example: 123456"
+                  helperText="Enter the fighter's BoxRec ID. TNG will first check whether this fighter is already in your database."
+                  value={fighterForm.boxrec_id}
+                  onChange={(e) => {
+                    setExistingFighterId("");
+                    setFighterForm({
+                      ...fighterForm,
+                      boxrec_id: e.target.value.replace(/[^0-9]/g, ""),
+                    });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      lookupBoxRec();
+                    }
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disabled={boxrecSearching || !fighterForm.boxrec_id}
+                  onClick={lookupBoxRec}
+                  sx={{
+                    bgcolor: "#111",
+                    minHeight: 56,
+                    "&:hover": { bgcolor: "#222" },
+                  }}
+                >
+                  {boxrecSearching ? "Searching..." : "Find Fighter"}
+                </Button>
+              </Grid>
+            </Grid>
+
+            {existingFighterId && (
+              <Alert severity="success">
+                Fighter found in TNG. The information below was populated from the saved fighter record.
+              </Alert>
+            )}
+
+            <Divider />
+
             <Typography variant="subtitle2" fontWeight={900}>Basic Information</Typography>
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
@@ -872,7 +991,11 @@ export default function Matchmaker() {
             onClick={createFighter}
             sx={{ bgcolor: "#e31b23" }}
           >
-            {working ? "Saving..." : "Add Fighter"}
+            {working
+              ? "Saving..."
+              : existingFighterId
+                ? "Use Existing Fighter"
+                : "Add Fighter"}
           </Button>
         </DialogActions>
       </Dialog>

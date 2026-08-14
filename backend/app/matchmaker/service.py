@@ -51,6 +51,7 @@ def fighter_dict(f):
         "fight_weight": f.fight_weight,
         "pro_record": f.pro_record,
         "amateur_record": f.amateur_record,
+        "boxrec_id": f.boxrec_id,
         "boxrec_url": f.boxrec_url,
         "manager_name": f.manager_name,
         "manager_phone": f.manager_phone,

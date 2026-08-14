@@ -21,10 +21,55 @@ def build_matchmaker_router(current_user_dependency):
             for f in db.query(BoxingFighter).order_by(BoxingFighter.legal_name.asc()).all()
         ]
 
+    @router.get("/fighters/by-boxrec/{boxrec_id}")
+    def get_fighter_by_boxrec(
+        boxrec_id: str,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        normalized = str(boxrec_id or "").strip()
+
+        if not normalized:
+            raise HTTPException(status_code=400, detail="BoxRec ID is required")
+
+        row = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.boxrec_id == normalized)
+            .first()
+        )
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter with this BoxRec ID is not in the TNG database yet",
+            )
+
+        return fighter_dict(row)
+
     @router.post("/fighters")
     def create_fighter(data: FighterCreate, db: Session = Depends(get_db), user=Depends(current_user_dependency)):
         require_staff(user)
-        row = BoxingFighter(**data.model_dump())
+
+        payload = data.model_dump()
+        boxrec_id = str(payload.get("boxrec_id") or "").strip()
+        payload["boxrec_id"] = boxrec_id
+
+        if boxrec_id:
+            existing = (
+                db.query(BoxingFighter)
+                .filter(BoxingFighter.boxrec_id == boxrec_id)
+                .first()
+            )
+
+            if existing:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"BoxRec ID {boxrec_id} is already assigned to {existing.legal_name}",
+                )
+
+        row = BoxingFighter(**payload)
         db.add(row)
         db.commit()
         db.refresh(row)

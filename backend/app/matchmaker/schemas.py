@@ -18,6 +18,7 @@ class FighterCreate(BaseModel):
     fight_weight: Optional[float] = None
     pro_record: str = ""
     amateur_record: str = ""
+    boxrec_id: str = ""
     boxrec_url: str = ""
     manager_name: str = ""
     manager_phone: str = ""
