@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Alert,
@@ -31,6 +31,7 @@ import Products from "./pages/Products.jsx";
 import DuplicateReview from "./pages/DuplicateReview.jsx";
 import AITrainer from "./pages/AITrainer.jsx";
 import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
+import Matchmaker from "./pages/Matchmaker.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import QRReferrals from "./pages/QRReferrals.jsx";
 import MarketingCenter from "./pages/MarketingCenter.jsx";
@@ -701,6 +702,7 @@ if (window.location.pathname === "/register") return <JoinPage />;
       {page === "Leads" && <Leads />}
       {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
       {page === "TNG Academy" && role !== "rep" && <TNGAcademy />}
+      {page === "Matchmaker" && role !== "rep" && <Matchmaker />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
       {page === "QR Referrals" && <QRReferrals />}
@@ -763,4 +765,5 @@ root.render(
     {host === "display.tngboxinggym.com" ? <AIDisplay /> : <App />}
   </ThemeProvider>
 );
+
 

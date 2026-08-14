@@ -28,6 +28,7 @@ export const ROLE_MENUS = {
     "Dashboard",
     "Members",
     "TNG Academy",
+    "Matchmaker",
     "Products",
     "Front Desk",
     "Sales",
@@ -57,6 +58,7 @@ const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
   Members: <PeopleAltRoundedIcon />,
   "TNG Academy": <SchoolRoundedIcon />,
+  Matchmaker: <SportsMmaRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
   "Front Desk": <QrCodeScannerRoundedIcon />,
   Sales: <PointOfSaleRoundedIcon />,
@@ -168,3 +170,4 @@ export default function Sidebar({
     </Box>
   );
 }
+

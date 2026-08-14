@@ -39,6 +39,8 @@ from .services.password_reset_service import (
 )
 from sqlalchemy import text
 from .database import Base, engine, get_db
+from .matchmaker import models as matchmaker_models
+from .matchmaker.routes import build_matchmaker_router
 from .services.sms_service import send_sms
 from .models import (
     User,
@@ -177,6 +179,9 @@ app.include_router(operations_router)
 app.include_router(ai_router)
 
 app.include_router(academy_router)
+
+# TNG Boxing Matchmaker
+app.include_router(build_matchmaker_router(current_user))
 
 os.makedirs("uploads/members", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
