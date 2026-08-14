@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, FormControl,
@@ -88,6 +88,8 @@ export default function Matchmaker() {
 
   const [fighterOpen, setFighterOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
+
+  const boxrecWindowRef = useRef(null);
   const [fighterForm, setFighterForm] = useState(emptyFighter);
   const [eventForm, setEventForm] = useState(emptyEvent);
 
@@ -128,6 +130,66 @@ export default function Matchmaker() {
     load();
   }, []);
 
+  function openBoxRecProfile() {
+    const boxrecId = (fighterForm.boxrec_id || "").trim();
+
+    if (!boxrecId) {
+      setMsgType("warning");
+      setMsg("Enter a BoxRec ID.");
+      return;
+    }
+
+    const url =
+      `https://boxrec.com/en/box-pro/${encodeURIComponent(boxrecId)}`;
+
+    try {
+      if (
+        boxrecWindowRef.current &&
+        !boxrecWindowRef.current.closed
+      ) {
+        boxrecWindowRef.current.location.href = url;
+        boxrecWindowRef.current.focus();
+        return;
+      }
+
+      boxrecWindowRef.current = window.open(
+        url,
+        "tngBoxRecProfile",
+        "popup=yes,width=1100,height=820,resizable=yes,scrollbars=yes"
+      );
+
+      if (!boxrecWindowRef.current) {
+        window.open(
+          url,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      }
+    } catch {
+      window.open(
+        url,
+        "_blank",
+        "noopener,noreferrer"
+      );
+    }
+  }
+
+  function closeBoxRecProfile() {
+    try {
+      if (
+        boxrecWindowRef.current &&
+        !boxrecWindowRef.current.closed
+      ) {
+        boxrecWindowRef.current.close();
+      }
+    } catch {
+      // Ignore cross-window browser restrictions.
+    }
+
+    boxrecWindowRef.current = null;
+  }
+
+
   async function lookupBoxRec() {
     const boxrecId = (fighterForm.boxrec_id || "").trim();
 
@@ -136,6 +198,10 @@ export default function Matchmaker() {
       setMsg("Enter a BoxRec ID first.");
       return;
     }
+
+    // Open BoxRec immediately from the user's click.
+    // Doing this before any await helps prevent browser popup blocking.
+    openBoxRecProfile();
 
     setBoxrecSearching(true);
     setExistingFighterId("");
@@ -182,12 +248,18 @@ export default function Matchmaker() {
     }
   }
 
-  async function createFighter() {
+  async function createFighter(findAfterSave = false) {
     if (existingFighterId) {
       setFighterId(existingFighterId);
       setFighterOpen(false);
-      setMsgType("success");
-      setMsg("Existing fighter selected for matchmaking.");
+
+      if (findAfterSave) {
+        await findMatches(existingFighterId);
+      } else {
+        setMsgType("success");
+        setMsg("Existing fighter selected for matchmaking.");
+      }
+
       return;
     }
 
@@ -222,10 +294,19 @@ export default function Matchmaker() {
       setFighterForm(emptyFighter);
       setExistingFighterId("");
       setFighterOpen(false);
+      closeBoxRecProfile();
       setMsgType("success");
       setMsg(`${d.legal_name || payload.legal_name} added to the fighter pool.`);
+
       await load();
-      if (d.id) setFighterId(d.id);
+
+      if (d.id) {
+        setFighterId(d.id);
+
+        if (findAfterSave) {
+          await findMatches(d.id);
+        }
+      }
     } catch (e) {
       setMsgType("error");
       setMsg(e.message || "Could not add fighter");
@@ -272,10 +353,11 @@ export default function Matchmaker() {
     }
   }
 
-  async function findMatches() {
-    if (!fighterId) {
-      setMsgType("warning");
-      setMsg("Choose a fighter first.");
+  async function findMatches(targetFighterId = fighterId) {
+    if (!targetFighterId) {
+      // Instead of warning that the fighter must already exist,
+      // immediately open Add Fighter.
+      setFighterOpen(true);
       return;
     }
 
@@ -283,7 +365,7 @@ export default function Matchmaker() {
     setMsg("");
     try {
       const q = eventId ? `?event_id=${eventId}` : "";
-      const r = await fetch(`${API}/api/boxing/match/${fighterId}${q}`, {
+      const r = await fetch(`${API}/api/boxing/match/${targetFighterId}${q}`, {
         headers: authHeaders(),
       });
       const d = await readJson(r);
@@ -714,7 +796,19 @@ export default function Matchmaker() {
                     fontWeight: 900,
                   }}
                 >
-                  {boxrecSearching ? "Finding..." : "Find"}
+                  {boxrecSearching ? "Checking..." : "Find Fighter"}
+                </Button>
+
+                <Button
+                  variant="text"
+                  onClick={closeBoxRecProfile}
+                  disabled={!fighterForm.boxrec_id}
+                  sx={{
+                    minHeight: 56,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Close BoxRec
                 </Button>
               </Stack>
 
@@ -951,26 +1045,48 @@ export default function Matchmaker() {
             onClick={() => {
               setFighterOpen(false);
               setExistingFighterId("");
+              closeBoxRecProfile();
             }}
           >
             Cancel
           </Button>
 
           <Button
-            variant="contained"
+            variant="outlined"
             disabled={working || !fighterForm.legal_name.trim()}
-            onClick={createFighter}
+            onClick={() => createFighter(false)}
             sx={{
-              bgcolor: "#e31b23",
               fontWeight: 900,
-              px: 3,
             }}
           >
             {working
               ? "Saving..."
               : existingFighterId
                 ? "Use Fighter"
-                : "Add Fighter"}
+                : "Save Fighter"}
+          </Button>
+
+          <Button
+            variant="contained"
+            disabled={
+              working ||
+              !fighterForm.legal_name.trim() ||
+              (
+                !fighterForm.fight_weight &&
+                !fighterForm.available_weight_min &&
+                !fighterForm.available_weight_max
+              )
+            }
+            onClick={() => createFighter(true)}
+            sx={{
+              bgcolor: "#e31b23",
+              fontWeight: 950,
+              px: 3,
+            }}
+          >
+            {working
+              ? "Finding..."
+              : "Save & Find Opponents"}
           </Button>
         </DialogActions>
       </Dialog>
