@@ -354,6 +354,15 @@ export default function Matchmaker() {
   }
 
   async function findMatches(targetFighterId = fighterId) {
+    // React onClick can pass a MouseEvent when a function is used directly.
+    // Only accept a numeric/string fighter ID here.
+    if (
+      targetFighterId &&
+      typeof targetFighterId === "object"
+    ) {
+      targetFighterId = fighterId;
+    }
+
     if (!targetFighterId) {
       // Instead of warning that the fighter must already exist,
       // immediately open Add Fighter.
@@ -364,8 +373,14 @@ export default function Matchmaker() {
     setWorking(true);
     setMsg("");
     try {
+      const resolvedFighterId = Number(targetFighterId);
+
+      if (!Number.isInteger(resolvedFighterId) || resolvedFighterId <= 0) {
+        throw new Error("A valid fighter must be selected before finding opponents.");
+      }
+
       const q = eventId ? `?event_id=${eventId}` : "";
-      const r = await fetch(`${API}/api/boxing/match/${targetFighterId}${q}`, {
+      const r = await fetch(`${API}/api/boxing/match/${resolvedFighterId}${q}`, {
         headers: authHeaders(),
       });
       const d = await readJson(r);
@@ -567,7 +582,7 @@ export default function Matchmaker() {
                 variant="contained"
                 startIcon={<SportsMmaRoundedIcon />}
                 disabled={!fighterId || working}
-                onClick={findMatches}
+                onClick={() => findMatches()}
                 sx={{ minWidth: 190, bgcolor: "#e31b23" }}
               >
                 Find Opponents
