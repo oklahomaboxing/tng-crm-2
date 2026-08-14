@@ -168,6 +168,31 @@ def run_sqlite_migrations():
     add_column_if_missing("boxing_fighters", "submitted_by_role", "VARCHAR DEFAULT ''")
     add_column_if_missing("boxing_fighters", "submitted_by_phone", "VARCHAR DEFAULT ''")
     add_column_if_missing("boxing_fighters", "submitted_by_email", "VARCHAR DEFAULT ''")
+
+
+    add_column_if_missing(
+        "boxing_fighters",
+        "bloodwork_provider",
+        "VARCHAR DEFAULT ''"
+    )
+
+    add_column_if_missing(
+        "boxing_fighters",
+        "bloodwork_requested_date",
+        "VARCHAR DEFAULT ''"
+    )
+
+    add_column_if_missing(
+        "boxing_fighters",
+        "bloodwork_completed_date",
+        "VARCHAR DEFAULT ''"
+    )
+
+    add_column_if_missing(
+        "boxing_fighters",
+        "bloodwork_notes",
+        "TEXT DEFAULT ''"
+    )
     with engine.connect() as conn:
         conn.execute(text("""
         CREATE TABLE IF NOT EXISTS attendance (
@@ -202,6 +227,30 @@ def run_sqlite_migrations():
         CREATE INDEX IF NOT EXISTS
         ix_boxing_event_checklist_event_id
         ON boxing_event_checklist(event_id)
+        """))
+
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS boxing_event_fees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL,
+            fee_key VARCHAR NOT NULL,
+            name VARCHAR NOT NULL,
+            estimate VARCHAR DEFAULT '',
+            actual_amount FLOAT,
+            paid BOOLEAN DEFAULT 0,
+            due_date VARCHAR DEFAULT '',
+            payee VARCHAR DEFAULT '',
+            notes TEXT DEFAULT '',
+            created_at DATETIME,
+            updated_at DATETIME,
+            FOREIGN KEY(event_id) REFERENCES boxing_events(id)
+        )
+        """))
+
+        conn.execute(text("""
+        CREATE INDEX IF NOT EXISTS
+        ix_boxing_event_fees_event_id
+        ON boxing_event_fees(event_id)
         """))
 
         conn.commit()

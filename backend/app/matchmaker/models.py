@@ -50,6 +50,10 @@ class BoxingFighter(Base):
     suspension_notes = Column(Text, default="")
     bloodwork_status = Column(String, default="missing")
     bloodwork_expires = Column(String, default="")
+    bloodwork_provider = Column(String, default="")
+    bloodwork_requested_date = Column(String, default="")
+    bloodwork_completed_date = Column(String, default="")
+    bloodwork_notes = Column(Text, default="")
 
     available = Column(Boolean, default=True)
     available_weight_min = Column(Float, nullable=True)
@@ -116,6 +120,37 @@ class BoxingEventChecklist(Base):
     notes = Column(Text, default="")
 
     sort_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
+class BoxingEventFee(Base):
+    __tablename__ = "boxing_event_fees"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    event_id = Column(
+        Integer,
+        ForeignKey("boxing_events.id"),
+        nullable=False,
+        index=True,
+    )
+
+    fee_key = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    estimate = Column(String, default="")
+
+    actual_amount = Column(Float, nullable=True)
+    paid = Column(Boolean, default=False)
+
+    due_date = Column(String, default="")
+    payee = Column(String, default="")
+    notes = Column(Text, default="")
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(

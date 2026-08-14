@@ -104,6 +104,81 @@ export default function EventWorkspace({
     load();
   }, [eventId]);
 
+  async function updateBloodwork(fighter, changes) {
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/fighters/${fighter.id}/bloodwork`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(changes),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not update bloodwork"
+        );
+      }
+
+      setData((old) => ({
+        ...old,
+        fighters: old.fighters.map((row) =>
+          row.id === fighter.id
+            ? { ...row, ...body }
+            : row
+        ),
+      }));
+
+      setMessage(`${fighter.legal_name} bloodwork updated.`);
+    } catch (error) {
+      setMessage(
+        error.message || "Could not update bloodwork"
+      );
+    }
+  }
+
+  async function updateFee(fee, changes) {
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/events/${eventId}/fees/${fee.id}`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(changes),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not update fee"
+        );
+      }
+
+      setData((old) => ({
+        ...old,
+        fees: old.fees.map((row) =>
+          row.id === fee.id
+            ? { ...row, ...body }
+            : row
+        ),
+      }));
+    } catch (error) {
+      setMessage(
+        error.message || "Could not update fee"
+      );
+    }
+  }
+
+
   async function updateChecklist(item, changes) {
     const response = await fetch(
       `${API}/api/boxing/events/${eventId}/checklist/${item.id}`,
@@ -982,32 +1057,23 @@ export default function EventWorkspace({
         {tab === 5 && (
           <Stack spacing={2}>
             <Stack
-              direction={{
-                xs: "column",
-                sm: "row",
-              }}
+              direction={{ xs: "column", sm: "row" }}
               justifyContent="space-between"
               spacing={1}
             >
               <Box>
-                <Typography
-                  variant="h5"
-                  fontWeight={950}
-                >
+                <Typography variant="h5" fontWeight={950}>
                   Fighter Bloodwork
                 </Typography>
 
                 <Typography color="text.secondary">
-                  Track readiness for every fighter
-                  on this card.
+                  Update bloodwork status for each fighter on this card.
                 </Typography>
               </Box>
 
               <Button
                 variant="outlined"
-                startIcon={
-                  <BloodtypeRoundedIcon />
-                }
+                startIcon={<BloodtypeRoundedIcon />}
                 onClick={() =>
                   window.open(
                     REQUEST_A_TEST_URL,
@@ -1016,83 +1082,170 @@ export default function EventWorkspace({
                   )
                 }
               >
-                Request A Test
+                Open Request A Test
               </Button>
             </Stack>
 
-            {fighters.map((fighter) => {
-              const verified =
-                fighter.bloodwork_status ===
-                "verified";
+            {fighters.map((fighter) => (
+              <Card key={fighter.id}>
+                <CardContent>
+                  <Stack spacing={2}>
+                    <Box>
+                      <Typography
+                        variant="h6"
+                        fontWeight={950}
+                      >
+                        {fighter.legal_name}
+                      </Typography>
 
-              return (
-                <Card key={fighter.id}>
-                  <CardContent>
-                    <Grid
-                      container
-                      spacing={2}
-                      alignItems="center"
-                    >
-                      <Grid item xs={12} md={4}>
-                        <Typography
-                          variant="h6"
-                          fontWeight={950}
-                        >
-                          {fighter.legal_name}
-                        </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        {fighter.pro_record || "Record N/A"}
+                        {" • "}
+                        {fighter.fight_weight
+                          ? `${fighter.fight_weight} lb`
+                          : "Weight N/A"}
+                      </Typography>
+                    </Box>
 
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={3}>
+                        <Select
+                          fullWidth
+                          value={
+                            fighter.bloodwork_status ||
+                            "missing"
+                          }
+                          onChange={(e) =>
+                            updateBloodwork(fighter, {
+                              bloodwork_status:
+                                e.target.value,
+                            })
+                          }
                         >
-                          {fighter.pro_record ||
-                            "Record N/A"}
-                          {" • "}
-                          {fighter.fight_weight
-                            ? `${fighter.fight_weight} lb`
-                            : "Weight N/A"}
-                        </Typography>
+                          <MenuItem value="missing">
+                            Missing
+                          </MenuItem>
+
+                          <MenuItem value="requested">
+                            Requested
+                          </MenuItem>
+
+                          <MenuItem value="pending">
+                            Pending
+                          </MenuItem>
+
+                          <MenuItem value="verified">
+                            Verified
+                          </MenuItem>
+
+                          <MenuItem value="expired">
+                            Expired
+                          </MenuItem>
+                        </Select>
                       </Grid>
 
                       <Grid item xs={12} md={3}>
-                        <Chip
-                          icon={
-                            verified ? (
-                              <CheckCircleRoundedIcon />
-                            ) : undefined
+                        <TextField
+                          fullWidth
+                          label="Provider"
+                          defaultValue={
+                            fighter.bloodwork_provider || ""
                           }
-                          label={
-                            verified
-                              ? "Verified"
-                              : fighter.bloodwork_status ||
-                                "Missing"
-                          }
-                          color={
-                            verified
-                              ? "success"
-                              : "warning"
+                          onBlur={(e) =>
+                            updateBloodwork(fighter, {
+                              bloodwork_provider:
+                                e.target.value,
+                            })
                           }
                         />
                       </Grid>
 
                       <Grid item xs={12} md={3}>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                        >
-                          EXPIRES
-                        </Typography>
+                        <TextField
+                          fullWidth
+                          type="date"
+                          label="Requested"
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                          defaultValue={
+                            fighter.bloodwork_requested_date ||
+                            ""
+                          }
+                          onBlur={(e) =>
+                            updateBloodwork(fighter, {
+                              bloodwork_requested_date:
+                                e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
 
-                        <Typography>
-                          {fighter.bloodwork_expires ||
-                            "—"}
-                        </Typography>
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          fullWidth
+                          type="date"
+                          label="Completed"
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                          defaultValue={
+                            fighter.bloodwork_completed_date ||
+                            ""
+                          }
+                          onBlur={(e) =>
+                            updateBloodwork(fighter, {
+                              bloodwork_completed_date:
+                                e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          fullWidth
+                          type="date"
+                          label="Expires"
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                          defaultValue={
+                            fighter.bloodwork_expires || ""
+                          }
+                          onBlur={(e) =>
+                            updateBloodwork(fighter, {
+                              bloodwork_expires:
+                                e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+
+                      <Grid item xs={12} md={7}>
+                        <TextField
+                          fullWidth
+                          label="Notes"
+                          defaultValue={
+                            fighter.bloodwork_notes || ""
+                          }
+                          onBlur={(e) =>
+                            updateBloodwork(fighter, {
+                              bloodwork_notes:
+                                e.target.value,
+                            })
+                          }
+                        />
                       </Grid>
 
                       <Grid item xs={12} md={2}>
                         <Button
                           fullWidth
                           variant="outlined"
+                          sx={{ minHeight: 56 }}
                           onClick={() =>
                             window.open(
                               REQUEST_A_TEST_URL,
@@ -1101,69 +1254,167 @@ export default function EventWorkspace({
                             )
                           }
                         >
-                          Request
+                          Request Test
                         </Button>
                       </Grid>
                     </Grid>
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {!fighters.length && (
-              <Alert severity="info">
-                Fighters will appear here after bouts
-                are assigned to this event.
-              </Alert>
-            )}
+                  </Stack>
+                </CardContent>
+              </Card>
+            ))}
           </Stack>
         )}
 
         {/* FEES */}
         {tab === 6 && (
           <Stack spacing={2}>
-            <Typography
-              variant="h5"
-              fontWeight={950}
-            >
-              Estimated Fees & Assessments
-            </Typography>
+            <Box>
+              <Typography variant="h5" fontWeight={950}>
+                Event Fees & Assessments
+              </Typography>
 
-            <Alert severity="info">
-              These figures are based on the promoter /
-              matchmaker checklist supplied for this
-              workspace. Confirm final amounts with the
-              Commission for each event.
-            </Alert>
+              <Typography color="text.secondary">
+                Track estimated and actual costs for this event.
+              </Typography>
+            </Box>
 
-            {(data.fees || []).map(
-              (fee) => (
-                <Card key={fee.name}>
-                  <CardContent>
+            {(data.fees || []).map((fee) => (
+              <Card key={fee.id}>
+                <CardContent>
+                  <Stack spacing={2}>
                     <Stack
                       direction={{
                         xs: "column",
-                        sm: "row",
+                        md: "row",
                       }}
                       justifyContent="space-between"
                       spacing={1}
                     >
-                      <Typography
-                        fontWeight={900}
-                      >
-                        {fee.name}
-                      </Typography>
+                      <Box>
+                        <Typography fontWeight={950}>
+                          {fee.name}
+                        </Typography>
 
-                      <Typography>
-                        {fee.amount}
-                      </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                        >
+                          Estimate: {fee.estimate}
+                        </Typography>
+                      </Box>
+
+                      <Chip
+                        label={
+                          fee.paid ? "Paid" : "Unpaid"
+                        }
+                        color={
+                          fee.paid
+                            ? "success"
+                            : "warning"
+                        }
+                      />
                     </Stack>
-                  </CardContent>
-                </Card>
-              )
-            )}
+
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="Actual Amount"
+                          defaultValue={
+                            fee.actual_amount ?? ""
+                          }
+                          onBlur={(e) =>
+                            updateFee(fee, {
+                              actual_amount:
+                                e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+
+                      <Grid item xs={12} md={2}>
+                        <Select
+                          fullWidth
+                          value={
+                            fee.paid ? "paid" : "unpaid"
+                          }
+                          onChange={(e) =>
+                            updateFee(fee, {
+                              paid:
+                                e.target.value === "paid",
+                            })
+                          }
+                        >
+                          <MenuItem value="unpaid">
+                            Unpaid
+                          </MenuItem>
+
+                          <MenuItem value="paid">
+                            Paid
+                          </MenuItem>
+                        </Select>
+                      </Grid>
+
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          fullWidth
+                          type="date"
+                          label="Due Date"
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                          defaultValue={
+                            fee.due_date || ""
+                          }
+                          onBlur={(e) =>
+                            updateFee(fee, {
+                              due_date:
+                                e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+
+                      <Grid item xs={12} md={4}>
+                        <TextField
+                          fullWidth
+                          label="Payee"
+                          defaultValue={
+                            fee.payee || ""
+                          }
+                          onBlur={(e) =>
+                            updateFee(fee, {
+                              payee: e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          minRows={2}
+                          label="Notes"
+                          defaultValue={
+                            fee.notes || ""
+                          }
+                          onBlur={(e) =>
+                            updateFee(fee, {
+                              notes: e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ))}
           </Stack>
         )}
+
       </Stack>
     </Box>
   );

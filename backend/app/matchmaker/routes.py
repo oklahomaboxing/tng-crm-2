@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from ..database import get_db
-from .models import BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist
+from .models import BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -165,6 +165,38 @@ EVENT_FEES = [
         "amount": "5% assessment",
     },
 ]
+
+
+def seed_event_fees(db, event_id):
+    existing = (
+        db.query(BoxingEventFee)
+        .filter(BoxingEventFee.event_id == event_id)
+        .count()
+    )
+
+    if existing:
+        return
+
+    for index, fee in enumerate(EVENT_FEES):
+        key = (
+            fee["name"]
+            .lower()
+            .replace(" / ", "_")
+            .replace(" ", "_")
+            .replace("-", "_")
+        )
+
+        db.add(
+            BoxingEventFee(
+                event_id=event_id,
+                fee_key=key,
+                name=fee["name"],
+                estimate=fee["amount"],
+                paid=False,
+            )
+        )
+
+    db.commit()
 
 
 def seed_event_checklist(db, event_id):
@@ -628,6 +660,68 @@ def build_matchmaker_router(current_user_dependency):
         return fighter_dict(fighter)
 
 
+    @router.patch("/fighters/{fighter_id}/bloodwork")
+    def update_fighter_bloodwork(
+        fighter_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        allowed_statuses = {
+            "missing",
+            "requested",
+            "pending",
+            "verified",
+            "expired",
+        }
+
+        if "bloodwork_status" in data:
+            status = str(
+                data.get("bloodwork_status") or ""
+            ).strip()
+
+            if status not in allowed_statuses:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid bloodwork status",
+                )
+
+            fighter.bloodwork_status = status
+
+        for field in (
+            "bloodwork_provider",
+            "bloodwork_requested_date",
+            "bloodwork_completed_date",
+            "bloodwork_expires",
+            "bloodwork_notes",
+        ):
+            if field in data:
+                setattr(
+                    fighter,
+                    field,
+                    str(data.get(field) or "").strip(),
+                )
+
+        db.commit()
+        db.refresh(fighter)
+
+        return fighter_dict(fighter)
+
+
     @router.get("/events")
     def list_events(db: Session = Depends(get_db), user=Depends(current_user_dependency)):
         require_staff(user)
@@ -666,6 +760,7 @@ def build_matchmaker_router(current_user_dependency):
             )
 
         seed_event_checklist(db, event_id)
+        seed_event_fees(db, event_id)
 
         bouts = (
             db.query(BoxingBout)
@@ -747,7 +842,92 @@ def build_matchmaker_router(current_user_dependency):
             "bouts": bout_rows,
             "fighters": fighters,
             "checklist": checklist_rows,
-            "fees": EVENT_FEES,
+            "fees": [
+                {
+                    "id": fee.id,
+                    "fee_key": fee.fee_key,
+                    "name": fee.name,
+                    "estimate": fee.estimate,
+                    "actual_amount": fee.actual_amount,
+                    "paid": bool(fee.paid),
+                    "due_date": fee.due_date,
+                    "payee": fee.payee,
+                    "notes": fee.notes,
+                }
+                for fee in (
+                    db.query(BoxingEventFee)
+                    .filter(BoxingEventFee.event_id == event_id)
+                    .order_by(BoxingEventFee.id.asc())
+                    .all()
+                )
+            ],
+        }
+
+
+    @router.patch("/events/{event_id}/fees/{fee_id}")
+    def update_event_fee(
+        event_id: int,
+        fee_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        fee = (
+            db.query(BoxingEventFee)
+            .filter(
+                BoxingEventFee.id == fee_id,
+                BoxingEventFee.event_id == event_id,
+            )
+            .first()
+        )
+
+        if not fee:
+            raise HTTPException(
+                status_code=404,
+                detail="Fee not found",
+            )
+
+        if "actual_amount" in data:
+            value = data.get("actual_amount")
+
+            if value in ("", None):
+                fee.actual_amount = None
+            else:
+                try:
+                    fee.actual_amount = float(value)
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid actual amount",
+                    )
+
+        if "paid" in data:
+            fee.paid = bool(data.get("paid"))
+
+        for field in (
+            "due_date",
+            "payee",
+            "notes",
+        ):
+            if field in data:
+                setattr(
+                    fee,
+                    field,
+                    str(data.get(field) or "").strip(),
+                )
+
+        db.commit()
+        db.refresh(fee)
+
+        return {
+            "id": fee.id,
+            "actual_amount": fee.actual_amount,
+            "paid": bool(fee.paid),
+            "due_date": fee.due_date,
+            "payee": fee.payee,
+            "notes": fee.notes,
         }
 
 
