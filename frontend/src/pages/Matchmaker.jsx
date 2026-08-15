@@ -514,11 +514,25 @@ export default function Matchmaker() {
         }
       );
 
-      const body = await response.json();
+      const responseText = await response.text();
+
+      let body = {};
+
+      try {
+        body = responseText
+          ? JSON.parse(responseText)
+          : {};
+      } catch {
+        throw new Error(
+          `Social search returned HTTP ${response.status} instead of JSON. ` +
+          `Response: ${responseText.slice(0, 180)}`
+        );
+      }
 
       if (!response.ok) {
         throw new Error(
-          body.detail || "Could not search fighter social media"
+          body.detail ||
+          `Social search failed with HTTP ${response.status}`
         );
       }
 
