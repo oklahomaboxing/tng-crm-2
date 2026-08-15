@@ -823,6 +823,7 @@ Rules:
                     "type": "web_search"
                 }
             ],
+            "tool_choice": "required",
             "input": prompt,
         }
 

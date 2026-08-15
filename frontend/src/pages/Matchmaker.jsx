@@ -90,6 +90,7 @@ export default function Matchmaker() {
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialResults, setSocialResults] = useState([]);
   const [socialFighter, setSocialFighter] = useState(null);
+  const [socialError, setSocialError] = useState("");
 
 
   const [fighterOpen, setFighterOpen] = useState(false);
@@ -498,6 +499,7 @@ export default function Matchmaker() {
 
     setSocialFighter(fighter || null);
     setSocialResults([]);
+    setSocialError("");
     setSocialOpen(true);
     setSocialLoading(true);
 
@@ -529,11 +531,13 @@ export default function Matchmaker() {
       );
 
     } catch (error) {
-      setMsgType("error");
-      setMsg(
+      const message =
         error.message ||
-        "Could not search fighter social media"
-      );
+        "Could not search fighter social media";
+
+      setSocialError(message);
+      setMsgType("error");
+      setMsg(message);
     } finally {
       setSocialLoading(false);
     }
