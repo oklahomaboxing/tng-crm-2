@@ -82,6 +82,7 @@ export default function Matchmaker() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [boxrecSearching, setBoxrecSearching] = useState(false);
+  const [boxrecSearchText, setBoxrecSearchText] = useState("");
   const [existingFighterId, setExistingFighterId] = useState("");
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("info");
@@ -141,17 +142,25 @@ export default function Matchmaker() {
     load();
   }, []);
 
-  function openBoxRecProfile() {
-    const boxrecId = (fighterForm.boxrec_id || "").trim();
+  function openBoxRecProfile(searchValue = null) {
+    const query = String(
+      searchValue ??
+      boxrecSearchText ??
+      fighterForm.boxrec_id ??
+      ""
+    ).trim();
 
-    if (!boxrecId) {
+    if (!query) {
       setMsgType("warning");
-      setMsg("Enter a BoxRec ID.");
+      setMsg("Enter a fighter name or BoxRec ID.");
       return;
     }
 
-    const url =
-      `https://boxrec.com/en/box-pro/${encodeURIComponent(boxrecId)}`;
+    const isBoxRecId = /^\d+$/.test(query);
+
+    const url = isBoxRecId
+      ? `https://boxrec.com/en/box-pro/${encodeURIComponent(query)}`
+      : `https://boxrec.com/en/search?search%5Bquery%5D=${encodeURIComponent(query)}`;
 
     try {
       if (
@@ -185,6 +194,7 @@ export default function Matchmaker() {
     }
   }
 
+
   function closeBoxRecProfile() {
     try {
       if (
@@ -202,17 +212,39 @@ export default function Matchmaker() {
 
 
   async function lookupBoxRec() {
-    const boxrecId = (fighterForm.boxrec_id || "").trim();
+    const query = String(
+      boxrecSearchText ||
+      fighterForm.boxrec_id ||
+      ""
+    ).trim();
 
-    if (!boxrecId) {
+    if (!query) {
       setMsgType("warning");
-      setMsg("Enter a BoxRec ID first.");
+      setMsg("Enter a fighter name or BoxRec ID first.");
       return;
     }
 
-    // Open BoxRec immediately from the user's click.
-    // Doing this before any await helps prevent browser popup blocking.
-    openBoxRecProfile();
+    const isBoxRecId = /^\d+$/.test(query);
+
+    // Name search: open BoxRec search only.
+    if (!isBoxRecId) {
+      openBoxRecProfile(query);
+
+      setMsgType("info");
+      setMsg(
+        `Searching BoxRec for "${query}". Once you find the correct fighter, enter their BoxRec ID to link them to TNG.`
+      );
+
+      return;
+    }
+
+    // ID search: direct profile + check TNG database.
+    setFighterForm({
+      ...fighterForm,
+      boxrec_id: query,
+    });
+
+    openBoxRecProfile(query);
 
     setBoxrecSearching(true);
     setExistingFighterId("");
@@ -220,7 +252,7 @@ export default function Matchmaker() {
 
     try {
       const r = await fetch(
-        `${API}/api/boxing/fighters/by-boxrec/${encodeURIComponent(boxrecId)}`,
+        `${API}/api/boxing/fighters/by-boxrec/${encodeURIComponent(query)}`,
         { headers: authHeaders() }
       );
 
@@ -229,35 +261,42 @@ export default function Matchmaker() {
       if (r.status === 404) {
         setMsgType("info");
         setMsg(
-          `BoxRec ID ${boxrecId} is not in TNG yet. Enter or verify the fighter information below, then click Add Fighter.`
+          `BoxRec ID ${query} is not in TNG yet. Verify the fighter on BoxRec, complete the fighter information below, then click Add Fighter.`
         );
         return;
       }
 
       if (!r.ok) {
-        throw new Error(d.detail || "Could not search BoxRec ID");
+        throw new Error(
+          d.detail || "Could not search BoxRec ID"
+        );
       }
 
       setFighterForm({
         ...emptyFighter,
         ...d,
-        boxrec_id: boxrecId,
+        boxrec_id: query,
         available: d.available ?? true,
       });
 
+      setBoxrecSearchText(query);
       setExistingFighterId(d.id || "");
 
       setMsgType("success");
       setMsg(
-        `${d.legal_name || "Fighter"} already exists in TNG. Their information has been loaded.`
+        `${d.legal_name || "Fighter"} already exists in TNG. Their saved information has been loaded.`
       );
+
     } catch (e) {
       setMsgType("error");
-      setMsg(e.message || "Could not search BoxRec ID");
+      setMsg(
+        e.message || "Could not search BoxRec ID"
+      );
     } finally {
       setBoxrecSearching(false);
     }
   }
+
 
   async function createFighter(findAfterSave = false) {
     if (existingFighterId) {
@@ -1296,15 +1335,21 @@ export default function Matchmaker() {
               >
                 <TextField
                   fullWidth
-                  label="BoxRec ID"
-                  placeholder="Example: 123456"
-                  value={fighterForm.boxrec_id}
+                  label="Find Fighter on BoxRec"
+                  placeholder="Type fighter name or BoxRec ID"
+                  value={boxrecSearchText}
                   onChange={(e) => {
+                    const value = e.target.value;
+
                     setExistingFighterId("");
-                    setFighterForm({
-                      ...fighterForm,
-                      boxrec_id: e.target.value.replace(/[^0-9]/g, ""),
-                    });
+                    setBoxrecSearchText(value);
+
+                    if (/^\d*$/.test(value)) {
+                      setFighterForm({
+                        ...fighterForm,
+                        boxrec_id: value,
+                      });
+                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -1316,7 +1361,7 @@ export default function Matchmaker() {
 
                 <Button
                   variant="outlined"
-                  disabled={boxrecSearching || !fighterForm.boxrec_id}
+                  disabled={boxrecSearching || !boxrecSearchText.trim()}
                   onClick={lookupBoxRec}
                   sx={{
                     minWidth: 120,
@@ -1330,7 +1375,7 @@ export default function Matchmaker() {
                 <Button
                   variant="text"
                   onClick={closeBoxRecProfile}
-                  disabled={!fighterForm.boxrec_id}
+                  disabled={!boxrecSearchText.trim()}
                   sx={{
                     minHeight: 56,
                     whiteSpace: "nowrap",
