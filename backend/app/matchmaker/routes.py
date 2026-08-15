@@ -1565,6 +1565,66 @@ Do not add fake ticket information.
             raise HTTPException(status_code=404, detail="Fighter not found")
         return {"fighter": base, "event_id": event_id, "matches": matches}
 
+    @router.patch("/bouts/{bout_id}/purse")
+    def update_bout_purse(
+        bout_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        bout = (
+            db.query(BoxingBout)
+            .filter(BoxingBout.id == bout_id)
+            .first()
+        )
+
+        if not bout:
+            raise HTTPException(
+                status_code=404,
+                detail="Bout not found",
+            )
+
+        for field in ("red_purse", "blue_purse"):
+            if field not in data:
+                continue
+
+            value = data.get(field)
+
+            if value in ("", None):
+                amount = 0.0
+            else:
+                try:
+                    amount = float(value)
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid {field}",
+                    )
+
+            if amount < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Purse cannot be negative",
+                )
+
+            setattr(bout, field, amount)
+
+        db.commit()
+        db.refresh(bout)
+
+        return {
+            "id": bout.id,
+            "red_purse": bout.red_purse or 0,
+            "blue_purse": bout.blue_purse or 0,
+            "total_purse": (
+                (bout.red_purse or 0)
+                + (bout.blue_purse or 0)
+            ),
+        }
+
+
     @router.patch("/bouts/{bout_id}/order")
     def update_bout_order(
         bout_id: int,

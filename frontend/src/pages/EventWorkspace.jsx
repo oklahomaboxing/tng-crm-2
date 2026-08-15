@@ -15,6 +15,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  InputAdornment,
   Typography,
 } from "@mui/material";
 
@@ -212,6 +213,49 @@ export default function EventWorkspace({
       ),
     }));
   }
+
+  async function updateBoutPurse(bout, changes) {
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/bouts/${bout.id}/purse`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(changes),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not update purse"
+        );
+      }
+
+      setData((old) => ({
+        ...old,
+        bouts: old.bouts.map((row) =>
+          row.id === bout.id
+            ? {
+                ...row,
+                red_purse: body.red_purse,
+                blue_purse: body.blue_purse,
+              }
+            : row
+        ),
+      }));
+
+      setMessage("Fight purse updated.");
+    } catch (error) {
+      setMessage(
+        error.message || "Could not update purse"
+      );
+    }
+  }
+
 
   async function updateBoutOrder(bout, value) {
     const order = Number(value);
@@ -1023,6 +1067,115 @@ export default function EventWorkspace({
                   </Stack>
 
                   <Divider sx={{ my: 2 }} />
+
+                  <Typography
+                    variant="subtitle1"
+                    fontWeight={950}
+                    sx={{ mb: 1 }}
+                  >
+                    Fight Offer / Purse
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="Red Corner Purse"
+                        value={bout.red_purse ?? 0}
+                        inputProps={{
+                          min: 0,
+                          step: 50,
+                        }}
+                        onChange={(e) => {
+                          const value = e.target.value;
+
+                          setData((old) => ({
+                            ...old,
+                            bouts: old.bouts.map((row) =>
+                              row.id === bout.id
+                                ? {
+                                    ...row,
+                                    red_purse: value,
+                                  }
+                                : row
+                            ),
+                          }));
+                        }}
+                        onBlur={(e) =>
+                          updateBoutPurse(bout, {
+                            red_purse:
+                              e.target.value,
+                          })
+                        }
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              $
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="Blue Corner Purse"
+                        value={bout.blue_purse ?? 0}
+                        inputProps={{
+                          min: 0,
+                          step: 50,
+                        }}
+                        onChange={(e) => {
+                          const value = e.target.value;
+
+                          setData((old) => ({
+                            ...old,
+                            bouts: old.bouts.map((row) =>
+                              row.id === bout.id
+                                ? {
+                                    ...row,
+                                    blue_purse: value,
+                                  }
+                                : row
+                            ),
+                          }));
+                        }}
+                        onBlur={(e) =>
+                          updateBoutPurse(bout, {
+                            blue_purse:
+                              e.target.value,
+                          })
+                        }
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              $
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={4}>
+                      <TextField
+                        fullWidth
+                        label="Total Bout Purse"
+                        value={
+                          `$${(
+                            Number(bout.red_purse || 0) +
+                            Number(bout.blue_purse || 0)
+                          ).toLocaleString()}`
+                        }
+                        InputProps={{
+                          readOnly: true,
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+
 
                   <Grid container spacing={3}>
                     <Grid item xs={12} md={6}>
