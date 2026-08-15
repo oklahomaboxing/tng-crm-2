@@ -69,6 +69,9 @@ export default function EventWorkspace({
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [promoImage, setPromoImage] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+
 
   async function load() {
     setLoading(true);
@@ -262,6 +265,49 @@ export default function EventWorkspace({
       );
     }
   }
+
+  async function generateEventPromo() {
+    setPromoLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/events/${eventId}/generate-promo`,
+        {
+          method: "POST",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not generate event promo"
+        );
+      }
+
+      setPromoImage(body.image);
+
+      setMessage(
+        "Event promo generated from the current fight card."
+      );
+
+    } catch (error) {
+
+      setMessage(
+        error.message ||
+        "Could not generate event promo"
+      );
+
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
 
   const promoterItems = useMemo(
     () =>
@@ -621,7 +667,82 @@ export default function EventWorkspace({
         </Grid>
 
         <Card>
-          <Tabs
+          <Card
+          sx={{
+            mb: 2,
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <CardContent>
+            <Stack spacing={2}>
+              <Stack
+                direction={{
+                  xs: "column",
+                  md: "row",
+                }}
+                justifyContent="space-between"
+                alignItems={{
+                  xs: "stretch",
+                  md: "center",
+                }}
+                spacing={2}
+              >
+                <Box>
+                  <Typography
+                    variant="h6"
+                    fontWeight={950}
+                  >
+                    AI Event Promo
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    Generate artwork from this event
+                    and the saved bout order.
+                  </Typography>
+                </Box>
+
+                <Button
+                  variant="contained"
+                  onClick={generateEventPromo}
+                  disabled={promoLoading}
+                >
+                  {promoLoading
+                    ? "Generating..."
+                    : promoImage
+                    ? "Regenerate Promo"
+                    : "Generate AI Event Promo"}
+                </Button>
+              </Stack>
+
+              {promoImage && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={promoImage}
+                    alt="Generated event promo"
+                    sx={{
+                      width: "100%",
+                      maxWidth: 600,
+                      borderRadius: 2,
+                      boxShadow: 3,
+                    }}
+                  />
+                </Box>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Tabs
             value={tab}
             onChange={(_, value) =>
               setTab(value)

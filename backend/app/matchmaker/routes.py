@@ -1,3 +1,7 @@
+import os
+import json
+import urllib.request
+import urllib.error
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -929,6 +933,253 @@ def build_matchmaker_router(current_user_dependency):
             "due_date": fee.due_date,
             "payee": fee.payee,
             "notes": fee.notes,
+        }
+
+
+    @router.post("/events/{event_id}/generate-promo")
+    def generate_event_promo(
+        event_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        api_key = os.getenv("OPENAI_API_KEY")
+
+        if not api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="OPENAI_API_KEY is not configured on the server.",
+            )
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(BoxingEvent.id == event_id)
+            .first()
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found",
+            )
+
+        bouts = (
+            db.query(BoxingBout)
+            .filter(BoxingBout.event_id == event_id)
+            .order_by(
+                BoxingBout.bout_order.asc(),
+                BoxingBout.id.asc(),
+            )
+            .all()
+        )
+
+        bout_lines = []
+
+        for index, bout in enumerate(bouts, start=1):
+
+            red = (
+                db.query(BoxingFighter)
+                .filter(
+                    BoxingFighter.id ==
+                    bout.red_fighter_id
+                )
+                .first()
+            )
+
+            blue = (
+                db.query(BoxingFighter)
+                .filter(
+                    BoxingFighter.id ==
+                    bout.blue_fighter_id
+                )
+                .first()
+            )
+
+            red_name = (
+                red.legal_name
+                if red
+                else "TBA"
+            )
+
+            blue_name = (
+                blue.legal_name
+                if blue
+                else "TBA"
+            )
+
+            order = bout.bout_order or index
+
+            weight = (
+                f"{bout.weight_agreed:g} LB"
+                if bout.weight_agreed
+                else "WEIGHT TBA"
+            )
+
+            rounds = (
+                f"{bout.rounds} ROUNDS"
+                if bout.rounds
+                else ""
+            )
+
+            bout_lines.append(
+                f"BOUT {order}: "
+                f"{red_name} VS {blue_name} — "
+                f"{weight} {rounds}".strip()
+            )
+
+        card = "\n".join(bout_lines)
+
+        if not card:
+            card = "FIGHT CARD TO BE ANNOUNCED"
+
+        event_name = (
+            event.name or "TNG BOXING"
+        )
+
+        event_date = (
+            str(event.event_date)
+            if event.event_date
+            else "DATE TBA"
+        )
+
+        venue = (
+            event.venue or "VENUE TBA"
+        )
+
+        location = (
+            event.venue_address or ""
+        )
+
+        prompt = f"""
+Create a premium vertical professional boxing
+event promotional poster.
+
+BRAND:
+TNG Boxing / The Next Generation
+
+EVENT:
+{event_name}
+
+DATE:
+{event_date}
+
+VENUE:
+{venue}
+
+LOCATION:
+{location}
+
+OFFICIAL FIGHT CARD IN EXACT BOUT ORDER:
+{card}
+
+DESIGN DIRECTION:
+High-end professional boxing promotion.
+Dramatic arena lighting.
+Black, deep red, white, metallic accents.
+Premium championship fight-night atmosphere.
+Strong visual hierarchy.
+Modern combat sports advertising.
+Powerful but clean.
+Suitable for Facebook, Instagram and print.
+
+Keep the event title highly visible.
+
+Represent the fighters as dramatic boxing
+figures, silhouettes, gloves, ring lighting,
+smoke, ropes, arena lights or premium
+fight-poster imagery.
+
+IMPORTANT:
+Use the fighter names and bout information
+provided above.
+Do not invent additional fighters.
+Do not invent additional bouts.
+Do not change the bout order.
+Do not add fake sponsors.
+Do not add fake ticket information.
+"""
+
+        payload = {
+            "model": "gpt-image-2",
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1536",
+            "quality": "medium",
+            "output_format": "png",
+        }
+
+        request = urllib.request.Request(
+            "https://api.openai.com/v1/images/generations",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(
+                request,
+                timeout=180,
+            ) as response:
+                result = json.loads(
+                    response.read().decode("utf-8")
+                )
+
+        except urllib.error.HTTPError as exc:
+            try:
+                error_body = json.loads(
+                    exc.read().decode("utf-8")
+                )
+
+                detail = (
+                    error_body
+                    .get("error", {})
+                    .get("message")
+                    or "OpenAI image generation failed."
+                )
+
+            except Exception:
+                detail = "OpenAI image generation failed."
+
+            raise HTTPException(
+                status_code=502,
+                detail=detail,
+            )
+
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Promo generation failed: {exc}",
+            )
+
+        images = result.get("data") or []
+
+        if not images:
+            raise HTTPException(
+                status_code=502,
+                detail="OpenAI did not return an image.",
+            )
+
+        image_base64 = (
+            images[0].get("b64_json") or ""
+        )
+
+        if not image_base64:
+            raise HTTPException(
+                status_code=502,
+                detail="Generated image data was missing.",
+            )
+
+        return {
+            "image": (
+                "data:image/png;base64,"
+                + image_base64
+            ),
+            "event_id": event_id,
+            "prompt": prompt,
         }
 
 
