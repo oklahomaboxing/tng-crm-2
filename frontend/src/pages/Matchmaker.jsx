@@ -86,6 +86,12 @@ export default function Matchmaker() {
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("info");
 
+  const [socialOpen, setSocialOpen] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [socialResults, setSocialResults] = useState([]);
+  const [socialFighter, setSocialFighter] = useState(null);
+
+
   const [fighterOpen, setFighterOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
 
@@ -479,6 +485,110 @@ export default function Matchmaker() {
     }
   }
 
+  async function findSocials() {
+    if (!fighterId) {
+      setMsgType("warning");
+      setMsg("Select a fighter first.");
+      return;
+    }
+
+    const fighter = fighters.find(
+      (row) => Number(row.id) === Number(fighterId)
+    );
+
+    setSocialFighter(fighter || null);
+    setSocialResults([]);
+    setSocialOpen(true);
+    setSocialLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/fighters/${fighterId}/find-socials`,
+        {
+          method: "POST",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not search fighter social media"
+        );
+      }
+
+      setSocialFighter(body.fighter || fighter);
+
+      setSocialResults(
+        Array.isArray(body.candidates)
+          ? body.candidates
+          : []
+      );
+
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not search fighter social media"
+      );
+    } finally {
+      setSocialLoading(false);
+    }
+  }
+
+
+  async function saveSocialCandidate(candidate) {
+    if (!socialFighter?.id) return;
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/fighters/${socialFighter.id}/socials`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            [candidate.platform]: candidate.url,
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not save social profile"
+        );
+      }
+
+      setFighters((old) =>
+        old.map((row) =>
+          Number(row.id) === Number(body.id)
+            ? { ...row, ...body }
+            : row
+        )
+      );
+
+      setSocialFighter(body);
+
+      setMsgType("success");
+      setMsg(
+        `${candidate.platform} saved for ${body.legal_name}.`
+      );
+
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message || "Could not save social profile"
+      );
+    }
+  }
+
+
   async function findMatches(targetFighterId = fighterId) {
     // React onClick can pass a MouseEvent when a function is used directly.
     // Only accept a numeric/string fighter ID here.
@@ -741,7 +851,16 @@ export default function Matchmaker() {
                 Open Event
               </Button>
 
-              <Button
+                            <Button
+                variant="outlined"
+                disabled={!fighterId || working}
+                onClick={findSocials}
+                sx={{ minWidth: 150 }}
+              >
+                Find Socials
+              </Button>
+
+<Button
                 variant="contained"
                 startIcon={<SportsMmaRoundedIcon />}
                 disabled={!fighterId || working}
