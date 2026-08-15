@@ -257,7 +257,13 @@ def run_sqlite_migrations():
     add_column_if_missing("boxing_bouts", "bout_order", "INTEGER DEFAULT 0")
 
 
-run_sqlite_migrations()
+if engine.url.get_backend_name() == "sqlite":
+    run_sqlite_migrations()
+else:
+    print(
+        f"Database backend is {engine.url.get_backend_name()}; "
+        "skipping SQLite-only migrations."
+    )
 app = FastAPI(title="TNG CRM 2.0")
 
 app.include_router(operations_router)
