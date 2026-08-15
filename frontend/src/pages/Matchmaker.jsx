@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog,
+  Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, FormControl,
   Grid, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, TextField, Typography
@@ -661,23 +661,60 @@ export default function Matchmaker() {
             </Typography>
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <FormControl fullWidth>
-                <InputLabel>Fighter to Match</InputLabel>
-                <Select
-                  value={fighterId}
-                  label="Fighter to Match"
-                  onChange={(e) => {
-                    setFighterId(e.target.value);
-                    setResult(null);
-                  }}
-                >
-                  {fighters.map((f) => (
-                    <MenuItem key={f.id} value={f.id}>
-                      {f.legal_name} — {f.fight_weight || "?"} lb — {f.pro_record || "record N/A"}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                fullWidth
+                options={fighters}
+                value={
+                  fighters.find(
+                    (f) =>
+                      Number(f.id) === Number(fighterId)
+                  ) || null
+                }
+                getOptionLabel={(f) =>
+                  `${f.legal_name || ""} — ${
+                    f.fight_weight || "?"
+                  } lb — ${
+                    f.pro_record || "record N/A"
+                  }`
+                }
+                isOptionEqualToValue={(option, value) =>
+                  Number(option.id) === Number(value.id)
+                }
+                onChange={(event, value) => {
+                  setFighterId(value ? value.id : "");
+                  setResult(null);
+                }}
+                filterOptions={(options, state) => {
+                  const search =
+                    state.inputValue
+                      .toLowerCase()
+                      .trim();
+
+                  if (!search) return options;
+
+                  return options.filter((f) =>
+                    [
+                      f.legal_name,
+                      f.pro_record,
+                      f.gym,
+                      f.city,
+                      f.state,
+                      f.boxrec_id,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                      .toLowerCase()
+                      .includes(search)
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Search Fighter"
+                    placeholder="Type fighter name..."
+                  />
+                )}
+              />
 
               <FormControl fullWidth>
                 <InputLabel>Event</InputLabel>
