@@ -888,6 +888,206 @@ export default function Matchmaker() {
                 Find Opponents
               </Button>
             </Stack>
+
+            {socialOpen && (
+              <Card
+                variant="outlined"
+                sx={{
+                  mt: 2,
+                  borderColor: "divider",
+                }}
+              >
+                <CardContent>
+                  <Stack spacing={2}>
+
+                    <Box>
+                      <Typography
+                        variant="h6"
+                        fontWeight={950}
+                      >
+                        Fighter Social Media Results
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        {socialFighter?.legal_name ||
+                          "Selected fighter"}
+                      </Typography>
+                    </Box>
+
+                    {socialError && (
+                      <Alert severity="error">
+                        {socialError}
+                      </Alert>
+                    )}
+
+                    {socialLoading && (
+                      <Stack
+                        direction="row"
+                        spacing={2}
+                        alignItems="center"
+                        sx={{ py: 2 }}
+                      >
+                        <CircularProgress size={26} />
+
+                        <Typography>
+                          Searching public social media profiles...
+                        </Typography>
+                      </Stack>
+                    )}
+
+                    {!socialLoading &&
+                      !socialError &&
+                      socialResults.length === 0 && (
+                        <Alert severity="info">
+                          No strong public social media matches
+                          were found for this fighter.
+                        </Alert>
+                      )}
+
+                    {!socialLoading &&
+                      socialResults.map(
+                        (candidate, index) => (
+                          <Card
+                            key={`${candidate.platform}-${candidate.url}-${index}`}
+                            variant="outlined"
+                          >
+                            <CardContent>
+                              <Stack spacing={1.5}>
+                                <Stack
+                                  direction={{
+                                    xs: "column",
+                                    sm: "row",
+                                  }}
+                                  spacing={1}
+                                  justifyContent="space-between"
+                                  alignItems={{
+                                    xs: "flex-start",
+                                    sm: "center",
+                                  }}
+                                >
+                                  <Box>
+                                    <Typography
+                                      fontWeight={950}
+                                      sx={{
+                                        textTransform:
+                                          "capitalize",
+                                      }}
+                                    >
+                                      {candidate.platform}
+                                    </Typography>
+
+                                    <Typography>
+                                      {candidate.handle ||
+                                        candidate.url}
+                                    </Typography>
+                                  </Box>
+
+                                  <Chip
+                                    label={`${
+                                      candidate.confidence || 0
+                                    }% confidence`}
+                                    color={
+                                      Number(
+                                        candidate.confidence
+                                      ) >= 85
+                                        ? "success"
+                                        : Number(
+                                            candidate.confidence
+                                          ) >= 65
+                                        ? "warning"
+                                        : "default"
+                                    }
+                                  />
+                                </Stack>
+
+                                {candidate.reason && (
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {candidate.reason}
+                                  </Typography>
+                                )}
+
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    overflowWrap: "anywhere",
+                                  }}
+                                >
+                                  {candidate.url}
+                                </Typography>
+
+                                <Stack
+                                  direction={{
+                                    xs: "column",
+                                    sm: "row",
+                                  }}
+                                  spacing={1}
+                                >
+                                  <Button
+                                    variant="outlined"
+                                    onClick={() =>
+                                      window.open(
+                                        candidate.url,
+                                        "_blank",
+                                        "noopener,noreferrer"
+                                      )
+                                    }
+                                  >
+                                    View Profile
+                                  </Button>
+
+                                  <Button
+                                    variant="contained"
+                                    onClick={() =>
+                                      saveSocialCandidate(
+                                        candidate
+                                      )
+                                    }
+                                  >
+                                    Confirm & Save
+                                  </Button>
+                                </Stack>
+                              </Stack>
+                            </CardContent>
+                          </Card>
+                        )
+                      )}
+
+                    {!socialLoading && (
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                      >
+                        <Button
+                          variant="text"
+                          onClick={findSocials}
+                        >
+                          Search Again
+                        </Button>
+
+                        <Button
+                          variant="text"
+                          onClick={() => {
+                            setSocialOpen(false);
+                            setSocialResults([]);
+                            setSocialError("");
+                          }}
+                        >
+                          Close Results
+                        </Button>
+                      </Stack>
+                    )}
+
+                  </Stack>
+                </CardContent>
+              </Card>
+            )}
+
           </CardContent>
         </Card>
 
