@@ -726,6 +726,293 @@ def build_matchmaker_router(current_user_dependency):
         return fighter_dict(fighter)
 
 
+    @router.post("/fighters/{fighter_id}/find-socials")
+    def find_fighter_socials(
+        fighter_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        api_key = os.getenv("OPENAI_API_KEY")
+
+        if not api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="OPENAI_API_KEY is not configured.",
+            )
+
+        context = f"""
+Fighter name: {fighter.legal_name}
+BoxRec ID: {getattr(fighter, "boxrec_id", "") or ""}
+BoxRec URL: {getattr(fighter, "boxrec_url", "") or ""}
+Pro record: {fighter.pro_record or ""}
+Gym: {fighter.gym or ""}
+Coach: {fighter.coach or ""}
+City: {fighter.city or ""}
+State: {fighter.state or ""}
+Country: {fighter.country or ""}
+"""
+
+        prompt = f"""
+Search the public web for the most likely official
+or authentic social media profiles for this
+professional boxer.
+
+{context}
+
+Search specifically for:
+
+Instagram
+Facebook
+TikTok
+X / Twitter
+
+Use boxing identity clues including:
+- exact fighter name
+- BoxRec identity
+- city/state/country
+- boxing gym
+- coach
+- boxing-related profile descriptions
+- fight photos/posts
+- matching professional boxing information
+
+DO NOT guess.
+
+If there is not enough evidence, omit the result.
+
+Return ONLY valid JSON in exactly this shape:
+
+{{
+  "candidates": [
+    {{
+      "platform": "instagram",
+      "url": "https://...",
+      "handle": "@example",
+      "confidence": 92,
+      "reason": "Name, boxing gym and location match"
+    }}
+  ]
+}}
+
+Rules:
+- confidence must be 0 through 100
+- only public profile URLs
+- do not return fan pages unless clearly labeled
+- do not invent URLs
+- maximum 3 candidates per platform
+"""
+
+        payload = {
+            "model": "gpt-5.6",
+            "tools": [
+                {
+                    "type": "web_search"
+                }
+            ],
+            "input": prompt,
+        }
+
+        request = urllib.request.Request(
+            "https://api.openai.com/v1/responses",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(
+                request,
+                timeout=120,
+            ) as response:
+
+                result = json.loads(
+                    response.read().decode("utf-8")
+                )
+
+        except urllib.error.HTTPError as exc:
+            try:
+                body = json.loads(
+                    exc.read().decode("utf-8")
+                )
+
+                detail = (
+                    body.get("error", {})
+                    .get("message")
+                    or "Social search failed."
+                )
+
+            except Exception:
+                detail = "Social search failed."
+
+            raise HTTPException(
+                status_code=502,
+                detail=detail,
+            )
+
+        output_text = ""
+
+        for item in result.get("output", []):
+            if item.get("type") != "message":
+                continue
+
+            for content in item.get("content", []):
+                if content.get("type") == "output_text":
+                    output_text += content.get("text", "")
+
+        cleaned = output_text.strip()
+
+        if cleaned.startswith("```"):
+            cleaned = cleaned.replace("```json", "")
+            cleaned = cleaned.replace("```", "")
+            cleaned = cleaned.strip()
+
+        try:
+            data = json.loads(cleaned)
+        except Exception:
+            raise HTTPException(
+                status_code=502,
+                detail="AI returned an invalid social-search response.",
+            )
+
+        allowed_domains = {
+            "instagram": (
+                "instagram.com",
+            ),
+            "facebook": (
+                "facebook.com",
+                "fb.com",
+            ),
+            "tiktok": (
+                "tiktok.com",
+            ),
+            "twitter": (
+                "x.com",
+                "twitter.com",
+            ),
+        }
+
+        clean_candidates = []
+
+        for candidate in data.get("candidates", []):
+
+            platform = str(
+                candidate.get("platform") or ""
+            ).strip().lower()
+
+            if platform == "x":
+                platform = "twitter"
+
+            if platform not in allowed_domains:
+                continue
+
+            url = str(
+                candidate.get("url") or ""
+            ).strip()
+
+            if not url.startswith(("http://", "https://")):
+                continue
+
+            if not any(
+                domain in url.lower()
+                for domain in allowed_domains[platform]
+            ):
+                continue
+
+            try:
+                confidence = int(
+                    candidate.get("confidence") or 0
+                )
+            except Exception:
+                confidence = 0
+
+            confidence = max(
+                0,
+                min(100, confidence),
+            )
+
+            clean_candidates.append({
+                "platform": platform,
+                "url": url,
+                "handle": str(
+                    candidate.get("handle") or ""
+                ).strip(),
+                "confidence": confidence,
+                "reason": str(
+                    candidate.get("reason") or ""
+                ).strip(),
+            })
+
+        clean_candidates.sort(
+            key=lambda x: -x["confidence"]
+        )
+
+        return {
+            "fighter": fighter_dict(fighter),
+            "candidates": clean_candidates,
+        }
+
+
+    @router.patch("/fighters/{fighter_id}/socials")
+    def save_fighter_social(
+        fighter_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        allowed = {
+            "instagram",
+            "facebook",
+            "tiktok",
+            "twitter",
+        }
+
+        for key, value in data.items():
+            if key not in allowed:
+                continue
+
+            setattr(
+                fighter,
+                key,
+                str(value or "").strip(),
+            )
+
+        db.commit()
+        db.refresh(fighter)
+
+        return fighter_dict(fighter)
+
+
     @router.get("/events")
     def list_events(db: Session = Depends(get_db), user=Depends(current_user_dependency)):
         require_staff(user)
