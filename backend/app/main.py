@@ -416,7 +416,13 @@ def ensure_security_schema():
 
 
 
-ensure_security_schema()
+if engine.url.get_backend_name() == "sqlite":
+    ensure_security_schema()
+else:
+    print(
+        f"Database backend is {engine.url.get_backend_name()}; "
+        "skipping SQLite-only security schema migration."
+    )
 seed_admin()
 @app.post("/api/login")
 def login(
