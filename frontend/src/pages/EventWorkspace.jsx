@@ -1139,8 +1139,8 @@ the contestant
             scrollButtons="auto"
           >
             <Tab label="Overview" />
-            <Tab label="Fight Card" />
-            <Tab label="Bout Sheets" />
+            <Tab label="Bout Sheet" />
+            <Tab label="Contracts" />
             <Tab label="Promoter Checklist" />
             <Tab label="Matchmaker Checklist" />
             <Tab label="Bloodwork" />
