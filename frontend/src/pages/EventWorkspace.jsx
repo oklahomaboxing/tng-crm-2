@@ -1349,6 +1349,38 @@ the contestant
                     </Grid>
 
                     <Grid item xs={12} md={2}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        size="small"
+                        label="Bout Order"
+                        value={bout.bout_order ?? ""}
+                        inputProps={{ min: 1 }}
+                        onChange={(e) => {
+                          const value = e.target.value;
+
+                          setData((old) => ({
+                            ...old,
+                            bouts: old.bouts.map((row) =>
+                              row.id === bout.id
+                                ? {
+                                    ...row,
+                                    bout_order: value,
+                                  }
+                                : row
+                            ),
+                          }));
+                        }}
+                        onBlur={(e) =>
+                          updateBoutOrder(
+                            bout,
+                            e.target.value
+                          )
+                        }
+                        sx={{ mb: 1 }}
+                      />
+
+
                       <Typography fontWeight={850}>
                         {bout.weight_agreed
                           ? `${bout.weight_agreed} lb`
@@ -1392,22 +1424,7 @@ the contestant
                       Bout Sheet #{bout.bout_order || index + 1}
                     </Typography>
 
-                    <TextField
-                      label="Bout Order"
-                      type="number"
-                      size="small"
-                      defaultValue={
-                        bout.bout_order || index + 1
-                      }
-                      inputProps={{ min: 1 }}
-                      onBlur={(e) =>
-                        updateBoutOrder(
-                          bout,
-                          e.target.value
-                        )
-                      }
-                      sx={{ width: 130 }}
-                    />
+                    
                   </Stack>
 
                   <Divider sx={{ my: 2 }} />
