@@ -159,3 +159,78 @@ class BoxingEventFee(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+
+class BoxingContract(Base):
+    __tablename__ = "boxing_contracts"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    event_id = Column(
+        Integer,
+        ForeignKey("boxing_events.id"),
+        nullable=False,
+        index=True,
+    )
+
+    bout_id = Column(
+        Integer,
+        ForeignKey("boxing_bouts.id"),
+        nullable=False,
+        index=True,
+    )
+
+    fighter_id = Column(
+        Integer,
+        ForeignKey("boxing_fighters.id"),
+        nullable=False,
+        index=True,
+    )
+
+    opponent_id = Column(
+        Integer,
+        ForeignKey("boxing_fighters.id"),
+        nullable=False,
+    )
+
+    corner = Column(String, nullable=False)
+
+    contract_date = Column(String, default="")
+
+    boxer_name = Column(String, default="")
+    boxer_federal_id = Column(String, default="")
+    boxer_address = Column(String, default="")
+    boxer_phone = Column(String, default="")
+    boxer_manager = Column(String, default="")
+
+    opponent_name = Column(String, default="")
+
+    rounds = Column(Integer, default=4)
+    maximum_weight = Column(Float, nullable=True)
+
+    event_name = Column(String, default="")
+    event_date = Column(String, default="")
+    venue = Column(String, default="")
+    venue_address = Column(String, default="")
+
+    promoter_name = Column(String, default="")
+    promoter_address = Column(String, default="")
+    promoter_phone = Column(String, default="")
+    promoter_matchmaker = Column(String, default="")
+
+    gross_purse = Column(Float, default=0)
+    travel_expense = Column(Float, default=0)
+    deductions = Column(Float, default=0)
+    boxer_paid = Column(Float, default=0)
+
+    additional_terms = Column(Text, default="")
+    cancellation_pay = Column(Float, default=0)
+
+    status = Column(String, default="draft")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )

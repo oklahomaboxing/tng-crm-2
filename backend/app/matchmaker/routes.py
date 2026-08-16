@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from ..database import get_db
-from .models import BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee
+from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -1565,6 +1565,370 @@ Do not add fake ticket information.
         if not base:
             raise HTTPException(status_code=404, detail="Fighter not found")
         return {"fighter": base, "event_id": event_id, "matches": matches}
+
+    @router.get("/bouts/{bout_id}/contracts")
+    def list_bout_contracts(
+        bout_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        rows = (
+            db.query(BoxingContract)
+            .filter(BoxingContract.bout_id == bout_id)
+            .order_by(BoxingContract.id.asc())
+            .all()
+        )
+
+        return [
+            {
+                "id": row.id,
+                "bout_id": row.bout_id,
+                "fighter_id": row.fighter_id,
+                "opponent_id": row.opponent_id,
+                "corner": row.corner,
+                "contract_date": row.contract_date,
+                "boxer_name": row.boxer_name,
+                "boxer_federal_id": row.boxer_federal_id,
+                "boxer_address": row.boxer_address,
+                "boxer_phone": row.boxer_phone,
+                "boxer_manager": row.boxer_manager,
+                "opponent_name": row.opponent_name,
+                "rounds": row.rounds,
+                "maximum_weight": row.maximum_weight,
+                "event_name": row.event_name,
+                "event_date": row.event_date,
+                "venue": row.venue,
+                "venue_address": row.venue_address,
+                "promoter_name": row.promoter_name,
+                "promoter_address": row.promoter_address,
+                "promoter_phone": row.promoter_phone,
+                "promoter_matchmaker": row.promoter_matchmaker,
+                "gross_purse": row.gross_purse,
+                "travel_expense": row.travel_expense,
+                "deductions": row.deductions,
+                "boxer_paid": row.boxer_paid,
+                "additional_terms": row.additional_terms,
+                "cancellation_pay": row.cancellation_pay,
+                "status": row.status,
+            }
+            for row in rows
+        ]
+
+
+    @router.post("/bouts/{bout_id}/contracts/{corner}")
+    def generate_bout_contract(
+        bout_id: int,
+        corner: str,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        corner = str(corner or "").lower().strip()
+
+        if corner not in ("red", "blue"):
+            raise HTTPException(
+                status_code=400,
+                detail="Corner must be red or blue",
+            )
+
+        bout = (
+            db.query(BoxingBout)
+            .filter(BoxingBout.id == bout_id)
+            .first()
+        )
+
+        if not bout:
+            raise HTTPException(
+                status_code=404,
+                detail="Bout not found",
+            )
+
+        if not bout.event_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Bout must be assigned to an event",
+            )
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(BoxingEvent.id == bout.event_id)
+            .first()
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found",
+            )
+
+        if corner == "red":
+            fighter_id = bout.red_fighter_id
+            opponent_id = bout.blue_fighter_id
+            purse = bout.red_purse or 0
+        else:
+            fighter_id = bout.blue_fighter_id
+            opponent_id = bout.red_fighter_id
+            purse = bout.blue_purse or 0
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        opponent = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == opponent_id)
+            .first()
+        )
+
+        if not fighter or not opponent:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter information missing",
+            )
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.bout_id == bout.id,
+                BoxingContract.fighter_id == fighter.id,
+            )
+            .first()
+        )
+
+        if not contract:
+            contract = BoxingContract(
+                event_id=event.id,
+                bout_id=bout.id,
+                fighter_id=fighter.id,
+                opponent_id=opponent.id,
+                corner=corner,
+            )
+            db.add(contract)
+
+        now = datetime.utcnow()
+
+        contract.contract_date = str(
+            data.get("contract_date")
+            or now.strftime("%m/%d/%Y")
+        )
+
+        contract.boxer_name = fighter.legal_name or ""
+        contract.boxer_federal_id = (
+            getattr(fighter, "federal_id_number", "")
+            or ""
+        )
+
+        address_parts = [
+            getattr(fighter, "address", "") or "",
+            fighter.city or "",
+            fighter.state or "",
+            fighter.country or "",
+        ]
+
+        contract.boxer_address = ", ".join(
+            part.strip()
+            for part in address_parts
+            if str(part).strip()
+        )
+
+        contract.boxer_phone = fighter.phone or ""
+        contract.boxer_manager = (
+            getattr(fighter, "manager_name", "")
+            or ""
+        )
+
+        contract.opponent_name = opponent.legal_name or ""
+
+        contract.rounds = int(
+            data.get("rounds")
+            or bout.rounds
+            or 4
+        )
+
+        contract.maximum_weight = (
+            float(data.get("maximum_weight"))
+            if data.get("maximum_weight") not in ("", None)
+            else bout.weight_agreed
+        )
+
+        contract.event_name = event.name or ""
+        contract.event_date = event.event_date or ""
+        contract.venue = event.venue or ""
+        contract.venue_address = event.venue_address or ""
+
+        contract.promoter_name = str(
+            data.get("promoter_name")
+            or "Maurice Williams"
+        ).strip()
+
+        contract.promoter_address = str(
+            data.get("promoter_address")
+            or ""
+        ).strip()
+
+        contract.promoter_phone = str(
+            data.get("promoter_phone")
+            or "651-239-0916"
+        ).strip()
+
+        contract.promoter_matchmaker = str(
+            data.get("promoter_matchmaker")
+            or "Maurice Williams"
+        ).strip()
+
+        contract.gross_purse = float(
+            data.get("gross_purse")
+            if data.get("gross_purse") not in ("", None)
+            else purse
+        )
+
+        contract.travel_expense = float(
+            data.get("travel_expense") or 0
+        )
+
+        contract.deductions = float(
+            data.get("deductions") or 0
+        )
+
+        contract.boxer_paid = (
+            contract.gross_purse
+            + contract.travel_expense
+            - contract.deductions
+        )
+
+        contract.additional_terms = str(
+            data.get("additional_terms")
+            or ""
+        ).strip()
+
+        contract.cancellation_pay = float(
+            data.get("cancellation_pay") or 0
+        )
+
+        contract.status = str(
+            data.get("status")
+            or "generated"
+        )
+
+        db.commit()
+        db.refresh(contract)
+
+        return {
+            "id": contract.id,
+            "bout_id": contract.bout_id,
+            "fighter_id": contract.fighter_id,
+            "opponent_id": contract.opponent_id,
+            "corner": contract.corner,
+            "contract_date": contract.contract_date,
+            "boxer_name": contract.boxer_name,
+            "boxer_federal_id": contract.boxer_federal_id,
+            "boxer_address": contract.boxer_address,
+            "boxer_phone": contract.boxer_phone,
+            "boxer_manager": contract.boxer_manager,
+            "opponent_name": contract.opponent_name,
+            "rounds": contract.rounds,
+            "maximum_weight": contract.maximum_weight,
+            "event_name": contract.event_name,
+            "event_date": contract.event_date,
+            "venue": contract.venue,
+            "venue_address": contract.venue_address,
+            "promoter_name": contract.promoter_name,
+            "promoter_address": contract.promoter_address,
+            "promoter_phone": contract.promoter_phone,
+            "promoter_matchmaker": contract.promoter_matchmaker,
+            "gross_purse": contract.gross_purse,
+            "travel_expense": contract.travel_expense,
+            "deductions": contract.deductions,
+            "boxer_paid": contract.boxer_paid,
+            "additional_terms": contract.additional_terms,
+            "cancellation_pay": contract.cancellation_pay,
+            "status": contract.status,
+        }
+
+
+    @router.patch("/contracts/{contract_id}")
+    def update_contract(
+        contract_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(BoxingContract.id == contract_id)
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        allowed = {
+            "contract_date",
+            "promoter_name",
+            "promoter_address",
+            "promoter_phone",
+            "promoter_matchmaker",
+            "gross_purse",
+            "travel_expense",
+            "deductions",
+            "additional_terms",
+            "cancellation_pay",
+            "status",
+        }
+
+        money_fields = {
+            "gross_purse",
+            "travel_expense",
+            "deductions",
+            "cancellation_pay",
+        }
+
+        for key, value in data.items():
+            if key not in allowed:
+                continue
+
+            if key in money_fields:
+                setattr(
+                    contract,
+                    key,
+                    float(value or 0),
+                )
+            else:
+                setattr(
+                    contract,
+                    key,
+                    str(value or "").strip(),
+                )
+
+        contract.boxer_paid = (
+            (contract.gross_purse or 0)
+            + (contract.travel_expense or 0)
+            - (contract.deductions or 0)
+        )
+
+        db.commit()
+        db.refresh(contract)
+
+        return {
+            "id": contract.id,
+            "status": contract.status,
+            "gross_purse": contract.gross_purse,
+            "travel_expense": contract.travel_expense,
+            "deductions": contract.deductions,
+            "boxer_paid": contract.boxer_paid,
+        }
+
 
     @router.patch("/bouts/{bout_id}/purse")
     def update_bout_purse(
