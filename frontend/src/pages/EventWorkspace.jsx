@@ -70,6 +70,7 @@ export default function EventWorkspace({
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [contractWeights, setContractWeights] = useState({});
   const [promoImage, setPromoImage] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
 
@@ -240,7 +241,14 @@ export default function EventWorkspace({
           headers: authHeaders({
             "Content-Type": "application/json",
           }),
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            maximum_weight:
+              contractWeights[
+                `${bout.id}-${corner}`
+              ] ??
+              bout.weight_agreed ??
+              "",
+          }),
         }
       );
 
@@ -1522,31 +1530,162 @@ the contestant
                     Fighter Contracts
                   </Typography>
 
-                  <Stack
-                    direction={{
-                      xs: "column",
-                      sm: "row",
-                    }}
-                    spacing={1}
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 2 }}
                   >
-                    <Button
-                      variant="outlined"
-                      onClick={() =>
-                        generateContract(bout, "red")
-                      }
-                    >
-                      Generate Red Contract
-                    </Button>
+                    Enter the final contracted maximum
+                    weight before generating each fighter's
+                    agreement.
+                  </Typography>
 
-                    <Button
-                      variant="outlined"
-                      onClick={() =>
-                        generateContract(bout, "blue")
-                      }
-                    >
-                      Generate Blue Contract
-                    </Button>
-                  </Stack>
+                  <Grid container spacing={2}>
+
+                    <Grid item xs={12} md={6}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Stack spacing={1.5}>
+
+                            <Typography
+                              fontWeight={950}
+                            >
+                              Red Corner Contract
+                            </Typography>
+
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              {bout.red?.legal_name ||
+                                "Red Corner"}
+                            </Typography>
+
+                            <TextField
+                              fullWidth
+                              type="number"
+                              label="Final Contract Weight"
+                              value={
+                                contractWeights[
+                                  `${bout.id}-red`
+                                ] ??
+                                bout.weight_agreed ??
+                                ""
+                              }
+                              inputProps={{
+                                min: 0,
+                                step: 0.1,
+                              }}
+                              onChange={(e) =>
+                                setContractWeights(
+                                  (old) => ({
+                                    ...old,
+                                    [`${bout.id}-red`]:
+                                      e.target.value,
+                                  })
+                                )
+                              }
+                              InputProps={{
+                                endAdornment: (
+                                  <InputAdornment
+                                    position="end"
+                                  >
+                                    lb
+                                  </InputAdornment>
+                                ),
+                              }}
+                            />
+
+                            <Button
+                              variant="contained"
+                              onClick={() =>
+                                generateContract(
+                                  bout,
+                                  "red"
+                                )
+                              }
+                            >
+                              Generate Red Contract
+                            </Button>
+
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+
+                    <Grid item xs={12} md={6}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Stack spacing={1.5}>
+
+                            <Typography
+                              fontWeight={950}
+                            >
+                              Blue Corner Contract
+                            </Typography>
+
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              {bout.blue?.legal_name ||
+                                "Blue Corner"}
+                            </Typography>
+
+                            <TextField
+                              fullWidth
+                              type="number"
+                              label="Final Contract Weight"
+                              value={
+                                contractWeights[
+                                  `${bout.id}-blue`
+                                ] ??
+                                bout.weight_agreed ??
+                                ""
+                              }
+                              inputProps={{
+                                min: 0,
+                                step: 0.1,
+                              }}
+                              onChange={(e) =>
+                                setContractWeights(
+                                  (old) => ({
+                                    ...old,
+                                    [`${bout.id}-blue`]:
+                                      e.target.value,
+                                  })
+                                )
+                              }
+                              InputProps={{
+                                endAdornment: (
+                                  <InputAdornment
+                                    position="end"
+                                  >
+                                    lb
+                                  </InputAdornment>
+                                ),
+                              }}
+                            />
+
+                            <Button
+                              variant="contained"
+                              onClick={() =>
+                                generateContract(
+                                  bout,
+                                  "blue"
+                                )
+                              }
+                            >
+                              Generate Blue Contract
+                            </Button>
+
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                  </Grid>
 
 
 
