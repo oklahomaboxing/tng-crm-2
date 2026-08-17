@@ -2696,7 +2696,11 @@ def sync_clover_sales(
             sale_type=(
                 "membership"
                 if membership_purchase
-                else (product.category or "other")
+                else (
+                    "nexgen_nutrition"
+                    if blocked_membership_sale
+                    else (product.category or "other")
+                )
             ),
         )
 
