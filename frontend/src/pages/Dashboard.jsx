@@ -19,6 +19,12 @@ export default function Dashboard({ dash, leader, load }) {
       dash?.active_member_revenue_this_month || 0
     ).toFixed(2);
 
+  const nutritionClubSalesThisMonth =
+    "$" +
+    Number(
+      dash?.nutrition_club_sales_this_month || 0
+    ).toFixed(2);
+
   return (
     <Box>
       <Box
@@ -84,6 +90,12 @@ export default function Dashboard({ dash, leader, load }) {
         <Stat
           title="Active Member Revenue"
           value={activeMemberRevenueThisMonth}
+        />
+
+
+        <Stat
+          title="Nutrition Club Sales"
+          value={nutritionClubSalesThisMonth}
         />
       </Grid>
 

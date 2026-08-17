@@ -96,6 +96,16 @@ def dashboard(
     )
 
 
+    nutrition_club_sales_this_month = sum(
+        sale.amount or 0
+        for sale in month_sales
+        if (
+            sale.payment_status == "paid"
+            and sale.sale_type == "nexgen_nutrition"
+        )
+    )
+
+
     active_member_revenue_this_month = sum(
         sale.amount or 0
         for sale in month_sales
@@ -145,6 +155,7 @@ def dashboard(
         "today_checkins": today_checkins,
         "sales_this_month": len(month_sales),
         "revenue_this_month": revenue_this_month,
+        "nutrition_club_sales_this_month": nutrition_club_sales_this_month,
         "active_member_revenue_this_month": active_member_revenue_this_month,
         "recent_checkins": recent,
     }
