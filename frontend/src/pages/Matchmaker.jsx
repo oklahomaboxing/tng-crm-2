@@ -100,6 +100,10 @@ export default function Matchmaker() {
   const [seriesFighters, setSeriesFighters] = useState([]);
   const [seriesFighterId, setSeriesFighterId] = useState("");
   const [seriesLoading, setSeriesLoading] = useState(false);
+
+  const [signedFighters, setSignedFighters] = useState([]);
+  const [signedFighterId, setSignedFighterId] = useState("");
+  const [signedLoading, setSignedLoading] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
 
   const boxrecWindowRef = useRef(null);
@@ -109,6 +113,143 @@ export default function Matchmaker() {
   const [editFighterId, setEditFighterId] = useState("");
   const [editFighterForm, setEditFighterForm] = useState(emptyFighter);
   const [eventForm, setEventForm] = useState(emptyEvent);
+
+  async function loadSignedFighters() {
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/signed-fighters`,
+        { headers: authHeaders() }
+      );
+
+      const body = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not load signed fighters"
+        );
+      }
+
+      setSignedFighters(
+        Array.isArray(body) ? body : []
+      );
+
+    } catch (error) {
+      console.error(
+        "Signed Fighters:",
+        error
+      );
+    }
+  }
+
+
+  async function signSelectedFighter() {
+    if (!signedFighterId) {
+      setMsgType("warning");
+      setMsg("Select a fighter to sign.");
+      return;
+    }
+
+    const fighter = fighters.find(
+      (row) =>
+        Number(row.id) ===
+        Number(signedFighterId)
+    );
+
+    setSignedLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/signed-fighters`,
+        {
+          method: "POST",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            fighter_id: Number(signedFighterId),
+            signed_date:
+              new Date()
+                .toISOString()
+                .slice(0, 10),
+            status: "active",
+            agreement_type: "development",
+          }),
+        }
+      );
+
+      const body = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not sign fighter"
+        );
+      }
+
+      setSignedFighterId("");
+
+      setMsgType("success");
+      setMsg(
+        `${fighter?.legal_name || "Fighter"} added to Signed Fighters.`
+      );
+
+      await loadSignedFighters();
+
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not sign fighter"
+      );
+    } finally {
+      setSignedLoading(false);
+    }
+  }
+
+
+  async function removeSignedFighter(row) {
+    const name =
+      row.fighter?.legal_name ||
+      "this fighter";
+
+    if (
+      !window.confirm(
+        `Remove ${name} from Signed Fighters?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/signed-fighters/${row.id}`,
+        {
+          method: "DELETE",
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not remove signed fighter"
+        );
+      }
+
+      await loadSignedFighters();
+
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not remove signed fighter"
+      );
+    }
+  }
+
 
   async function loadFirstFiveSeries() {
     try {
