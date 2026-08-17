@@ -95,6 +95,11 @@ export default function Matchmaker() {
 
 
   const [fighterOpen, setFighterOpen] = useState(false);
+
+  const [seriesList, setSeriesList] = useState([]);
+  const [seriesFighters, setSeriesFighters] = useState([]);
+  const [seriesFighterId, setSeriesFighterId] = useState("");
+  const [seriesLoading, setSeriesLoading] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
 
   const boxrecWindowRef = useRef(null);
@@ -104,6 +109,264 @@ export default function Matchmaker() {
   const [editFighterId, setEditFighterId] = useState("");
   const [editFighterForm, setEditFighterForm] = useState(emptyFighter);
   const [eventForm, setEventForm] = useState(emptyEvent);
+
+  async function loadFirstFiveSeries() {
+    try {
+      const seriesResponse = await fetch(
+        `${API}/api/boxing/series`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      const seriesBody = await readJson(
+        seriesResponse
+      );
+
+      if (!seriesResponse.ok) {
+        throw new Error(
+          seriesBody.detail ||
+          "Could not load fighter series"
+        );
+      }
+
+      const list = Array.isArray(seriesBody)
+        ? seriesBody
+        : [];
+
+      setSeriesList(list);
+
+      const firstFive = list.find(
+        (row) =>
+          row.slug === "first-5-fights"
+      );
+
+      if (!firstFive) {
+        setSeriesFighters([]);
+        return;
+      }
+
+      const fighterResponse = await fetch(
+        `${API}/api/boxing/series/${firstFive.id}/fighters`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      const fighterBody = await readJson(
+        fighterResponse
+      );
+
+      if (!fighterResponse.ok) {
+        throw new Error(
+          fighterBody.detail ||
+          "Could not load First 5 fighters"
+        );
+      }
+
+      setSeriesFighters(
+        Array.isArray(fighterBody)
+          ? fighterBody
+          : []
+      );
+
+    } catch (error) {
+      console.error(
+        "First 5 Series:",
+        error
+      );
+    }
+  }
+
+
+  async function addToFirstFive() {
+    if (!seriesFighterId) {
+      setMsgType("warning");
+      setMsg(
+        "Select a fighter to add to the First 5 Fights Series."
+      );
+      return;
+    }
+
+    const firstFive = seriesList.find(
+      (row) =>
+        row.slug === "first-5-fights"
+    );
+
+    if (!firstFive) {
+      setMsgType("error");
+      setMsg(
+        "First 5 Fights Series could not be found."
+      );
+      return;
+    }
+
+    const fighter = fighters.find(
+      (row) =>
+        Number(row.id) ===
+        Number(seriesFighterId)
+    );
+
+    setSeriesLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/series/${firstFive.id}/fighters`,
+        {
+          method: "POST",
+          headers: authHeaders({
+            "Content-Type":
+              "application/json",
+          }),
+          body: JSON.stringify({
+            fighter_id:
+              Number(seriesFighterId),
+
+            signed_date:
+              new Date()
+                .toISOString()
+                .slice(0, 10),
+
+            start_record:
+              fighter?.pro_record || "",
+
+            target_fights: 5,
+            fights_completed: 0,
+          }),
+        }
+      );
+
+      const body = await readJson(
+        response
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not add fighter to series"
+        );
+      }
+
+      setSeriesFighterId("");
+
+      setMsgType("success");
+      setMsg(
+        `${body.fighter?.legal_name || "Fighter"} added to First 5 Fights Series.`
+      );
+
+      await loadFirstFiveSeries();
+
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not add fighter to series"
+      );
+    } finally {
+      setSeriesLoading(false);
+    }
+  }
+
+
+  async function updateSeriesFighter(
+    row,
+    changes
+  ) {
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/series-fighters/${row.id}`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type":
+              "application/json",
+          }),
+          body: JSON.stringify(changes),
+        }
+      );
+
+      const body = await readJson(
+        response
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not update series fighter"
+        );
+      }
+
+      setSeriesFighters(
+        (old) =>
+          old.map((item) =>
+            item.id === row.id
+              ? {
+                  ...item,
+                  ...body,
+                }
+              : item
+          )
+      );
+
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not update series fighter"
+      );
+    }
+  }
+
+
+  async function removeSeriesFighter(row) {
+    const name =
+      row.fighter?.legal_name ||
+      "this fighter";
+
+    if (
+      !window.confirm(
+        `Remove ${name} from the First 5 Fights Series?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/series-fighters/${row.id}`,
+        {
+          method: "DELETE",
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await readJson(
+        response
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not remove fighter"
+        );
+      }
+
+      await loadFirstFiveSeries();
+
+      setMsgType("success");
+      setMsg(
+        `${name} removed from the series.`
+      );
+
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not remove fighter"
+      );
+    }
+  }
+
 
   async function readJson(response) {
     try {
@@ -140,6 +403,7 @@ export default function Matchmaker() {
 
   useEffect(() => {
     load();
+    loadFirstFiveSeries();
   }, []);
 
   function openBoxRecProfile(searchValue = null) {
