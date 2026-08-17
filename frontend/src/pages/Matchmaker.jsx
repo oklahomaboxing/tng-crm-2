@@ -1484,7 +1484,213 @@ export default function Matchmaker() {
             borderColor: "divider",
           }}
         >
+          
+        <Card
+          sx={{
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
           <CardContent>
+            <Stack spacing={2}>
+
+              <Stack
+                direction={{
+                  xs: "column",
+                  md: "row",
+                }}
+                justifyContent="space-between"
+                spacing={1}
+              >
+                <Box>
+                  <Typography
+                    variant="h5"
+                    fontWeight={950}
+                  >
+                    SIGNED FIGHTERS
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    Fighters currently signed to a
+                    TNG developmental series.
+                  </Typography>
+                </Box>
+
+                <Chip
+                  label={`${seriesFighters.length} Signed`}
+                  color="primary"
+                  variant="outlined"
+                />
+              </Stack>
+
+              <Divider />
+
+              {seriesFighters.length === 0 ? (
+                <Alert severity="info">
+                  No signed fighters yet. Add a fighter
+                  to the First 5 Fights Series below.
+                </Alert>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>
+                          Fighter
+                        </TableCell>
+
+                        <TableCell>
+                          Record
+                        </TableCell>
+
+                        <TableCell>
+                          Weight
+                        </TableCell>
+
+                        <TableCell>
+                          Series
+                        </TableCell>
+
+                        <TableCell>
+                          Progress
+                        </TableCell>
+
+                        <TableCell>
+                          Signed
+                        </TableCell>
+
+                        <TableCell>
+                          Status
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+
+                    <TableBody>
+                      {seriesFighters.map((row) => {
+                        const fighter =
+                          row.fighter || {};
+
+                        const completed =
+                          Number(
+                            row.fights_completed || 0
+                          );
+
+                        const target =
+                          Number(
+                            row.target_fights || 5
+                          );
+
+                        return (
+                          <TableRow
+                            key={`signed-${row.id}`}
+                            hover
+                            sx={{
+                              cursor: "pointer",
+                            }}
+                            onClick={() => {
+                              if (fighter.id) {
+                                setFighterId(
+                                  fighter.id
+                                );
+
+                                setResult(null);
+                              }
+                            }}
+                          >
+                            <TableCell>
+                              <Typography
+                                fontWeight={900}
+                              >
+                                {fighter.legal_name ||
+                                  "Unnamed Fighter"}
+                              </Typography>
+
+                              {fighter.boxrec_id && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  BoxRec #
+                                  {fighter.boxrec_id}
+                                </Typography>
+                              )}
+                            </TableCell>
+
+                            <TableCell>
+                              {fighter.pro_record ||
+                                "N/A"}
+                            </TableCell>
+
+                            <TableCell>
+                              {fighter.fight_weight
+                                ? `${fighter.fight_weight} lb`
+                                : fighter.preferred_weight
+                                ? `${fighter.preferred_weight} lb`
+                                : "N/A"}
+                            </TableCell>
+
+                            <TableCell>
+                              First 5 Fights
+                            </TableCell>
+
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                color={
+                                  completed >= target
+                                    ? "success"
+                                    : "primary"
+                                }
+                                label={
+                                  completed >= target
+                                    ? "Graduated"
+                                    : `${completed} of ${target}`
+                                }
+                              />
+                            </TableCell>
+
+                            <TableCell>
+                              {row.signed_date ||
+                                "—"}
+                            </TableCell>
+
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={
+                                  (
+                                    row.status ||
+                                    "active"
+                                  )
+                                    .charAt(0)
+                                    .toUpperCase() +
+                                  (
+                                    row.status ||
+                                    "active"
+                                  ).slice(1)
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+
+                  </Table>
+                </TableContainer>
+              )}
+
+            </Stack>
+          </CardContent>
+        </Card>
+
+
+<CardContent>
             <Stack spacing={2.5}>
 
               <Box>
