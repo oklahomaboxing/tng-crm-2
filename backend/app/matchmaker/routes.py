@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from ..database import get_db
-from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter
+from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -1651,6 +1651,230 @@ Rules:
         db.refresh(fighter)
 
         return fighter_dict(fighter)
+
+
+    @router.get("/calendar")
+    def get_fight_calendar(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        events = (
+            db.query(BoxingEvent)
+            .order_by(
+                BoxingEvent.event_date.asc(),
+                BoxingEvent.id.asc(),
+            )
+            .all()
+        )
+
+        publication_rows = (
+            db.query(BoxingEventPublication)
+            .all()
+        )
+
+        publication_by_event = {
+            row.event_id: row
+            for row in publication_rows
+        }
+
+        results = []
+
+        for event in events:
+            publication = publication_by_event.get(
+                event.id
+            )
+
+            results.append({
+                "id": event.id,
+                "slug": event.slug,
+                "name": event.name,
+                "venue": event.venue,
+                "venue_address": event.venue_address,
+                "event_date": event.event_date,
+                "status": event.status,
+
+                "published": (
+                    bool(publication.published)
+                    if publication
+                    else False
+                ),
+
+                "public_title": (
+                    publication.public_title
+                    if publication
+                    else ""
+                ),
+
+                "doors_time": (
+                    publication.doors_time
+                    if publication
+                    else ""
+                ),
+
+                "first_bout_time": (
+                    publication.first_bout_time
+                    if publication
+                    else ""
+                ),
+
+                "ticket_url": (
+                    publication.ticket_url
+                    if publication
+                    else ""
+                ),
+
+                "poster_url": (
+                    publication.poster_url
+                    if publication
+                    else ""
+                ),
+
+                "public_notes": (
+                    publication.public_notes
+                    if publication
+                    else ""
+                ),
+            })
+
+        return results
+
+
+    @router.patch("/calendar/{event_id}")
+    def update_calendar_publication(
+        event_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(BoxingEvent.id == event_id)
+            .first()
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found",
+            )
+
+        row = (
+            db.query(BoxingEventPublication)
+            .filter(
+                BoxingEventPublication.event_id ==
+                event_id
+            )
+            .first()
+        )
+
+        if not row:
+            row = BoxingEventPublication(
+                event_id=event_id
+            )
+
+            db.add(row)
+
+        if "published" in data:
+            row.published = bool(
+                data.get("published")
+            )
+
+        for field in (
+            "public_title",
+            "doors_time",
+            "first_bout_time",
+            "ticket_url",
+            "poster_url",
+            "public_notes",
+        ):
+            if field in data:
+                setattr(
+                    row,
+                    field,
+                    str(
+                        data.get(field) or ""
+                    ).strip(),
+                )
+
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "id": row.id,
+            "event_id": row.event_id,
+            "published": bool(row.published),
+            "public_title": row.public_title,
+            "doors_time": row.doors_time,
+            "first_bout_time": row.first_bout_time,
+            "ticket_url": row.ticket_url,
+            "poster_url": row.poster_url,
+            "public_notes": row.public_notes,
+        }
+
+
+    @router.get("/public/fight-calendar")
+    def public_fight_calendar(
+        db: Session = Depends(get_db),
+    ):
+        rows = (
+            db.query(
+                BoxingEvent,
+                BoxingEventPublication,
+            )
+            .join(
+                BoxingEventPublication,
+                BoxingEventPublication.event_id ==
+                BoxingEvent.id,
+            )
+            .filter(
+                BoxingEventPublication.published ==
+                True
+            )
+            .order_by(
+                BoxingEvent.event_date.asc(),
+                BoxingEvent.id.asc(),
+            )
+            .all()
+        )
+
+        return [
+            {
+                "id": event.id,
+                "slug": event.slug,
+
+                "name": (
+                    publication.public_title
+                    or event.name
+                ),
+
+                "venue": event.venue,
+                "venue_address":
+                    event.venue_address,
+
+                "event_date":
+                    event.event_date,
+
+                "doors_time":
+                    publication.doors_time,
+
+                "first_bout_time":
+                    publication.first_bout_time,
+
+                "ticket_url":
+                    publication.ticket_url,
+
+                "poster_url":
+                    publication.poster_url,
+
+                "public_notes":
+                    publication.public_notes,
+            }
+            for event, publication in rows
+        ]
 
 
     @router.get("/events")

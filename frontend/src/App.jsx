@@ -32,6 +32,8 @@ import DuplicateReview from "./pages/DuplicateReview.jsx";
 import AITrainer from "./pages/AITrainer.jsx";
 import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
 import Matchmaker from "./pages/Matchmaker.jsx";
+import EventCalendar from "./pages/EventCalendar.jsx";
+import PublicFightCalendar from "./pages/PublicFightCalendar.jsx";
 import FighterRegistration from "./pages/FighterRegistration.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import QRReferrals from "./pages/QRReferrals.jsx";
@@ -410,6 +412,10 @@ async function submitPasswordReset() {
 
   if (paymentStatus) return <PaymentMessage status={paymentStatus} />;
 
+  if (window.location.pathname === "/fight-calendar") {
+    return <PublicFightCalendar />;
+  }
+
   if (params.has("fighter-register")) {
     return <FighterRegistration />;
   }
@@ -708,6 +714,7 @@ if (window.location.pathname === "/register") return <JoinPage />;
       {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
       {page === "TNG Academy" && role !== "rep" && <TNGAcademy />}
       {page === "Matchmaker" && role !== "rep" && <Matchmaker />}
+      {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
       {page === "QR Referrals" && <QRReferrals />}

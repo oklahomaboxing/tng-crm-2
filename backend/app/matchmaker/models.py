@@ -328,3 +328,37 @@ class BoxingSignedFighter(Base):
     )
 
     fighter = relationship("BoxingFighter")
+
+
+class BoxingEventPublication(Base):
+    __tablename__ = "boxing_event_publications"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    event_id = Column(
+        Integer,
+        ForeignKey("boxing_events.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    published = Column(Boolean, default=False)
+
+    public_title = Column(String, default="")
+    doors_time = Column(String, default="")
+    first_bout_time = Column(String, default="")
+
+    ticket_url = Column(String, default="")
+    poster_url = Column(String, default="")
+
+    public_notes = Column(Text, default="")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    event = relationship("BoxingEvent")

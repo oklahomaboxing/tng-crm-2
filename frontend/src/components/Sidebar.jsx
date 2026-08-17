@@ -23,12 +23,14 @@ import AssessmentRoundedIcon from "@mui/icons-material/AssessmentRounded";
 import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
+import EventRoundedIcon from "@mui/icons-material/EventRounded";
 export const ROLE_MENUS = {
   admin: [
     "Dashboard",
     "Members",
     "TNG Academy",
     "Matchmaker",
+    "Fight Calendar",
     "Products",
     "Front Desk",
     "Sales",
@@ -45,6 +47,7 @@ export const ROLE_MENUS = {
   ],
   staff: [
     "Front Desk",
+    "Fight Calendar",
     "Members",
     "Sales",
     "Leads",
@@ -59,6 +62,7 @@ const ICONS = {
   Members: <PeopleAltRoundedIcon />,
   "TNG Academy": <SchoolRoundedIcon />,
   Matchmaker: <SportsMmaRoundedIcon />,
+  "Fight Calendar": <EventRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
   "Front Desk": <QrCodeScannerRoundedIcon />,
   Sales: <PointOfSaleRoundedIcon />,
