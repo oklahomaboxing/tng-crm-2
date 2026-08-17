@@ -7,35 +7,35 @@ from app.models import Sale
 
 
 def is_membership_product(product):
+    """
+    Membership activation must be explicit.
+
+    Clover/manual/custom/test products do NOT become memberships
+    based only on their name or price.
+    """
     if not product:
         return False
 
-    name = (product.name or "").lower()
+    name = (product.name or "").strip().lower()
+    category = (getattr(product, "category", "") or "").strip().lower()
 
-    membership_keywords = [
-        "membership",
-        "monthly",
-        "month",
-        "3 month",
-        "3-month",
-        "three month",
-        "annual",
-        "year",
-        "yearly",
-        "youth",
-        "adult",
-        "family",
-        "unlimited",
-        "boxing",
-    ]
+    blocked_words = {
+        "test",
+        "testing",
+        "manual",
+        "custom",
+        "uncategorized",
+        "clover sale",
+    }
 
-    if any(keyword in name for keyword in membership_keywords):
-        return True
+    if any(word in name for word in blocked_words):
+        return False
 
-    if getattr(product, "category", "").lower() == "membership":
-        return True
-
-    return False
+    # Membership must be intentionally marked in TNG OS.
+    return bool(
+        getattr(product, "is_membership", False)
+        and category == "membership"
+    )
 
 
 def is_event_product(product):

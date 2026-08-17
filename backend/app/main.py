@@ -1884,6 +1884,17 @@ def categorize_clover_product(name):
 
     product_name = name.strip().lower()
 
+    blocked_words = [
+        "test",
+        "testing",
+        "manual",
+        "custom",
+        "uncategorized",
+    ]
+
+    if any(word in product_name for word in blocked_words):
+        return "other"
+
     event_keywords = [
         "ticket",
         "general admission",
@@ -1895,28 +1906,15 @@ def categorize_clover_product(name):
         "kids under",
     ]
 
-    membership_keywords = [
-        "membership",
-        "month to month",
-        "monthly",
-        "3 month",
-        "3-month",
-        "three month",
-        "annual",
-        "yearly",
-        "unlimited boxing",
-        "youth boxing",
-        "adult boxing",
-        "family membership",
-    ]
-
     if any(keyword in product_name for keyword in event_keywords):
         return "event_ticket"
 
-    if any(keyword in product_name for keyword in membership_keywords):
-        return "membership"
-
+    # IMPORTANT:
+    # Clover product names no longer automatically create memberships.
+    # Membership products must be explicitly marked in TNG OS Products.
     return "other"
+
+
 @app.post("/api/clover/sync-products")
 def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
@@ -1964,20 +1962,22 @@ def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(cur
             MembershipProduct.name == name
         ).first()
 
-        is_membership = category == "membership"
-
         if existing:
             existing.price = price_cents / 100
             existing.active = True
-            existing.category = category
-            existing.is_membership = is_membership
+
+            # Preserve intentional TNG membership configuration.
+            # Clover sync is not allowed to turn a product into a membership.
+            if not existing.is_membership:
+                existing.category = category
+
         else:
             product = MembershipProduct(
                 name=name,
                 price=price_cents / 100,
                 active=True,
                 category=category,
-                is_membership=is_membership,
+                is_membership=False,
             )
             db.add(product)
 
@@ -2653,17 +2653,30 @@ def sync_clover_sales(
                     db.add(product)
                     db.flush()
 
+        product_name = (
+            product.name or ""
+        ).strip().lower()
+
+        blocked_membership_sale = any(
+            word in product_name
+            for word in (
+                "test",
+                "testing",
+                "manual",
+                "custom",
+                "uncategorized",
+                "clover sale",
+            )
+        )
+
         membership_purchase = bool(
-            product.is_membership
-            or (
+            not blocked_membership_sale
+            and product.is_membership
+            and (
                 (product.category or "")
                 .strip()
                 .lower()
-                in {
-                    "membership",
-                    "monthly_membership",
-                    "annual_membership",
-                }
+                == "membership"
             )
         )
 
