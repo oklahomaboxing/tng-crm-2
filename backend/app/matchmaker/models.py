@@ -293,3 +293,38 @@ class BoxingSeriesFighter(Base):
 
     series = relationship("BoxingSeries")
     fighter = relationship("BoxingFighter")
+
+
+class BoxingSignedFighter(Base):
+    __tablename__ = "boxing_signed_fighters"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    fighter_id = Column(
+        Integer,
+        ForeignKey("boxing_fighters.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    signed_date = Column(String, default="")
+    start_date = Column(String, default="")
+    end_date = Column(String, default="")
+
+    agreement_type = Column(String, default="development")
+    status = Column(String, default="active")
+
+    exclusive = Column(Boolean, default=False)
+    contract_on_file = Column(Boolean, default=False)
+
+    notes = Column(Text, default="")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    fighter = relationship("BoxingFighter")

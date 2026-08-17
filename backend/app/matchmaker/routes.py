@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from ..database import get_db
-from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter
+from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -484,6 +484,287 @@ def build_matchmaker_router(current_user_dependency):
                 )
 
         return list(contacts.values())
+
+
+    @router.get("/signed-fighters")
+    def list_signed_fighters(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        rows = (
+            db.query(BoxingSignedFighter)
+            .order_by(
+                BoxingSignedFighter.id.asc()
+            )
+            .all()
+        )
+
+        results = []
+
+        for row in rows:
+            fighter = (
+                db.query(BoxingFighter)
+                .filter(
+                    BoxingFighter.id ==
+                    row.fighter_id
+                )
+                .first()
+            )
+
+            if not fighter:
+                continue
+
+            results.append({
+                "id": row.id,
+                "fighter_id": row.fighter_id,
+
+                "fighter":
+                    fighter_dict(fighter),
+
+                "signed_date":
+                    row.signed_date,
+
+                "start_date":
+                    row.start_date,
+
+                "end_date":
+                    row.end_date,
+
+                "agreement_type":
+                    row.agreement_type,
+
+                "status":
+                    row.status,
+
+                "exclusive":
+                    bool(row.exclusive),
+
+                "contract_on_file":
+                    bool(row.contract_on_file),
+
+                "notes":
+                    row.notes,
+            })
+
+        return results
+
+
+    @router.post("/signed-fighters")
+    def sign_fighter(
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        fighter_id = data.get("fighter_id")
+
+        try:
+            fighter_id = int(fighter_id)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="fighter_id is required",
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id ==
+                fighter_id
+            )
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        existing = (
+            db.query(BoxingSignedFighter)
+            .filter(
+                BoxingSignedFighter.fighter_id ==
+                fighter_id
+            )
+            .first()
+        )
+
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="Fighter is already signed",
+            )
+
+        row = BoxingSignedFighter(
+            fighter_id=fighter_id,
+
+            signed_date=str(
+                data.get("signed_date") or ""
+            ).strip(),
+
+            start_date=str(
+                data.get("start_date") or ""
+            ).strip(),
+
+            end_date=str(
+                data.get("end_date") or ""
+            ).strip(),
+
+            agreement_type=str(
+                data.get("agreement_type")
+                or "development"
+            ).strip(),
+
+            status=str(
+                data.get("status")
+                or "active"
+            ).strip(),
+
+            exclusive=bool(
+                data.get("exclusive", False)
+            ),
+
+            contract_on_file=bool(
+                data.get(
+                    "contract_on_file",
+                    False
+                )
+            ),
+
+            notes=str(
+                data.get("notes") or ""
+            ).strip(),
+        )
+
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "id": row.id,
+            "fighter_id": row.fighter_id,
+            "fighter": fighter_dict(fighter),
+            "signed_date": row.signed_date,
+            "start_date": row.start_date,
+            "end_date": row.end_date,
+            "agreement_type": row.agreement_type,
+            "status": row.status,
+            "exclusive": bool(row.exclusive),
+            "contract_on_file":
+                bool(row.contract_on_file),
+            "notes": row.notes,
+        }
+
+
+    @router.patch(
+        "/signed-fighters/{signed_fighter_id}"
+    )
+    def update_signed_fighter(
+        signed_fighter_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        row = (
+            db.query(BoxingSignedFighter)
+            .filter(
+                BoxingSignedFighter.id ==
+                signed_fighter_id
+            )
+            .first()
+        )
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="Signed fighter not found",
+            )
+
+        for field in (
+            "signed_date",
+            "start_date",
+            "end_date",
+            "agreement_type",
+            "status",
+            "notes",
+        ):
+            if field in data:
+                setattr(
+                    row,
+                    field,
+                    str(
+                        data.get(field) or ""
+                    ).strip(),
+                )
+
+        if "exclusive" in data:
+            row.exclusive = bool(
+                data.get("exclusive")
+            )
+
+        if "contract_on_file" in data:
+            row.contract_on_file = bool(
+                data.get("contract_on_file")
+            )
+
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "id": row.id,
+            "fighter_id": row.fighter_id,
+            "signed_date": row.signed_date,
+            "start_date": row.start_date,
+            "end_date": row.end_date,
+            "agreement_type":
+                row.agreement_type,
+            "status": row.status,
+            "exclusive":
+                bool(row.exclusive),
+            "contract_on_file":
+                bool(row.contract_on_file),
+            "notes": row.notes,
+        }
+
+
+    @router.delete(
+        "/signed-fighters/{signed_fighter_id}"
+    )
+    def release_signed_fighter(
+        signed_fighter_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        row = (
+            db.query(BoxingSignedFighter)
+            .filter(
+                BoxingSignedFighter.id ==
+                signed_fighter_id
+            )
+            .first()
+        )
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="Signed fighter not found",
+            )
+
+        db.delete(row)
+        db.commit()
+
+        return {
+            "ok": True,
+            "id": signed_fighter_id,
+        }
 
 
     @router.get("/series")
