@@ -13,6 +13,12 @@ export default function Dashboard({ dash, leader, load }) {
   const revenueThisMonth =
     "$" + Number(dash?.revenue_this_month || 0).toFixed(2);
 
+  const activeMemberRevenueThisMonth =
+    "$" +
+    Number(
+      dash?.active_member_revenue_this_month || 0
+    ).toFixed(2);
+
   return (
     <Box>
       <Box
@@ -72,6 +78,12 @@ export default function Dashboard({ dash, leader, load }) {
         <Stat
           title="Revenue This Month"
           value={revenueThisMonth}
+        />
+
+
+        <Stat
+          title="Active Member Revenue"
+          value={activeMemberRevenueThisMonth}
         />
       </Grid>
 

@@ -55,6 +55,7 @@ def dashboard(
 
     total_members = 0
     active_members = 0
+    active_member_ids = set()
 
     for member in dashboard_members:
         recalculate_member_from_payments(member, db)
@@ -68,6 +69,7 @@ def dashboard(
             )
         ):
             active_members += 1
+            active_member_ids.add(member.id)
 
     db.commit()
 
@@ -91,6 +93,17 @@ def dashboard(
     revenue_this_month = sum(
         sale.amount or 0
         for sale in month_sales
+    )
+
+
+    active_member_revenue_this_month = sum(
+        sale.amount or 0
+        for sale in month_sales
+        if (
+            sale.member_id is not None
+            and sale.member_id in active_member_ids
+            and sale.payment_status == "paid"
+        )
     )
 
     recent_checkins = (
@@ -132,5 +145,6 @@ def dashboard(
         "today_checkins": today_checkins,
         "sales_this_month": len(month_sales),
         "revenue_this_month": revenue_this_month,
+        "active_member_revenue_this_month": active_member_revenue_this_month,
         "recent_checkins": recent,
     }
