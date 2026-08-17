@@ -2475,6 +2475,10 @@ def sync_clover_sales(
             else ""
         )
 
+        is_manual_transaction = bool(
+            order.get("manualTransaction")
+        )
+
         duplicate_filters = [
             Sale.clover_order_id == order_id,
         ]
@@ -2491,6 +2495,10 @@ def sync_clover_sales(
         )
 
         if existing_sale:
+            if is_manual_transaction:
+                existing_sale.sale_type = "nexgen_nutrition"
+                db.commit()
+
             skipped += 1
             already_imported += 1
             continue
@@ -2657,15 +2665,18 @@ def sync_clover_sales(
             product.name or ""
         ).strip().lower()
 
-        blocked_membership_sale = any(
-            word in product_name
-            for word in (
-                "test",
-                "testing",
-                "manual",
-                "custom",
-                "uncategorized",
-                "clover sale",
+        blocked_membership_sale = (
+            is_manual_transaction
+            or any(
+                word in product_name
+                for word in (
+                    "test",
+                    "testing",
+                    "manual",
+                    "custom",
+                    "uncategorized",
+                    "clover sale",
+                )
             )
         )
 
@@ -2694,11 +2705,11 @@ def sync_clover_sales(
             quantity=1,
             unit_price=total_cents / 100,
             sale_type=(
-                "membership"
-                if membership_purchase
+                "nexgen_nutrition"
+                if is_manual_transaction
                 else (
-                    "nexgen_nutrition"
-                    if blocked_membership_sale
+                    "membership"
+                    if membership_purchase
                     else (product.category or "other")
                 )
             ),
