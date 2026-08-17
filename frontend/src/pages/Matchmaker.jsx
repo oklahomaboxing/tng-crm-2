@@ -1831,6 +1831,197 @@ export default function Matchmaker() {
         </Card>
 
 
+        <Card
+          sx={{
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <CardContent>
+            <Stack spacing={2}>
+
+              <Stack
+                direction={{
+                  xs: "column",
+                  md: "row",
+                }}
+                justifyContent="space-between"
+                spacing={1}
+              >
+                <Box>
+                  <Typography
+                    variant="h5"
+                    fontWeight={950}
+                  >
+                    SIGNED FIGHTERS
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    Fighters signed directly to TNG.
+                    First 5 Fights Series membership
+                    is separate.
+                  </Typography>
+                </Box>
+
+                <Chip
+                  label={`${signedFighters.length} Signed`}
+                  color="primary"
+                  variant="outlined"
+                />
+              </Stack>
+
+              <Stack
+                direction={{
+                  xs: "column",
+                  md: "row",
+                }}
+                spacing={1.5}
+              >
+                <Autocomplete
+                  fullWidth
+                  options={fighters.filter(
+                    (fighter) =>
+                      !signedFighters.some(
+                        (row) =>
+                          Number(row.fighter_id) ===
+                          Number(fighter.id)
+                      )
+                  )}
+                  value={
+                    fighters.find(
+                      (fighter) =>
+                        Number(fighter.id) ===
+                        Number(signedFighterId)
+                    ) || null
+                  }
+                  getOptionLabel={(fighter) =>
+                    `${fighter.legal_name || ""} — ${
+                      fighter.pro_record ||
+                      "record N/A"
+                    }`
+                  }
+                  isOptionEqualToValue={(option, value) =>
+                    Number(option.id) ===
+                    Number(value.id)
+                  }
+                  onChange={(event, value) =>
+                    setSignedFighterId(
+                      value ? value.id : ""
+                    )
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Select Fighter to Sign"
+                      placeholder="Search fighter pool..."
+                    />
+                  )}
+                />
+
+                <Button
+                  variant="contained"
+                  disabled={
+                    !signedFighterId ||
+                    signedLoading
+                  }
+                  onClick={signSelectedFighter}
+                  sx={{ minWidth: 170 }}
+                >
+                  {signedLoading
+                    ? "Signing..."
+                    : "Sign Fighter"}
+                </Button>
+              </Stack>
+
+              <Divider />
+
+              {!signedFighters.length ? (
+                <Alert severity="info">
+                  No fighters are currently signed
+                  directly to TNG.
+                </Alert>
+              ) : (
+                <Stack spacing={1}>
+                  {signedFighters.map((row) => {
+                    const fighter =
+                      row.fighter || {};
+
+                    return (
+                      <Card
+                        key={`signed-${row.id}`}
+                        variant="outlined"
+                      >
+                        <CardContent>
+                          <Stack
+                            direction={{
+                              xs: "column",
+                              md: "row",
+                            }}
+                            justifyContent="space-between"
+                            alignItems={{
+                              xs: "flex-start",
+                              md: "center",
+                            }}
+                            spacing={1}
+                          >
+                            <Box>
+                              <Typography
+                                fontWeight={900}
+                              >
+                                {fighter.legal_name ||
+                                  "Unnamed Fighter"}
+                              </Typography>
+
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                {fighter.pro_record ||
+                                  "Record N/A"}
+                                {" • "}
+                                Signed:{" "}
+                                {row.signed_date || "—"}
+                              </Typography>
+                            </Box>
+
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                            >
+                              <Chip
+                                size="small"
+                                label={
+                                  row.status ||
+                                  "active"
+                                }
+                              />
+
+                              <Button
+                                size="small"
+                                color="error"
+                                onClick={() =>
+                                  removeSignedFighter(row)
+                                }
+                              >
+                                Remove
+                              </Button>
+                            </Stack>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </Stack>
+              )}
+
+            </Stack>
+          </CardContent>
+        </Card>
+
+
 <CardContent>
             <Stack spacing={2.5}>
 
