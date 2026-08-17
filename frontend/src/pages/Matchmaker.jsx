@@ -1415,6 +1415,7 @@ export default function Matchmaker() {
         )}
 
         {!!fighters.length && !result && (
+          <>
           <Card>
             <CardContent>
               <Typography variant="h6" fontWeight={900}>Fighter Pool</Typography>
@@ -1476,6 +1477,401 @@ export default function Matchmaker() {
               </TableContainer>
             </CardContent>
           </Card>
+
+        <Card
+          sx={{
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <CardContent>
+            <Stack spacing={2.5}>
+
+              <Box>
+                <Typography
+                  variant="h5"
+                  fontWeight={950}
+                >
+                  FIRST 5 FIGHTS SERIES
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  The Next Generation developmental
+                  fighter program.
+                </Typography>
+              </Box>
+
+              <Stack
+                direction={{
+                  xs: "column",
+                  md: "row",
+                }}
+                spacing={1.5}
+              >
+                <Autocomplete
+                  fullWidth
+                  options={fighters.filter(
+                    (fighter) =>
+                      !seriesFighters.some(
+                        (row) =>
+                          Number(row.fighter_id) ===
+                          Number(fighter.id)
+                      )
+                  )}
+                  value={
+                    fighters.find(
+                      (fighter) =>
+                        Number(fighter.id) ===
+                        Number(seriesFighterId)
+                    ) || null
+                  }
+                  getOptionLabel={(fighter) =>
+                    `${fighter.legal_name || ""} — ${
+                      fighter.pro_record || "record N/A"
+                    } — ${
+                      fighter.fight_weight || "?"
+                    } lb`
+                  }
+                  isOptionEqualToValue={(option, value) =>
+                    Number(option.id) === Number(value.id)
+                  }
+                  onChange={(event, value) =>
+                    setSeriesFighterId(
+                      value ? value.id : ""
+                    )
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Add Fighter to First 5"
+                      placeholder="Search fighter pool..."
+                    />
+                  )}
+                />
+
+                <Button
+                  variant="contained"
+                  disabled={
+                    !seriesFighterId ||
+                    seriesLoading
+                  }
+                  onClick={addToFirstFive}
+                  sx={{ minWidth: 180 }}
+                >
+                  {seriesLoading
+                    ? "Adding..."
+                    : "Add to Series"}
+                </Button>
+              </Stack>
+
+              <Divider />
+
+              {seriesFighters.length === 0 && (
+                <Alert severity="info">
+                  No fighters are currently in the
+                  First 5 Fights Series.
+                </Alert>
+              )}
+
+              {seriesFighters.map((row) => {
+                const fighter =
+                  row.fighter || {};
+
+                const completed =
+                  Number(
+                    row.fights_completed || 0
+                  );
+
+                const target =
+                  Number(
+                    row.target_fights || 5
+                  );
+
+                return (
+                  <Card
+                    key={row.id}
+                    variant="outlined"
+                  >
+                    <CardContent>
+                      <Stack spacing={2}>
+
+                        <Stack
+                          direction={{
+                            xs: "column",
+                            md: "row",
+                          }}
+                          justifyContent="space-between"
+                          spacing={1}
+                        >
+                          <Box>
+                            <Typography
+                              variant="h6"
+                              fontWeight={950}
+                            >
+                              {fighter.legal_name}
+                            </Typography>
+
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              Start Record:{" "}
+                              {row.start_record || "N/A"}
+                              {" • "}
+                              Current:{" "}
+                              {fighter.pro_record || "N/A"}
+                              {" • "}
+                              {fighter.fight_weight
+                                ? `${fighter.fight_weight} lb`
+                                : "Weight N/A"}
+                            </Typography>
+                          </Box>
+
+                          <Chip
+                            label={
+                              completed >= target
+                                ? "GRADUATED"
+                                : `FIGHT ${completed} OF ${target}`
+                            }
+                            color={
+                              completed >= target
+                                ? "success"
+                                : "primary"
+                            }
+                          />
+                        </Stack>
+
+                        <Grid container spacing={2}>
+
+                          <Grid
+                            item
+                            xs={12}
+                            md={3}
+                          >
+                            <TextField
+                              fullWidth
+                              type="date"
+                              label="Signed Date"
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              value={
+                                row.signed_date || ""
+                              }
+                              onChange={(e) => {
+                                const value =
+                                  e.target.value;
+
+                                setSeriesFighters(
+                                  (old) =>
+                                    old.map(
+                                      (item) =>
+                                        item.id === row.id
+                                          ? {
+                                              ...item,
+                                              signed_date:
+                                                value,
+                                            }
+                                          : item
+                                    )
+                                );
+                              }}
+                              onBlur={(e) =>
+                                updateSeriesFighter(
+                                  row,
+                                  {
+                                    signed_date:
+                                      e.target.value,
+                                  }
+                                )
+                              }
+                            />
+                          </Grid>
+
+                          <Grid
+                            item
+                            xs={12}
+                            md={3}
+                          >
+                            <TextField
+                              fullWidth
+                              type="number"
+                              label="Fights Completed"
+                              value={
+                                row.fights_completed ??
+                                0
+                              }
+                              inputProps={{
+                                min: 0,
+                                max: target,
+                              }}
+                              onChange={(e) => {
+                                const value =
+                                  e.target.value;
+
+                                setSeriesFighters(
+                                  (old) =>
+                                    old.map(
+                                      (item) =>
+                                        item.id === row.id
+                                          ? {
+                                              ...item,
+                                              fights_completed:
+                                                value,
+                                            }
+                                          : item
+                                    )
+                                );
+                              }}
+                              onBlur={(e) =>
+                                updateSeriesFighter(
+                                  row,
+                                  {
+                                    fights_completed:
+                                      Number(
+                                        e.target.value
+                                      ),
+                                  }
+                                )
+                              }
+                            />
+                          </Grid>
+
+                          <Grid
+                            item
+                            xs={12}
+                            md={3}
+                          >
+                            <TextField
+                              select
+                              fullWidth
+                              label="Status"
+                              value={
+                                row.status ||
+                                "active"
+                              }
+                              onChange={(e) => {
+                                const value =
+                                  e.target.value;
+
+                                setSeriesFighters(
+                                  (old) =>
+                                    old.map(
+                                      (item) =>
+                                        item.id === row.id
+                                          ? {
+                                              ...item,
+                                              status:
+                                                value,
+                                            }
+                                          : item
+                                    )
+                                );
+
+                                updateSeriesFighter(
+                                  row,
+                                  {
+                                    status: value,
+                                  }
+                                );
+                              }}
+                            >
+                              <MenuItem value="active">
+                                Active
+                              </MenuItem>
+
+                              <MenuItem value="paused">
+                                Paused
+                              </MenuItem>
+
+                              <MenuItem value="graduated">
+                                Graduated
+                              </MenuItem>
+
+                              <MenuItem value="released">
+                                Released
+                              </MenuItem>
+                            </TextField>
+                          </Grid>
+
+                          <Grid
+                            item
+                            xs={12}
+                            md={3}
+                          >
+                            <Button
+                              fullWidth
+                              variant="outlined"
+                              color="error"
+                              sx={{
+                                minHeight: 56,
+                              }}
+                              onClick={() =>
+                                removeSeriesFighter(row)
+                              }
+                            >
+                              Remove
+                            </Button>
+                          </Grid>
+
+                          <Grid
+                            item
+                            xs={12}
+                          >
+                            <TextField
+                              fullWidth
+                              multiline
+                              minRows={2}
+                              label="Development Notes"
+                              value={
+                                row.notes || ""
+                              }
+                              onChange={(e) => {
+                                const value =
+                                  e.target.value;
+
+                                setSeriesFighters(
+                                  (old) =>
+                                    old.map(
+                                      (item) =>
+                                        item.id === row.id
+                                          ? {
+                                              ...item,
+                                              notes:
+                                                value,
+                                            }
+                                          : item
+                                    )
+                                );
+                              }}
+                              onBlur={(e) =>
+                                updateSeriesFighter(
+                                  row,
+                                  {
+                                    notes:
+                                      e.target.value,
+                                  }
+                                )
+                              }
+                            />
+                          </Grid>
+
+                        </Grid>
+
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+            </Stack>
+          </CardContent>
+        </Card>
+
+          </>
         )}
 
         {result && (
