@@ -1315,6 +1315,23 @@ the contestant
                           "Record N/A"}
                       </Typography>
 
+
+                      {bout.red_series &&
+                        bout.red_series.status !==
+                          "released" && (
+                          <Chip
+                            size="small"
+                            color="primary"
+                            sx={{ mt: 0.75 }}
+                            label={
+                              bout.red_series.status ===
+                              "graduated"
+                                ? "FIRST 5 FIGHTS SERIES — GRADUATED"
+                                : `FIRST 5 FIGHTS SERIES — FIGHT ${bout.red_series.next_fight_number} OF ${bout.red_series.target_fights}`
+                            }
+                          />
+                        )}
+
                       <Typography
                         variant="caption"
                         color="text.secondary"
@@ -1337,6 +1354,23 @@ the contestant
                         {bout.blue?.pro_record ||
                           "Record N/A"}
                       </Typography>
+
+
+                      {bout.blue_series &&
+                        bout.blue_series.status !==
+                          "released" && (
+                          <Chip
+                            size="small"
+                            color="primary"
+                            sx={{ mt: 0.75 }}
+                            label={
+                              bout.blue_series.status ===
+                              "graduated"
+                                ? "FIRST 5 FIGHTS SERIES — GRADUATED"
+                                : `FIRST 5 FIGHTS SERIES — FIGHT ${bout.blue_series.next_fight_number} OF ${bout.blue_series.target_fights}`
+                            }
+                          />
+                        )}
 
                       <Typography
                         variant="caption"
@@ -1423,6 +1457,42 @@ the contestant
                     >
                       Bout Contract {bout.bout_order || index + 1}
                     </Typography>
+
+
+                    {(bout.red_series ||
+                      bout.blue_series) && (
+                      <Stack
+                        direction={{
+                          xs: "column",
+                          sm: "row",
+                        }}
+                        spacing={1}
+                      >
+                        {bout.red_series &&
+                          bout.red_series.status !==
+                            "released" && (
+                            <Chip
+                              size="small"
+                              color="primary"
+                              label={
+                                `RED: ${bout.red?.legal_name || "Fighter"} — First 5 Fight ${bout.red_series.next_fight_number} of ${bout.red_series.target_fights}`
+                              }
+                            />
+                          )}
+
+                        {bout.blue_series &&
+                          bout.blue_series.status !==
+                            "released" && (
+                            <Chip
+                              size="small"
+                              color="primary"
+                              label={
+                                `BLUE: ${bout.blue?.legal_name || "Fighter"} — First 5 Fight ${bout.blue_series.next_fight_number} of ${bout.blue_series.target_fights}`
+                              }
+                            />
+                          )}
+                      </Stack>
+                    )}
 
                     
                   </Stack>

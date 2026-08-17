@@ -1419,14 +1419,87 @@ Rules:
             .all()
         )
 
-        bout_rows = []
-
         fighter_ids = set()
 
         for bout in bouts:
-            fighter_ids.add(bout.red_fighter_id)
-            fighter_ids.add(bout.blue_fighter_id)
+            if bout.red_fighter_id:
+                fighter_ids.add(bout.red_fighter_id)
 
+            if bout.blue_fighter_id:
+                fighter_ids.add(bout.blue_fighter_id)
+
+
+        first_five_series = (
+            db.query(BoxingSeries)
+            .filter(
+                BoxingSeries.slug == "first-5-fights"
+            )
+            .first()
+        )
+
+        series_by_fighter = {}
+
+        if first_five_series and fighter_ids:
+            series_rows = (
+                db.query(BoxingSeriesFighter)
+                .filter(
+                    BoxingSeriesFighter.series_id ==
+                    first_five_series.id,
+
+                    BoxingSeriesFighter.fighter_id.in_(
+                        fighter_ids
+                    ),
+                )
+                .all()
+            )
+
+            series_by_fighter = {
+                row.fighter_id: row
+                for row in series_rows
+            }
+
+
+        def event_series_payload(fighter_id):
+            row = series_by_fighter.get(fighter_id)
+
+            if not row:
+                return None
+
+            completed = int(
+                row.fights_completed or 0
+            )
+
+            target = int(
+                row.target_fights or 5
+            )
+
+            if completed >= target:
+                next_fight_number = target
+            else:
+                next_fight_number = completed + 1
+
+            return {
+                "id": row.id,
+                "series_id": row.series_id,
+                "name": (
+                    first_five_series.name
+                    if first_five_series
+                    else "First 5 Fights Series"
+                ),
+                "slug": "first-5-fights",
+                "signed_date": row.signed_date,
+                "start_record": row.start_record,
+                "fights_completed": completed,
+                "target_fights": target,
+                "next_fight_number": next_fight_number,
+                "status": row.status,
+                "notes": row.notes,
+            }
+
+
+        bout_rows = []
+
+        for bout in bouts:
             bout_rows.append({
                 "id": bout.id,
                 "bout_order": bout.bout_order or 0,
@@ -1438,16 +1511,37 @@ Rules:
                 "blue_purse": bout.blue_purse,
                 "match_score": bout.match_score,
                 "notes": bout.notes,
-                "red": fighter_dict(bout.red_fighter),
-                "blue": fighter_dict(bout.blue_fighter),
+
+                "red": fighter_dict(
+                    bout.red_fighter
+                ),
+
+                "blue": fighter_dict(
+                    bout.blue_fighter
+                ),
+
+                "red_series":
+                    event_series_payload(
+                        bout.red_fighter_id
+                    ),
+
+                "blue_series":
+                    event_series_payload(
+                        bout.blue_fighter_id
+                    ),
             })
+
 
         fighters = []
 
         if fighter_ids:
             fighter_rows = (
                 db.query(BoxingFighter)
-                .filter(BoxingFighter.id.in_(fighter_ids))
+                .filter(
+                    BoxingFighter.id.in_(
+                        fighter_ids
+                    )
+                )
                 .all()
             )
 
@@ -1455,6 +1549,7 @@ Rules:
                 fighter_dict(f)
                 for f in fighter_rows
             ]
+
 
         checklist = (
             db.query(BoxingEventChecklist)
