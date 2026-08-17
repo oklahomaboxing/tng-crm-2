@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from ..database import get_db
-from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee
+from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -245,6 +245,34 @@ def seed_event_checklist(db, event_id):
     db.commit()
 
 
+def ensure_first_five_series(db):
+    series = (
+        db.query(BoxingSeries)
+        .filter(BoxingSeries.slug == "first-5-fights")
+        .first()
+    )
+
+    if series:
+        return series
+
+    series = BoxingSeries(
+        name="First 5 Fights Series",
+        slug="first-5-fights",
+        description=(
+            "TNG developmental series promoting fighters "
+            "through their next five professional fights."
+        ),
+        target_fights=5,
+        active=True,
+    )
+
+    db.add(series)
+    db.commit()
+    db.refresh(series)
+
+    return series
+
+
 def build_matchmaker_router(current_user_dependency):
     router = APIRouter(prefix="/api/boxing", tags=["boxing-matchmaker"])
 
@@ -456,6 +484,335 @@ def build_matchmaker_router(current_user_dependency):
                 )
 
         return list(contacts.values())
+
+
+    @router.get("/series")
+    def list_series(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        ensure_first_five_series(db)
+
+        rows = (
+            db.query(BoxingSeries)
+            .order_by(BoxingSeries.id.asc())
+            .all()
+        )
+
+        return [
+            {
+                "id": row.id,
+                "name": row.name,
+                "slug": row.slug,
+                "description": row.description,
+                "target_fights": row.target_fights,
+                "active": bool(row.active),
+            }
+            for row in rows
+        ]
+
+
+    @router.get("/series/{series_id}/fighters")
+    def list_series_fighters(
+        series_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        rows = (
+            db.query(BoxingSeriesFighter)
+            .filter(
+                BoxingSeriesFighter.series_id == series_id
+            )
+            .order_by(BoxingSeriesFighter.id.asc())
+            .all()
+        )
+
+        results = []
+
+        for row in rows:
+            fighter = (
+                db.query(BoxingFighter)
+                .filter(
+                    BoxingFighter.id == row.fighter_id
+                )
+                .first()
+            )
+
+            if not fighter:
+                continue
+
+            results.append({
+                "id": row.id,
+                "series_id": row.series_id,
+                "fighter_id": row.fighter_id,
+
+                "fighter": fighter_dict(fighter),
+
+                "signed_date": row.signed_date,
+                "start_record": row.start_record,
+
+                "target_fights": row.target_fights,
+                "fights_completed": row.fights_completed,
+
+                "status": row.status,
+                "notes": row.notes,
+
+                "progress_label": (
+                    f"{row.fights_completed} of "
+                    f"{row.target_fights}"
+                ),
+            })
+
+        return results
+
+
+    @router.post("/series/{series_id}/fighters")
+    def add_fighter_to_series(
+        series_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        series = (
+            db.query(BoxingSeries)
+            .filter(BoxingSeries.id == series_id)
+            .first()
+        )
+
+        if not series:
+            raise HTTPException(
+                status_code=404,
+                detail="Series not found",
+            )
+
+        fighter_id = data.get("fighter_id")
+
+        try:
+            fighter_id = int(fighter_id)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="fighter_id is required",
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        existing = (
+            db.query(BoxingSeriesFighter)
+            .filter(
+                BoxingSeriesFighter.series_id == series_id,
+                BoxingSeriesFighter.fighter_id == fighter_id,
+            )
+            .first()
+        )
+
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="Fighter is already in this series",
+            )
+
+        signed_date = str(
+            data.get("signed_date") or ""
+        ).strip()
+
+        start_record = str(
+            data.get("start_record")
+            or fighter.pro_record
+            or ""
+        ).strip()
+
+        row = BoxingSeriesFighter(
+            series_id=series_id,
+            fighter_id=fighter_id,
+
+            signed_date=signed_date,
+            start_record=start_record,
+
+            target_fights=int(
+                data.get("target_fights")
+                or series.target_fights
+                or 5
+            ),
+
+            fights_completed=int(
+                data.get("fights_completed") or 0
+            ),
+
+            status="active",
+
+            notes=str(
+                data.get("notes") or ""
+            ).strip(),
+        )
+
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "id": row.id,
+            "series_id": row.series_id,
+            "fighter_id": row.fighter_id,
+            "fighter": fighter_dict(fighter),
+            "signed_date": row.signed_date,
+            "start_record": row.start_record,
+            "target_fights": row.target_fights,
+            "fights_completed": row.fights_completed,
+            "status": row.status,
+            "notes": row.notes,
+            "progress_label": (
+                f"{row.fights_completed} of "
+                f"{row.target_fights}"
+            ),
+        }
+
+
+    @router.patch("/series-fighters/{series_fighter_id}")
+    def update_series_fighter(
+        series_fighter_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        row = (
+            db.query(BoxingSeriesFighter)
+            .filter(
+                BoxingSeriesFighter.id ==
+                series_fighter_id
+            )
+            .first()
+        )
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="Series fighter not found",
+            )
+
+        if "signed_date" in data:
+            row.signed_date = str(
+                data.get("signed_date") or ""
+            ).strip()
+
+        if "start_record" in data:
+            row.start_record = str(
+                data.get("start_record") or ""
+            ).strip()
+
+        if "notes" in data:
+            row.notes = str(
+                data.get("notes") or ""
+            ).strip()
+
+        if "fights_completed" in data:
+            try:
+                count = int(
+                    data.get("fights_completed") or 0
+                )
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid fight count",
+                )
+
+            count = max(
+                0,
+                min(count, row.target_fights or 5),
+            )
+
+            row.fights_completed = count
+
+            if count >= (row.target_fights or 5):
+                row.status = "graduated"
+
+        if "status" in data:
+            status = str(
+                data.get("status") or ""
+            ).strip().lower()
+
+            allowed = {
+                "active",
+                "graduated",
+                "released",
+                "paused",
+            }
+
+            if status not in allowed:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid series status",
+                )
+
+            row.status = status
+
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "id": row.id,
+            "fighter_id": row.fighter_id,
+            "signed_date": row.signed_date,
+            "start_record": row.start_record,
+            "target_fights": row.target_fights,
+            "fights_completed": row.fights_completed,
+            "status": row.status,
+            "notes": row.notes,
+            "progress_label": (
+                f"{row.fights_completed} of "
+                f"{row.target_fights}"
+            ),
+        }
+
+
+    @router.delete("/series-fighters/{series_fighter_id}")
+    def remove_series_fighter(
+        series_fighter_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        row = (
+            db.query(BoxingSeriesFighter)
+            .filter(
+                BoxingSeriesFighter.id ==
+                series_fighter_id
+            )
+            .first()
+        )
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="Series fighter not found",
+            )
+
+        db.delete(row)
+        db.commit()
+
+        return {
+            "ok": True,
+            "id": series_fighter_id,
+        }
 
 
     @router.get("/fighters")

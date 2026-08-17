@@ -234,3 +234,62 @@ class BoxingContract(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+
+class BoxingSeries(Base):
+    __tablename__ = "boxing_series"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String, nullable=False)
+    slug = Column(String, unique=True, index=True, nullable=False)
+
+    description = Column(Text, default="")
+    target_fights = Column(Integer, default=5)
+    active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
+class BoxingSeriesFighter(Base):
+    __tablename__ = "boxing_series_fighters"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    series_id = Column(
+        Integer,
+        ForeignKey("boxing_series.id"),
+        nullable=False,
+        index=True,
+    )
+
+    fighter_id = Column(
+        Integer,
+        ForeignKey("boxing_fighters.id"),
+        nullable=False,
+        index=True,
+    )
+
+    signed_date = Column(String, default="")
+    start_record = Column(String, default="")
+
+    target_fights = Column(Integer, default=5)
+    fights_completed = Column(Integer, default=0)
+
+    status = Column(String, default="active")
+    notes = Column(Text, default="")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    series = relationship("BoxingSeries")
+    fighter = relationship("BoxingFighter")
