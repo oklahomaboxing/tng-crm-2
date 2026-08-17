@@ -1421,7 +1421,7 @@ the contestant
                       variant="h5"
                       fontWeight={950}
                     >
-                      Bout Sheet #{bout.bout_order || index + 1}
+                      Bout Contract {bout.bout_order || index + 1}
                     </Typography>
 
                     
