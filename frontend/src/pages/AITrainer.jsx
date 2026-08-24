@@ -17,6 +17,7 @@ import {
   LinearProgress,
 } from "@mui/material";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const SILENT_AUDIO_DATA = "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const TRAINING_MODULES = {
   "Heavy Bag": {
     category: "Boxing",
@@ -908,6 +909,15 @@ export default function AITrainer() {
   const [nextDrill, setNextDrill] = useState("Waiting for round to begin");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [sessionResults, setSessionResults] = useState(null);
+  const [audioReady, setAudioReady] = useState(false);
+  const [audioStatus, setAudioStatus] = useState("Audio not tested");
+  const [audioOutputs, setAudioOutputs] = useState([]);
+  const [selectedAudioOutput, setSelectedAudioOutput] = useState("");
+  const [musicFileName, setMusicFileName] = useState("");
+  const [musicPlaying, setMusicPlaying] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(0.45);
+  const [tvMode, setTvMode] = useState(false);
+  const [fullScreenActive, setFullScreenActive] = useState(false);
 
   const [currentRound, setCurrentRound] = useState(0);
   const [phase, setPhase] = useState("Ready");
@@ -940,7 +950,224 @@ export default function AITrainer() {
   const selectedVoiceURIRef = useRef(selectedVoiceURI);
   const lastSpokenRef = useRef({ text: "", at: 0 });
   const currentSpokenRef = useRef("");
+  const trainerRootRef = useRef(null);
+  const trainerAudioRef = useRef(null);
+  const musicAudioRef = useRef(null);
+  const musicObjectUrlRef = useRef("");
+  const audioContextRef = useRef(null);
+  const wakeLockRef = useRef(null);
   const moduleConfig = TRAINING_MODULES[selectedModule];
+
+  async function refreshAudioOutputs() {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      setAudioOutputs([]);
+      return;
+    }
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const outputs = devices.filter((device) => device.kind === "audiooutput");
+      setAudioOutputs(outputs);
+    } catch (error) {
+      console.warn("Audio output discovery unavailable", error);
+      setAudioOutputs([]);
+    }
+  }
+
+  function unlockTrainerAudio() {
+    setAudioStatus("Connecting audio…");
+
+    try {
+      const audio = trainerAudioRef.current;
+      if (audio) {
+        audio.src = SILENT_AUDIO_DATA;
+        audio.volume = 0.01;
+        const playPromise = audio.play();
+        if (playPromise?.then) {
+          playPromise
+            .then(() => {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.volume = 1;
+              setAudioReady(true);
+              setAudioStatus("Audio ready — using device media output");
+            })
+            .catch((error) => {
+              console.warn("Media audio unlock failed", error);
+              setAudioStatus("Tap Test Speaker to enable audio");
+            });
+        }
+      }
+
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new AudioContextClass();
+        }
+        if (audioContextRef.current.state === "suspended") {
+          audioContextRef.current.resume().catch(() => {});
+        }
+      }
+
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.resume();
+      }
+
+      refreshAudioOutputs();
+      return true;
+    } catch (error) {
+      console.error("TNG audio unlock error", error);
+      setAudioStatus("Audio connection failed");
+      return false;
+    }
+  }
+
+  function playSpeakerTestTone() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass();
+      }
+
+      const context = audioContextRef.current;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.value = 660;
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.36);
+    } catch (error) {
+      console.warn("Speaker test tone unavailable", error);
+    }
+  }
+
+  function testTrainerSpeaker() {
+    unlockTrainerAudio();
+    playSpeakerTestTone();
+
+    setTimeout(() => {
+      speak("TNG Coach audio connected. Earned Not Given.", {
+        rate: voiceRateRef.current,
+        pitch: 0.98,
+        volume: 1,
+      });
+    }, 120);
+
+    setAudioReady(true);
+    setAudioStatus("Test sent — confirm sound on your selected Bluetooth speaker");
+  }
+
+  async function applyAudioOutput(deviceId) {
+    setSelectedAudioOutput(deviceId);
+
+    const elements = [trainerAudioRef.current, musicAudioRef.current].filter(Boolean);
+    const supported = elements.some((element) => typeof element.setSinkId === "function");
+
+    if (!supported) {
+      setAudioStatus("Speaker selection is controlled by this phone/device");
+      return;
+    }
+
+    try {
+      await Promise.all(
+        elements.map((element) =>
+          typeof element.setSinkId === "function" ? element.setSinkId(deviceId) : Promise.resolve()
+        )
+      );
+      setAudioStatus("Media output changed");
+    } catch (error) {
+      console.error("Audio output selection failed", error);
+      setAudioStatus("Could not switch output — select Bluetooth in device settings");
+    }
+  }
+
+  function loadMusicFile(event) {
+    const file = event.target.files?.[0];
+    if (!file || !musicAudioRef.current) return;
+
+    if (musicObjectUrlRef.current) {
+      URL.revokeObjectURL(musicObjectUrlRef.current);
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    musicObjectUrlRef.current = objectUrl;
+    musicAudioRef.current.src = objectUrl;
+    musicAudioRef.current.loop = true;
+    musicAudioRef.current.volume = musicVolume;
+    setMusicFileName(file.name);
+    setMusicPlaying(false);
+    setAudioStatus(`Music loaded: ${file.name}`);
+  }
+
+  async function toggleWorkoutMusic() {
+    const audio = musicAudioRef.current;
+    if (!audio || !audio.src) {
+      setAudioStatus("Load a music file first");
+      return;
+    }
+
+    unlockTrainerAudio();
+
+    try {
+      if (audio.paused) {
+        audio.volume = musicVolume;
+        await audio.play();
+        setMusicPlaying(true);
+        setAudioStatus("Workout music playing");
+      } else {
+        audio.pause();
+        setMusicPlaying(false);
+        setAudioStatus("Workout music paused");
+      }
+    } catch (error) {
+      console.error("Music playback failed", error);
+      setMusicPlaying(false);
+      setAudioStatus("Music blocked — tap Play Music again");
+    }
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        await trainerRootRef.current?.requestFullscreen?.();
+      } else {
+        await document.exitFullscreen?.();
+      }
+    } catch (error) {
+      console.warn("Fullscreen unavailable", error);
+      setAudioStatus("Fullscreen is not supported by this browser");
+    }
+  }
+
+  async function requestWakeLock() {
+    if (!("wakeLock" in navigator)) return;
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request("screen");
+    } catch (error) {
+      console.warn("Wake lock unavailable", error);
+    }
+  }
+
+  function enableTVMode() {
+    setTvMode((old) => {
+      const next = !old;
+      if (next) requestWakeLock();
+      else if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+      return next;
+    });
+  }
 
   async function generateAIPlanInBackground() {
     const token = localStorage.getItem("token");
@@ -1505,6 +1732,7 @@ export default function AITrainer() {
   }
 
   function startSession() {
+    unlockTrainerAudio();
     console.log("Starting instant boxing-fundamentals workout");
 
     clearTimers();
@@ -1623,6 +1851,11 @@ export default function AITrainer() {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+
+    if (musicAudioRef.current) {
+      musicAudioRef.current.pause();
+      setMusicPlaying(false);
+    }
   }
 
   useEffect(() => {
@@ -1703,6 +1936,31 @@ export default function AITrainer() {
 
 
   useEffect(() => {
+    if (musicAudioRef.current) {
+      musicAudioRef.current.volume = musicVolume;
+    }
+  }, [musicVolume]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => setFullScreenActive(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    refreshAudioOutputs();
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      if (musicObjectUrlRef.current) {
+        URL.revokeObjectURL(musicObjectUrlRef.current);
+      }
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+      }
+      if (audioContextRef.current?.close) {
+        audioContextRef.current.close().catch(() => {});
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     return () => clearTimers();
   }, []);
   useEffect(() => {
@@ -1719,7 +1977,26 @@ export default function AITrainer() {
   }, [running, phase, currentRound, rounds, timeLeft, prompt, subPrompt]);
 
   return (
-    <Box>
+    <Box
+      ref={trainerRootRef}
+      sx={{
+        minHeight: tvMode ? "100vh" : "auto",
+        background: tvMode ? "#050507" : "transparent",
+        p: tvMode ? { xs: 1, md: 2 } : 0,
+      }}
+    >
+      <audio ref={trainerAudioRef} playsInline preload="auto" style={{ display: "none" }} />
+      <audio
+        ref={musicAudioRef}
+        playsInline
+        preload="metadata"
+        loop
+        onPlay={() => setMusicPlaying(true)}
+        onPause={() => setMusicPlaying(false)}
+        onEnded={() => setMusicPlaying(false)}
+        style={{ display: "none" }}
+      />
+
       <Box
         sx={{
           background: "linear-gradient(135deg, #0b0b0f, #1a1a22)",
@@ -1750,7 +2027,7 @@ export default function AITrainer() {
       </Box>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} lg={4}>
+        <Grid item xs={12} lg={4} sx={{ display: tvMode ? "none" : "block" }}>
           <Card sx={{ borderRadius: 4, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold">
@@ -1895,15 +2172,109 @@ export default function AITrainer() {
                   />
                 </Box>
 
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 3,
+                    border: "1px solid #d7d7df",
+                    background: audioReady ? "#f3fff6" : "#fffaf0",
+                  }}
+                >
+                  <Typography fontWeight="bold">Audio / Bluetooth</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    Connect your Bluetooth speaker in the phone or computer settings first, then test it here.
+                  </Typography>
+
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button type="button" variant="contained" onClick={testTrainerSpeaker}>
+                      🔊 Test Speaker
+                    </Button>
+                    <Button type="button" variant="outlined" onClick={refreshAudioOutputs}>
+                      Refresh Outputs
+                    </Button>
+                  </Stack>
+
+                  {audioOutputs.length > 0 && (
+                    <Select
+                      fullWidth
+                      size="small"
+                      value={selectedAudioOutput}
+                      displayEmpty
+                      onChange={(e) => applyAudioOutput(e.target.value)}
+                      sx={{ mt: 1.5 }}
+                    >
+                      <MenuItem value="">System / Bluetooth Default</MenuItem>
+                      {audioOutputs.map((device, index) => (
+                        <MenuItem key={device.deviceId || index} value={device.deviceId}>
+                          {device.label || `Audio output ${index + 1}`}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  )}
+
+                  <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
+                    {audioStatus}
+                  </Typography>
+                </Box>
+
+                <Box
+                  sx={{ p: 2, borderRadius: 3, border: "1px solid #d7d7df" }}
+                >
+                  <Typography fontWeight="bold">Workout Music</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Load music from this device. It will use the same system/Bluetooth media output.
+                  </Typography>
+
+                  <Button component="label" variant="outlined" sx={{ mt: 1.5, mr: 1 }}>
+                    🎵 Load Music
+                    <input hidden accept="audio/*" type="file" onChange={loadMusicFile} />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="contained"
+                    color={musicPlaying ? "warning" : "success"}
+                    onClick={toggleWorkoutMusic}
+                    disabled={!musicFileName}
+                    sx={{ mt: 1.5 }}
+                  >
+                    {musicPlaying ? "Pause Music" : "Play Music"}
+                  </Button>
+
+                  {musicFileName && (
+                    <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
+                      Loaded: {musicFileName}
+                    </Typography>
+                  )}
+
+                  <Typography fontWeight="bold" sx={{ mt: 1.5 }}>
+                    Music Volume: {Math.round(musicVolume * 100)}%
+                  </Typography>
+                  <Slider
+                    value={musicVolume}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    onChange={(e, value) => setMusicVolume(Number(value))}
+                  />
+                </Box>
+
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  <Button type="button" variant={tvMode ? "contained" : "outlined"} onClick={enableTVMode}>
+                    📺 {tvMode ? "Exit TV Mode" : "TV / Cast Mode"}
+                  </Button>
+                  <Button type="button" variant="outlined" onClick={toggleFullscreen}>
+                    ⛶ {fullScreenActive ? "Exit Fullscreen" : "Fullscreen"}
+                  </Button>
+                </Stack>
+
+                <Typography variant="caption" color="text.secondary">
+                  For Chromecast, AirPlay, Smart View, or wireless display: start screen mirroring from the phone/computer, then use TV / Cast Mode and Fullscreen here.
+                </Typography>
+
                 <Button
                   type="button"
                   variant="outlined"
-                  onClick={() =>
-                    speak(
-                      "TNG Coach is ready. Stay relaxed, listen carefully, and work with clean technique.",
-                      { rate: voiceRate }
-                    )
-                  }
+                  onClick={testTrainerSpeaker}
                 >
                   Test Coach Voice
                 </Button>
@@ -1980,17 +2351,19 @@ export default function AITrainer() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} lg={5}>
+        <Grid item xs={12} lg={tvMode ? 12 : 5}>
           <Card
             sx={{
               borderRadius: 4,
               background: "#0b0b0f",
               color: "white",
               border: "1px solid #2a2a35",
-              minHeight: 560,
+              minHeight: tvMode ? "calc(100vh - 180px)" : 560,
+              display: "flex",
+              alignItems: tvMode ? "center" : "stretch",
             }}
           >
-            <CardContent sx={{ textAlign: "center", p: 4 }}>
+            <CardContent sx={{ textAlign: "center", p: tvMode ? { xs: 2, md: 5 } : 4, width: "100%" }}>
               <Stack direction="row" justifyContent="center" spacing={1} sx={{ mb: 2 }}>
                 <Chip
                   label={`ROUND ${currentRound} / ${rounds}`}
@@ -2042,7 +2415,7 @@ export default function AITrainer() {
               >
                 <Typography
                   sx={{
-                    fontSize: { xs: 26, md: 34 },
+                    fontSize: tvMode ? { xs: 34, md: 56 } : { xs: 26, md: 34 },
                     fontWeight: 900,
                     lineHeight: 1.2,
                   }}
@@ -2156,7 +2529,7 @@ export default function AITrainer() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} lg={3}>
+        <Grid item xs={12} lg={3} sx={{ display: tvMode ? "none" : "block" }}>
           <Card sx={{ borderRadius: 4, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold">
