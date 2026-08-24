@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import CastTrainerButton from "../components/CastTrainerButton";
 
 import {
   Box,
@@ -462,7 +463,7 @@ function actionToPrompt(action) {
 
 function actionToNames(action) {
   if (!Array.isArray(action)) return action;
-  return action.map((number) => FUNDAMENTAL_PUNCHES[number]).join(" — ");
+  return action.map((number) => FUNDAMENTAL_PUNCHES[number]).join(" â€” ");
 }
 
 
@@ -979,7 +980,7 @@ export default function AITrainer() {
   }
 
   function unlockTrainerAudio() {
-    setAudioStatus("Connecting audio…");
+    setAudioStatus("Connecting audioâ€¦");
 
     try {
       const audio = trainerAudioRef.current;
@@ -994,7 +995,7 @@ export default function AITrainer() {
               audio.currentTime = 0;
               audio.volume = 1;
               setAudioReady(true);
-              setAudioStatus("Audio ready — using device media output");
+              setAudioStatus("Audio ready â€” using device media output");
             })
             .catch((error) => {
               console.warn("Media audio unlock failed", error);
@@ -1056,7 +1057,7 @@ export default function AITrainer() {
 
   async function testTrainerSpeaker() {
     unlockTrainerAudio();
-    setAudioStatus("Sending media test to your selected output…");
+    setAudioStatus("Sending media test to your selected outputâ€¦");
 
     const played = await speak("TNG Coach audio connected. Earned Not Given.", {
       rate: voiceRateRef.current,
@@ -1066,9 +1067,9 @@ export default function AITrainer() {
 
     if (played) {
       setAudioReady(true);
-      setAudioStatus("Media test playing — confirm it is coming through the Sony / Bluetooth output");
+      setAudioStatus("Media test playing â€” confirm it is coming through the Sony / Bluetooth output");
     } else {
-      setAudioStatus("Media test failed — check Bluetooth output and TTS connection");
+      setAudioStatus("Media test failed â€” check Bluetooth output and TTS connection");
     }
   }
 
@@ -1092,7 +1093,7 @@ export default function AITrainer() {
       setAudioStatus("Media output changed");
     } catch (error) {
       console.error("Audio output selection failed", error);
-      setAudioStatus("Could not switch output — select Bluetooth in device settings");
+      setAudioStatus("Could not switch output â€” select Bluetooth in device settings");
     }
   }
 
@@ -1137,7 +1138,7 @@ export default function AITrainer() {
     } catch (error) {
       console.error("Music playback failed", error);
       setMusicPlaying(false);
-      setAudioStatus("Music blocked — tap Play Music again");
+      setAudioStatus("Music blocked â€” tap Play Music again");
     }
   }
 
@@ -1176,14 +1177,14 @@ export default function AITrainer() {
   }
 
   async function connectTV() {
-    setTvConnectStatus("Looking for a TV / wireless display…");
+    setTvConnectStatus("Looking for a TV / wireless displayâ€¦");
 
     try {
       if ("PresentationRequest" in window) {
         const request = new PresentationRequest([TNG_DISPLAY_URL]);
         const connection = await request.start();
         presentationConnectionRef.current = connection;
-        setTvConnectStatus(`Connected${connection?.id ? ` — ${connection.id}` : ""}`);
+        setTvConnectStatus(`Connected${connection?.id ? ` â€” ${connection.id}` : ""}`);
         enableTVMode();
         return;
       }
@@ -1200,7 +1201,7 @@ export default function AITrainer() {
     }
 
     setTvConnectStatus(
-      "Native TV picker is not available on this phone. On the TV open display.tngboxinggym.com, or use iPhone Control Center → Screen Mirroring. Display URL copied when permitted."
+      "Native TV picker is not available on this phone. On the TV open display.tngboxinggym.com, or use iPhone Control Center â†’ Screen Mirroring. Display URL copied when permitted."
     );
     enableTVMode();
   }
@@ -1412,7 +1413,7 @@ export default function AITrainer() {
         return true;
       } catch (error) {
         console.warn("TNG media TTS failed; using browser voice fallback", error);
-        setAudioStatus("Media TTS unavailable — using browser voice fallback");
+        setAudioStatus("Media TTS unavailable â€” using browser voice fallback");
       }
     }
 
@@ -2103,7 +2104,7 @@ export default function AITrainer() {
         }}
       >
         <Typography variant="h4" fontWeight="bold">
-          🤖 TNG Coach AI
+          ðŸ¤– TNG Coach AI
         </Typography>
 
         <Typography sx={{ color: "#cfcfcf", mt: 1 }}>
@@ -2117,7 +2118,7 @@ export default function AITrainer() {
           <Chip label="Footwork" />
           <Chip label="Coordination" />
           <Chip label="Conditioning" />
-          <Chip label={aiLoading ? "AI Enhancing…" : "Instant Start"} color={aiLoading ? "warning" : "success"} />
+          <Chip label={aiLoading ? "AI Enhancingâ€¦" : "Instant Start"} color={aiLoading ? "warning" : "success"} />
         </Stack>
       </Box>
 
@@ -2282,7 +2283,7 @@ export default function AITrainer() {
 
                   <Stack direction="row" spacing={1} flexWrap="wrap">
                     <Button type="button" variant="contained" onClick={testTrainerSpeaker}>
-                      🔊 Test Speaker
+                      ðŸ”Š Test Speaker
                     </Button>
                     <Button type="button" variant="outlined" onClick={refreshAudioOutputs}>
                       Refresh Outputs
@@ -2321,7 +2322,7 @@ export default function AITrainer() {
                   </Typography>
 
                   <Button component="label" variant="outlined" sx={{ mt: 1.5, mr: 1 }}>
-                    🎵 Load Music
+                    ðŸŽµ Load Music
                     <input hidden accept="audio/*" type="file" onChange={loadMusicFile} />
                   </Button>
                   <Button
@@ -2360,13 +2361,13 @@ export default function AITrainer() {
                   </Typography>
                   <Stack direction="row" spacing={1} flexWrap="wrap">
                     <Button type="button" variant="contained" onClick={connectTV}>
-                      📺 Connect TV
+                      ðŸ“º Connect TV
                     </Button>
                     <Button type="button" variant={tvMode ? "contained" : "outlined"} onClick={enableTVMode}>
                       {tvMode ? "Exit TV Mode" : "TV Mode"}
                     </Button>
                     <Button type="button" variant="outlined" onClick={toggleFullscreen}>
-                      ⛶ {fullScreenActive ? "Exit Fullscreen" : "Fullscreen"}
+                      â›¶ {fullScreenActive ? "Exit Fullscreen" : "Fullscreen"}
                     </Button>
                   </Stack>
                   <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
@@ -2638,6 +2639,21 @@ export default function AITrainer() {
         <Grid item xs={12} lg={3} sx={{ display: tvMode ? "none" : "block" }}>
           <Card sx={{ borderRadius: 4, height: "100%" }}>
             <CardContent>
+              <Stack sx={{ mb: 2 }}>
+                <CastTrainerButton
+                  liveState={{
+                    active: running,
+                    phase,
+                    round: currentRound,
+                    total_rounds: Number(rounds),
+                    time_left: timeLeft,
+                    module: currentModuleRef.current,
+                    prompt,
+                    sub_prompt: subPrompt,
+                  }}
+                />
+              </Stack>
+
               <Typography variant="h6" fontWeight="bold">
                 Session Intelligence
               </Typography>
@@ -2668,7 +2684,7 @@ export default function AITrainer() {
                   <Typography fontWeight="bold">Workout Result</Typography>
                   <Typography variant="body2">{sessionResults.program}</Typography>
                   <Typography variant="body2">{sessionResults.roundsCompleted} rounds completed</Typography>
-                  <Typography variant="body2">{sessionResults.level} · {sessionResults.module}</Typography>
+                  <Typography variant="body2">{sessionResults.level} Â· {sessionResults.module}</Typography>
                   <Typography variant="caption" color="text.secondary">{sessionResults.completedAt}</Typography>
                 </Box>
               )}

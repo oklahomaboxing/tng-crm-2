@@ -1,0 +1,56 @@
+﻿<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TNG Trainer Cast</title>
+  <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <style>
+    html,body{margin:0;width:100%;height:100%;background:#08090c;color:white;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+    .screen{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4vw;box-sizing:border-box}
+    .brand{font-size:3vw;font-weight:900;letter-spacing:.12em;color:#ef3340;margin-bottom:2vh}
+    .phase{font-size:3vw;font-weight:800;opacity:.85}
+    .round{font-size:5vw;font-weight:900;margin-top:1vh}
+    .time{font-size:14vw;line-height:1;font-weight:900;margin:2vh 0}
+    .prompt{font-size:5vw;line-height:1.05;font-weight:900;max-width:90vw}
+    .sub{font-size:2.2vw;line-height:1.3;opacity:.78;max-width:82vw;margin-top:2vh}
+    .status{position:fixed;bottom:2vh;font-size:1.3vw;opacity:.45}
+  </style>
+</head>
+<body>
+  <div class="screen">
+    <div class="brand">TNG COACH AI</div>
+    <div id="phase" class="phase">READY</div>
+    <div id="round" class="round">Waiting for coach</div>
+    <div id="time" class="time">00:00</div>
+    <div id="prompt" class="prompt">TNG Trainer</div>
+    <div id="sub" class="sub">Connect from the TNG Coach.</div>
+    <div id="status" class="status">Cast receiver connected</div>
+  </div>
+
+  <script>
+    const NS = "urn:x-cast:com.tngboxing.trainer";
+    const context = cast.framework.CastReceiverContext.getInstance();
+
+    function fmt(sec) {
+      const n = Math.max(0, Number(sec || 0));
+      const m = Math.floor(n / 60);
+      const s = n % 60;
+      return String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+    }
+
+    context.addCustomMessageListener(NS, (event) => {
+      const s = event.data || {};
+      document.getElementById("phase").textContent = (s.phase || "READY").toUpperCase();
+      document.getElementById("round").textContent =
+        s.round ? `ROUND ${s.round} / ${s.total_rounds || "?"}` : "Waiting for coach";
+      document.getElementById("time").textContent = fmt(s.time_left);
+      document.getElementById("prompt").textContent = s.prompt || "TNG Trainer";
+      document.getElementById("sub").textContent = s.sub_prompt || "";
+      document.getElementById("status").textContent = "LIVE - TNG Coach connected";
+    });
+
+    context.start();
+  </script>
+</body>
+</html>

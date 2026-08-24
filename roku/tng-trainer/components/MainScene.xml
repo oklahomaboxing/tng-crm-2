@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<component name="MainScene" extends="Scene">
+  <children>
+    <Rectangle width="1280" height="720" color="0x08090CFF" />
+    <Label
+      id="brand"
+      text="TNG COACH AI"
+      width="1280"
+      height="80"
+      horizAlign="center"
+      translation="[0,80]"
+      color="0xEF3340FF" />
+    <Label
+      id="message"
+      text="TNG Trainer Roku Receiver Ready"
+      width="1280"
+      height="120"
+      horizAlign="center"
+      translation="[0,290]"
+      color="0xFFFFFFFF" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+</component>
