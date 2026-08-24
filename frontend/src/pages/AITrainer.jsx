@@ -17,6 +17,7 @@ import {
   LinearProgress,
 } from "@mui/material";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const TNG_DISPLAY_URL = "https://display.tngboxinggym.com";
 const SILENT_AUDIO_DATA = "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const TRAINING_MODULES = {
   "Heavy Bag": {
@@ -918,6 +919,7 @@ export default function AITrainer() {
   const [musicVolume, setMusicVolume] = useState(0.45);
   const [tvMode, setTvMode] = useState(false);
   const [fullScreenActive, setFullScreenActive] = useState(false);
+  const [tvConnectStatus, setTvConnectStatus] = useState("TV not connected");
 
   const [currentRound, setCurrentRound] = useState(0);
   const [phase, setPhase] = useState("Ready");
@@ -954,6 +956,8 @@ export default function AITrainer() {
   const trainerAudioRef = useRef(null);
   const musicAudioRef = useRef(null);
   const musicObjectUrlRef = useRef("");
+  const voiceObjectUrlRef = useRef("");
+  const presentationConnectionRef = useRef(null);
   const audioContextRef = useRef(null);
   const wakeLockRef = useRef(null);
   const moduleConfig = TRAINING_MODULES[selectedModule];
@@ -1050,20 +1054,22 @@ export default function AITrainer() {
     }
   }
 
-  function testTrainerSpeaker() {
+  async function testTrainerSpeaker() {
     unlockTrainerAudio();
-    playSpeakerTestTone();
+    setAudioStatus("Sending media test to your selected output…");
 
-    setTimeout(() => {
-      speak("TNG Coach audio connected. Earned Not Given.", {
-        rate: voiceRateRef.current,
-        pitch: 0.98,
-        volume: 1,
-      });
-    }, 120);
+    const played = await speak("TNG Coach audio connected. Earned Not Given.", {
+      rate: voiceRateRef.current,
+      volume: 1,
+      force: true,
+    });
 
-    setAudioReady(true);
-    setAudioStatus("Test sent — confirm sound on your selected Bluetooth speaker");
+    if (played) {
+      setAudioReady(true);
+      setAudioStatus("Media test playing — confirm it is coming through the Sony / Bluetooth output");
+    } else {
+      setAudioStatus("Media test failed — check Bluetooth output and TTS connection");
+    }
   }
 
   async function applyAudioOutput(deviceId) {
@@ -1167,6 +1173,36 @@ export default function AITrainer() {
       }
       return next;
     });
+  }
+
+  async function connectTV() {
+    setTvConnectStatus("Looking for a TV / wireless display…");
+
+    try {
+      if ("PresentationRequest" in window) {
+        const request = new PresentationRequest([TNG_DISPLAY_URL]);
+        const connection = await request.start();
+        presentationConnectionRef.current = connection;
+        setTvConnectStatus(`Connected${connection?.id ? ` — ${connection.id}` : ""}`);
+        enableTVMode();
+        return;
+      }
+    } catch (error) {
+      if (error?.name !== "NotAllowedError" && error?.name !== "AbortError") {
+        console.warn("Native TV presentation unavailable", error);
+      }
+    }
+
+    try {
+      await navigator.clipboard?.writeText?.(TNG_DISPLAY_URL);
+    } catch (error) {
+      console.warn("Could not copy display URL", error);
+    }
+
+    setTvConnectStatus(
+      "Native TV picker is not available on this phone. On the TV open display.tngboxinggym.com, or use iPhone Control Center → Screen Mirroring. Display URL copied when permitted."
+    );
+    enableTVMode();
   }
 
   async function generateAIPlanInBackground() {
@@ -1307,24 +1343,81 @@ export default function AITrainer() {
     );
   }
 
-  function speak(text, options = {}) {
-    if (!voiceEnabled) return;
-    if (!text || !("speechSynthesis" in window)) return;
+  async function speak(text, options = {}) {
+    if (!voiceEnabled) return false;
+    if (!text) return false;
 
     const normalizedText = String(text).trim();
     const now = Date.now();
 
     if (
+      !options.force &&
       lastSpokenRef.current.text === normalizedText &&
       now - lastSpokenRef.current.at < 750
     ) {
-      return;
+      return false;
     }
 
-    lastSpokenRef.current = {
-      text: normalizedText,
-      at: now,
-    };
+    lastSpokenRef.current = { text: normalizedText, at: now };
+
+    const token = localStorage.getItem("token");
+    const audio = trainerAudioRef.current;
+
+    // Primary path: backend TTS returns a real MP3. On iPhone this is normal
+    // media audio, so it follows the phone's selected Bluetooth / AirPlay output.
+    if (token && audio) {
+      try {
+        const response = await fetch(`${API}/api/ai/tts`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            text: normalizedText,
+            voice: "alloy",
+            speed: Math.max(0.75, Math.min(1.15, Number(options.rate ?? voiceRateRef.current))),
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || `TTS failed with status ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+
+        audio.pause();
+        audio.currentTime = 0;
+
+        if (voiceObjectUrlRef.current) {
+          URL.revokeObjectURL(voiceObjectUrlRef.current);
+        }
+        voiceObjectUrlRef.current = objectUrl;
+
+        audio.src = objectUrl;
+        audio.volume = options.volume ?? 1;
+
+        if (
+          selectedAudioOutput &&
+          typeof audio.setSinkId === "function"
+        ) {
+          await audio.setSinkId(selectedAudioOutput).catch(() => {});
+        }
+
+        await audio.play();
+        setAudioReady(true);
+        setAudioStatus("TNG coach voice playing through media output");
+        return true;
+      } catch (error) {
+        console.warn("TNG media TTS failed; using browser voice fallback", error);
+        setAudioStatus("Media TTS unavailable — using browser voice fallback");
+      }
+    }
+
+    // Fallback for desktop/offline operation. iPhone may route this to the handset.
+    if (!("speechSynthesis" in window)) return false;
 
     try {
       window.speechSynthesis.cancel();
@@ -1345,8 +1438,10 @@ export default function AITrainer() {
       utterance.volume = options.volume ?? 1;
 
       window.speechSynthesis.speak(utterance);
+      return true;
     } catch (err) {
       console.log("Voice failed", err);
+      return false;
     }
   }
 
@@ -2182,7 +2277,7 @@ export default function AITrainer() {
                 >
                   <Typography fontWeight="bold">Audio / Bluetooth</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Connect your Bluetooth speaker in the phone or computer settings first, then test it here.
+                    Connect the Sony/Bluetooth stereo in the phone settings first. TNG coach cues now use media audio so they follow the selected media output.
                   </Typography>
 
                   <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -2222,7 +2317,7 @@ export default function AITrainer() {
                 >
                   <Typography fontWeight="bold">Workout Music</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Load music from this device. It will use the same system/Bluetooth media output.
+                    Optional in-app music. You can also keep using Apple Music externally; TNG coach cues use the phone media output.
                   </Typography>
 
                   <Button component="label" variant="outlined" sx={{ mt: 1.5, mr: 1 }}>
@@ -2258,18 +2353,29 @@ export default function AITrainer() {
                   />
                 </Box>
 
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Button type="button" variant={tvMode ? "contained" : "outlined"} onClick={enableTVMode}>
-                    📺 {tvMode ? "Exit TV Mode" : "TV / Cast Mode"}
-                  </Button>
-                  <Button type="button" variant="outlined" onClick={toggleFullscreen}>
-                    ⛶ {fullScreenActive ? "Exit Fullscreen" : "Fullscreen"}
-                  </Button>
-                </Stack>
-
-                <Typography variant="caption" color="text.secondary">
-                  For Chromecast, AirPlay, Smart View, or wireless display: start screen mirroring from the phone/computer, then use TV / Cast Mode and Fullscreen here.
-                </Typography>
+                <Box sx={{ p: 2, borderRadius: 3, border: "1px solid #d7d7df", background: "#f7f9ff" }}>
+                  <Typography fontWeight="bold">TV / Gym Display</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    Connect to the dedicated TNG display. The TV shows the workout while this phone remains the coach remote.
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button type="button" variant="contained" onClick={connectTV}>
+                      📺 Connect TV
+                    </Button>
+                    <Button type="button" variant={tvMode ? "contained" : "outlined"} onClick={enableTVMode}>
+                      {tvMode ? "Exit TV Mode" : "TV Mode"}
+                    </Button>
+                    <Button type="button" variant="outlined" onClick={toggleFullscreen}>
+                      ⛶ {fullScreenActive ? "Exit Fullscreen" : "Fullscreen"}
+                    </Button>
+                  </Stack>
+                  <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
+                    {tvConnectStatus}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                    TV fallback: open display.tngboxinggym.com on the TV browser. iPhone Safari cannot directly open Apple's Screen Mirroring picker from a webpage.
+                  </Typography>
+                </Box>
 
                 <Button
                   type="button"

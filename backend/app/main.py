@@ -4198,3 +4198,61 @@ def test_sms():
         "success": True,
         "result": result
     }
+
+# ============================================================
+# TNG Coach media TTS - routes coach voice through normal media
+# audio so phones can send it to their selected Bluetooth output.
+# ============================================================
+@app.post("/api/ai/tts")
+def tng_ai_trainer_tts(
+    data: dict,
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    if not client:
+        raise HTTPException(status_code=503, detail="OpenAI TTS is not configured.")
+
+    text_value = str(data.get("text") or "").strip()
+    if not text_value:
+        raise HTTPException(status_code=400, detail="TTS text is required.")
+
+    if len(text_value) > 1200:
+        text_value = text_value[:1200]
+
+    allowed_voices = {
+        "alloy", "ash", "ballad", "coral", "echo", "fable",
+        "nova", "onyx", "sage", "shimmer", "verse"
+    }
+    voice = str(data.get("voice") or "alloy").lower()
+    if voice not in allowed_voices:
+        voice = "alloy"
+
+    try:
+        speed = float(data.get("speed") or 1.0)
+    except (TypeError, ValueError):
+        speed = 1.0
+    speed = max(0.75, min(1.15, speed))
+
+    try:
+        speech = client.audio.speech.create(
+            model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
+            voice=voice,
+            input=text_value,
+            response_format="mp3",
+            speed=speed,
+        )
+        audio_bytes = speech.read()
+
+        from fastapi.responses import Response
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "Cache-Control": "no-store",
+                "X-TNG-Audio": "coach-media-tts",
+            },
+        )
+    except Exception as exc:
+        logger.exception("TNG trainer TTS failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Coach voice audio could not be generated.")
