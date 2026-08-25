@@ -1,0 +1,82 @@
+/* =========================================================
+   TNG iPhone / PWA Bottom Dock
+   Keeps Menu + Logout reachable from the bottom of screen
+   ========================================================= */
+
+body.tng-bottom-dock-enabled {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.tng-ios-bottom-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99999;
+  display: none;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(17, 17, 17, 0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 -6px 24px rgba(0,0,0,0.28);
+}
+
+.tng-ios-bottom-dock-inner {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.tng-ios-bottom-dock button,
+.tng-ios-bottom-dock a {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  border-radius: 14px;
+  min-height: 52px;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  text-decoration: none;
+  color: #fff;
+  background: #c40000;
+}
+
+.tng-ios-bottom-dock button:active,
+.tng-ios-bottom-dock a:active {
+  transform: scale(0.98);
+}
+
+.tng-ios-bottom-dock .secondary {
+  background: #2a2a2a;
+}
+
+.tng-ios-bottom-dock .ghost {
+  background: #444;
+}
+
+@media (max-width: 768px) {
+  .tng-ios-bottom-dock {
+    display: block;
+  }
+}
+
+/* Optional: keep sticky headers from sitting under iPhone top area */
+@supports (padding-top: env(safe-area-inset-top)) {
+  header,
+  nav,
+  .header,
+  .topbar,
+  .top-bar,
+  .navbar,
+  .nav-bar,
+  .app-header,
+  .main-header {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+}
