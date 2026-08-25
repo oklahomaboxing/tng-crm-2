@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import CastTrainerButton from "../components/CastTrainerButton";
 
 import {
@@ -1534,7 +1534,7 @@ export default function AITrainer() {
   function repeatCurrentDrill() {
     if (!runningRef.current || phaseRef.current !== "Fight") return;
     setBlockTimeLeft(Number(paceSeconds));
-    speak(`${prompt}. ${subPrompt}`, { force: true });
+    speak(prompt, { force: true });
   }
 
   function skipCurrentDrill() {
@@ -1609,7 +1609,7 @@ export default function AITrainer() {
 
     logPrompt(next);
     const spokenIntro = introText ? `${introText} ` : "";
-    speak(`${spokenIntro}${next}. ${coachingCue}`);
+    speak(`${spokenIntro}${next}`, { force: true });
   }
 
   function startPromptLoop(delaySeconds = paceSeconds) {
@@ -2718,3 +2718,4 @@ export default function AITrainer() {
     </Box>
   );
 }
+
