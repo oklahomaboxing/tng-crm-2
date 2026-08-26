@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import CastTrainerButton from "../components/CastTrainerButton";
 
 import {
   Box,
@@ -18,8 +17,6 @@ import {
   LinearProgress,
 } from "@mui/material";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-const TNG_DISPLAY_URL = "https://display.tngboxinggym.com";
-const SILENT_AUDIO_DATA = "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const TRAINING_MODULES = {
   "Heavy Bag": {
     category: "Boxing",
@@ -463,7 +460,7 @@ function actionToPrompt(action) {
 
 function actionToNames(action) {
   if (!Array.isArray(action)) return action;
-  return action.map((number) => FUNDAMENTAL_PUNCHES[number]).join(" â€” ");
+  return action.map((number) => FUNDAMENTAL_PUNCHES[number]).join(" — ");
 }
 
 
@@ -911,16 +908,6 @@ export default function AITrainer() {
   const [nextDrill, setNextDrill] = useState("Waiting for round to begin");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [sessionResults, setSessionResults] = useState(null);
-  const [audioReady, setAudioReady] = useState(false);
-  const [audioStatus, setAudioStatus] = useState("Audio not tested");
-  const [audioOutputs, setAudioOutputs] = useState([]);
-  const [selectedAudioOutput, setSelectedAudioOutput] = useState("");
-  const [musicFileName, setMusicFileName] = useState("");
-  const [musicPlaying, setMusicPlaying] = useState(false);
-  const [musicVolume, setMusicVolume] = useState(0.45);
-  const [tvMode, setTvMode] = useState(false);
-  const [fullScreenActive, setFullScreenActive] = useState(false);
-  const [tvConnectStatus, setTvConnectStatus] = useState("TV not connected");
 
   const [currentRound, setCurrentRound] = useState(0);
   const [phase, setPhase] = useState("Ready");
@@ -949,262 +936,12 @@ export default function AITrainer() {
   const commandIndexRef = useRef(0);
   const currentRoundRef = useRef(0);
   const phaseRef = useRef("Ready");
+  const phaseBeforePauseRef = useRef("Ready");
   const voiceRateRef = useRef(voiceRate);
   const selectedVoiceURIRef = useRef(selectedVoiceURI);
   const lastSpokenRef = useRef({ text: "", at: 0 });
   const currentSpokenRef = useRef("");
-  const trainerRootRef = useRef(null);
-  const trainerAudioRef = useRef(null);
-  const musicAudioRef = useRef(null);
-  const musicObjectUrlRef = useRef("");
-  const voiceObjectUrlRef = useRef("");
-  const presentationConnectionRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const wakeLockRef = useRef(null);
   const moduleConfig = TRAINING_MODULES[selectedModule];
-
-  async function refreshAudioOutputs() {
-    if (!navigator.mediaDevices?.enumerateDevices) {
-      setAudioOutputs([]);
-      return;
-    }
-
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const outputs = devices.filter((device) => device.kind === "audiooutput");
-      setAudioOutputs(outputs);
-    } catch (error) {
-      console.warn("Audio output discovery unavailable", error);
-      setAudioOutputs([]);
-    }
-  }
-
-  function unlockTrainerAudio() {
-    setAudioStatus("Connecting audioâ€¦");
-
-    try {
-      const audio = trainerAudioRef.current;
-      if (audio) {
-        audio.src = SILENT_AUDIO_DATA;
-        audio.volume = 0.01;
-        const playPromise = audio.play();
-        if (playPromise?.then) {
-          playPromise
-            .then(() => {
-              audio.pause();
-              audio.currentTime = 0;
-              audio.volume = 1;
-              setAudioReady(true);
-              setAudioStatus("Audio ready â€” using device media output");
-            })
-            .catch((error) => {
-              console.warn("Media audio unlock failed", error);
-              setAudioStatus("Tap Test Speaker to enable audio");
-            });
-        }
-      }
-
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (AudioContextClass) {
-        if (!audioContextRef.current) {
-          audioContextRef.current = new AudioContextClass();
-        }
-        if (audioContextRef.current.state === "suspended") {
-          audioContextRef.current.resume().catch(() => {});
-        }
-      }
-
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.resume();
-      }
-
-      refreshAudioOutputs();
-      return true;
-    } catch (error) {
-      console.error("TNG audio unlock error", error);
-      setAudioStatus("Audio connection failed");
-      return false;
-    }
-  }
-
-  function playSpeakerTestTone() {
-    try {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) return;
-
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContextClass();
-      }
-
-      const context = audioContextRef.current;
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-
-      oscillator.type = "sine";
-      oscillator.frequency.value = 660;
-      gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
-
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.36);
-    } catch (error) {
-      console.warn("Speaker test tone unavailable", error);
-    }
-  }
-
-  async function testTrainerSpeaker() {
-    unlockTrainerAudio();
-    setAudioStatus("Sending media test to your selected outputâ€¦");
-
-    const played = await speak("TNG Coach audio connected. Earned Not Given.", {
-      rate: voiceRateRef.current,
-      volume: 1,
-      force: true,
-    });
-
-    if (played) {
-      setAudioReady(true);
-      setAudioStatus("Media test playing â€” confirm it is coming through the Sony / Bluetooth output");
-    } else {
-      setAudioStatus("Media test failed â€” check Bluetooth output and TTS connection");
-    }
-  }
-
-  async function applyAudioOutput(deviceId) {
-    setSelectedAudioOutput(deviceId);
-
-    const elements = [trainerAudioRef.current, musicAudioRef.current].filter(Boolean);
-    const supported = elements.some((element) => typeof element.setSinkId === "function");
-
-    if (!supported) {
-      setAudioStatus("Speaker selection is controlled by this phone/device");
-      return;
-    }
-
-    try {
-      await Promise.all(
-        elements.map((element) =>
-          typeof element.setSinkId === "function" ? element.setSinkId(deviceId) : Promise.resolve()
-        )
-      );
-      setAudioStatus("Media output changed");
-    } catch (error) {
-      console.error("Audio output selection failed", error);
-      setAudioStatus("Could not switch output â€” select Bluetooth in device settings");
-    }
-  }
-
-  function loadMusicFile(event) {
-    const file = event.target.files?.[0];
-    if (!file || !musicAudioRef.current) return;
-
-    if (musicObjectUrlRef.current) {
-      URL.revokeObjectURL(musicObjectUrlRef.current);
-    }
-
-    const objectUrl = URL.createObjectURL(file);
-    musicObjectUrlRef.current = objectUrl;
-    musicAudioRef.current.src = objectUrl;
-    musicAudioRef.current.loop = true;
-    musicAudioRef.current.volume = musicVolume;
-    setMusicFileName(file.name);
-    setMusicPlaying(false);
-    setAudioStatus(`Music loaded: ${file.name}`);
-  }
-
-  async function toggleWorkoutMusic() {
-    const audio = musicAudioRef.current;
-    if (!audio || !audio.src) {
-      setAudioStatus("Load a music file first");
-      return;
-    }
-
-    unlockTrainerAudio();
-
-    try {
-      if (audio.paused) {
-        audio.volume = musicVolume;
-        await audio.play();
-        setMusicPlaying(true);
-        setAudioStatus("Workout music playing");
-      } else {
-        audio.pause();
-        setMusicPlaying(false);
-        setAudioStatus("Workout music paused");
-      }
-    } catch (error) {
-      console.error("Music playback failed", error);
-      setMusicPlaying(false);
-      setAudioStatus("Music blocked â€” tap Play Music again");
-    }
-  }
-
-  async function toggleFullscreen() {
-    try {
-      if (!document.fullscreenElement) {
-        await trainerRootRef.current?.requestFullscreen?.();
-      } else {
-        await document.exitFullscreen?.();
-      }
-    } catch (error) {
-      console.warn("Fullscreen unavailable", error);
-      setAudioStatus("Fullscreen is not supported by this browser");
-    }
-  }
-
-  async function requestWakeLock() {
-    if (!("wakeLock" in navigator)) return;
-    try {
-      wakeLockRef.current = await navigator.wakeLock.request("screen");
-    } catch (error) {
-      console.warn("Wake lock unavailable", error);
-    }
-  }
-
-  function enableTVMode() {
-    setTvMode((old) => {
-      const next = !old;
-      if (next) requestWakeLock();
-      else if (wakeLockRef.current) {
-        wakeLockRef.current.release().catch(() => {});
-        wakeLockRef.current = null;
-      }
-      return next;
-    });
-  }
-
-  async function connectTV() {
-    setTvConnectStatus("Looking for a TV / wireless displayâ€¦");
-
-    try {
-      if ("PresentationRequest" in window) {
-        const request = new PresentationRequest([TNG_DISPLAY_URL]);
-        const connection = await request.start();
-        presentationConnectionRef.current = connection;
-        setTvConnectStatus(`Connected${connection?.id ? ` â€” ${connection.id}` : ""}`);
-        enableTVMode();
-        return;
-      }
-    } catch (error) {
-      if (error?.name !== "NotAllowedError" && error?.name !== "AbortError") {
-        console.warn("Native TV presentation unavailable", error);
-      }
-    }
-
-    try {
-      await navigator.clipboard?.writeText?.(TNG_DISPLAY_URL);
-    } catch (error) {
-      console.warn("Could not copy display URL", error);
-    }
-
-    setTvConnectStatus(
-      "Native TV picker is not available on this phone. On the TV open display.tngboxinggym.com, or use iPhone Control Center â†’ Screen Mirroring. Display URL copied when permitted."
-    );
-    enableTVMode();
-  }
 
   async function generateAIPlanInBackground() {
     const token = localStorage.getItem("token");
@@ -1344,81 +1081,24 @@ export default function AITrainer() {
     );
   }
 
-  async function speak(text, options = {}) {
-    if (!voiceEnabled) return false;
-    if (!text) return false;
+  function speak(text, options = {}) {
+    if (!voiceEnabled) return;
+    if (!text || !("speechSynthesis" in window)) return;
 
     const normalizedText = String(text).trim();
     const now = Date.now();
 
     if (
-      !options.force &&
       lastSpokenRef.current.text === normalizedText &&
       now - lastSpokenRef.current.at < 750
     ) {
-      return false;
+      return;
     }
 
-    lastSpokenRef.current = { text: normalizedText, at: now };
-
-    const token = localStorage.getItem("token");
-    const audio = trainerAudioRef.current;
-
-    // Primary path: backend TTS returns a real MP3. On iPhone this is normal
-    // media audio, so it follows the phone's selected Bluetooth / AirPlay output.
-    if (token && audio) {
-      try {
-        const response = await fetch(`${API}/api/ai/tts`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            text: normalizedText,
-            voice: "alloy",
-            speed: Math.max(0.75, Math.min(1.15, Number(options.rate ?? voiceRateRef.current))),
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.detail || `TTS failed with status ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-
-        audio.pause();
-        audio.currentTime = 0;
-
-        if (voiceObjectUrlRef.current) {
-          URL.revokeObjectURL(voiceObjectUrlRef.current);
-        }
-        voiceObjectUrlRef.current = objectUrl;
-
-        audio.src = objectUrl;
-        audio.volume = options.volume ?? 1;
-
-        if (
-          selectedAudioOutput &&
-          typeof audio.setSinkId === "function"
-        ) {
-          await audio.setSinkId(selectedAudioOutput).catch(() => {});
-        }
-
-        await audio.play();
-        setAudioReady(true);
-        setAudioStatus("TNG coach voice playing through media output");
-        return true;
-      } catch (error) {
-        console.warn("TNG media TTS failed; using browser voice fallback", error);
-        setAudioStatus("Media TTS unavailable â€” using browser voice fallback");
-      }
-    }
-
-    // Fallback for desktop/offline operation. iPhone may route this to the handset.
-    if (!("speechSynthesis" in window)) return false;
+    lastSpokenRef.current = {
+      text: normalizedText,
+      at: now,
+    };
 
     try {
       window.speechSynthesis.cancel();
@@ -1439,10 +1119,8 @@ export default function AITrainer() {
       utterance.volume = options.volume ?? 1;
 
       window.speechSynthesis.speak(utterance);
-      return true;
     } catch (err) {
       console.log("Voice failed", err);
-      return false;
     }
   }
 
@@ -1466,6 +1144,59 @@ export default function AITrainer() {
         nextAICommand?.prompt ||
         `Round ${nextRoundNumber}: ${nextModule}`,
     };
+  }
+
+  function getReadyCue(moduleName) {
+    switch (moduleName) {
+      case "Dynamic Warm-Up":
+        return "Ten seconds. Stay loose, keep moving, and prepare for the next movement.";
+
+      case "Coordination Drills":
+        return "Ten seconds. Reset your rhythm, stay balanced, and prepare for the next coordination drill.";
+
+      case "Core":
+        return "Ten seconds. Get into position, brace your core, and prepare for the next exercise.";
+
+      case "Boxing Conditioning":
+        return "Ten seconds. Control your breathing, stay ready, and prepare to work.";
+
+      default:
+        return "Ten seconds. Return to your stance. Hands up. Eyes forward. Ready for the next round.";
+    }
+  }
+
+  function getRoundStartCue(moduleName, roundNumber) {
+    switch (moduleName) {
+      case "Dynamic Warm-Up":
+        return `Warm-up round ${roundNumber}. Begin.`;
+
+      case "Coordination Drills":
+        return `Coordination round ${roundNumber}. Begin.`;
+
+      case "Core":
+        return `Core round ${roundNumber}. Begin.`;
+
+      case "Boxing Conditioning":
+        return `Conditioning round ${roundNumber}. Begin.`;
+
+      case "Footwork":
+        return `Footwork round ${roundNumber}. Hands up. Begin.`;
+
+      case "Defense / Reaction":
+        return `Defense round ${roundNumber}. Hands up. Eyes forward. Begin.`;
+
+      case "Shadowboxing":
+        return `Shadowboxing round ${roundNumber}. Hands up. Begin.`;
+
+      case "Heavy Bag":
+        return `Heavy bag round ${roundNumber}. Hands up. Begin.`;
+
+      case "Ring IQ":
+        return `Ring I Q round ${roundNumber}. Hands up. Think first. Begin.`;
+
+      default:
+        return `Round ${roundNumber}. Begin.`;
+    }
   }
 
 
@@ -1534,7 +1265,7 @@ export default function AITrainer() {
   function repeatCurrentDrill() {
     if (!runningRef.current || phaseRef.current !== "Fight") return;
     setBlockTimeLeft(Number(paceSeconds));
-    speak(prompt, { force: true });
+    speak(`${prompt}. ${subPrompt}`, { force: true });
   }
 
   function skipCurrentDrill() {
@@ -1609,7 +1340,7 @@ export default function AITrainer() {
 
     logPrompt(next);
     const spokenIntro = introText ? `${introText} ` : "";
-    speak(`${spokenIntro}${next}`, { force: true });
+    speak(`${spokenIntro}${next}. ${coachingCue}`);
   }
 
   function startPromptLoop(delaySeconds = paceSeconds) {
@@ -1709,10 +1440,10 @@ export default function AITrainer() {
         }
 
         if (old === 11) {
-          speak(
-            "Ten seconds. Return to your stance, bring your hands up, and prepare for the next round.",
-            { rate: voiceRateRef.current, pitch: 0.96 }
-          );
+          speak(getReadyCue(nextRound.module), {
+            rate: voiceRateRef.current,
+            pitch: 0.96,
+          });
         }
 
         if (old === 4) {
@@ -1788,7 +1519,8 @@ export default function AITrainer() {
     });
 
     // Issue the first exercise immediately instead of waiting for the first pace interval.
-    callPrompt(false, `Round ${roundNumber}. ${activeModule}. Begin.`);
+    // The spoken opening now matches the type of work being performed.
+    callPrompt(false, getRoundStartCue(activeModule, roundNumber));
     startPromptLoop();
 
     timerRef.current = setInterval(() => {
@@ -1828,7 +1560,6 @@ export default function AITrainer() {
   }
 
   function startSession() {
-    unlockTrainerAudio();
     console.log("Starting instant boxing-fundamentals workout");
 
     clearTimers();
@@ -1872,6 +1603,9 @@ export default function AITrainer() {
   function pauseSession() {
     if (!runningRef.current) return;
 
+    phaseBeforePauseRef.current =
+      phaseRef.current === "Rest" ? "Rest" : "Fight";
+
     pausedRef.current = true;
     setPaused(true);
     phaseRef.current = "Paused";
@@ -1896,21 +1630,27 @@ export default function AITrainer() {
   function resumeSession() {
     if (!runningRef.current) return;
 
+    const resumePhase =
+      phaseBeforePauseRef.current === "Rest" ? "Rest" : "Fight";
+
     pausedRef.current = false;
     setPaused(false);
-    phaseRef.current = "Fight";
-    setPhase("Fight");
+    phaseRef.current = resumePhase;
+    setPhase(resumePhase);
     speak("Resume");
 
     updateLiveDisplay({
       active: true,
-      phase: "Fight",
+      phase: resumePhase,
       round: currentRound,
       total_rounds: Number(rounds),
       time_left: timeLeft,
       module: currentModuleRef.current,
       prompt,
-      sub_prompt: "Timer resumed.",
+      sub_prompt:
+        resumePhase === "Rest"
+          ? "Rest timer resumed."
+          : "Round timer resumed.",
     });
   }
 
@@ -1919,6 +1659,7 @@ export default function AITrainer() {
 
     runningRef.current = false;
     pausedRef.current = false;
+    phaseBeforePauseRef.current = "Ready";
 
     setRunning(false);
     setPaused(false);
@@ -1946,11 +1687,6 @@ export default function AITrainer() {
 
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
-    }
-
-    if (musicAudioRef.current) {
-      musicAudioRef.current.pause();
-      setMusicPlaying(false);
     }
   }
 
@@ -2032,31 +1768,6 @@ export default function AITrainer() {
 
 
   useEffect(() => {
-    if (musicAudioRef.current) {
-      musicAudioRef.current.volume = musicVolume;
-    }
-  }, [musicVolume]);
-
-  useEffect(() => {
-    const handleFullscreenChange = () => setFullScreenActive(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    refreshAudioOutputs();
-
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      if (musicObjectUrlRef.current) {
-        URL.revokeObjectURL(musicObjectUrlRef.current);
-      }
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release().catch(() => {});
-      }
-      if (audioContextRef.current?.close) {
-        audioContextRef.current.close().catch(() => {});
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     return () => clearTimers();
   }, []);
   useEffect(() => {
@@ -2073,26 +1784,7 @@ export default function AITrainer() {
   }, [running, phase, currentRound, rounds, timeLeft, prompt, subPrompt]);
 
   return (
-    <Box
-      ref={trainerRootRef}
-      sx={{
-        minHeight: tvMode ? "100vh" : "auto",
-        background: tvMode ? "#050507" : "transparent",
-        p: tvMode ? { xs: 1, md: 2 } : 0,
-      }}
-    >
-      <audio ref={trainerAudioRef} playsInline preload="auto" style={{ display: "none" }} />
-      <audio
-        ref={musicAudioRef}
-        playsInline
-        preload="metadata"
-        loop
-        onPlay={() => setMusicPlaying(true)}
-        onPause={() => setMusicPlaying(false)}
-        onEnded={() => setMusicPlaying(false)}
-        style={{ display: "none" }}
-      />
-
+    <Box>
       <Box
         sx={{
           background: "linear-gradient(135deg, #0b0b0f, #1a1a22)",
@@ -2104,7 +1796,7 @@ export default function AITrainer() {
         }}
       >
         <Typography variant="h4" fontWeight="bold">
-          ðŸ¤– TNG Coach AI
+          🤖 TNG Coach AI
         </Typography>
 
         <Typography sx={{ color: "#cfcfcf", mt: 1 }}>
@@ -2118,12 +1810,12 @@ export default function AITrainer() {
           <Chip label="Footwork" />
           <Chip label="Coordination" />
           <Chip label="Conditioning" />
-          <Chip label={aiLoading ? "AI Enhancingâ€¦" : "Instant Start"} color={aiLoading ? "warning" : "success"} />
+          <Chip label={aiLoading ? "AI Enhancing…" : "Instant Start"} color={aiLoading ? "warning" : "success"} />
         </Stack>
       </Box>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} lg={4} sx={{ display: tvMode ? "none" : "block" }}>
+        <Grid item xs={12} lg={4}>
           <Card sx={{ borderRadius: 4, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold">
@@ -2268,120 +1960,15 @@ export default function AITrainer() {
                   />
                 </Box>
 
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 3,
-                    border: "1px solid #d7d7df",
-                    background: audioReady ? "#f3fff6" : "#fffaf0",
-                  }}
-                >
-                  <Typography fontWeight="bold">Audio / Bluetooth</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Connect the Sony/Bluetooth stereo in the phone settings first. TNG coach cues now use media audio so they follow the selected media output.
-                  </Typography>
-
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    <Button type="button" variant="contained" onClick={testTrainerSpeaker}>
-                      ðŸ”Š Test Speaker
-                    </Button>
-                    <Button type="button" variant="outlined" onClick={refreshAudioOutputs}>
-                      Refresh Outputs
-                    </Button>
-                  </Stack>
-
-                  {audioOutputs.length > 0 && (
-                    <Select
-                      fullWidth
-                      size="small"
-                      value={selectedAudioOutput}
-                      displayEmpty
-                      onChange={(e) => applyAudioOutput(e.target.value)}
-                      sx={{ mt: 1.5 }}
-                    >
-                      <MenuItem value="">System / Bluetooth Default</MenuItem>
-                      {audioOutputs.map((device, index) => (
-                        <MenuItem key={device.deviceId || index} value={device.deviceId}>
-                          {device.label || `Audio output ${index + 1}`}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  )}
-
-                  <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
-                    {audioStatus}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{ p: 2, borderRadius: 3, border: "1px solid #d7d7df" }}
-                >
-                  <Typography fontWeight="bold">Workout Music</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Optional in-app music. You can also keep using Apple Music externally; TNG coach cues use the phone media output.
-                  </Typography>
-
-                  <Button component="label" variant="outlined" sx={{ mt: 1.5, mr: 1 }}>
-                    ðŸŽµ Load Music
-                    <input hidden accept="audio/*" type="file" onChange={loadMusicFile} />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="contained"
-                    color={musicPlaying ? "warning" : "success"}
-                    onClick={toggleWorkoutMusic}
-                    disabled={!musicFileName}
-                    sx={{ mt: 1.5 }}
-                  >
-                    {musicPlaying ? "Pause Music" : "Play Music"}
-                  </Button>
-
-                  {musicFileName && (
-                    <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
-                      Loaded: {musicFileName}
-                    </Typography>
-                  )}
-
-                  <Typography fontWeight="bold" sx={{ mt: 1.5 }}>
-                    Music Volume: {Math.round(musicVolume * 100)}%
-                  </Typography>
-                  <Slider
-                    value={musicVolume}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    onChange={(e, value) => setMusicVolume(Number(value))}
-                  />
-                </Box>
-
-                <Box sx={{ p: 2, borderRadius: 3, border: "1px solid #d7d7df", background: "#f7f9ff" }}>
-                  <Typography fontWeight="bold">TV / Gym Display</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Connect to the dedicated TNG display. The TV shows the workout while this phone remains the coach remote.
-                  </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    <Button type="button" variant="contained" onClick={connectTV}>
-                      ðŸ“º Connect TV
-                    </Button>
-                    <Button type="button" variant={tvMode ? "contained" : "outlined"} onClick={enableTVMode}>
-                      {tvMode ? "Exit TV Mode" : "TV Mode"}
-                    </Button>
-                    <Button type="button" variant="outlined" onClick={toggleFullscreen}>
-                      â›¶ {fullScreenActive ? "Exit Fullscreen" : "Fullscreen"}
-                    </Button>
-                  </Stack>
-                  <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
-                    {tvConnectStatus}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                    TV fallback: open display.tngboxinggym.com on the TV browser. iPhone Safari cannot directly open Apple's Screen Mirroring picker from a webpage.
-                  </Typography>
-                </Box>
-
                 <Button
                   type="button"
                   variant="outlined"
-                  onClick={testTrainerSpeaker}
+                  onClick={() =>
+                    speak(
+                      "TNG Coach is ready. Stay relaxed, listen carefully, and work with clean technique.",
+                      { rate: voiceRate }
+                    )
+                  }
                 >
                   Test Coach Voice
                 </Button>
@@ -2458,19 +2045,17 @@ export default function AITrainer() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} lg={tvMode ? 12 : 5}>
+        <Grid item xs={12} lg={5}>
           <Card
             sx={{
               borderRadius: 4,
               background: "#0b0b0f",
               color: "white",
               border: "1px solid #2a2a35",
-              minHeight: tvMode ? "calc(100vh - 180px)" : 560,
-              display: "flex",
-              alignItems: tvMode ? "center" : "stretch",
+              minHeight: 560,
             }}
           >
-            <CardContent sx={{ textAlign: "center", p: tvMode ? { xs: 2, md: 5 } : 4, width: "100%" }}>
+            <CardContent sx={{ textAlign: "center", p: 4 }}>
               <Stack direction="row" justifyContent="center" spacing={1} sx={{ mb: 2 }}>
                 <Chip
                   label={`ROUND ${currentRound} / ${rounds}`}
@@ -2522,7 +2107,7 @@ export default function AITrainer() {
               >
                 <Typography
                   sx={{
-                    fontSize: tvMode ? { xs: 34, md: 56 } : { xs: 26, md: 34 },
+                    fontSize: { xs: 26, md: 34 },
                     fontWeight: 900,
                     lineHeight: 1.2,
                   }}
@@ -2636,24 +2221,9 @@ export default function AITrainer() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} lg={3} sx={{ display: tvMode ? "none" : "block" }}>
+        <Grid item xs={12} lg={3}>
           <Card sx={{ borderRadius: 4, height: "100%" }}>
             <CardContent>
-              <Stack sx={{ mb: 2 }}>
-                <CastTrainerButton
-                  liveState={{
-                    active: running,
-                    phase,
-                    round: currentRound,
-                    total_rounds: Number(rounds),
-                    time_left: timeLeft,
-                    module: currentModuleRef.current,
-                    prompt,
-                    sub_prompt: subPrompt,
-                  }}
-                />
-              </Stack>
-
               <Typography variant="h6" fontWeight="bold">
                 Session Intelligence
               </Typography>
@@ -2684,7 +2254,7 @@ export default function AITrainer() {
                   <Typography fontWeight="bold">Workout Result</Typography>
                   <Typography variant="body2">{sessionResults.program}</Typography>
                   <Typography variant="body2">{sessionResults.roundsCompleted} rounds completed</Typography>
-                  <Typography variant="body2">{sessionResults.level} Â· {sessionResults.module}</Typography>
+                  <Typography variant="body2">{sessionResults.level} · {sessionResults.module}</Typography>
                   <Typography variant="caption" color="text.secondary">{sessionResults.completedAt}</Typography>
                 </Box>
               )}
@@ -2718,4 +2288,3 @@ export default function AITrainer() {
     </Box>
   );
 }
-
