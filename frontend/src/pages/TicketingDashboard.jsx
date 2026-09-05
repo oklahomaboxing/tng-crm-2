@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import EventTicketSales from "./EventTicketSales.jsx";
 import TicketDoorScanner from "../components/tickets/TicketDoorScanner.jsx";
 
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
 const API = "";
 
 function authHeaders() {
@@ -217,7 +219,7 @@ export default function TicketingDashboard() {
           disabled={!eventId || busy}
           onClick={() =>
             downloadReport(
-              `/api/ticketing/events/${eventId}/report.pdf`,
+              `${API_BASE}/api/ticketing/events/${eventId}/report.pdf`,
               `tng_event_${eventId}_master_report.pdf`
             )
           }
@@ -230,7 +232,7 @@ export default function TicketingDashboard() {
           disabled={!eventId || busy}
           onClick={() =>
             downloadReport(
-              `/api/ticketing/events/${eventId}/report.csv`,
+              `${API_BASE}/api/ticketing/events/${eventId}/report.csv`,
               `tng_event_${eventId}_ticket_report.csv`
             )
           }
@@ -338,7 +340,7 @@ export default function TicketingDashboard() {
                         <button
                           onClick={() =>
                             downloadReport(
-                              `/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/report.pdf`,
+                              `${API_BASE}/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/report.pdf`,
                               `seller_${seller.seller_id}_report.pdf`
                             )
                           }
@@ -351,7 +353,7 @@ export default function TicketingDashboard() {
                         <button
                           onClick={() =>
                             downloadReport(
-                              `/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/report.csv`,
+                              `${API_BASE}/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/report.csv`,
                               `seller_${seller.seller_id}_report.csv`
                             )
                           }

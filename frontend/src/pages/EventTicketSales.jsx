@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
 const money = cents => `$${((cents || 0)/100).toFixed(2)}`;
 
 export default function EventTicketSales({ eventId }) {
@@ -8,7 +10,7 @@ export default function EventTicketSales({ eventId }) {
   const token = localStorage.getItem("token");
 
   const load = async () => {
-    const { data } = await axios.get(`/api/ticketing/events/${eventId}/sellers/live`, {
+    const { data } = await axios.get(`${API_BASE}/api/ticketing/events/${eventId}/sellers/live`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     setData(data);
