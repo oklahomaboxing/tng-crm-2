@@ -9,6 +9,7 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import EventRoundedIcon from "@mui/icons-material/EventRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
+import TicketSellerControls from "../components/tickets/TicketSellerControls.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -1563,6 +1564,12 @@ export default function Matchmaker() {
               <Typography color="text.secondary">
                 Click a fighter to select them for matchmaking.
               </Typography>
+
+
+              <TicketSellerControls
+                eventId={eventId}
+                fighterId={fighterId}
+              />
 
               <TableContainer sx={{ mt: 2 }}>
                 <Table size="small">

@@ -30,6 +30,7 @@ export const ROLE_MENUS = {
     "Members",
     "TNG Academy",
     "Matchmaker",
+    "Ticket Sales",
     "Fight Calendar",
     "Products",
     "Front Desk",
@@ -62,6 +63,7 @@ const ICONS = {
   Members: <PeopleAltRoundedIcon />,
   "TNG Academy": <SchoolRoundedIcon />,
   Matchmaker: <SportsMmaRoundedIcon />,
+  "Ticket Sales": <SportsMmaRoundedIcon />,
   "Fight Calendar": <EventRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
   "Front Desk": <QrCodeScannerRoundedIcon />,
@@ -174,4 +176,5 @@ export default function Sidebar({
     </Box>
   );
 }
+
 

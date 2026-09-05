@@ -1,6 +1,11 @@
 from dotenv import load_dotenv
 import os
+from app.ticketing.routes import router as ticketing_router
+from app.ticketing.checkout_routes import router as ticketing_checkout_router
 import logging
+from app.ticketing.models import TicketOrder
+from app.ticketing.emailing import send_ticket_email
+from app.ticketing.service import issue_paid_order
 from .services.memberships import (
     apply_membership,
     is_event_product,
@@ -269,6 +274,8 @@ app = FastAPI(title="TNG CRM 2.0")
 app.include_router(operations_router)
 
 app.include_router(ai_router)
+app.include_router(ticketing_router)
+app.include_router(ticketing_checkout_router)
 
 app.include_router(academy_router)
 
@@ -2947,6 +2954,83 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
             "received": True,
             "message": f"Ignored unsupported payment status: {webhook_status}",
         }
+    ticket_order = None
+    matching_ticket_checkout_id = str(hosted_checkout_id or checkout_id or "")
+
+    if matching_ticket_checkout_id:
+        ticket_order = db.query(TicketOrder).filter(
+            TicketOrder.clover_checkout_id == matching_ticket_checkout_id
+        ).first()
+
+    if ticket_order:
+        if webhook_status == "APPROVED":
+
+            # Clover may retry the same webhook.
+            # Never issue the same ticket order twice.
+            if ticket_order.payment_status == "paid":
+                return {
+                    "received": True,
+                    "message": "Ticket payment already processed",
+                    "order_id": ticket_order.id,
+                }
+
+            import json
+            from datetime import datetime
+
+            ticket_order.payment_status = "paid"
+            ticket_order.payment_id = str(payment_id or "")
+            ticket_order.paid_at = datetime.utcnow()
+
+            items = json.loads(ticket_order.items_json or "[]")
+
+            issued = issue_paid_order(
+                db,
+                ticket_order,
+                items,
+            )
+            from app.matchmaker.models import BoxingEvent
+            from app.ticketing.routes import generate_ticket_qr_base64
+
+            event = db.query(BoxingEvent).filter(
+                BoxingEvent.id == ticket_order.event_id
+            ).first()
+
+            email_tickets = []
+
+            for item in issued:
+                ticket = item["ticket"]
+
+                email_tickets.append({
+                    "ticket_number": ticket.ticket_number,
+                    "status": ticket.status,
+                    "price_cents": ticket.price_cents,
+                    "qr_png_base64": generate_ticket_qr_base64(
+                        ticket.qr_token_encrypted
+                    ),
+                })
+
+            try:
+                send_ticket_email(
+                    ticket_order.buyer_email,
+                    event.name if event else "TNG Boxing Event",
+                    ticket_order.receipt_number,
+                    email_tickets,
+                    ticket_order.total_cents,
+                )
+            except Exception as email_error:
+                # Payment and ticket issuance succeeded.
+                # Do not make Clover retry the payment webhook
+                # just because email delivery failed.
+                print(
+                    "TICKET EMAIL DELIVERY ERROR:",
+                    str(email_error),
+                )
+
+            return {
+                "received": True,
+                "message": "Ticket payment recorded and tickets issued",
+                "order_id": ticket_order.id,
+            }
 
     merchandise_checkout = None
     if hosted_checkout_id:

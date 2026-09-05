@@ -32,6 +32,8 @@ import DuplicateReview from "./pages/DuplicateReview.jsx";
 import AITrainer from "./pages/AITrainer.jsx";
 import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
 import Matchmaker from "./pages/Matchmaker.jsx";
+import TicketingDashboard from "./pages/TicketingDashboard.jsx";
+import PublicTicketCheckout from "./pages/PublicTicketCheckout.jsx";
 import EventCalendar from "./pages/EventCalendar.jsx";
 import PublicFightCalendar from "./pages/PublicFightCalendar.jsx";
 import FighterRegistration from "./pages/FighterRegistration.jsx";
@@ -128,6 +130,20 @@ function PaymentMessage({ status }) {
       </Card>
     </Box>
   );
+}
+
+
+function RootEntry() {
+  const isPublicTicketPage =
+    /^\/events\/\d+\/tickets\/?$/.test(
+      window.location.pathname
+    );
+
+  if (isPublicTicketPage) {
+    return <PublicTicketCheckout />;
+  }
+
+  return <App />;
 }
 
 function App() {
@@ -714,6 +730,7 @@ if (window.location.pathname === "/register") return <JoinPage />;
       {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
       {page === "TNG Academy" && role !== "rep" && <TNGAcademy />}
       {page === "Matchmaker" && role !== "rep" && <Matchmaker />}
+      {page === "Ticket Sales" && role !== "rep" && <TicketingDashboard />}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
@@ -774,8 +791,9 @@ const root = createRoot(document.getElementById("root"));
 root.render(
   <ThemeProvider theme={theme}>
     <CssBaseline />
-    {host === "display.tngboxinggym.com" ? <AIDisplay /> : <App />}
+    {host === "display.tngboxinggym.com" ? <AIDisplay /> : <RootEntry />}
   </ThemeProvider>
 );
+
 
 
