@@ -4,7 +4,7 @@ import TicketDoorScanner from "../components/tickets/TicketDoorScanner.jsx";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
-const API = "";
+const API = API_BASE;
 
 function authHeaders() {
   const token = localStorage.getItem("token");
