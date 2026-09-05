@@ -16,6 +16,7 @@ from app.ticketing.emailing import send_fighter_report
 from app.ticketing.security import decrypt_token
 from fastapi.responses import StreamingResponse
 from app.models import User
+from app.core.permissions import require_admin_or_staff
 
 router = APIRouter(prefix="/api/ticketing", tags=["ticketing"])
 
