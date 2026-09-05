@@ -717,3 +717,68 @@ def download_event_report_pdf(
             "Content-Disposition": f'attachment; filename="{filename}"'
         },
     )
+
+@router.post("/events/{event_id}/ticket-types")
+def create_event_ticket_type(
+    event_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    name = str(data.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Ticket type name is required.")
+
+    try:
+        price_cents = int(data.get("price_cents"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Valid price_cents is required.")
+
+    inventory = data.get("inventory")
+    if inventory is not None:
+        try:
+            inventory = int(inventory)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Inventory must be an integer.")
+
+    commission_type = str(data.get("commission_type") or "percent")
+    commission_value = data.get("commission_value", 0)
+
+    existing = (
+        db.query(EventTicketType)
+        .filter(
+            EventTicketType.event_id == event_id,
+            EventTicketType.name == name,
+        )
+        .first()
+    )
+
+    if existing:
+        raise HTTPException(status_code=409, detail="Ticket type already exists.")
+
+    row = EventTicketType(
+        event_id=event_id,
+        name=name,
+        price_cents=price_cents,
+        inventory=inventory,
+        commission_type=commission_type,
+        commission_value=commission_value,
+        active=True,
+    )
+
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+
+    return {
+        "id": row.id,
+        "event_id": row.event_id,
+        "name": row.name,
+        "price_cents": row.price_cents,
+        "inventory": row.inventory,
+        "commission_type": row.commission_type,
+        "commission_value": float(row.commission_value or 0),
+        "active": row.active,
+    }
