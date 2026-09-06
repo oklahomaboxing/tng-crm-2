@@ -2,12 +2,14 @@ import json
 import os
 
 import requests
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.matchmaker.models import BoxingEvent
 from app.ticketing.models import TicketOrder, EventTicketType
+from app.ticketing.service import issue_paid_order
 
 
 router = APIRouter(
@@ -105,6 +107,38 @@ def create_ticket_clover_checkout(
             status_code=400,
             detail="Ticket order total does not match current ticket prices",
         )
+
+    # --------------------------------------------------------
+    # FREE / COMP ORDER
+    # $0 orders do not go to Clover.
+    # Mark paid and issue unique QR tickets immediately.
+    # --------------------------------------------------------
+    if calculated_total == 0:
+        order.payment_status = "paid"
+        order.payment_provider = "comp"
+        order.payment_id = f"COMP-{order.id}"
+        order.paid_at = datetime.utcnow()
+
+        db.flush()
+
+        issued = issue_paid_order(
+            db,
+            order,
+            items,
+        )
+
+        db.commit()
+        db.refresh(order)
+
+        return {
+            "success": True,
+            "order_id": order.id,
+            "status": "paid",
+            "payment_provider": "comp",
+            "total_cents": 0,
+            "tickets_issued": len(issued),
+            "checkout_url": None,
+        }
 
     merchant_id = os.getenv("CLOVER_MERCHANT_ID")
 

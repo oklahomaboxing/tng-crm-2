@@ -322,6 +322,12 @@ export default function PublicTicketCheckout() {
         );
       }
 
+      if (checkout.status === "paid" && Number(checkout.total_cents) === 0) {
+        window.location.href =
+          `/events/${eventId}/tickets?ticket_payment=success&order=${order.order_id}`;
+        return;
+      }
+
       if (!checkout.checkout_url) {
         throw new Error(
           "Clover did not return a payment link"
@@ -588,17 +594,16 @@ export default function PublicTicketCheckout() {
             </div>
 
             <button
-              disabled={
-                submitting ||
-                total <= 0
-              }
+              disabled={submitting}
               style={styles.buyButton}
             >
               {submitting
-                ? "Opening Clover..."
-                : `Buy Tickets — ${money(
-                    total
-                  )}`}
+                ? (total === 0
+                    ? "Issuing Ticket..."
+                    : "Opening Clover...")
+                : (total === 0
+                    ? "Get Free Ticket"
+                    : `Buy Tickets — ${money(total)}`)}
             </button>
 
             <div
