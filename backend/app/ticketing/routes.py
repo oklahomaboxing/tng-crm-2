@@ -60,6 +60,7 @@ def create_public_ticket_order(
         ).first()
 
     subtotal_cents = 0
+    valid_ticket_count = 0
 
     for item in body.items:
         ticket_type_id = int(item.get("ticket_type_id"))
@@ -81,8 +82,9 @@ def create_public_ticket_order(
             )
 
         subtotal_cents += ticket_type.price_cents * quantity
+        valid_ticket_count += quantity
 
-    if subtotal_cents <= 0:
+    if valid_ticket_count <= 0:
         raise HTTPException(
             status_code=400,
             detail="At least one ticket is required",
