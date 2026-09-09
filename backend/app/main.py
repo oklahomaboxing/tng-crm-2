@@ -4340,3 +4340,9 @@ def tng_ai_trainer_tts(
     except Exception as exc:
         logger.exception("TNG trainer TTS failed: %s", exc)
         raise HTTPException(status_code=502, detail="Coach voice audio could not be generated.")
+
+
+# TNG OS Member Portal v1
+from .member_portal.routes import router as member_portal_router
+app.include_router(member_portal_router)
+

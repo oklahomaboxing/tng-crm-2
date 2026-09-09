@@ -1,3 +1,5 @@
+import MemberPortal from "./pages/MemberPortal.jsx";
+import MemberActivate from "./pages/MemberActivate.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -398,7 +400,11 @@ async function submitPasswordReset() {
   }
 
   useEffect(() => {
-    if (!token) {
+    if (window.location.pathname === "/member/activate") {
+    return <MemberActivate />;
+  }
+
+  if (!token) {
       autoSyncStarted.current = false;
       return;
     }
@@ -702,7 +708,11 @@ if (window.location.pathname === "/register") return <JoinPage />;
     );
   }
 
-  return (
+  if (role === "member") {
+    return <MemberPortal onLogout={() => window.location.reload()} />;
+  }
+
+return (
     <AppShell
       role={role}
       page={page}
@@ -794,6 +804,7 @@ root.render(
     {host === "display.tngboxinggym.com" ? <AIDisplay /> : <RootEntry />}
   </ThemeProvider>
 );
+
 
 
 
