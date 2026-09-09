@@ -1,4 +1,4 @@
-import MemberPortal from "./pages/MemberPortal.jsx";
+﻿import MemberPortal from "./pages/MemberPortal.jsx";
 import MemberActivate from "./pages/MemberActivate.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -432,6 +432,10 @@ async function submitPasswordReset() {
     }
   }, [isResetPasswordPage, passwordResetToken]);
 
+  if (window.location.pathname === "/member/activate") {
+    return <MemberActivate />;
+  }
+
   if (paymentStatus) return <PaymentMessage status={paymentStatus} />;
 
   if (window.location.pathname === "/fight-calendar") {
@@ -804,6 +808,7 @@ root.render(
     {host === "display.tngboxinggym.com" ? <AIDisplay /> : <RootEntry />}
   </ThemeProvider>
 );
+
 
 
 
