@@ -436,6 +436,10 @@ async function submitPasswordReset() {
     return <MemberActivate />;
   }
 
+  if (window.location.pathname === "/member/activate") {
+    return <MemberActivate />;
+  }
+
   if (paymentStatus) return <PaymentMessage status={paymentStatus} />;
 
   if (window.location.pathname === "/fight-calendar") {
@@ -808,6 +812,7 @@ root.render(
     {host === "display.tngboxinggym.com" ? <AIDisplay /> : <RootEntry />}
   </ThemeProvider>
 );
+
 
 
 
