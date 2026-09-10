@@ -1,4 +1,6 @@
-﻿import hashlib
+﻿import resend
+import os
+import hashlib
 import secrets
 from datetime import datetime, timedelta
 
@@ -75,14 +77,89 @@ def create_member_invite(
     db.add(invite)
     db.commit()
 
-    # v1 returns the activation URL so TNG staff can test immediately.
-    # Next step: send this automatically through your existing email service.
+    activation_path = f"/member/activate?token={raw_token}"
+    frontend_url = os.getenv(
+        "FRONTEND_URL",
+        "https://tngos.tngboxinggym.com",
+    ).rstrip("/")
+    activation_url = f"{frontend_url}{activation_path}"
+
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    sender_email = os.getenv(
+        "RESEND_FROM_EMAIL",
+        "TNG Boxing <marketing@tngboxinggym.com>",
+    )
+
+    email_sent = False
+    email_error = None
+
+    if resend_api_key:
+        try:
+            resend.api_key = resend_api_key
+
+            resend.Emails.send(
+                {
+                    "from": sender_email,
+                    "to": [member.email],
+                    "subject": "Activate Your TNG Boxing Member Account",
+                    "html": f"""
+                    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;">
+                      <h2>Welcome to TNG Boxing</h2>
+
+                      <p>Your TNG Boxing member account is ready.</p>
+
+                      <p>
+                        Use the button below to create your password and activate
+                        access to your member portal.
+                      </p>
+
+                      <p style="margin:30px 0;">
+                        <a
+                          href="{activation_url}"
+                          style="
+                            background:#d71920;
+                            color:#ffffff;
+                            padding:14px 22px;
+                            text-decoration:none;
+                            border-radius:6px;
+                            font-weight:bold;
+                          "
+                        >
+                          Activate My Account
+                        </a>
+                      </p>
+
+                      <p>This activation link expires in 7 days.</p>
+
+                      <p>
+                        After activation, sign in at
+                        <strong>tngos.tngboxinggym.com</strong>
+                        using your email and new password.
+                      </p>
+
+                      <p><strong>TNG Boxing — Earned Not Given</strong></p>
+                    </div>
+                    """,
+                }
+            )
+
+            email_sent = True
+
+        except Exception as exc:
+            email_error = str(exc)
+
+    else:
+        email_error = "RESEND_API_KEY is not configured"
+
     return {
         "member_id": member.id,
         "email": member.email,
         "activation_token": raw_token,
-        "activation_path": f"/member/activate?token={raw_token}",
+        "activation_path": activation_path,
+        "activation_url": activation_url,
         "expires_at": invite.expires_at,
+        "email_sent": email_sent,
+        "email_error": email_error,
     }
 
 
@@ -277,4 +354,5 @@ def add_manual_scan(
     db.commit()
     db.refresh(scan)
     return serialize_scan(scan)
+
 
