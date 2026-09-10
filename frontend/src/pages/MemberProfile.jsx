@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -28,6 +28,7 @@ export default function MemberProfile({ member, onBack }) {
   const [showQr, setShowQr] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [loginInviteLoading, setLoginInviteLoading] = useState(false);
 
   useEffect(() => {
     setMemberData(member);
@@ -151,6 +152,52 @@ export default function MemberProfile({ member, onBack }) {
     setEditing(false);
   }
 
+  async function activateMemberLogin() {
+    if (!memberData.email || !memberData.email.trim()) {
+      alert("This member needs an email address before login can be activated.");
+      return;
+    }
+
+    try {
+      setLoginInviteLoading(true);
+
+      const response = await fetch(`${API}/api/member/admin/invite`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          member_id: memberData.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Could not create member login invitation.");
+      }
+
+      const activationUrl =
+        `${window.location.origin}${data.activation_path}`;
+
+      try {
+        await navigator.clipboard.writeText(activationUrl);
+        alert(
+          `Member login activation link created and copied to clipboard:\n\n${activationUrl}`
+        );
+      } catch {
+        alert(
+          `Member login activation link created:\n\n${activationUrl}`
+        );
+      }
+    } catch (err) {
+      alert(err.message || "Could not activate member login.");
+    } finally {
+      setLoginInviteLoading(false);
+    }
+  }
+
   function downloadQrCode() {
     const canvas = document.getElementById("tng-member-qr");
     if (!canvas) return;
@@ -217,6 +264,23 @@ export default function MemberProfile({ member, onBack }) {
                 </Button>
                 <Button variant="outlined" color="error" onClick={startEdit}>
                   Edit Member
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={activateMemberLogin}
+                  disabled={
+                    loginInviteLoading ||
+                    !memberData.email ||
+                    !memberData.email.trim()
+                  }
+                >
+                  {loginInviteLoading
+                    ? "Creating Login..."
+                    : memberData.email && memberData.email.trim()
+                    ? "Activate Login"
+                    : "Email Required"}
                 </Button>
               </Stack>
             </Grid>
@@ -317,7 +381,7 @@ export default function MemberProfile({ member, onBack }) {
                   ${Number(payment.amount || 0).toFixed(2)}
                 </Typography>
                 <Typography color="text.secondary">
-                  {payment.membership || "Membership"} • {payment.sale_date ? new Date(payment.sale_date).toLocaleString() : ""}
+                  {payment.membership || "Membership"} â€¢ {payment.sale_date ? new Date(payment.sale_date).toLocaleString() : ""}
                 </Typography>
               </Card>
             ))}
