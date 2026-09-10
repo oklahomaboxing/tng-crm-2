@@ -51,6 +51,62 @@ def member_account_for_user(db: Session, user: User) -> MemberAccount:
     return account
 
 
+@router.get("/admin/{member_id}/invite-status")
+def member_invite_status(
+    member_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    account = (
+        db.query(MemberAccount)
+        .filter(MemberAccount.member_id == member_id)
+        .first()
+    )
+
+    if account:
+        return {
+            "status": "active",
+            "activated": True,
+            "invite_pending": False,
+            "message": "Member login is active.",
+        }
+
+    active_invite = (
+        db.query(MemberInvite)
+        .filter(
+            MemberInvite.member_id == member_id,
+            MemberInvite.used_at == None,
+            MemberInvite.expires_at > datetime.utcnow(),
+        )
+        .order_by(MemberInvite.created_at.desc())
+        .first()
+    )
+
+    if active_invite:
+        return {
+            "status": "invite_sent",
+            "activated": False,
+            "invite_pending": True,
+            "email": member.email,
+            "sent_at": active_invite.created_at,
+            "expires_at": active_invite.expires_at,
+            "message": "Activation email already sent.",
+        }
+
+    return {
+        "status": "not_invited",
+        "activated": False,
+        "invite_pending": False,
+        "email": member.email,
+        "message": "Member login has not been activated.",
+    }
+
 @router.post("/admin/invite")
 def create_member_invite(
     data: InviteMemberIn,
@@ -375,6 +431,7 @@ def add_manual_scan(
     db.commit()
     db.refresh(scan)
     return serialize_scan(scan)
+
 
 
 
