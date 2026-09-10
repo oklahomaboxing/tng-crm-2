@@ -179,17 +179,24 @@ export default function MemberProfile({ member, onBack }) {
       }
 
       const activationUrl =
+        data.activation_url ||
         `${window.location.origin}${data.activation_path}`;
 
-      try {
-        await navigator.clipboard.writeText(activationUrl);
+      if (data.email_sent) {
         alert(
-          `Member login activation link created and copied to clipboard:\n\n${activationUrl}`
+          `Activation email sent successfully to:\n\n${data.email}`
         );
-      } catch {
-        alert(
-          `Member login activation link created:\n\n${activationUrl}`
-        );
+      } else {
+        try {
+          await navigator.clipboard.writeText(activationUrl);
+          alert(
+            `Activation link was created, but the email could not be sent.\n\nReason: ${data.email_error || "Unknown email error"}\n\nThe activation link has been copied to your clipboard:\n\n${activationUrl}`
+          );
+        } catch {
+          alert(
+            `Activation link was created, but the email could not be sent.\n\nReason: ${data.email_error || "Unknown email error"}\n\nActivation link:\n${activationUrl}`
+          );
+        }
       }
     } catch (err) {
       alert(err.message || "Could not activate member login.");
@@ -432,3 +439,4 @@ function InfoCard({ title, children }) {
     </Card>
   );
 }
+
