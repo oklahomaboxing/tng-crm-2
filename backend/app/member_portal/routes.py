@@ -68,6 +68,27 @@ def create_member_invite(
     if existing_account:
         raise HTTPException(status_code=409, detail="Member account already activated")
 
+    active_invite = (
+        db.query(MemberInvite)
+        .filter(
+            MemberInvite.member_id == member.id,
+            MemberInvite.used_at == None,
+            MemberInvite.expires_at > datetime.utcnow(),
+        )
+        .order_by(MemberInvite.created_at.desc())
+        .first()
+    )
+
+    if active_invite:
+        return {
+            "member_id": member.id,
+            "email": member.email,
+            "already_sent": True,
+            "email_sent": False,
+            "message": "Activation email has already been sent. A new invitation cannot be sent until the current 7-day invitation expires.",
+            "expires_at": active_invite.expires_at,
+        }
+
     raw_token = secrets.token_urlsafe(32)
     invite = MemberInvite(
         member_id=member.id,
@@ -354,5 +375,6 @@ def add_manual_scan(
     db.commit()
     db.refresh(scan)
     return serialize_scan(scan)
+
 
 
