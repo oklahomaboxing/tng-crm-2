@@ -1791,12 +1791,21 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         else "https://apisandbox.dev.clover.com"
     )
 
+    app_url = os.getenv(
+        "TNG_APP_URL",
+        "https://tngos.tngboxinggym.com",
+    ).rstrip("/")
+
     payload = {
         "customer": {
             "firstName": lead.first_name,
             "lastName": lead.last_name,
             "email": lead.email,
             "phoneNumber": lead.phone or "",
+        },
+        "redirectUrls": {
+            "success": f"{app_url}/?payment=success&lead_id={lead.id}",
+            "failure": f"{app_url}/?payment=failed&lead_id={lead.id}",
         },
         "shoppingCart": {
             "lineItems": [
@@ -3210,11 +3219,147 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
 
     db.commit()
 
+    # ------------------------------------------------------------
+    # Automatically invite newly paid members to the TNG member portal.
+    # Payment processing must never fail because of an email problem.
+    # ------------------------------------------------------------
+    portal_invite_sent = False
+    portal_invite_status = "not_sent"
+
+    try:
+        import hashlib
+        import secrets
+        import resend
+        from datetime import timedelta
+        from app.member_portal.models import MemberAccount, MemberInvite
+
+        member_email = (member.email or "").strip().lower()
+
+        if member_email:
+            existing_account = (
+                db.query(MemberAccount)
+                .filter(MemberAccount.member_id == member.id)
+                .first()
+            )
+
+            if existing_account:
+                portal_invite_status = "already_active"
+
+            else:
+                active_invite = (
+                    db.query(MemberInvite)
+                    .filter(
+                        MemberInvite.member_id == member.id,
+                        MemberInvite.used_at == None,
+                        MemberInvite.expires_at > datetime.utcnow(),
+                    )
+                    .order_by(MemberInvite.created_at.desc())
+                    .first()
+                )
+
+                if active_invite:
+                    portal_invite_status = "already_invited"
+
+                else:
+                    raw_token = secrets.token_urlsafe(32)
+
+                    invite = MemberInvite(
+                        member_id=member.id,
+                        token_hash=hashlib.sha256(
+                            raw_token.encode("utf-8")
+                        ).hexdigest(),
+                        expires_at=datetime.utcnow() + timedelta(days=7),
+                    )
+
+                    db.add(invite)
+                    db.commit()
+
+                    frontend_url = os.getenv(
+                        "FRONTEND_URL",
+                        "https://tngos.tngboxinggym.com",
+                    ).rstrip("/")
+
+                    activation_url = (
+                        f"{frontend_url}/member/activate?token={raw_token}"
+                    )
+
+                    resend_api_key = os.getenv("RESEND_API_KEY")
+                    sender_email = os.getenv(
+                        "RESEND_FROM_EMAIL",
+                        "TNG Boxing <marketing@tngboxinggym.com>",
+                    )
+
+                    if resend_api_key:
+                        resend.api_key = resend_api_key
+
+                        resend.Emails.send(
+                            {
+                                "from": sender_email,
+                                "to": [member_email],
+                                "subject": "Activate Your TNG Boxing Member Account",
+                                "html": f"""
+                                <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;">
+                                  <h2>Welcome to TNG Boxing</h2>
+
+                                  <p>Your membership payment was received successfully.</p>
+
+                                  <p>
+                                    Your TNGOS member account is ready.
+                                    Click below to create your password.
+                                  </p>
+
+                                  <p style="margin:30px 0;">
+                                    <a
+                                      href="{activation_url}"
+                                      style="
+                                        background:#d71920;
+                                        color:#ffffff;
+                                        padding:14px 22px;
+                                        text-decoration:none;
+                                        border-radius:6px;
+                                        font-weight:bold;
+                                      "
+                                    >
+                                      Set Up My Member Account
+                                    </a>
+                                  </p>
+
+                                  <p>This link expires in 7 days.</p>
+
+                                  <p>
+                                    After setup, you can sign in anytime at
+                                    <strong>tngos.tngboxinggym.com</strong>.
+                                  </p>
+
+                                  <p><strong>TNG Boxing ? Earned Not Given</strong></p>
+                                </div>
+                                """,
+                            }
+                        )
+
+                        portal_invite_sent = True
+                        portal_invite_status = "sent"
+
+                    else:
+                        portal_invite_status = "email_not_configured"
+
+        else:
+            portal_invite_status = "member_has_no_email"
+
+    except Exception as portal_error:
+        portal_invite_status = "email_error"
+        print(
+            "MEMBER PORTAL INVITE ERROR:",
+            str(portal_error),
+        )
+
     return {
         "received": True,
         "message": "Lead converted to member",
         "member_id": member.id,
         "member_number": member.member_number,
+        "portal_invite_sent": portal_invite_sent,
+        "portal_invite_status": portal_invite_status,
     }
 
 

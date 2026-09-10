@@ -89,8 +89,8 @@ function landingPageForRole(role) {
 function PaymentMessage({ status }) {
   const content = {
     success: {
-      title: "Payment Successful",
-      text: "Welcome to TNG Boxing. Your membership payment was processed successfully.",
+      title: "Payment Successful ??",
+      text: "Your TNG Boxing membership is active. We sent your TNGOS account setup link to your email. Check your email to create your password and access your member portal.",
       severity: "success",
     },
     cancelled: {
