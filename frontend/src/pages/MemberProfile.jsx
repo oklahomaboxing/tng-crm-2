@@ -29,10 +29,17 @@ export default function MemberProfile({ member, onBack }) {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [loginInviteLoading, setLoginInviteLoading] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState(null);
 
   useEffect(() => {
     setMemberData(member);
   }, [member]);
+
+  useEffect(() => {
+    if (memberData?.id) {
+      loadInviteStatus();
+    }
+  }, [memberData?.id]);
 
   useEffect(() => {
     if (tab === "Attendance") loadAttendance();
@@ -152,6 +159,27 @@ export default function MemberProfile({ member, onBack }) {
     setEditing(false);
   }
 
+  async function loadInviteStatus() {
+    try {
+      const response = await fetch(
+        `${API}/api/member/admin/${memberData.id}/invite-status`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setInviteStatus(data);
+      }
+    } catch (err) {
+      console.error("Could not load invite status", err);
+    }
+  }
+
   async function activateMemberLogin() {
     if (!memberData.email || !memberData.email.trim()) {
       alert("This member needs an email address before login can be activated.");
@@ -178,11 +206,23 @@ export default function MemberProfile({ member, onBack }) {
         throw new Error(data.detail || "Could not create member login invitation.");
       }
 
+      if (data.already_sent) {
+        await loadInviteStatus();
+
+        alert(
+          `Activation email was already sent to:\n\n${data.email}\n\nA new invitation cannot be sent until the current invitation expires.`
+        );
+
+        return;
+      }
+
       const activationUrl =
         data.activation_url ||
         `${window.location.origin}${data.activation_path}`;
 
       if (data.email_sent) {
+        await loadInviteStatus();
+
         alert(
           `Activation email sent successfully to:\n\n${data.email}`
         );
@@ -279,12 +319,18 @@ export default function MemberProfile({ member, onBack }) {
                   onClick={activateMemberLogin}
                   disabled={
                     loginInviteLoading ||
+                    inviteStatus?.status === "invite_sent" ||
+                    inviteStatus?.status === "active" ||
                     !memberData.email ||
                     !memberData.email.trim()
                   }
                 >
                   {loginInviteLoading
                     ? "Creating Login..."
+                    : inviteStatus?.status === "active"
+                    ? "Login Active"
+                    : inviteStatus?.status === "invite_sent"
+                    ? "Invite Already Sent"
                     : memberData.email && memberData.email.trim()
                     ? "Activate Login"
                     : "Email Required"}
@@ -439,4 +485,6 @@ function InfoCard({ title, children }) {
     </Card>
   );
 }
+
+
 
