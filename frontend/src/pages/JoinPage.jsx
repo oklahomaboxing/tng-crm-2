@@ -785,27 +785,101 @@ export default function JoinPage() {
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
-                  <Typography color="text.secondary">
-                    Membership
-                  </Typography>
-                  <Typography fontWeight="bold">
-                    {selectedMembership?.name || ""}
-                  </Typography>
-                  <Typography>
-                    $
-                    {Number(
-                      selectedMembership?.price || 0
-                    ).toFixed(2)}
-                  </Typography>
+                <Grid item xs={12}>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      borderRadius: 3,
+                      bgcolor: "#fafafa",
+                    }}
+                  >
+                    <CardContent sx={{ p: 3 }}>
+                      <Typography
+                        variant="h6"
+                        fontWeight="bold"
+                        sx={{ mb: 2 }}
+                      >
+                        Payment Summary
+                      </Typography>
+
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 2,
+                          mb: 1.5,
+                        }}
+                      >
+                        <Typography>
+                          {selectedMembership?.name || "Membership"}
+                        </Typography>
+
+                        <Typography fontWeight="bold">
+                          $
+                          {Number(
+                            selectedMembership?.price || 0
+                          ).toFixed(2)}
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 2,
+                          mb: 2,
+                        }}
+                      >
+                        <Typography>
+                          New Member Registration
+                        </Typography>
+
+                        <Typography fontWeight="bold">
+                          $100.00
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          borderTop: "1px solid",
+                          borderColor: "divider",
+                          pt: 2,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 2,
+                        }}
+                      >
+                        <Typography
+                          variant="h6"
+                          fontWeight="bold"
+                        >
+                          Due Today
+                        </Typography>
+
+                        <Typography
+                          variant="h5"
+                          fontWeight="bold"
+                          color="error.main"
+                        >
+                          $
+                          {(
+                            Number(
+                              selectedMembership?.price || 0
+                            ) + 100
+                          ).toFixed(2)}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
                 </Grid>
 
                 <Grid item xs={12}>
                   <Alert severity="info">
-                    Your registration and signed waiver will be saved
-                    before you are redirected to Clover for payment.
-                    Membership access will be activated after payment
-                    is confirmed.
+                    You will make one secure Clover payment for your
+                    $100 registration fee plus the membership you
+                    selected. Your membership access will activate
+                    after payment is confirmed.
                   </Alert>
                 </Grid>
               </Grid>
@@ -846,7 +920,9 @@ export default function JoinPage() {
               >
                 {submitting
                   ? "Preparing Payment..."
-                  : "Continue to Payment"}
+                  : `Pay $${(
+                      Number(selectedMembership?.price || 0) + 100
+                    ).toFixed(2)} Securely with Clover`}
               </Button>
             )}
           </Box>

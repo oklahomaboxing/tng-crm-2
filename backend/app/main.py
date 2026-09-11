@@ -1775,6 +1775,21 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
             detail="Membership product not found",
         )
 
+    registration_product = (
+        db.query(MembershipProduct)
+        .filter(
+            func.lower(MembershipProduct.name) == "registration fee",
+            MembershipProduct.active == True,
+        )
+        .first()
+    )
+
+    if not registration_product:
+        raise HTTPException(
+            status_code=500,
+            detail="Registration Fee product is not configured",
+        )
+
     merchant_id = os.getenv("CLOVER_MERCHANT_ID")
     api_token = os.getenv("CLOVER_API_TOKEN")
     clover_env = os.getenv("CLOVER_ENV", "production")
@@ -1810,10 +1825,15 @@ def create_clover_checkout(lead_id: int, db: Session = Depends(get_db)):
         "shoppingCart": {
             "lineItems": [
                 {
+                    "name": "Registration Fee",
+                    "price": int(registration_product.price * 100),
+                    "unitQty": 1,
+                },
+                {
                     "name": product.name,
                     "price": int(product.price * 100),
                     "unitQty": 1,
-                }
+                },
             ]
         },
     }
@@ -3193,12 +3213,27 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(member)
 
-    existing_sale = db.query(Sale).filter(
-        Sale.clover_checkout_id == lead.clover_checkout_id
+    existing_membership_sale = db.query(Sale).filter(
+        Sale.clover_checkout_id == lead.clover_checkout_id,
+        Sale.product_id == product.id,
     ).first()
 
-    if not existing_sale and lead.sales_rep_id and product:
-        sale = Sale(
+    registration_product = (
+        db.query(MembershipProduct)
+        .filter(
+            func.lower(MembershipProduct.name) == "registration fee",
+            MembershipProduct.active == True,
+        )
+        .first()
+    )
+
+    if not registration_product:
+        print(
+            "REGISTRATION SALE WARNING: Registration Fee product not found."
+        )
+
+    if not existing_membership_sale and lead.sales_rep_id and product:
+        membership_sale = Sale(
             member_id=member.id,
             sales_rep_id=lead.sales_rep_id,
             product_id=product.id,
@@ -3209,8 +3244,37 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
             clover_order_id=lead.clover_order_id or "",
             clover_payment_id=payment_id or "",
             payment_method="clover",
+            sale_date=datetime.utcnow(),
+            quantity=1,
+            unit_price=product.price,
+            sale_type="membership",
         )
-        db.add(sale)
+        db.add(membership_sale)
+
+    if registration_product and lead.sales_rep_id:
+        existing_registration_sale = db.query(Sale).filter(
+            Sale.clover_checkout_id == lead.clover_checkout_id,
+            Sale.product_id == registration_product.id,
+        ).first()
+
+        if not existing_registration_sale:
+            registration_sale = Sale(
+                member_id=member.id,
+                sales_rep_id=lead.sales_rep_id,
+                product_id=registration_product.id,
+                amount=registration_product.price,
+                payment_status="paid",
+                transaction_status="paid",
+                clover_checkout_id=lead.clover_checkout_id,
+                clover_order_id=lead.clover_order_id or "",
+                clover_payment_id=payment_id or "",
+                payment_method="clover",
+                sale_date=datetime.utcnow(),
+                quantity=1,
+                unit_price=registration_product.price,
+                sale_type="registration",
+            )
+            db.add(registration_sale)
 
     lead.status = "converted"
     lead.clover_payment_id = payment_id
