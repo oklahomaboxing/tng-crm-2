@@ -106,6 +106,7 @@ export default function Matchmaker() {
   const [signedFighterId, setSignedFighterId] = useState("");
   const [signedLoading, setSignedLoading] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(false);
 
   const boxrecWindowRef = useRef(null);
   const [fighterForm, setFighterForm] = useState(emptyFighter);
@@ -1180,6 +1181,14 @@ export default function Matchmaker() {
           </Box>
 
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<EventRoundedIcon />}
+              onClick={() => setEventsOpen(true)}
+            >
+              Events
+            </Button>
+
             <Button
               variant="outlined"
               startIcon={<EventRoundedIcon />}
@@ -3272,6 +3281,153 @@ export default function Matchmaker() {
         </DialogActions>
       </Dialog>
 
+
+      <Dialog
+        open={eventsOpen}
+        onClose={() => setEventsOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          <Typography variant="h5" fontWeight={950}>
+            Events
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            View and open the events you are currently working on.
+          </Typography>
+        </DialogTitle>
+
+        <DialogContent dividers>
+          {!events.length ? (
+            <Box sx={{ textAlign: "center", py: 5 }}>
+              <EventRoundedIcon sx={{ fontSize: 52, mb: 1 }} />
+
+              <Typography variant="h6" fontWeight={900}>
+                No events yet
+              </Typography>
+
+              <Typography color="text.secondary" sx={{ mb: 2 }}>
+                Create an event to start building the fight card.
+              </Typography>
+
+              <Button
+                variant="contained"
+                sx={{ bgcolor: "#e31b23" }}
+                onClick={() => {
+                  setEventsOpen(false);
+                  setEventOpen(true);
+                }}
+              >
+                Add Event
+              </Button>
+            </Box>
+          ) : (
+            <Stack spacing={2}>
+              {events.map((event) => {
+                const selected =
+                  Number(eventId) === Number(event.id);
+
+                return (
+                  <Card
+                    key={event.id}
+                    variant="outlined"
+                    sx={{
+                      borderRadius: 3,
+                      borderColor: selected
+                        ? "error.main"
+                        : "divider",
+                      borderWidth: selected ? 2 : 1,
+                    }}
+                  >
+                    <CardContent>
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        justifyContent="space-between"
+                        spacing={2}
+                      >
+                        <Box>
+                          <Typography variant="h6" fontWeight={950}>
+                            {event.name}
+                          </Typography>
+
+                          <Typography color="text.secondary">
+                            {event.event_date || "Date not set"}
+                          </Typography>
+
+                          <Typography sx={{ mt: 1 }}>
+                            {event.venue || "Venue not set"}
+                          </Typography>
+
+                          {event.venue_address && (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              {event.venue_address}
+                            </Typography>
+                          )}
+
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ mt: 1.5 }}
+                          >
+                            <Chip
+                              size="small"
+                              label={event.status || "planning"}
+                            />
+
+                            {selected && (
+                              <Chip
+                                size="small"
+                                color="error"
+                                label="Current Event"
+                              />
+                            )}
+                          </Stack>
+                        </Box>
+
+                        <Button
+                          variant={selected ? "contained" : "outlined"}
+                          color="error"
+                          onClick={() => {
+                            setEventId(event.id);
+                            setResult(null);
+                            setEventsOpen(false);
+                            setMsgType("success");
+                            setMsg(
+                              `${event.name} is now your active event.`
+                            );
+                          }}
+                        >
+                          {selected ? "Selected" : "Open Event"}
+                        </Button>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setEventsOpen(false)}>
+            Close
+          </Button>
+
+          <Button
+            variant="contained"
+            sx={{ bgcolor: "#e31b23" }}
+            onClick={() => {
+              setEventsOpen(false);
+              setEventOpen(true);
+            }}
+          >
+            Add Event
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={eventOpen} onClose={() => !working && setEventOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Add Boxing Event</DialogTitle>
