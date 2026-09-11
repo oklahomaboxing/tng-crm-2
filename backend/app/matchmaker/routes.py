@@ -2888,6 +2888,65 @@ Do not add fake ticket information.
         }
 
 
+    @router.patch("/bouts/{bout_id}/cancel")
+    def cancel_bout(
+        bout_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        reason = str(
+            data.get("notes")
+            or data.get("reason")
+            or ""
+        ).strip()
+
+        if not reason:
+            raise HTTPException(
+                status_code=400,
+                detail="Cancellation notes are required",
+            )
+
+        bout = (
+            db.query(BoxingBout)
+            .filter(BoxingBout.id == bout_id)
+            .first()
+        )
+
+        if not bout:
+            raise HTTPException(
+                status_code=404,
+                detail="Bout not found",
+            )
+
+        previous_notes = (bout.notes or "").strip()
+
+        cancellation_note = (
+            "BOUT CANCELLED / REMOVED\n"
+            f"Reason: {reason}"
+        )
+
+        bout.notes = (
+            f"{previous_notes}\n\n{cancellation_note}"
+            if previous_notes
+            else cancellation_note
+        )
+
+        bout.status = "cancelled"
+
+        db.commit()
+        db.refresh(bout)
+
+        return {
+            "id": bout.id,
+            "event_id": bout.event_id,
+            "status": bout.status,
+            "notes": bout.notes,
+        }
+
+
     @router.patch("/bouts/{bout_id}/purse")
     def update_bout_purse(
         bout_id: int,

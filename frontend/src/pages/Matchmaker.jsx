@@ -3394,10 +3394,7 @@ export default function Matchmaker() {
                             setEventId(event.id);
                             setResult(null);
                             setEventsOpen(false);
-                            setMsgType("success");
-                            setMsg(
-                              `${event.name} is now your active event.`
-                            );
+                            setEventWorkspaceId(event.id);
                           }}
                         >
                           {selected ? "Selected" : "Open Event"}

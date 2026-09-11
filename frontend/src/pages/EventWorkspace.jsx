@@ -7,6 +7,10 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Grid,
   MenuItem,
@@ -68,6 +72,10 @@ export default function EventWorkspace({
 }) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState(0);
+  const [cancelBoutOpen, setCancelBoutOpen] = useState(false);
+  const [cancelBout, setCancelBout] = useState(null);
+  const [cancelBoutNotes, setCancelBoutNotes] = useState("");
+  const [cancelBoutWorking, setCancelBoutWorking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [contractWeights, setContractWeights] = useState({});
@@ -912,6 +920,66 @@ the contestant
     );
   }
 
+
+  async function submitBoutCancellation() {
+    if (!cancelBout) return;
+
+    const notes = cancelBoutNotes.trim();
+
+    if (!notes) {
+      alert("Please enter a reason for removing this bout.");
+      return;
+    }
+
+    setCancelBoutWorking(true);
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/bouts/${cancelBout.id}/cancel`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            notes,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail || "Could not remove bout."
+        );
+      }
+
+      setData((old) => ({
+        ...old,
+        bouts: old.bouts.map((bout) =>
+          bout.id === cancelBout.id
+            ? {
+                ...bout,
+                status: "cancelled",
+                notes: result.notes || bout.notes,
+              }
+            : bout
+        ),
+      }));
+
+      setCancelBoutOpen(false);
+      setCancelBout(null);
+      setCancelBoutNotes("");
+    } catch (error) {
+      alert(error.message || "Could not remove bout.");
+    } finally {
+      setCancelBoutWorking(false);
+    }
+  }
+
+
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Stack spacing={2.5}>
@@ -1424,6 +1492,29 @@ the contestant
                       <Typography variant="body2">
                         {bout.rounds} rounds
                       </Typography>
+
+                      {bout.status !== "cancelled" ? (
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          sx={{ mt: 1 }}
+                          onClick={() => {
+                            setCancelBout(bout);
+                            setCancelBoutNotes("");
+                            setCancelBoutOpen(true);
+                          }}
+                        >
+                          Remove Bout
+                        </Button>
+                      ) : (
+                        <Chip
+                          size="small"
+                          color="default"
+                          label="Removed / Cancelled"
+                          sx={{ mt: 1 }}
+                        />
+                      )}
                     </Grid>
                   </Grid>
                 </CardContent>
@@ -2366,6 +2457,79 @@ the contestant
         )}
 
       </Stack>
+      <Dialog
+        open={cancelBoutOpen}
+        onClose={() => {
+          if (!cancelBoutWorking) {
+            setCancelBoutOpen(false);
+          }
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          Remove Bout
+        </DialogTitle>
+
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This will remove the bout from the active fight card,
+            but it will remain in TNGOS records as cancelled.
+          </Alert>
+
+          {cancelBout && (
+            <Typography fontWeight={900} sx={{ mb: 2 }}>
+              {cancelBout.red?.legal_name || "Red Corner"}
+              {" vs "}
+              {cancelBout.blue?.legal_name || "Blue Corner"}
+            </Typography>
+          )}
+
+          <TextField
+            autoFocus
+            required
+            fullWidth
+            multiline
+            minRows={4}
+            label="Reason / Notes"
+            placeholder="Example: Opponent withdrew, purse disagreement, medical issue, weight issue..."
+            value={cancelBoutNotes}
+            onChange={(e) =>
+              setCancelBoutNotes(e.target.value)
+            }
+            helperText="Required. This note will stay with the bout record."
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            disabled={cancelBoutWorking}
+            onClick={() => {
+              setCancelBoutOpen(false);
+              setCancelBout(null);
+              setCancelBoutNotes("");
+            }}
+          >
+            Keep Bout
+          </Button>
+
+          <Button
+            variant="contained"
+            color="error"
+            disabled={
+              cancelBoutWorking ||
+              !cancelBoutNotes.trim()
+            }
+            onClick={submitBoutCancellation}
+          >
+            {cancelBoutWorking
+              ? "Removing..."
+              : "Remove Bout"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+
     </Box>
   );
 }
