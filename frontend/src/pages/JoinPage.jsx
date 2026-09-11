@@ -21,7 +21,8 @@ const steps = [
   "Member Information",
   "Emergency Contact",
   "Consent and Waiver",
-  "Review",
+  "Membership",
+  "Review & Payment",
 ];
 
 export default function JoinPage() {
@@ -98,8 +99,7 @@ export default function JoinPage() {
         !form.last_name.trim() ||
         !form.email.trim() ||
         !form.phone.trim() ||
-        !form.participant_date_of_birth ||
-        !selectedProduct
+        !form.participant_date_of_birth
       ) {
         setMessage("Complete all member information fields.");
         return false;
@@ -173,6 +173,14 @@ export default function JoinPage() {
 
       if (!form.signature_name.trim()) {
         setMessage("Enter the electronic signature.");
+        return false;
+      }
+    }
+
+
+    if (activeStep === 3) {
+      if (!selectedProduct) {
+        setMessage("Select a membership plan to continue.");
         return false;
       }
     }
@@ -616,6 +624,117 @@ export default function JoinPage() {
           )}
 
           {activeStep === 3 && (
+            <Box>
+              <Alert
+                severity="success"
+                sx={{
+                  mb: 3,
+                  borderRadius: 3,
+                  fontWeight: 700,
+                }}
+              >
+                Registration complete ? select your membership to continue.
+              </Alert>
+
+              <Typography
+                variant="h4"
+                fontWeight="bold"
+                sx={{ mb: 1 }}
+              >
+                Choose Your Membership
+              </Typography>
+
+              <Typography
+                color="text.secondary"
+                sx={{ mb: 3 }}
+              >
+                Select the training option that works best for you.
+                You will review everything before being sent to secure
+                Clover checkout.
+              </Typography>
+
+              <Grid container spacing={2}>
+                {(data.products || []).map((product) => {
+                  const selected =
+                    Number(selectedProduct) === Number(product.id);
+
+                  return (
+                    <Grid item xs={12} md={6} key={product.id}>
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          height: "100%",
+                          borderRadius: 3,
+                          borderWidth: selected ? 2 : 1,
+                          borderColor: selected
+                            ? "error.main"
+                            : "divider",
+                          bgcolor: selected
+                            ? "rgba(211,47,47,0.05)"
+                            : "background.paper",
+                          transition: "all .2s ease",
+                        }}
+                      >
+                        <CardContent sx={{ p: 3 }}>
+                          <Typography
+                            variant="h6"
+                            fontWeight="bold"
+                          >
+                            {product.name}
+                          </Typography>
+
+                          <Typography
+                            variant="h3"
+                            fontWeight="bold"
+                            sx={{ mt: 1 }}
+                          >
+                            ${Number(product.price || 0).toFixed(2)}
+                          </Typography>
+
+                          <Typography
+                            color="text.secondary"
+                            sx={{ mt: 1, mb: 3 }}
+                          >
+                            TNG Boxing membership
+                          </Typography>
+
+                          <Button
+                            fullWidth
+                            size="large"
+                            variant={
+                              selected
+                                ? "contained"
+                                : "outlined"
+                            }
+                            color="error"
+                            onClick={() =>
+                              setSelectedProduct(product.id)
+                            }
+                          >
+                            {selected
+                              ? "Selected ?"
+                              : "Select Membership"}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+
+              {!selectedProduct && (
+                <Typography
+                  color="text.secondary"
+                  textAlign="center"
+                  sx={{ mt: 3 }}
+                >
+                  Select one membership option to continue.
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {activeStep === 4 && (
             <Box>
               <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
                 Review Registration
