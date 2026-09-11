@@ -977,8 +977,9 @@ def front_desk_join_page_data(
         .filter(
             MembershipProduct.active == True,
             MembershipProduct.is_membership == True,
+            MembershipProduct.price.in_([150, 300]),
         )
-        .order_by(MembershipProduct.name.asc())
+        .order_by(MembershipProduct.price.asc())
         .all()
     )
 
@@ -1029,8 +1030,9 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
         .filter(
             MembershipProduct.active == True,
             MembershipProduct.is_membership == True,
+            MembershipProduct.price.in_([150, 300]),
         )
-        .order_by(MembershipProduct.name.asc())
+        .order_by(MembershipProduct.price.asc())
         .all()
     )
 
