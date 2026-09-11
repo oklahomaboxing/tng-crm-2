@@ -1925,13 +1925,23 @@ Rules:
         )
 
         fighter_ids = set()
+        active_bout_count = 0
+        cancelled_bout_count = 0
 
         for bout in bouts:
-            if bout.red_fighter_id:
-                fighter_ids.add(bout.red_fighter_id)
+            bout_status = (bout.status or "draft").lower()
+            is_active_bout = bout_status not in ("cancelled", "void")
 
-            if bout.blue_fighter_id:
-                fighter_ids.add(bout.blue_fighter_id)
+            if is_active_bout:
+                active_bout_count += 1
+
+                if bout.red_fighter_id:
+                    fighter_ids.add(bout.red_fighter_id)
+
+                if bout.blue_fighter_id:
+                    fighter_ids.add(bout.blue_fighter_id)
+            else:
+                cancelled_bout_count += 1
 
 
         first_five_series = (
@@ -2005,10 +2015,14 @@ Rules:
         bout_rows = []
 
         for bout in bouts:
+            bout_status = (bout.status or "draft").lower()
+            is_active_bout = bout_status not in ("cancelled", "void")
+
             bout_rows.append({
                 "id": bout.id,
                 "bout_order": bout.bout_order or 0,
                 "status": bout.status,
+                "is_active": is_active_bout,
                 "weight_agreed": bout.weight_agreed,
                 "rounds": bout.rounds,
                 "bout_type": bout.bout_type,
@@ -2091,6 +2105,8 @@ Rules:
                 "status": event.status,
             },
             "bouts": bout_rows,
+            "active_bout_count": active_bout_count,
+            "cancelled_bout_count": cancelled_bout_count,
             "fighters": fighters,
             "checklist": checklist_rows,
             "fees": [

@@ -764,6 +764,19 @@ the contestant
 
   const event = data.event;
   const bouts = data.bouts || [];
+
+  const activeBouts = bouts.filter(
+    (bout) =>
+      bout.status !== "cancelled" &&
+      bout.status !== "void"
+  );
+
+  const cancelledBouts = bouts.filter(
+    (bout) =>
+      bout.status === "cancelled" ||
+      bout.status === "void"
+  );
+
   const fighters = data.fighters || [];
   const totalChecklist =
     data.checklist?.length || 0;
@@ -1231,7 +1244,7 @@ the contestant
 
                   <Divider sx={{ my: 1.5 }} />
 
-                  {!bouts.length && (
+                  {!activeBouts.length && (
                     <Typography color="text.secondary">
                       No bouts have been built for
                       this event yet.
@@ -1239,7 +1252,7 @@ the contestant
                   )}
 
                   <Stack spacing={1}>
-                    {bouts.map((bout, index) => (
+                    {activeBouts.map((bout, index) => (
                       <Box
                         key={bout.id}
                         sx={{
@@ -1348,7 +1361,7 @@ the contestant
         {/* FIGHT CARD */}
         {tab === 1 && (
           <Stack spacing={2}>
-            {bouts.map((bout, index) => (
+            {activeBouts.map((bout, index) => (
               <Card key={bout.id}>
                 <CardContent>
                   <Grid
@@ -1521,11 +1534,95 @@ the contestant
               </Card>
             ))}
 
-            {!bouts.length && (
+            {!activeBouts.length && (
               <Alert severity="info">
-                Build bouts in Matchmaker and assign
-                them to this event.
+                No active bouts are currently assigned to this event.
               </Alert>
+            )}
+
+            {cancelledBouts.length > 0 && (
+              <>
+                <Divider sx={{ my: 2 }} />
+
+                <Typography
+                  variant="h6"
+                  fontWeight={950}
+                >
+                  Cancelled Bout History
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1 }}
+                >
+                  These bouts remain in TNGOS for records but are
+                  no longer part of the active fight card.
+                </Typography>
+
+                <Stack spacing={1}>
+                  {cancelledBouts.map((bout) => (
+                    <Card
+                      key={bout.id}
+                      variant="outlined"
+                      sx={{
+                        opacity: 0.78,
+                        borderStyle: "dashed",
+                      }}
+                    >
+                      <CardContent>
+                        <Stack
+                          direction={{
+                            xs: "column",
+                            md: "row",
+                          }}
+                          justifyContent="space-between"
+                          spacing={2}
+                        >
+                          <Box>
+                            <Typography fontWeight={950}>
+                              {bout.red?.legal_name || "Red Corner"}
+                              {" vs "}
+                              {bout.blue?.legal_name || "Blue Corner"}
+                            </Typography>
+
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              {bout.weight_agreed
+                                ? `${bout.weight_agreed} lb`
+                                : "Weight TBD"}
+                              {" ? "}
+                              {bout.rounds} rounds
+                            </Typography>
+
+                            {bout.notes && (
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  mt: 1,
+                                  whiteSpace: "pre-line",
+                                }}
+                              >
+                                {bout.notes}
+                              </Typography>
+                            )}
+                          </Box>
+
+                          <Chip
+                            label={
+                              bout.status === "void"
+                                ? "Void"
+                                : "Cancelled"
+                            }
+                          />
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+              </>
             )}
           </Stack>
         )}
@@ -1533,7 +1630,7 @@ the contestant
         {/* BOUT SHEETS */}
         {tab === 2 && (
           <Stack spacing={2}>
-            {bouts.map((bout, index) => (
+            {activeBouts.map((bout, index) => (
               <Card key={bout.id}>
                 <CardContent>
                   <Stack
