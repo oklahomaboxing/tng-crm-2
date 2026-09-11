@@ -994,7 +994,19 @@ def front_desk_join_page_data(
         ),
         "clover_link": front_desk_rep.clover_link or "",
         "registration_source": "front_desk",
-        "products": products,
+        "products": [
+            {
+                "id": product.id,
+                "name": product.name,
+                "price": float(product.price or 0),
+                "category": product.category or "",
+                "is_membership": bool(product.is_membership),
+                "default_membership_months": (
+                    product.default_membership_months or 1
+                ),
+            }
+            for product in products
+        ],
     }
 
 
@@ -1027,7 +1039,19 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
         "rep_name": rep.user.name,
         "clover_link": rep.clover_link,
         "registration_source": "sales_rep",
-        "products": products,
+        "products": [
+            {
+                "id": product.id,
+                "name": product.name,
+                "price": float(product.price or 0),
+                "category": product.category or "",
+                "is_membership": bool(product.is_membership),
+                "default_membership_months": (
+                    product.default_membership_months or 1
+                ),
+            }
+            for product in products
+        ],
     }
 
 @app.get("/api/members")
