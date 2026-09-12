@@ -428,3 +428,83 @@ class BoxingEventPublication(Base):
     )
 
     event = relationship("BoxingEvent")
+
+class BoxingContractSignature(Base):
+    __tablename__ = "boxing_contract_signatures"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    contract_id = Column(
+        Integer,
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    fighter_id = Column(
+        Integer,
+        nullable=False,
+        index=True,
+    )
+
+    signer_user_id = Column(
+        Integer,
+        nullable=False,
+        index=True,
+    )
+
+    typed_legal_name = Column(
+        String,
+        nullable=False,
+        default="",
+    )
+
+    agreed = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    signed_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    template_version = Column(
+        String,
+        nullable=False,
+        default="oklahoma-boxing-contract-v1",
+    )
+
+    # Exact authoritative contract terms at signing.
+    contract_snapshot = Column(
+        Text,
+        nullable=False,
+    )
+
+    snapshot_sha256 = Column(
+        String(64),
+        nullable=False,
+        index=True,
+    )
+
+    signer_ip = Column(
+        String,
+        default="",
+    )
+
+    signer_user_agent = Column(
+        Text,
+        default="",
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+

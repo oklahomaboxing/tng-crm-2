@@ -1,3 +1,4 @@
+import json
 from fastapi.responses import StreamingResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import LETTER
@@ -11,7 +12,7 @@ import qrcode
 from datetime import datetime, timedelta
 
 import resend
-from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, Response
+from fastapi import Request, APIRouter, Depends, Header, HTTPException, UploadFile, File, Response
 from sqlalchemy.orm import Session
 
 from ..auth import decode_token, hash_password
@@ -22,6 +23,7 @@ from ..matchmaker.models import (
     BoxingEvent,
     BoxingBout,
     BoxingContract, BoxingSignedContractDocument,
+    BoxingContractSignature,
 )
 from ..ticketing.models import EventSeller, IssuedTicket, SellerPayout
 from .models import FighterAccount, FighterInvite
@@ -34,6 +36,138 @@ router = APIRouter(
     prefix="/api/fighter",
     tags=["Fighter Portal"],
 )
+
+
+def _contract_signature_snapshot(contract):
+    """
+    Authoritative server-side snapshot of every material
+    term used by the official fighter contract.
+    """
+    snapshot = {
+        "template_version":
+            "oklahoma-boxing-contract-v1",
+        "contract_id":
+            contract.id,
+        "event_id":
+            contract.event_id,
+        "bout_id":
+            contract.bout_id,
+        "fighter_id":
+            contract.fighter_id,
+        "opponent_id":
+            contract.opponent_id,
+        "corner":
+            contract.corner,
+        "contract_date":
+            contract.contract_date,
+        "boxer_name":
+            contract.boxer_name,
+        "boxer_federal_id":
+            contract.boxer_federal_id,
+        "boxer_address":
+            contract.boxer_address,
+        "boxer_phone":
+            contract.boxer_phone,
+        "boxer_manager":
+            contract.boxer_manager,
+        "opponent_name":
+            contract.opponent_name,
+        "rounds":
+            contract.rounds,
+        "maximum_weight":
+            contract.maximum_weight,
+        "event_name":
+            contract.event_name,
+        "event_date":
+            contract.event_date,
+        "venue":
+            contract.venue,
+        "venue_address":
+            contract.venue_address,
+        "promoter_name":
+            contract.promoter_name,
+        "promoter_address":
+            contract.promoter_address,
+        "promoter_phone":
+            contract.promoter_phone,
+        "promoter_matchmaker":
+            contract.promoter_matchmaker,
+        "gross_purse":
+            contract.gross_purse,
+        "travel_type":
+            getattr(
+                contract,
+                "travel_type",
+                "",
+            ),
+        "travel_paid_by":
+            getattr(
+                contract,
+                "travel_paid_by",
+                "",
+            ),
+        "travel_expense":
+            contract.travel_expense,
+        "hotel_provided":
+            getattr(
+                contract,
+                "hotel_provided",
+                "",
+            ),
+        "hotel_name":
+            getattr(
+                contract,
+                "hotel_name",
+                "",
+            ),
+        "hotel_nights":
+            getattr(
+                contract,
+                "hotel_nights",
+                0,
+            ),
+        "per_diem_daily":
+            getattr(
+                contract,
+                "per_diem_daily",
+                0,
+            ),
+        "per_diem_days":
+            getattr(
+                contract,
+                "per_diem_days",
+                0,
+            ),
+        "per_diem_total":
+            getattr(
+                contract,
+                "per_diem_total",
+                0,
+            ),
+        "deductions":
+            contract.deductions,
+        "boxer_paid":
+            contract.boxer_paid,
+        "additional_terms":
+            contract.additional_terms,
+        "cancellation_pay":
+            contract.cancellation_pay,
+    }
+
+    # Stable JSON means the same terms always produce
+    # the same hash.
+    snapshot_json = json.dumps(
+        snapshot,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+    snapshot_hash = hashlib.sha256(
+        snapshot_json.encode("utf-8")
+    ).hexdigest()
+
+    return snapshot_json, snapshot_hash
 
 
 def _linked_fighter_account(
@@ -820,6 +954,191 @@ def my_contracts(
             }
             for row in contracts
         ],
+    }
+
+
+@router.post(
+    "/me/contracts/{contract_id}/esign"
+)
+def fighter_esign_contract(
+    contract_id: int,
+    data: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    contract = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.id == contract_id,
+            BoxingContract.fighter_id
+            == fighter.id,
+        )
+        .first()
+    )
+
+    if not contract:
+        raise HTTPException(
+            status_code=404,
+            detail="Contract not found.",
+        )
+
+    current_status = str(
+        contract.status or ""
+    ).strip().lower()
+
+    if current_status not in (
+        "accepted",
+        "generated",
+        "sent",
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This contract is not currently "
+                "eligible for electronic signature."
+            ),
+        )
+
+    typed_name = str(
+        data.get("typed_legal_name") or ""
+    ).strip()
+
+    agreed = bool(
+        data.get("agreed")
+    )
+
+    if not typed_name:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Type your legal name to sign "
+                "the contract."
+            ),
+        )
+
+    fighter_name = str(
+        fighter.legal_name or ""
+    ).strip()
+
+    if fighter_name:
+        normalize = lambda value: " ".join(
+            str(value)
+            .lower()
+            .replace(".", "")
+            .replace(",", "")
+            .split()
+        )
+
+        if normalize(typed_name) != normalize(
+            fighter_name
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Typed legal name must match "
+                    "your fighter profile."
+                ),
+            )
+
+    if not agreed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "You must agree to the contract "
+                "before signing."
+            ),
+        )
+
+    existing = (
+        db.query(BoxingContractSignature)
+        .filter(
+            BoxingContractSignature.contract_id
+            == contract.id
+        )
+        .first()
+    )
+
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This contract has already been "
+                "electronically signed."
+            ),
+        )
+
+    snapshot_json, snapshot_hash = (
+        _contract_signature_snapshot(
+            contract
+        )
+    )
+
+    forwarded_for = (
+        request.headers.get(
+            "x-forwarded-for",
+            "",
+        )
+        or ""
+    )
+
+    signer_ip = (
+        forwarded_for.split(",")[0].strip()
+        if forwarded_for
+        else (
+            request.client.host
+            if request.client
+            else ""
+        )
+    )
+
+    signature = BoxingContractSignature(
+        contract_id=contract.id,
+        fighter_id=fighter.id,
+        signer_user_id=user.id,
+        typed_legal_name=typed_name,
+        agreed=True,
+        template_version=(
+            "oklahoma-boxing-contract-v1"
+        ),
+        contract_snapshot=snapshot_json,
+        snapshot_sha256=snapshot_hash,
+        signer_ip=signer_ip,
+        signer_user_agent=(
+            request.headers.get(
+                "user-agent",
+                "",
+            )
+            or ""
+        )[:2000],
+    )
+
+    db.add(signature)
+
+    contract.status = "signed"
+
+    db.commit()
+    db.refresh(signature)
+
+    return {
+        "ok": True,
+        "contract_id": contract.id,
+        "status": contract.status,
+        "signed_at": signature.signed_at,
+        "typed_legal_name":
+            signature.typed_legal_name,
+        "snapshot_sha256":
+            signature.snapshot_sha256,
+        "template_version":
+            signature.template_version,
+        "message": (
+            "Contract electronically signed."
+        ),
     }
 
 

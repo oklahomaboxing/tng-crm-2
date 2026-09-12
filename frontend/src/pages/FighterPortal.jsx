@@ -47,6 +47,9 @@ export default function FighterPortal({ onLogout }) {
   const [contracts, setContracts] = useState([]);
   const [contractWorkingId, setContractWorkingId] =
     useState(null);
+  const [signatureNames, setSignatureNames] = useState({});
+  const [signatureAgreements, setSignatureAgreements] =
+    useState({});
   const [offerWorkingId, setOfferWorkingId] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -160,6 +163,118 @@ export default function FighterPortal({ onLogout }) {
         "Could not load fighter contracts:",
         err
       );
+    }
+  }
+
+
+  async function electronicallySignContract(
+    contract
+  ) {
+    const contractId = contract.contract_id;
+
+    const typedName = String(
+      signatureNames[contractId] || ""
+    ).trim();
+
+    const agreed =
+      signatureAgreements[contractId] === true;
+
+    if (!typedName) {
+      window.alert(
+        "Type your full legal name before signing."
+      );
+      return;
+    }
+
+    if (!agreed) {
+      window.alert(
+        "You must agree to the contract before signing."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "By selecting OK, you confirm that you have reviewed the official contract and intend to electronically sign it."
+    );
+
+    if (!confirmed) return;
+
+    setContractWorkingId(contractId);
+    setMessage("");
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/fighter/me/contracts/${contractId}/esign`,
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            typed_legal_name: typedName,
+            agreed: true,
+          }),
+        }
+      );
+
+      const body =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not electronically sign contract."
+        );
+      }
+
+      setMessage(
+        body.message ||
+        "Contract electronically signed."
+      );
+
+      window.alert(
+        body.message ||
+        "Contract electronically signed."
+      );
+
+      setContracts((current) =>
+        current.map((item) =>
+          item.contract_id === contractId
+            ? {
+                ...item,
+                status: "signed",
+              }
+            : item
+        )
+      );
+
+      setFightOffers((current) =>
+        current.map((offer) =>
+          offer.contract_id === contractId
+            ? {
+                ...offer,
+                status: "signed",
+              }
+            : offer
+        )
+      );
+
+    } catch (err) {
+      const notice =
+        err.message ||
+        "Could not electronically sign contract.";
+
+      setMessage(notice);
+      window.alert(notice);
+
+    } finally {
+      setContractWorkingId(null);
     }
   }
 
@@ -1162,6 +1277,167 @@ export default function FighterPortal({ onLogout }) {
                         Additional Terms:
                       </strong>{" "}
                       {contract.additional_terms}
+                    </div>
+                  )}
+
+                  {![
+                    "signed",
+                    "declined",
+                    "cancelled",
+                    "completed",
+                  ].includes(
+                    String(
+                      contract.status || ""
+                    ).toLowerCase()
+                  ) && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: 16,
+                        border: "2px solid #111",
+                        borderRadius: 10,
+                        background: "#fafafa",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 17,
+                          fontWeight: 900,
+                          marginBottom: 8,
+                        }}
+                      >
+                        Electronic Signature
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "#555",
+                          marginBottom: 12,
+                        }}
+                      >
+                        Review and download the official
+                        contract before signing.
+                      </div>
+
+                      <label
+                        style={{
+                          display: "block",
+                          fontWeight: 800,
+                          fontSize: 13,
+                          marginBottom: 6,
+                        }}
+                      >
+                        Type Your Full Legal Name
+                      </label>
+
+                      <input
+                        type="text"
+                        value={
+                          signatureNames[
+                            contract.contract_id
+                          ] || ""
+                        }
+                        onChange={(e) =>
+                          setSignatureNames(
+                            (current) => ({
+                              ...current,
+                              [contract.contract_id]:
+                                e.target.value,
+                            })
+                          )
+                        }
+                        placeholder={
+                          fighter.legal_name ||
+                          "Full legal name"
+                        }
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: 11,
+                          border: "1px solid #aaa",
+                          borderRadius: 7,
+                          fontSize: 15,
+                        }}
+                      />
+
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 9,
+                          marginTop: 13,
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={
+                            signatureAgreements[
+                              contract.contract_id
+                            ] === true
+                          }
+                          onChange={(e) =>
+                            setSignatureAgreements(
+                              (current) => ({
+                                ...current,
+                                [contract.contract_id]:
+                                  e.target.checked,
+                              })
+                            )
+                          }
+                          style={{
+                            marginTop: 3,
+                          }}
+                        />
+
+                        <span>
+                          I have reviewed the official
+                          professional boxing contract,
+                          agree to its terms, and intend
+                          my typed legal name to serve as
+                          my electronic signature.
+                        </span>
+                      </label>
+
+                      <button
+                        type="button"
+                        disabled={
+                          contractWorkingId ===
+                            contract.contract_id ||
+                          !String(
+                            signatureNames[
+                              contract.contract_id
+                            ] || ""
+                          ).trim() ||
+                          signatureAgreements[
+                            contract.contract_id
+                          ] !== true
+                        }
+                        onClick={() =>
+                          electronicallySignContract(
+                            contract
+                          )
+                        }
+                        style={{
+                          marginTop: 14,
+                          width: "100%",
+                          border: 0,
+                          borderRadius: 8,
+                          padding: "12px 16px",
+                          background: "#b71c1c",
+                          color: "#fff",
+                          fontWeight: 900,
+                          fontSize: 15,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {contractWorkingId ===
+                        contract.contract_id
+                          ? "Signing..."
+                          : "Sign Contract Electronically"}
+                      </button>
                     </div>
                   )}
 
