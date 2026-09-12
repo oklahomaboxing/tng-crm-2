@@ -79,6 +79,7 @@ export default function EventWorkspace({
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [contractWeights, setContractWeights] = useState({});
+  const [contractTravel, setContractTravel] = useState({});
   const [promoImage, setPromoImage] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
 
@@ -223,6 +224,37 @@ export default function EventWorkspace({
     }));
   }
 
+  function contractTravelValue(
+    boutId,
+    corner,
+    field,
+    fallback = ""
+  ) {
+    const key = `${boutId}-${corner}`;
+
+    return (
+      contractTravel[key]?.[field] ??
+      fallback
+    );
+  }
+
+  function setContractTravelValue(
+    boutId,
+    corner,
+    field,
+    value
+  ) {
+    const key = `${boutId}-${corner}`;
+
+    setContractTravel((old) => ({
+      ...old,
+      [key]: {
+        ...(old[key] || {}),
+        [field]: value,
+      },
+    }));
+  }
+
   async function generateContract(bout, corner) {
     const printWindow = window.open(
       "",
@@ -242,6 +274,10 @@ export default function EventWorkspace({
     );
 
     try {
+      const travelKey = `${bout.id}-${corner}`;
+      const travel =
+        contractTravel[travelKey] || {};
+
       const response = await fetch(
         `${API}/api/boxing/bouts/${bout.id}/contracts/${corner}`,
         {
@@ -256,6 +292,30 @@ export default function EventWorkspace({
               ] ??
               bout.weight_agreed ??
               "",
+
+            travel_type:
+              travel.travel_type || "",
+
+            travel_paid_by:
+              travel.travel_paid_by || "",
+
+            travel_expense:
+              travel.travel_expense || 0,
+
+            hotel_provided:
+              travel.hotel_provided || "",
+
+            hotel_name:
+              travel.hotel_name || "",
+
+            hotel_nights:
+              travel.hotel_nights || 0,
+
+            per_diem_daily:
+              travel.per_diem_daily || 0,
+
+            per_diem_days:
+              travel.per_diem_days || 0,
           }),
         }
       );
@@ -458,6 +518,59 @@ which is located
 Boxers will be paid after the final bout of the evening.
 </p>
 
+<div style="
+  border:1px solid #111;
+  padding:10px;
+  margin:14px 0;
+">
+  <div style="
+    font-weight:bold;
+    text-align:center;
+    margin-bottom:8px;
+  ">
+    TRAVEL / HOTEL / PER DIEM
+  </div>
+
+  <div>
+    <b>Travel Type:</b>
+    ${safe(contract.travel_type || "N/A")}
+  </div>
+
+  <div>
+    <b>Travel Paid By:</b>
+    ${safe(contract.travel_paid_by || "N/A")}
+  </div>
+
+  <div>
+    <b>Travel Allowance / Reimbursement:</b>
+    $${money(contract.travel_expense)}
+  </div>
+
+  <div style="margin-top:6px;">
+    <b>Hotel Provided:</b>
+    ${safe(contract.hotel_provided || "No")}
+  </div>
+
+  <div>
+    <b>Hotel:</b>
+    ${safe(contract.hotel_name || "N/A")}
+  </div>
+
+  <div>
+    <b>Hotel Nights:</b>
+    ${safe(contract.hotel_nights || 0)}
+  </div>
+
+  <div style="margin-top:6px;">
+    <b>Per Diem:</b>
+    $${money(contract.per_diem_daily)}
+    per day ?
+    ${safe(contract.per_diem_days || 0)}
+    days =
+    <b>$${money(contract.per_diem_total)}</b>
+  </div>
+</div>
+
 <p>
 <b>Additional Terms:</b>
 ${safe(contract.additional_terms)}
@@ -516,7 +629,7 @@ the contestant
   </div>
 
   <div>
-    TRAVEL EXPENSE:
+    TRAVEL ALLOWANCE:
     <b>$${money(contract.travel_expense)}</b>
   </div>
 
@@ -1925,6 +2038,210 @@ the contestant
                               }}
                             />
 
+                            <Divider />
+
+                            <Typography
+                              variant="body2"
+                              fontWeight={900}
+                            >
+                              Travel / Hotel / Per Diem
+                            </Typography>
+
+                            <Grid container spacing={1}>
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Travel Type"
+                                  placeholder="Airfare, ground, other"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "red",
+                                    "travel_type"
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "red",
+                                      "travel_type",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Travel Paid By"
+                                  placeholder="Promoter / fighter / reimbursement"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "red",
+                                    "travel_paid_by"
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "red",
+                                      "travel_paid_by",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Travel Amount"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "red",
+                                    "travel_expense",
+                                    0
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "red",
+                                      "travel_expense",
+                                      e.target.value
+                                    )
+                                  }
+                                  InputProps={{
+                                    startAdornment: (
+                                      <InputAdornment position="start">
+                                        $
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Hotel Provided"
+                                  placeholder="Yes / No"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "red",
+                                    "hotel_provided"
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "red",
+                                      "hotel_provided",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={8}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Hotel Name"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "red",
+                                    "hotel_name"
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "red",
+                                      "hotel_name",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Hotel Nights"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "red",
+                                    "hotel_nights",
+                                    0
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "red",
+                                      "hotel_nights",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Per Diem / Day"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "red",
+                                    "per_diem_daily",
+                                    0
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "red",
+                                      "per_diem_daily",
+                                      e.target.value
+                                    )
+                                  }
+                                  InputProps={{
+                                    startAdornment: (
+                                      <InputAdornment position="start">
+                                        $
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Per Diem Days"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "red",
+                                    "per_diem_days",
+                                    0
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "red",
+                                      "per_diem_days",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+                            </Grid>
+
                             <Button
                               variant="contained"
                               onClick={() =>
@@ -2050,6 +2367,210 @@ the contestant
                                 ),
                               }}
                             />
+
+                            <Divider />
+
+                            <Typography
+                              variant="body2"
+                              fontWeight={900}
+                            >
+                              Travel / Hotel / Per Diem
+                            </Typography>
+
+                            <Grid container spacing={1}>
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Travel Type"
+                                  placeholder="Airfare, ground, other"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "blue",
+                                    "travel_type"
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "blue",
+                                      "travel_type",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Travel Paid By"
+                                  placeholder="Promoter / fighter / reimbursement"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "blue",
+                                    "travel_paid_by"
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "blue",
+                                      "travel_paid_by",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Travel Amount"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "blue",
+                                    "travel_expense",
+                                    0
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "blue",
+                                      "travel_expense",
+                                      e.target.value
+                                    )
+                                  }
+                                  InputProps={{
+                                    startAdornment: (
+                                      <InputAdornment position="start">
+                                        $
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Hotel Provided"
+                                  placeholder="Yes / No"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "blue",
+                                    "hotel_provided"
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "blue",
+                                      "hotel_provided",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={8}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Hotel Name"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "blue",
+                                    "hotel_name"
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "blue",
+                                      "hotel_name",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Hotel Nights"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "blue",
+                                    "hotel_nights",
+                                    0
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "blue",
+                                      "hotel_nights",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Per Diem / Day"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "blue",
+                                    "per_diem_daily",
+                                    0
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "blue",
+                                      "per_diem_daily",
+                                      e.target.value
+                                    )
+                                  }
+                                  InputProps={{
+                                    startAdornment: (
+                                      <InputAdornment position="start">
+                                        $
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                />
+                              </Grid>
+
+                              <Grid item xs={12} sm={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Per Diem Days"
+                                  value={contractTravelValue(
+                                    bout.id,
+                                    "blue",
+                                    "per_diem_days",
+                                    0
+                                  )}
+                                  onChange={(e) =>
+                                    setContractTravelValue(
+                                      bout.id,
+                                      "blue",
+                                      "per_diem_days",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </Grid>
+                            </Grid>
 
                             <Button
                               variant="contained"

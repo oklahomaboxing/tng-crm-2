@@ -219,7 +219,20 @@ class BoxingContract(Base):
     promoter_matchmaker = Column(String, default="")
 
     gross_purse = Column(Float, default=0)
+
+    # Travel / lodging package
+    travel_type = Column(String, default="")
+    travel_paid_by = Column(String, default="")
     travel_expense = Column(Float, default=0)
+
+    hotel_provided = Column(String, default="")
+    hotel_name = Column(String, default="")
+    hotel_nights = Column(Integer, default=0)
+
+    per_diem_daily = Column(Float, default=0)
+    per_diem_days = Column(Integer, default=0)
+    per_diem_total = Column(Float, default=0)
+
     deductions = Column(Float, default=0)
     boxer_paid = Column(Float, default=0)
 

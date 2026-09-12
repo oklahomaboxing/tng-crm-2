@@ -5,11 +5,62 @@ import urllib.request
 import urllib.error
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
-from ..database import get_db
+from sqlalchemy import or_, inspect, text
+from ..database import get_db, engine
 from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
+
+
+def ensure_contract_travel_schema():
+    """
+    Add travel/lodging/per-diem columns to an existing
+    boxing contract table.
+
+    Works with PostgreSQL and SQLite.
+    """
+    table_name = BoxingContract.__tablename__
+    inspector = inspect(engine)
+
+    if table_name not in inspector.get_table_names():
+        return
+
+    existing = {
+        column["name"]
+        for column in inspector.get_columns(table_name)
+    }
+
+    required_columns = {
+        "travel_type": "VARCHAR",
+        "travel_paid_by": "VARCHAR",
+        "hotel_provided": "VARCHAR",
+        "hotel_name": "VARCHAR",
+        "hotel_nights": "INTEGER",
+        "per_diem_daily": "FLOAT",
+        "per_diem_days": "INTEGER",
+        "per_diem_total": "FLOAT",
+    }
+
+    missing = [
+        (name, sql_type)
+        for name, sql_type in required_columns.items()
+        if name not in existing
+    ]
+
+    if not missing:
+        return
+
+    with engine.begin() as connection:
+        for name, sql_type in missing:
+            connection.execute(
+                text(
+                    f"ALTER TABLE {table_name} "
+                    f"ADD COLUMN {name} {sql_type}"
+                )
+            )
+
+
+ensure_contract_travel_schema()
 
 
 PROMOTER_CHECKLIST = [
@@ -2639,7 +2690,15 @@ Do not add fake ticket information.
                 "promoter_phone": row.promoter_phone,
                 "promoter_matchmaker": row.promoter_matchmaker,
                 "gross_purse": row.gross_purse,
+                "travel_type": row.travel_type,
+                "travel_paid_by": row.travel_paid_by,
                 "travel_expense": row.travel_expense,
+                "hotel_provided": row.hotel_provided,
+                "hotel_name": row.hotel_name,
+                "hotel_nights": row.hotel_nights,
+                "per_diem_daily": row.per_diem_daily,
+                "per_diem_days": row.per_diem_days,
+                "per_diem_total": row.per_diem_total,
                 "deductions": row.deductions,
                 "boxer_paid": row.boxer_paid,
                 "additional_terms": row.additional_terms,
@@ -2821,8 +2880,41 @@ Do not add fake ticket information.
             else purse
         )
 
+        contract.travel_type = str(
+            data.get("travel_type") or ""
+        ).strip()
+
+        contract.travel_paid_by = str(
+            data.get("travel_paid_by") or ""
+        ).strip()
+
         contract.travel_expense = float(
             data.get("travel_expense") or 0
+        )
+
+        contract.hotel_provided = str(
+            data.get("hotel_provided") or ""
+        ).strip()
+
+        contract.hotel_name = str(
+            data.get("hotel_name") or ""
+        ).strip()
+
+        contract.hotel_nights = int(
+            float(data.get("hotel_nights") or 0)
+        )
+
+        contract.per_diem_daily = float(
+            data.get("per_diem_daily") or 0
+        )
+
+        contract.per_diem_days = int(
+            float(data.get("per_diem_days") or 0)
+        )
+
+        contract.per_diem_total = (
+            contract.per_diem_daily
+            * contract.per_diem_days
         )
 
         contract.deductions = float(
@@ -2832,6 +2924,7 @@ Do not add fake ticket information.
         contract.boxer_paid = (
             contract.gross_purse
             + contract.travel_expense
+            + contract.per_diem_total
             - contract.deductions
         )
 
@@ -2876,7 +2969,15 @@ Do not add fake ticket information.
             "promoter_phone": contract.promoter_phone,
             "promoter_matchmaker": contract.promoter_matchmaker,
             "gross_purse": contract.gross_purse,
+            "travel_type": contract.travel_type,
+            "travel_paid_by": contract.travel_paid_by,
             "travel_expense": contract.travel_expense,
+            "hotel_provided": contract.hotel_provided,
+            "hotel_name": contract.hotel_name,
+            "hotel_nights": contract.hotel_nights,
+            "per_diem_daily": contract.per_diem_daily,
+            "per_diem_days": contract.per_diem_days,
+            "per_diem_total": contract.per_diem_total,
             "deductions": contract.deductions,
             "boxer_paid": contract.boxer_paid,
             "additional_terms": contract.additional_terms,
