@@ -611,6 +611,50 @@ export default function FighterPortal({ onLogout }) {
                     </div>
                   </div>
 
+                  {event.qr_png_base64 && (
+                    <div
+                      style={{
+                        marginTop: 18,
+                        padding: 16,
+                        background: "#f7f7f7",
+                        borderRadius: 12,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 900,
+                          marginBottom: 10,
+                        }}
+                      >
+                        MY TICKET QR
+                      </div>
+
+                      <img
+                        src={`data:image/png;base64,${event.qr_png_base64}`}
+                        alt={`${event.event_name} ticket sales QR`}
+                        style={{
+                          width: 220,
+                          maxWidth: "100%",
+                          background: "#fff",
+                          padding: 10,
+                          borderRadius: 10,
+                        }}
+                      />
+
+                      <div
+                        style={{
+                          marginTop: 10,
+                          color: "#666",
+                          fontSize: 12,
+                        }}
+                      >
+                        Scan this QR to purchase tickets
+                        through your fighter sales link.
+                      </div>
+                    </div>
+                  )}
+
                   <div
                     style={{
                       display: "flex",

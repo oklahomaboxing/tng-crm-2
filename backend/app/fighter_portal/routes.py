@@ -1,6 +1,9 @@
 import hashlib
 import os
 import secrets
+import base64
+import io
+import qrcode
 from datetime import datetime, timedelta
 
 import resend
@@ -699,6 +702,13 @@ def fighter_ticket_sales(
             f"?seller={seller.public_code}"
         )
 
+        qr_image = qrcode.make(ticket_url)
+        qr_buffer = io.BytesIO()
+        qr_image.save(qr_buffer, format="PNG")
+        qr_png_base64 = base64.b64encode(
+            qr_buffer.getvalue()
+        ).decode()
+
         events.append({
             "event_id": seller.event_id,
             "event_name": (
@@ -719,6 +729,7 @@ def fighter_ticket_sales(
             "seller_id": seller.id,
             "seller_code": seller.public_code,
             "ticket_url": ticket_url,
+            "qr_png_base64": qr_png_base64,
             "active": seller.active,
             "tickets_sold": tickets_sold,
             "gross_sales_cents": gross_sales_cents,
