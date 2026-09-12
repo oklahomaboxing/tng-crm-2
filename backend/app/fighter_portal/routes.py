@@ -782,11 +782,13 @@ def fighter_respond_to_offer(
     if action not in (
         "accept",
         "decline",
+        "request_change",
     ):
         raise HTTPException(
             status_code=400,
             detail=(
-                "Action must be accept or decline"
+                "Action must be accept, decline, "
+                "or request_change"
             ),
         )
 
@@ -825,11 +827,52 @@ def fighter_respond_to_offer(
             ),
         )
 
-    contract.status = (
-        "accepted"
-        if action == "accept"
-        else "declined"
-    )
+    if action == "accept":
+        contract.status = "accepted"
+        response_message = "Fight offer accepted."
+
+    elif action == "decline":
+        contract.status = "declined"
+        response_message = "Fight offer declined."
+
+    else:
+        request_note = str(
+            data.get("message") or ""
+        ).strip()
+
+        if not request_note:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Please enter what you want "
+                    "changed in the fight offer."
+                ),
+            )
+
+        existing_terms = str(
+            contract.additional_terms or ""
+        ).strip()
+
+        request_block = (
+            "[FIGHTER CHANGE REQUEST]\n"
+            + request_note
+        )
+
+        if existing_terms:
+            contract.additional_terms = (
+                existing_terms
+                + "\n\n"
+                + request_block
+            )
+        else:
+            contract.additional_terms = (
+                request_block
+            )
+
+        contract.status = "change_requested"
+        response_message = (
+            "Change request sent to TNG."
+        )
 
     db.commit()
     db.refresh(contract)
@@ -838,11 +881,9 @@ def fighter_respond_to_offer(
         "ok": True,
         "contract_id": contract.id,
         "status": contract.status,
-        "message": (
-            "Fight offer accepted."
-            if contract.status == "accepted"
-            else "Fight offer declined."
-        ),
+        "additional_terms":
+            contract.additional_terms,
+        "message": response_message,
     }
 
 

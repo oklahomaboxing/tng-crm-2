@@ -125,7 +125,8 @@ export default function FighterPortal({ onLogout }) {
 
   async function respondToOffer(
     contractId,
-    action
+    action,
+    responseMessage = ""
   ) {
     setOfferWorkingId(contractId);
     setMessage("");
@@ -145,6 +146,7 @@ export default function FighterPortal({ onLogout }) {
           },
           body: JSON.stringify({
             action,
+            message: responseMessage,
           }),
         }
       );
@@ -221,6 +223,7 @@ export default function FighterPortal({ onLogout }) {
           ![
             "accepted",
             "declined",
+            "change_requested",
             "signed",
             "completed",
             "cancelled",
@@ -472,6 +475,7 @@ export default function FighterPortal({ onLogout }) {
                 const canRespond = ![
                   "accepted",
                   "declined",
+                  "change_requested",
                   "signed",
                   "completed",
                   "cancelled",
@@ -673,6 +677,44 @@ export default function FighterPortal({ onLogout }) {
                           offer.contract_id
                             ? "Updating..."
                             : "Accept Fight"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={
+                            offerWorkingId ===
+                            offer.contract_id
+                          }
+                          onClick={() => {
+                            const request =
+                              window.prompt(
+                                "What would you like changed? Example: purse, weight, rounds, travel, opponent, or other terms."
+                              );
+
+                            if (
+                              request &&
+                              request.trim()
+                            ) {
+                              respondToOffer(
+                                offer.contract_id,
+                                "request_change",
+                                request.trim()
+                              );
+                            }
+                          }}
+                          style={{
+                            border:
+                              "1px solid #c98b00",
+                            borderRadius: 8,
+                            padding:
+                              "11px 18px",
+                            background: "#fff",
+                            color: "#8a5a00",
+                            fontWeight: 900,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Request Change
                         </button>
 
                         <button
