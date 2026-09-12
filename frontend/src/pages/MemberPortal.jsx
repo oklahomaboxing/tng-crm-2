@@ -17,6 +17,8 @@ import {
 import FitnessCenterRoundedIcon from "@mui/icons-material/FitnessCenterRounded";
 import QrCode2RoundedIcon from "@mui/icons-material/QrCode2Rounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
+import MemberHomeTrainer from "./MemberHomeTrainer.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -41,6 +43,7 @@ export default function MemberPortal({ onLogout }) {
   const [data, setData] = useState(null);
   const [scans, setScans] = useState([]);
   const [error, setError] = useState("");
+  const [showTrainer, setShowTrainer] = useState(false);
 
   async function load() {
     setError("");
@@ -149,6 +152,84 @@ export default function MemberPortal({ onLogout }) {
                 </Typography>
               </CardContent>
             </Card>
+          </Grid>
+
+          <Grid item xs={12}>
+            {!showTrainer ? (
+              <Card
+                sx={{
+                  borderRadius: 4,
+                  bgcolor: "#09090b",
+                  color: "white",
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Stack
+                    direction={{
+                      xs: "column",
+                      sm: "row",
+                    }}
+                    spacing={2}
+                    alignItems={{
+                      xs: "flex-start",
+                      sm: "center",
+                    }}
+                    justifyContent="space-between"
+                  >
+                    <Stack
+                      direction="row"
+                      spacing={1.5}
+                      alignItems="center"
+                    >
+                      <SportsMmaRoundedIcon
+                        color="error"
+                        sx={{ fontSize: 38 }}
+                      />
+
+                      <Box>
+                        <Typography
+                          variant="h5"
+                          fontWeight={900}
+                        >
+                          Train at Home
+                        </Typography>
+
+                        <Typography
+                          sx={{ color: "grey.400" }}
+                        >
+                          Simple TNGTrainer workouts for
+                          shadowboxing, conditioning and
+                          footwork.
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    <Button
+                      variant="contained"
+                      color="error"
+                      onClick={() => setShowTrainer(true)}
+                      sx={{
+                        fontWeight: 900,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Open Trainer
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ) : (
+              <Stack spacing={1.5}>
+                <Button
+                  onClick={() => setShowTrainer(false)}
+                  sx={{ alignSelf: "flex-start" }}
+                >
+                  Back to Member Account
+                </Button>
+
+                <MemberHomeTrainer />
+              </Stack>
+            )}
           </Grid>
 
           <Grid item xs={12}>
