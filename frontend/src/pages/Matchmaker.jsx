@@ -118,6 +118,136 @@ export default function Matchmaker() {
   const [editFighterForm, setEditFighterForm] = useState(emptyFighter);
   const [eventForm, setEventForm] = useState(emptyEvent);
 
+  const [fighterInviteStatus, setFighterInviteStatus] = useState({});
+  const [fighterInviteLoading, setFighterInviteLoading] = useState({});
+
+  async function loadFighterInviteStatus(fighterId) {
+    try {
+      const response = await fetch(
+        `${API}/api/fighter/admin/${fighterId}/invite-status`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not load fighter login status"
+        );
+      }
+
+      setFighterInviteStatus((current) => ({
+        ...current,
+        [fighterId]: body,
+      }));
+
+      return body;
+    } catch (error) {
+      console.error(
+        "Fighter login status:",
+        error
+      );
+
+      return null;
+    }
+  }
+
+
+  async function loadAllFighterInviteStatuses() {
+    if (!fighters.length) return;
+
+    await Promise.all(
+      fighters.map((fighter) =>
+        loadFighterInviteStatus(fighter.id)
+      )
+    );
+  }
+
+
+  async function inviteFighterLogin(fighter) {
+    if (!fighter?.id) return;
+
+    if (!(fighter.email || "").trim()) {
+      setMsgType("warning");
+      setMsg(
+        `${fighter.legal_name || "Fighter"} needs an email address before login can be activated.`
+      );
+      return;
+    }
+
+    setFighterInviteLoading((current) => ({
+      ...current,
+      [fighter.id]: true,
+    }));
+
+    try {
+      const response = await fetch(
+        `${API}/api/fighter/admin/invite`,
+        {
+          method: "POST",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            fighter_id: Number(fighter.id),
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not send fighter activation email"
+        );
+      }
+
+      setMsgType("success");
+
+      if (body.already_sent) {
+        setMsg(
+          `An activation email has already been sent to ${fighter.legal_name}.`
+        );
+      } else if (body.email_sent) {
+        setMsg(
+          `Fighter Portal activation email sent to ${fighter.email}.`
+        );
+      } else {
+        setMsg(
+          `Fighter invite created, but the email could not be sent. ${body.email_error || ""}`
+        );
+      }
+
+      await loadFighterInviteStatus(
+        fighter.id
+      );
+
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not activate fighter login"
+      );
+    } finally {
+      setFighterInviteLoading((current) => ({
+        ...current,
+        [fighter.id]: false,
+      }));
+    }
+  }
+
+
+  useEffect(() => {
+    if (!fighters.length) return;
+
+    loadAllFighterInviteStatuses();
+  }, [fighters]);
+
+
   async function loadSignedFighters() {
     try {
       const response = await fetch(
@@ -1615,6 +1745,7 @@ export default function Matchmaker() {
                       <TableCell>Record</TableCell>
                       <TableCell>Gym</TableCell>
                       <TableCell>Eligibility</TableCell>
+                      <TableCell align="right">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1642,16 +1773,56 @@ export default function Matchmaker() {
                         </TableCell>
 
                         <TableCell align="right">
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditFighter(f);
-                            }}
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            justifyContent="flex-end"
                           >
-                            Edit
-                          </Button>
+                            <Button
+                              size="small"
+                              variant={
+                                fighterInviteStatus[f.id]?.activated
+                                  ? "contained"
+                                  : "outlined"
+                              }
+                              color={
+                                fighterInviteStatus[f.id]?.activated
+                                  ? "success"
+                                  : "primary"
+                              }
+                              disabled={
+                                fighterInviteLoading[f.id] ||
+                                !(f.email || "").trim() ||
+                                fighterInviteStatus[f.id]?.activated ||
+                                fighterInviteStatus[f.id]?.invite_pending
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                inviteFighterLogin(f);
+                              }}
+                            >
+                              {fighterInviteLoading[f.id]
+                                ? "Sending..."
+                                : !(f.email || "").trim()
+                                  ? "Email Required"
+                                  : fighterInviteStatus[f.id]?.activated
+                                    ? "Login Active"
+                                    : fighterInviteStatus[f.id]?.invite_pending
+                                      ? "Invite Sent"
+                                      : "Activate Login"}
+                            </Button>
+
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditFighter(f);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                          </Stack>
                         </TableCell>
                       </TableRow>
                     ))}
