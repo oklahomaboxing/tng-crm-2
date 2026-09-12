@@ -42,6 +42,8 @@ function money(cents) {
 export default function FighterPortal({ onLogout }) {
   const [data, setData] = useState(null);
   const [ticketSales, setTicketSales] = useState(null);
+  const [fightOffers, setFightOffers] = useState([]);
+  const [offerWorkingId, setOfferWorkingId] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -56,23 +58,33 @@ export default function FighterPortal({ onLogout }) {
         Authorization: `Bearer ${token}`,
       };
 
-      const [profileResponse, ticketResponse] =
-        await Promise.all([
-          fetch(
-            `${API}/api/fighter/me`,
-            { headers }
-          ),
-          fetch(
-            `${API}/api/fighter/me/ticket-sales`,
-            { headers }
-          ),
-        ]);
+      const [
+        profileResponse,
+        ticketResponse,
+        offersResponse,
+      ] = await Promise.all([
+        fetch(
+          `${API}/api/fighter/me`,
+          { headers }
+        ),
+        fetch(
+          `${API}/api/fighter/me/ticket-sales`,
+          { headers }
+        ),
+        fetch(
+          `${API}/api/fighter/me/fight-offers`,
+          { headers }
+        ),
+      ]);
 
       const profileBody =
         await profileResponse.json();
 
       const ticketBody =
         await ticketResponse.json();
+
+      const offersBody =
+        await offersResponse.json();
 
       if (!profileResponse.ok) {
         throw new Error(
@@ -88,14 +100,89 @@ export default function FighterPortal({ onLogout }) {
         );
       }
 
+      if (!offersResponse.ok) {
+        throw new Error(
+          offersBody.detail ||
+          "Could not load fight offers"
+        );
+      }
+
       setData(profileBody);
       setTicketSales(ticketBody);
+      setFightOffers(
+        Array.isArray(offersBody.offers)
+          ? offersBody.offers
+          : []
+      );
     } catch (err) {
       setMessage(
         err.message || "Could not load Fighter Portal"
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function respondToOffer(
+    contractId,
+    action
+  ) {
+    setOfferWorkingId(contractId);
+    setMessage("");
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/fighter/me/fight-offers/${contractId}/respond`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            action,
+          }),
+        }
+      );
+
+      const body =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not update fight offer"
+        );
+      }
+
+      setFightOffers((current) =>
+        current.map((offer) =>
+          offer.contract_id === contractId
+            ? {
+                ...offer,
+                status: body.status,
+              }
+            : offer
+        )
+      );
+
+      setMessage(body.message || "Offer updated.");
+      window.alert(
+        body.message || "Offer updated."
+      );
+    } catch (err) {
+      const notice =
+        err.message ||
+        "Could not update fight offer";
+
+      setMessage(notice);
+      window.alert(notice);
+    } finally {
+      setOfferWorkingId(null);
     }
   }
 
@@ -129,8 +216,23 @@ export default function FighterPortal({ onLogout }) {
   const cards = [
     {
       title: "Fight Offers",
-      value: "No pending offers",
-      note: "View, accept or decline fight offers.",
+      value: `${
+        fightOffers.filter((offer) =>
+          ![
+            "accepted",
+            "declined",
+            "signed",
+            "completed",
+            "cancelled",
+          ].includes(
+            String(
+              offer.status || ""
+            ).toLowerCase()
+          )
+        ).length
+      } pending`,
+      note:
+        "View, accept or decline fight offers.",
     },
     {
       title: "Contracts",
@@ -332,6 +434,286 @@ export default function FighterPortal({ onLogout }) {
               </div>
             </div>
           ))}
+        </section>
+
+        <section
+          style={{
+            background: "#fff",
+            borderRadius: 14,
+            padding: 22,
+            marginBottom: 20,
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>
+            Fight Offers
+          </h2>
+
+          {!fightOffers.length ? (
+            <div
+              style={{
+                color: "#666",
+                padding: "10px 0",
+              }}
+            >
+              You do not have any fight offers yet.
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gap: 14,
+              }}
+            >
+              {fightOffers.map((offer) => {
+                const status = String(
+                  offer.status || "draft"
+                ).toLowerCase();
+
+                const canRespond = ![
+                  "accepted",
+                  "declined",
+                  "signed",
+                  "completed",
+                  "cancelled",
+                ].includes(status);
+
+                return (
+                  <div
+                    key={offer.contract_id}
+                    style={{
+                      border: "1px solid #ddd",
+                      borderRadius: 12,
+                      padding: 18,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent:
+                          "space-between",
+                        gap: 12,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 20,
+                            fontWeight: 900,
+                          }}
+                        >
+                          vs{" "}
+                          {offer.opponent?.name ||
+                            "Opponent TBD"}
+                        </div>
+
+                        <div
+                          style={{
+                            color: "#666",
+                            marginTop: 4,
+                          }}
+                        >
+                          {offer.opponent?.record
+                            ? `Record: ${offer.opponent.record}`
+                            : ""}
+                        </div>
+                      </div>
+
+                      <div>
+                        {statusBadge(status)}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(150px, 1fr))",
+                        gap: 12,
+                        marginTop: 18,
+                      }}
+                    >
+                      <div>
+                        <small>Event</small>
+                        <div>
+                          <strong>
+                            {offer.event?.name ||
+                              "Event TBD"}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div>
+                        <small>Date</small>
+                        <div>
+                          <strong>
+                            {offer.event?.date ||
+                              "TBD"}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div>
+                        <small>Weight</small>
+                        <div>
+                          <strong>
+                            {offer.weight
+                              ? `${offer.weight} lb`
+                              : "TBD"}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div>
+                        <small>Rounds</small>
+                        <div>
+                          <strong>
+                            {offer.rounds || 4}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div>
+                        <small>Purse</small>
+                        <div>
+                          <strong>
+                            {new Intl.NumberFormat(
+                              "en-US",
+                              {
+                                style: "currency",
+                                currency: "USD",
+                              }
+                            ).format(
+                              Number(
+                                offer.purse || 0
+                              )
+                            )}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div>
+                        <small>Travel</small>
+                        <div>
+                          <strong>
+                            {new Intl.NumberFormat(
+                              "en-US",
+                              {
+                                style: "currency",
+                                currency: "USD",
+                              }
+                            ).format(
+                              Number(
+                                offer.travel_expense ||
+                                  0
+                              )
+                            )}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {offer.additional_terms && (
+                      <div
+                        style={{
+                          marginTop: 16,
+                          padding: 12,
+                          background: "#f7f7f7",
+                          borderRadius: 8,
+                        }}
+                      >
+                        <strong>
+                          Additional Terms
+                        </strong>
+                        <div
+                          style={{
+                            marginTop: 5,
+                            color: "#555",
+                          }}
+                        >
+                          {offer.additional_terms}
+                        </div>
+                      </div>
+                    )}
+
+                    {canRespond && (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          flexWrap: "wrap",
+                          marginTop: 18,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          disabled={
+                            offerWorkingId ===
+                            offer.contract_id
+                          }
+                          onClick={() =>
+                            respondToOffer(
+                              offer.contract_id,
+                              "accept"
+                            )
+                          }
+                          style={{
+                            border: 0,
+                            borderRadius: 8,
+                            padding:
+                              "11px 18px",
+                            background:
+                              "#176b2c",
+                            color: "#fff",
+                            fontWeight: 900,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {offerWorkingId ===
+                          offer.contract_id
+                            ? "Updating..."
+                            : "Accept Fight"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={
+                            offerWorkingId ===
+                            offer.contract_id
+                          }
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                "Decline this fight offer?"
+                              )
+                            ) {
+                              respondToOffer(
+                                offer.contract_id,
+                                "decline"
+                              );
+                            }
+                          }}
+                          style={{
+                            border:
+                              "1px solid #c62828",
+                            borderRadius: 8,
+                            padding:
+                              "11px 18px",
+                            background: "#fff",
+                            color: "#c62828",
+                            fontWeight: 900,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section

@@ -13,7 +13,12 @@ from sqlalchemy.orm import Session
 from ..auth import decode_token, hash_password
 from ..database import Base, engine, get_db
 from ..models import User
-from ..matchmaker.models import BoxingFighter, BoxingEvent
+from ..matchmaker.models import (
+    BoxingFighter,
+    BoxingEvent,
+    BoxingBout,
+    BoxingContract,
+)
 from ..ticketing.models import EventSeller, IssuedTicket, SellerPayout
 from .models import FighterAccount, FighterInvite
 from .schemas import ActivateFighterIn, InviteFighterIn
@@ -602,6 +607,243 @@ def activate_fighter(
         ),
     }
 
+
+
+
+@router.get("/me/fight-offers")
+def fighter_fight_offers(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account = fighter_account_for_user(
+        db,
+        user,
+    )
+
+    contracts = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.fighter_id
+            == account.fighter_id
+        )
+        .order_by(
+            BoxingContract.created_at.desc()
+        )
+        .all()
+    )
+
+    results = []
+
+    for contract in contracts:
+        opponent = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id
+                == contract.opponent_id
+            )
+            .first()
+        )
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(
+                BoxingEvent.id
+                == contract.event_id
+            )
+            .first()
+        )
+
+        bout = (
+            db.query(BoxingBout)
+            .filter(
+                BoxingBout.id
+                == contract.bout_id
+            )
+            .first()
+        )
+
+        results.append({
+            "contract_id": contract.id,
+            "bout_id": contract.bout_id,
+            "status": (
+                contract.status or "draft"
+            ),
+            "opponent": {
+                "id": (
+                    opponent.id
+                    if opponent
+                    else contract.opponent_id
+                ),
+                "name": (
+                    opponent.legal_name
+                    if opponent
+                    else contract.opponent_name
+                ),
+                "record": (
+                    opponent.pro_record
+                    if opponent
+                    else ""
+                ),
+                "gym": (
+                    opponent.gym
+                    if opponent
+                    else ""
+                ),
+            },
+            "event": {
+                "id": contract.event_id,
+                "name": (
+                    contract.event_name
+                    or (
+                        event.name
+                        if event
+                        else ""
+                    )
+                ),
+                "date": (
+                    contract.event_date
+                    or (
+                        event.event_date
+                        if event
+                        else ""
+                    )
+                ),
+                "venue": (
+                    contract.venue
+                    or (
+                        event.venue
+                        if event
+                        else ""
+                    )
+                ),
+                "venue_address": (
+                    contract.venue_address
+                    or (
+                        event.venue_address
+                        if event
+                        else ""
+                    )
+                ),
+            },
+            "rounds": (
+                contract.rounds
+                or (
+                    bout.rounds
+                    if bout
+                    else 4
+                )
+            ),
+            "weight": (
+                contract.maximum_weight
+                if contract.maximum_weight is not None
+                else (
+                    bout.weight_agreed
+                    if bout
+                    else None
+                )
+            ),
+            "purse": (
+                contract.gross_purse or 0
+            ),
+            "travel_expense": (
+                contract.travel_expense or 0
+            ),
+            "cancellation_pay": (
+                contract.cancellation_pay or 0
+            ),
+            "additional_terms": (
+                contract.additional_terms or ""
+            ),
+            "created_at": contract.created_at,
+        })
+
+    return {
+        "fighter_id": account.fighter_id,
+        "offers": results,
+    }
+
+
+@router.post("/me/fight-offers/{contract_id}/respond")
+def fighter_respond_to_offer(
+    contract_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account = fighter_account_for_user(
+        db,
+        user,
+    )
+
+    action = str(
+        data.get("action") or ""
+    ).strip().lower()
+
+    if action not in (
+        "accept",
+        "decline",
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Action must be accept or decline"
+            ),
+        )
+
+    contract = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.id == contract_id,
+            BoxingContract.fighter_id
+            == account.fighter_id,
+        )
+        .first()
+    )
+
+    if not contract:
+        raise HTTPException(
+            status_code=404,
+            detail="Fight offer not found",
+        )
+
+    current_status = (
+        contract.status or "draft"
+    ).lower()
+
+    if current_status in (
+        "accepted",
+        "declined",
+        "signed",
+        "completed",
+        "cancelled",
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This offer is already "
+                f"{current_status}."
+            ),
+        )
+
+    contract.status = (
+        "accepted"
+        if action == "accept"
+        else "declined"
+    )
+
+    db.commit()
+    db.refresh(contract)
+
+    return {
+        "ok": True,
+        "contract_id": contract.id,
+        "status": contract.status,
+        "message": (
+            "Fight offer accepted."
+            if contract.status == "accepted"
+            else "Fight offer declined."
+        ),
+    }
 
 
 @router.get("/me/ticket-sales")
