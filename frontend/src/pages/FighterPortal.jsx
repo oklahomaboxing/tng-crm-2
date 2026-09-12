@@ -32,8 +32,16 @@ function statusBadge(value) {
   );
 }
 
+function money(cents) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format((Number(cents) || 0) / 100);
+}
+
 export default function FighterPortal({ onLogout }) {
   const [data, setData] = useState(null);
+  const [ticketSales, setTicketSales] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -44,24 +52,44 @@ export default function FighterPortal({ onLogout }) {
 
       const token = localStorage.getItem("token");
 
-      const response = await fetch(
-        `${API}/api/fighter/me`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
 
-      const body = await response.json();
+      const [profileResponse, ticketResponse] =
+        await Promise.all([
+          fetch(
+            `${API}/api/fighter/me`,
+            { headers }
+          ),
+          fetch(
+            `${API}/api/fighter/me/ticket-sales`,
+            { headers }
+          ),
+        ]);
 
-      if (!response.ok) {
+      const profileBody =
+        await profileResponse.json();
+
+      const ticketBody =
+        await ticketResponse.json();
+
+      if (!profileResponse.ok) {
         throw new Error(
-          body.detail || "Could not load Fighter Portal"
+          profileBody.detail ||
+          "Could not load Fighter Portal"
         );
       }
 
-      setData(body);
+      if (!ticketResponse.ok) {
+        throw new Error(
+          ticketBody.detail ||
+          "Could not load ticket sales"
+        );
+      }
+
+      setData(profileBody);
+      setTicketSales(ticketBody);
     } catch (err) {
       setMessage(
         err.message || "Could not load Fighter Portal"
@@ -118,8 +146,12 @@ export default function FighterPortal({ onLogout }) {
     },
     {
       title: "Ticket Sales",
-      value: "0 tickets",
-      note: "View your personal QR, link, sales and commission.",
+      value: `${
+        ticketSales?.summary?.tickets_sold || 0
+      } tickets`,
+      note: `Commission earned: ${money(
+        ticketSales?.summary?.commission_cents || 0
+      )}`,
     },
   ];
 
@@ -356,6 +388,285 @@ export default function FighterPortal({ onLogout }) {
               </div>
             </div>
           </div>
+        </section>
+
+        <section
+          style={{
+            background: "#fff",
+            borderRadius: 14,
+            padding: 22,
+            marginBottom: 20,
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>
+            Ticket Sales & Commission
+          </h2>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(170px, 1fr))",
+              gap: 12,
+              marginBottom: 22,
+            }}
+          >
+            <div>
+              <small>Tickets Sold</small>
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 900,
+                  marginTop: 4,
+                }}
+              >
+                {ticketSales?.summary?.tickets_sold || 0}
+              </div>
+            </div>
+
+            <div>
+              <small>Gross Sales</small>
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 900,
+                  marginTop: 4,
+                }}
+              >
+                {money(
+                  ticketSales?.summary
+                    ?.gross_sales_cents || 0
+                )}
+              </div>
+            </div>
+
+            <div>
+              <small>Commission Earned</small>
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 900,
+                  marginTop: 4,
+                }}
+              >
+                {money(
+                  ticketSales?.summary
+                    ?.commission_cents || 0
+                )}
+              </div>
+            </div>
+
+            <div>
+              <small>Commission Paid</small>
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 900,
+                  marginTop: 4,
+                }}
+              >
+                {money(
+                  ticketSales?.summary
+                    ?.amount_paid_cents || 0
+                )}
+              </div>
+            </div>
+
+            <div>
+              <small>Balance Due</small>
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 900,
+                  marginTop: 4,
+                }}
+              >
+                {money(
+                  ticketSales?.summary
+                    ?.balance_due_cents || 0
+                )}
+              </div>
+            </div>
+          </div>
+
+          {!ticketSales?.events?.length ? (
+            <div
+              style={{
+                color: "#666",
+                padding: "12px 0",
+              }}
+            >
+              You have not been assigned ticket sales
+              for an event yet.
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gap: 14,
+              }}
+            >
+              {ticketSales.events.map((event) => (
+                <div
+                  key={event.seller_id}
+                  style={{
+                    border: "1px solid #ddd",
+                    borderRadius: 12,
+                    padding: 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 18,
+                          fontWeight: 900,
+                        }}
+                      >
+                        {event.event_name}
+                      </div>
+
+                      <div
+                        style={{
+                          color: "#666",
+                          fontSize: 13,
+                          marginTop: 3,
+                        }}
+                      >
+                        {[
+                          event.event_date,
+                          event.venue,
+                        ]
+                          .filter(Boolean)
+                          .join(" - ")}
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        textTransform: "capitalize",
+                        fontWeight: 800,
+                      }}
+                    >
+                      {event.payout_status}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(130px, 1fr))",
+                      gap: 10,
+                      marginTop: 15,
+                    }}
+                  >
+                    <div>
+                      <small>Tickets</small>
+                      <div>
+                        <strong>
+                          {event.tickets_sold}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div>
+                      <small>Gross</small>
+                      <div>
+                        <strong>
+                          {money(
+                            event.gross_sales_cents
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div>
+                      <small>Commission</small>
+                      <div>
+                        <strong>
+                          {money(
+                            event.commission_cents
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div>
+                      <small>Balance Due</small>
+                      <div>
+                        <strong>
+                          {money(
+                            event.balance_due_cents
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      marginTop: 16,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.open(
+                          event.ticket_url,
+                          "_blank"
+                        );
+                      }}
+                      style={{
+                        padding: "10px 14px",
+                        background: "#d71920",
+                        color: "#fff",
+                        border: 0,
+                        borderRadius: 8,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Open My Ticket Page
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(
+                          event.ticket_url
+                        );
+                        setMessage(
+                          "Ticket link copied."
+                        );
+                      }}
+                      style={{
+                        padding: "10px 14px",
+                        background: "#fff",
+                        color: "#111",
+                        border: "1px solid #bbb",
+                        borderRadius: 8,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Copy My Link
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section

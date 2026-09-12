@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from ..auth import decode_token, hash_password
 from ..database import Base, engine, get_db
 from ..models import User
-from ..matchmaker.models import BoxingFighter
+from ..matchmaker.models import BoxingFighter, BoxingEvent
+from ..ticketing.models import EventSeller, IssuedTicket, SellerPayout
 from .models import FighterAccount, FighterInvite
 from .schemas import ActivateFighterIn, InviteFighterIn
 
@@ -611,6 +612,161 @@ def activate_fighter(
     }
 
 
+
+@router.get("/me/ticket-sales")
+def fighter_ticket_sales(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account = fighter_account_for_user(
+        db,
+        user,
+    )
+
+    fighter_id = account.fighter_id
+
+    sellers = (
+        db.query(EventSeller)
+        .filter(
+            EventSeller.seller_type == "fighter",
+            EventSeller.seller_ref_id == fighter_id,
+        )
+        .order_by(EventSeller.created_at.desc())
+        .all()
+    )
+
+    events = []
+    total_tickets = 0
+    total_gross_cents = 0
+    total_commission_cents = 0
+    total_paid_cents = 0
+
+    for seller in sellers:
+        event = (
+            db.query(BoxingEvent)
+            .filter(
+                BoxingEvent.id == seller.event_id
+            )
+            .first()
+        )
+
+        tickets = (
+            db.query(IssuedTicket)
+            .filter(
+                IssuedTicket.seller_id == seller.id,
+                IssuedTicket.status != "refunded",
+            )
+            .all()
+        )
+
+        tickets_sold = len(tickets)
+
+        gross_sales_cents = sum(
+            int(ticket.price_cents or 0)
+            for ticket in tickets
+        )
+
+        commission_cents = sum(
+            int(ticket.commission_cents or 0)
+            for ticket in tickets
+        )
+
+        payout = (
+            db.query(SellerPayout)
+            .filter(
+                SellerPayout.event_id == seller.event_id,
+                SellerPayout.seller_id == seller.id,
+            )
+            .order_by(
+                SellerPayout.created_at.desc()
+            )
+            .first()
+        )
+
+        amount_paid_cents = (
+            int(payout.amount_paid_cents or 0)
+            if payout
+            else 0
+        )
+
+        payout_status = (
+            payout.status
+            if payout
+            else (
+                "unpaid"
+                if commission_cents > 0
+                else "none"
+            )
+        )
+
+        balance_due_cents = max(
+            commission_cents
+            - amount_paid_cents,
+            0,
+        )
+
+        ticket_url = (
+            "https://tngos.tngboxinggym.com"
+            f"/events/{seller.event_id}/tickets"
+            f"?seller={seller.public_code}"
+        )
+
+        events.append({
+            "event_id": seller.event_id,
+            "event_name": (
+                event.name
+                if event
+                else f"Event {seller.event_id}"
+            ),
+            "event_date": (
+                event.event_date
+                if event
+                else None
+            ),
+            "venue": (
+                event.venue
+                if event
+                else None
+            ),
+            "seller_id": seller.id,
+            "seller_code": seller.public_code,
+            "ticket_url": ticket_url,
+            "active": seller.active,
+            "tickets_sold": tickets_sold,
+            "gross_sales_cents": gross_sales_cents,
+            "commission_cents": commission_cents,
+            "amount_paid_cents": amount_paid_cents,
+            "balance_due_cents": balance_due_cents,
+            "payout_status": payout_status,
+            "paid_at": (
+                payout.paid_at
+                if payout
+                else None
+            ),
+        })
+
+        total_tickets += tickets_sold
+        total_gross_cents += gross_sales_cents
+        total_commission_cents += commission_cents
+        total_paid_cents += amount_paid_cents
+
+    return {
+        "fighter_id": fighter_id,
+        "summary": {
+            "tickets_sold": total_tickets,
+            "gross_sales_cents": total_gross_cents,
+            "commission_cents": total_commission_cents,
+            "amount_paid_cents": total_paid_cents,
+            "balance_due_cents": max(
+                total_commission_cents
+                - total_paid_cents,
+                0,
+            ),
+        },
+        "events": events,
+    }
+
+
 @router.get("/me")
 def fighter_me(
     db: Session = Depends(get_db),
@@ -699,4 +855,5 @@ def fighter_me(
                 fighter.bloodwork_expires
             ),
         },
-    }
+    }
+
