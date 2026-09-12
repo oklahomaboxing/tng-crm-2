@@ -1326,7 +1326,37 @@ export default function AITrainer() {
     setCurrentDrillNumber(commandIndexRef.current);
     const upcoming = getCommandPreview(activeRoundNumber);
     setNextDrill(upcoming === next ? "Repeat with cleaner technique" : upcoming);
-    currentSpokenRef.current = `${next}. ${coachingCue}`;
+
+    const fastCoachMode = [
+      "Heavy Bag",
+      "Shadowboxing",
+      "Defense / Reaction",
+      "Footwork",
+      "Boxing Conditioning",
+      "Ring IQ",
+    ].includes(activeModule);
+
+    const shortCues = [
+      "Hands up",
+      "Move",
+      "Reset",
+      "Again",
+      "Angle out",
+      "Defense",
+      "Finish strong",
+    ];
+
+    const shortCoachCue =
+      fastCoachMode && commandIndexRef.current % 3 === 0
+        ? shortCues[
+            Math.floor(commandIndexRef.current / 3) %
+              shortCues.length
+          ]
+        : "";
+
+    currentSpokenRef.current = fastCoachMode
+      ? `${next}${shortCoachCue ? `. ${shortCoachCue}` : ""}`
+      : `${next}. ${coachingCue}`;
 
     setAiDetails({
       objective: command?.objective || "Clean boxing fundamentals",
@@ -1340,7 +1370,23 @@ export default function AITrainer() {
 
     logPrompt(next);
     const spokenIntro = introText ? `${introText} ` : "";
-    speak(`${spokenIntro}${next}. ${coachingCue}`);
+
+    if (fastCoachMode) {
+      speak(
+        `${spokenIntro}${next}${
+          shortCoachCue ? `. ${shortCoachCue}` : ""
+        }`,
+        {
+          rate: Math.max(
+            1.02,
+            Number(voiceRateRef.current) || 1
+          ),
+          pitch: 0.94,
+        }
+      );
+    } else {
+      speak(`${spokenIntro}${next}. ${coachingCue}`);
+    }
   }
 
   function startPromptLoop(delaySeconds = paceSeconds) {
