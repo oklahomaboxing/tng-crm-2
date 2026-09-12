@@ -152,3 +152,80 @@ def send_fighter_report(
         "subject": f"{event_name} — Ticket Sales & Commission Report",
         "html": html,
     })
+
+
+def send_seller_ticket_link(
+    to_email: str,
+    seller_name: str,
+    event_name: str,
+    ticket_url: str,
+    qr_png_base64: str,
+):
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:650px;margin:auto;">
+        <h2>TNG Promotions</h2>
+        <h3>{event_name}</h3>
+
+        <p>Hello {seller_name},</p>
+
+        <p>
+            Your personal ticket sales link is ready.
+            Tickets purchased through this link will be credited to you.
+        </p>
+
+        <div style="margin:24px 0;">
+            <a
+                href="{ticket_url}"
+                style="
+                    display:inline-block;
+                    background:#d71920;
+                    color:#ffffff;
+                    padding:12px 20px;
+                    text-decoration:none;
+                    border-radius:8px;
+                    font-weight:bold;
+                "
+            >
+                Open My Ticket Sales Page
+            </a>
+        </div>
+
+        <p style="word-break:break-all;">
+            <strong>Your personal link:</strong><br>
+            {ticket_url}
+        </p>
+
+        <div style="margin-top:24px;">
+            <p><strong>Your QR Code</strong></p>
+            <img
+                src="cid:sellerqr"
+                width="240"
+                height="240"
+                alt="Personal Ticket Sales QR Code"
+            />
+        </div>
+
+        <p style="margin-top:24px;">
+            Share either the link or QR code with your supporters.
+        </p>
+
+        <p>Earned Not Given.</p>
+    </div>
+    """
+
+    return resend.Emails.send({
+        "from": os.getenv(
+            "TICKET_FROM_EMAIL",
+            "TNG Promotions <onboarding@resend.dev>"
+        ),
+        "to": [to_email],
+        "subject": f"{event_name} - Your Personal Ticket Sales Link",
+        "html": html,
+        "attachments": [
+            {
+                "filename": "tng-ticket-sales-qr.png",
+                "content": qr_png_base64,
+                "content_id": "sellerqr",
+            }
+        ],
+    })

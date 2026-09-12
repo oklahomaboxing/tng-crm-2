@@ -24,6 +24,9 @@ export default function TicketingDashboard() {
   const [summary, setSummary] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sellerQr, setSellerQr] = useState(null);
+  const [sellerQrOpen, setSellerQrOpen] = useState(false);
+  const [sellerActionMessage, setSellerActionMessage] = useState("");
 
   async function loadEvents() {
     try {
@@ -148,6 +151,87 @@ export default function TicketingDashboard() {
   const selectedEvent = events.find(
     (event) => String(event.id) === String(eventId)
   );
+
+  async function loadSellerQr(seller) {
+    try {
+      setSellerActionMessage("");
+
+      const response = await fetch(
+        `${API}/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/qr`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not load seller QR."
+        );
+      }
+
+      setSellerQr({
+        ...body,
+        display_name: seller.display_name,
+      });
+      setSellerQrOpen(true);
+    } catch (error) {
+      setSellerActionMessage(
+        error.message || "Could not load seller QR."
+      );
+    }
+  }
+
+  function sellerTicketUrl(seller) {
+    return (
+      `https://tngos.tngboxinggym.com/events/${eventId}/tickets` +
+      `?seller=${seller.public_code}`
+    );
+  }
+
+  async function copySellerLink(seller) {
+    const url = sellerTicketUrl(seller);
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setSellerActionMessage(
+        `Ticket link copied for ${seller.display_name}.`
+      );
+    } catch {
+      setSellerActionMessage("Could not copy ticket link.");
+    }
+  }
+
+  async function emailSellerLink(seller) {
+    try {
+      setSellerActionMessage("");
+
+      const response = await fetch(
+        `${API}/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/email-link`,
+        {
+          method: "POST",
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not email ticket link."
+        );
+      }
+
+      setSellerActionMessage(
+        `Ticket link and QR emailed to ${body.email}.`
+      );
+    } catch (error) {
+      setSellerActionMessage(
+        error.message || "Could not email ticket link."
+      );
+    }
+  }
 
   return (
     <div
@@ -314,6 +398,7 @@ export default function TicketingDashboard() {
                     <th>Gross</th>
                     <th>Commission</th>
                     <th>Reports</th>
+                    <th>Ticket Link / QR</th>
                   </tr>
                 </thead>
 
@@ -361,6 +446,50 @@ export default function TicketingDashboard() {
                           CSV
                         </button>
                       </td>
+
+                      <td align="center">
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            flexWrap: "wrap",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => loadSellerQr(seller)}
+                          >
+                            View QR
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => copySellerLink(seller)}
+                          >
+                            Copy Link
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              window.open(
+                                sellerTicketUrl(seller),
+                                "_blank"
+                              )
+                            }
+                          >
+                            Open Page
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => emailSellerLink(seller)}
+                          >
+                            Email Fighter
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -368,6 +497,110 @@ export default function TicketingDashboard() {
             </div>
           </div>
         </>
+      )}
+      {sellerActionMessage && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 12,
+            background: "#f5f5f5",
+            borderRadius: 8,
+          }}
+        >
+          {sellerActionMessage}
+        </div>
+      )}
+
+      {sellerQrOpen && sellerQr && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 20,
+          }}
+          onClick={() => setSellerQrOpen(false)}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: 14,
+              padding: 24,
+              width: "100%",
+              maxWidth: 440,
+              textAlign: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0 }}>
+              {sellerQr.display_name || sellerQr.name}
+            </h2>
+
+            <p>Personal Ticket Sales QR</p>
+
+            {sellerQr.qr_png_base64 && (
+              <img
+                src={
+                  "data:image/png;base64," +
+                  sellerQr.qr_png_base64
+                }
+                alt="Seller ticket QR"
+                width="260"
+                height="260"
+                style={{ maxWidth: "100%" }}
+              />
+            )}
+
+            <div
+              style={{
+                marginTop: 12,
+                wordBreak: "break-all",
+                fontSize: 13,
+              }}
+            >
+              {sellerQr.url}
+            </div>
+
+            <div
+              style={{
+                marginTop: 18,
+                display: "flex",
+                gap: 8,
+                justifyContent: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  navigator.clipboard.writeText(sellerQr.url)
+                }
+              >
+                Copy Link
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  window.open(sellerQr.url, "_blank")
+                }
+              >
+                Open Ticket Page
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSellerQrOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

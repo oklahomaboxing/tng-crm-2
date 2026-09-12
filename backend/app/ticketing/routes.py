@@ -12,7 +12,7 @@ import qrcode
 import json
 import csv
 from reportlab.pdfgen import canvas
-from app.ticketing.emailing import send_fighter_report
+from app.ticketing.emailing import send_fighter_report, send_seller_ticket_link
 from app.ticketing.security import decrypt_token
 from fastapi.responses import StreamingResponse
 from app.models import User
@@ -252,6 +252,73 @@ def seller_ticket_qr(
         "url": url,
         "qr_png_base64": base64.b64encode(buf.getvalue()).decode(),
     }
+
+@router.post("/events/{event_id}/sellers/{seller_id}/email-link")
+def email_seller_ticket_link(
+    event_id: int,
+    seller_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    from app.matchmaker.models import BoxingEvent
+
+    seller = db.query(EventSeller).filter(
+        EventSeller.id == seller_id,
+        EventSeller.event_id == event_id,
+    ).first()
+
+    if not seller:
+        raise HTTPException(
+            status_code=404,
+            detail="Seller not found",
+        )
+
+    if not seller.email:
+        raise HTTPException(
+            status_code=400,
+            detail="This seller does not have an email address saved.",
+        )
+
+    event = db.query(BoxingEvent).filter(
+        BoxingEvent.id == event_id
+    ).first()
+
+    if not event:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found",
+        )
+
+    ticket_url = (
+        f"https://tngos.tngboxinggym.com/events/"
+        f"{event_id}/tickets?seller={seller.public_code}"
+    )
+
+    img = qrcode.make(ticket_url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    qr_png_base64 = base64.b64encode(
+        buf.getvalue()
+    ).decode()
+
+    send_seller_ticket_link(
+        seller.email,
+        seller.display_name,
+        event.name,
+        ticket_url,
+        qr_png_base64,
+    )
+
+    return {
+        "ok": True,
+        "seller_id": seller.id,
+        "name": seller.display_name,
+        "email": seller.email,
+        "url": ticket_url,
+    }
+
+
 @router.get("/public/events/{event_id}/tickets")
 def public_event_tickets(
     event_id: int,
