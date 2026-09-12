@@ -916,63 +916,7 @@ function formatTime(seconds) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-const SAVED_PROGRAMS = {
-  custom: { label: "Custom Workout" },
-  beginnerFundamentals: {
-    label: "Beginner Boxing Fundamentals",
-    module: "Shadowboxing",
-    level: "beginner",
-    rounds: 6,
-    roundTime: 120,
-    restTime: 30,
-    paceSeconds: 40,
-  },
-  youthCoordination: {
-    label: "Youth Coordination",
-    module: "Coordination Drills",
-    level: "beginner",
-    rounds: 6,
-    roundTime: 90,
-    restTime: 25,
-    paceSeconds: 30,
-  },
-  competitionWarmup: {
-    label: "Competition Team Warm-Up",
-    module: "Dynamic Warm-Up",
-    level: "intermediate",
-    rounds: 10,
-    roundTime: 45,
-    restTime: 10,
-    paceSeconds: 30,
-  },
-  footworkDevelopment: {
-    label: "Footwork Development",
-    module: "Footwork",
-    level: "intermediate",
-    rounds: 8,
-    roundTime: 90,
-    restTime: 25,
-    paceSeconds: 35,
-  },
-  defenseReaction: {
-    label: "Defense and Reaction",
-    module: "Defense / Reaction",
-    level: "intermediate",
-    rounds: 6,
-    roundTime: 180,
-    restTime: 45,
-    paceSeconds: 35,
-  },
-  fightCamp: {
-    label: "Fight Camp Conditioning",
-    module: "Fight Camp Progressive",
-    level: "advanced",
-    rounds: 8,
-    roundTime: 180,
-    restTime: 45,
-    paceSeconds: 30,
-  },
-};
+
 
 export default function AITrainer() {
   const [selectedModule, setSelectedModule] = useState("Heavy Bag");
@@ -985,7 +929,6 @@ export default function AITrainer() {
   const [availableVoices, setAvailableVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
   const [voiceRate, setVoiceRate] = useState(0.92);
-  const [selectedProgram, setSelectedProgram] = useState("custom");
   const [blockTimeLeft, setBlockTimeLeft] = useState(0);
   const [currentDrillNumber, setCurrentDrillNumber] = useState(0);
   const [nextDrill, setNextDrill] = useState("Waiting for round to begin");
@@ -1330,21 +1273,6 @@ export default function AITrainer() {
     return preview?.prompt || "Next drill";
   }
 
-  function applySavedProgram(programKey) {
-    setSelectedProgram(programKey);
-    const program = SAVED_PROGRAMS[programKey];
-    if (!program || programKey === "custom") return;
-
-    setSelectedModule(program.module);
-    setLevel(program.level);
-    setRounds(program.rounds);
-    setRoundTime(program.roundTime);
-    setRestTime(program.restTime);
-    setPaceSeconds(program.paceSeconds);
-    setPrompt(`${program.label} loaded`);
-    setSubPrompt("Review the settings, then press Start Instantly.");
-  }
-
   function repeatCurrentDrill() {
     if (!runningRef.current || phaseRef.current !== "Fight") return;
 
@@ -1550,7 +1478,7 @@ export default function AITrainer() {
     setNextDrill("Session complete");
     setBlockTimeLeft(0);
     setSessionResults({
-      program: SAVED_PROGRAMS[selectedProgram]?.label || "Custom Workout",
+      program: selectedModule,
       module: selectedModule,
       level: LEVEL_GUIDANCE[level]?.label || level,
       roundsCompleted: Number(rounds),
@@ -2005,24 +1933,11 @@ export default function AITrainer() {
 
               <Stack spacing={2}>
                 <Box>
-                  <Typography fontWeight="bold">Saved Program</Typography>
-                  <Select
-                    fullWidth
-                    value={selectedProgram}
-                    onChange={(e) => applySavedProgram(e.target.value)}
-                  >
-                    {Object.entries(SAVED_PROGRAMS).map(([key, program]) => (
-                      <MenuItem key={key} value={key}>{program.label}</MenuItem>
-                    ))}
-                  </Select>
-                </Box>
-
-                <Box>
                   <Typography fontWeight="bold">Training Module</Typography>
                   <Select
                     fullWidth
                     value={selectedModule}
-                    onChange={(e) => { setSelectedModule(e.target.value); setSelectedProgram("custom"); }}
+                    onChange={(e) => setSelectedModule(e.target.value)}
                   >
                     {Object.keys(TRAINING_MODULES).map((module) => (
                       <MenuItem key={module} value={module}>
@@ -2050,7 +1965,7 @@ export default function AITrainer() {
                     <Select
                       fullWidth
                       value={level}
-                      onChange={(e) => { setLevel(e.target.value); setSelectedProgram("custom"); }}
+                      onChange={(e) => setLevel(e.target.value)}
                     >
                       <MenuItem value="beginner">Beginner</MenuItem>
                       <MenuItem value="intermediate">Intermediate</MenuItem>
