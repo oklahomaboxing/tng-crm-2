@@ -2268,6 +2268,77 @@ Rules:
         }
 
 
+    @router.patch("/events/{event_id}/venue")
+    def update_event_venue(
+        event_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(BoxingEvent.id == event_id)
+            .first()
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found",
+            )
+
+        venue = str(data.get("venue") or "").strip()
+        venue_address = str(
+            data.get("venue_address") or ""
+        ).strip()
+
+        event.venue = venue
+        event.venue_address = venue_address
+
+        contracts = (
+            db.query(BoxingContract)
+            .filter(BoxingContract.event_id == event_id)
+            .all()
+        )
+
+        updated_contracts = 0
+        preserved_signed_contracts = 0
+
+        for contract in contracts:
+            electronic_signature = (
+                db.query(BoxingContractSignature)
+                .filter(
+                    BoxingContractSignature.contract_id
+                    == contract.id
+                )
+                .first()
+            )
+
+            if electronic_signature:
+                preserved_signed_contracts += 1
+                continue
+
+            contract.venue = venue
+            contract.venue_address = venue_address
+            updated_contracts += 1
+
+        db.commit()
+        db.refresh(event)
+
+        return {
+            "message": "Venue updated",
+            "event": {
+                "id": event.id,
+                "venue": event.venue,
+                "venue_address": event.venue_address,
+            },
+            "contracts_updated": updated_contracts,
+            "signed_contracts_preserved":
+                preserved_signed_contracts,
+        }
+
     @router.patch("/events/{event_id}/fees/{fee_id}")
     def update_event_fee(
         event_id: int,
@@ -3770,4 +3841,5 @@ Do not add fake ticket information.
         return {"id": row.id, "status": row.status}
 
     return router
+
 

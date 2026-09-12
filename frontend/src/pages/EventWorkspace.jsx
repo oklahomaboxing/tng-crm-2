@@ -83,6 +83,9 @@ export default function EventWorkspace({
   const [contractTravel, setContractTravel] = useState({});
   const [promoImage, setPromoImage] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
+  const [venueName, setVenueName] = useState("");
+  const [venueAddress, setVenueAddress] = useState("");
+  const [venueSaving, setVenueSaving] = useState(false);
 
 
   async function load() {
@@ -118,6 +121,66 @@ export default function EventWorkspace({
   useEffect(() => {
     load();
   }, [eventId]);
+
+  useEffect(() => {
+    if (data?.event) {
+      setVenueName(data.event.venue || "");
+      setVenueAddress(data.event.venue_address || "");
+    }
+  }, [data?.event?.id, data?.event?.venue, data?.event?.venue_address]);
+
+  async function saveVenue() {
+    try {
+      setVenueSaving(true);
+      setMessage("");
+
+      const response = await fetch(
+        `${API}/api/boxing/events/${eventId}/venue`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            venue: venueName,
+            venue_address: venueAddress,
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not update venue"
+        );
+      }
+
+      await load();
+
+      const updated = body.contracts_updated || 0;
+      const preserved =
+        body.signed_contracts_preserved || 0;
+
+      setMessage(
+        `Venue updated. ${updated} contract${
+          updated === 1 ? "" : "s"
+        } synchronized.${
+          preserved
+            ? ` ${preserved} electronically signed contract${
+                preserved === 1 ? "" : "s"
+              } preserved.`
+            : ""
+        }`
+      );
+    } catch (error) {
+      setMessage(
+        error.message || "Could not update venue"
+      );
+    } finally {
+      setVenueSaving(false);
+    }
+  }
 
   async function updateBloodwork(fighter, changes) {
     try {
@@ -1050,6 +1113,67 @@ export default function EventWorkspace({
             {message}
           </Alert>
         )}
+
+        <Card>
+          <CardContent>
+            <Typography
+              variant="h6"
+              fontWeight={900}
+              sx={{ mb: 2 }}
+            >
+              Event Venue
+            </Typography>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={5}>
+                <TextField
+                  fullWidth
+                  label="Venue Name"
+                  value={venueName}
+                  onChange={(e) =>
+                    setVenueName(e.target.value)
+                  }
+                />
+              </Grid>
+
+              <Grid item xs={12} md={5}>
+                <TextField
+                  fullWidth
+                  label="Venue Address"
+                  value={venueAddress}
+                  onChange={(e) =>
+                    setVenueAddress(e.target.value)
+                  }
+                />
+              </Grid>
+
+              <Grid item xs={12} md={2}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="error"
+                  onClick={saveVenue}
+                  disabled={venueSaving}
+                  sx={{ height: "100%", minHeight: 56 }}
+                >
+                  {venueSaving
+                    ? "Saving..."
+                    : "Save Venue"}
+                </Button>
+              </Grid>
+            </Grid>
+
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 1.5 }}
+            >
+              Updating the venue also updates all unsigned
+              contracts for this event. Electronically signed
+              contracts remain unchanged.
+            </Typography>
+          </CardContent>
+        </Card>
 
         <Grid container spacing={2}>
           <Grid item xs={6} md={3}>
