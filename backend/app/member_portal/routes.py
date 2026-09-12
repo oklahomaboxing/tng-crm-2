@@ -1,4 +1,5 @@
 ﻿import resend
+import httpx
 import os
 import hashlib
 import secrets
@@ -370,6 +371,86 @@ def serialize_scan(s: InBodyScan):
 
 
 
+
+def _inbody_result_config():
+    return {
+        "api_key": os.getenv("INBODY_API_KEY", "").strip(),
+        "account": os.getenv("INBODY_ACCOUNT", "").strip(),
+        "result_url": os.getenv("INBODY_RESULT_URL", "").strip(),
+    }
+
+
+def _inbody_response_shape(value, depth=0):
+    """
+    Return field names / structure only.
+    Never return health measurement values.
+    """
+    if depth > 3:
+        return "..."
+
+    if isinstance(value, dict):
+        return {
+            str(key): _inbody_response_shape(child, depth + 1)
+            for key, child in list(value.items())[:50]
+        }
+
+    if isinstance(value, list):
+        if not value:
+            return []
+
+        return [
+            _inbody_response_shape(value[0], depth + 1)
+        ]
+
+    return type(value).__name__
+
+
+async def _fetch_inbody_result(
+    user_token: str,
+    test_datetime: str,
+):
+    config = _inbody_result_config()
+
+    missing = [
+        key
+        for key, value in config.items()
+        if not value
+    ]
+
+    if missing:
+        raise RuntimeError(
+            "Missing InBody configuration: "
+            + ", ".join(missing)
+        )
+
+    headers = {
+        "Content-Type": "application/json",
+        "api-key": config["api_key"],
+        "Account": config["account"],
+    }
+
+    body = {
+        "UserToken": user_token,
+        "Datetimes": test_datetime,
+    }
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            config["result_url"],
+            headers=headers,
+            json=body,
+        )
+
+    response.raise_for_status()
+
+    try:
+        return response.json()
+    except Exception as exc:
+        raise RuntimeError(
+            "InBody result API did not return JSON"
+        ) from exc
+
+
 @router.post("/inbody/webhook")
 async def inbody_webhook(request: Request):
     """
@@ -452,13 +533,62 @@ async def inbody_webhook(request: Request):
             detail="Webhook contains no UserID or UserToken",
         )
 
+    config = _inbody_result_config()
+
+    if not all(config.values()):
+        return {
+            "ok": True,
+            "received": True,
+            "status": "result_sync_not_configured",
+            "user_id_present": bool(user_id),
+            "user_token_present": bool(user_token),
+            "test_datetime_present": bool(test_datetime),
+        }
+
+    # The documented GetInBodyData request uses UserToken
+    # (TelHP) and Datetimes.
+    if not user_token or not test_datetime:
+        return {
+            "ok": True,
+            "received": True,
+            "status": "result_sync_missing_identifier",
+            "user_id_present": bool(user_id),
+            "user_token_present": bool(user_token),
+            "test_datetime_present": bool(test_datetime),
+        }
+
+    try:
+        result = await _fetch_inbody_result(
+            user_token=user_token,
+            test_datetime=test_datetime,
+        )
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "InBody result API returned HTTP "
+                f"{exc.response.status_code}"
+            ),
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to connect to InBody result API",
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        ) from exc
+
     return {
         "ok": True,
         "received": True,
-        "status": "ready_for_result_sync",
+        "status": "result_received",
         "user_id_present": bool(user_id),
         "user_token_present": bool(user_token),
         "test_datetime_present": bool(test_datetime),
+        "result_shape": _inbody_response_shape(result),
     }
 
 
