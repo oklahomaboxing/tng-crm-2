@@ -315,7 +315,7 @@ def create_fighter_invite(
 
     activation_path = (
         "/fighter/activate"
-        f"-token={raw_token}"
+        f"?token={raw_token}"
     )
 
     frontend_url = os.getenv(
