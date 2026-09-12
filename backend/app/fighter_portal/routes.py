@@ -1,8 +1,12 @@
+from fastapi.responses import StreamingResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import LETTER
 import hashlib
 import os
 import secrets
 import base64
 import io
+import textwrap
 import qrcode
 from datetime import datetime, timedelta
 
@@ -931,6 +935,708 @@ async def fighter_upload_signed_contract(
             "successfully."
         ),
     }
+
+
+@router.get(
+    "/me/contracts/{contract_id}/pdf"
+)
+def fighter_download_full_contract_pdf(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    # SECURITY:
+    # The contract must belong to the fighter
+    # linked to the authenticated login.
+    contract = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.id == contract_id,
+            BoxingContract.fighter_id
+            == fighter.id,
+        )
+        .first()
+    )
+
+    if not contract:
+        raise HTTPException(
+            status_code=404,
+            detail="Contract not found.",
+        )
+
+    output = io.BytesIO()
+
+    pdf = canvas.Canvas(
+        output,
+        pagesize=LETTER,
+    )
+
+    width, height = LETTER
+
+    left = 54
+    right = width - 54
+    y = height - 50
+
+    def new_page():
+        nonlocal y
+
+        pdf.showPage()
+        y = height - 50
+
+        pdf.setFont(
+            "Helvetica-Bold",
+            9,
+        )
+        pdf.drawString(
+            left,
+            y,
+            "TNG PROMOTIONS - BOXING CONTRACT",
+        )
+
+        y -= 26
+
+    def ensure_space(amount=60):
+        nonlocal y
+
+        if y < amount:
+            new_page()
+
+    def heading(value):
+        nonlocal y
+
+        ensure_space(55)
+
+        pdf.setFont(
+            "Helvetica-Bold",
+            11,
+        )
+
+        pdf.drawString(
+            left,
+            y,
+            str(value),
+        )
+
+        y -= 6
+
+        pdf.line(
+            left,
+            y,
+            right,
+            y,
+        )
+
+        y -= 18
+
+    def line(label, value=""):
+        nonlocal y
+
+        ensure_space(35)
+
+        pdf.setFont(
+            "Helvetica-Bold",
+            9,
+        )
+
+        pdf.drawString(
+            left,
+            y,
+            f"{label}:",
+        )
+
+        pdf.setFont(
+            "Helvetica",
+            9,
+        )
+
+        display = (
+            ""
+            if value is None
+            else str(value)
+        )
+
+        wrapped = textwrap.wrap(
+            display,
+            width=72,
+        ) or [""]
+
+        first = True
+
+        for part in wrapped:
+            ensure_space(25)
+
+            if first:
+                pdf.drawString(
+                    left + 125,
+                    y,
+                    part,
+                )
+
+                first = False
+
+            else:
+                y -= 12
+
+                pdf.drawString(
+                    left + 125,
+                    y,
+                    part,
+                )
+
+        y -= 17
+
+    def paragraph(value):
+        nonlocal y
+
+        if not value:
+            return
+
+        pdf.setFont(
+            "Helvetica",
+            9,
+        )
+
+        wrapped = textwrap.wrap(
+            str(value),
+            width=92,
+        )
+
+        for part in wrapped:
+            ensure_space(25)
+
+            pdf.drawString(
+                left,
+                y,
+                part,
+            )
+
+            y -= 12
+
+        y -= 6
+
+
+    # =====================================================
+    # TITLE
+    # =====================================================
+
+    pdf.setFont(
+        "Helvetica-Bold",
+        18,
+    )
+
+    pdf.drawCentredString(
+        width / 2,
+        y,
+        "PROFESSIONAL BOXING BOUT AGREEMENT",
+    )
+
+    y -= 23
+
+    pdf.setFont(
+        "Helvetica-Bold",
+        12,
+    )
+
+    pdf.drawCentredString(
+        width / 2,
+        y,
+        "TNG PROMOTIONS",
+    )
+
+    y -= 13
+
+    pdf.setFont(
+        "Helvetica",
+        8,
+    )
+
+    pdf.drawCentredString(
+        width / 2,
+        y,
+        "Official Fighter Contract",
+    )
+
+    y -= 30
+
+
+    # =====================================================
+    # CONTRACT INFORMATION
+    # =====================================================
+
+    heading("CONTRACT INFORMATION")
+
+    line(
+        "Contract Date",
+        contract.contract_date,
+    )
+
+    line(
+        "Contract Status",
+        contract.status,
+    )
+
+    line(
+        "Corner",
+        contract.corner,
+    )
+
+
+    # =====================================================
+    # BOXER
+    # =====================================================
+
+    heading("BOXER INFORMATION")
+
+    line(
+        "Boxer",
+        contract.boxer_name,
+    )
+
+    line(
+        "Federal ID",
+        contract.boxer_federal_id,
+    )
+
+    line(
+        "Address",
+        contract.boxer_address,
+    )
+
+    line(
+        "Phone",
+        contract.boxer_phone,
+    )
+
+    line(
+        "Manager",
+        contract.boxer_manager,
+    )
+
+
+    # =====================================================
+    # BOUT
+    # =====================================================
+
+    heading("BOUT AGREEMENT")
+
+    line(
+        "Opponent",
+        contract.opponent_name,
+    )
+
+    line(
+        "Rounds",
+        contract.rounds,
+    )
+
+    weight = (
+        f"{contract.maximum_weight} lb"
+        if contract.maximum_weight
+        else ""
+    )
+
+    line(
+        "Maximum Weight",
+        weight,
+    )
+
+
+    # =====================================================
+    # EVENT
+    # =====================================================
+
+    heading("EVENT INFORMATION")
+
+    line(
+        "Event",
+        contract.event_name,
+    )
+
+    line(
+        "Event Date",
+        contract.event_date,
+    )
+
+    line(
+        "Venue",
+        contract.venue,
+    )
+
+    line(
+        "Venue Address",
+        contract.venue_address,
+    )
+
+
+    # =====================================================
+    # PROMOTER
+    # =====================================================
+
+    heading("PROMOTER / MATCHMAKER")
+
+    line(
+        "Promoter",
+        contract.promoter_name,
+    )
+
+    line(
+        "Promoter Address",
+        contract.promoter_address,
+    )
+
+    line(
+        "Promoter Phone",
+        contract.promoter_phone,
+    )
+
+    line(
+        "Matchmaker",
+        contract.promoter_matchmaker,
+    )
+
+
+    # =====================================================
+    # COMPENSATION
+    # =====================================================
+
+    heading("COMPENSATION")
+
+    line(
+        "Gross Purse",
+        f"${float(contract.gross_purse or 0):,.2f}",
+    )
+
+    line(
+        "Deductions",
+        f"${float(contract.deductions or 0):,.2f}",
+    )
+
+    line(
+        "Travel Allowance / Reimbursement",
+        f"${float(contract.travel_expense or 0):,.2f}",
+    )
+
+    line(
+        "Per Diem Total",
+        f"${float(getattr(contract, 'per_diem_total', 0) or 0):,.2f}",
+    )
+
+    line(
+        "Boxer Will Be Paid",
+        f"${float(contract.boxer_paid or 0):,.2f}",
+    )
+
+
+    # =====================================================
+    # TRAVEL
+    # =====================================================
+
+    heading(
+        "TRAVEL / HOTEL / PER DIEM"
+    )
+
+    line(
+        "Travel Type",
+        getattr(
+            contract,
+            "travel_type",
+            "",
+        ),
+    )
+
+    line(
+        "Travel Paid By",
+        getattr(
+            contract,
+            "travel_paid_by",
+            "",
+        ),
+    )
+
+    line(
+        "Travel Allowance",
+        f"${float(contract.travel_expense or 0):,.2f}",
+    )
+
+    line(
+        "Hotel Provided",
+        getattr(
+            contract,
+            "hotel_provided",
+            "",
+        ),
+    )
+
+    line(
+        "Hotel",
+        getattr(
+            contract,
+            "hotel_name",
+            "",
+        ),
+    )
+
+    line(
+        "Hotel Nights",
+        getattr(
+            contract,
+            "hotel_nights",
+            0,
+        ),
+    )
+
+    daily = float(
+        getattr(
+            contract,
+            "per_diem_daily",
+            0,
+        ) or 0
+    )
+
+    days = int(
+        getattr(
+            contract,
+            "per_diem_days",
+            0,
+        ) or 0
+    )
+
+    total = float(
+        getattr(
+            contract,
+            "per_diem_total",
+            0,
+        ) or 0
+    )
+
+    line(
+        "Per Diem",
+        (
+            f"${daily:,.2f} per day "
+            f"x {days} days "
+            f"= ${total:,.2f}"
+        ),
+    )
+
+
+    # =====================================================
+    # ADDITIONAL TERMS
+    # =====================================================
+
+    heading("ADDITIONAL TERMS")
+
+    if contract.additional_terms:
+        paragraph(
+            contract.additional_terms
+        )
+    else:
+        paragraph(
+            "No additional terms were entered."
+        )
+
+
+    # =====================================================
+    # CANCELLATION
+    # =====================================================
+
+    heading("CANCELLATION PAY")
+
+    line(
+        "Cancellation Pay",
+        f"${float(contract.cancellation_pay or 0):,.2f}",
+    )
+
+
+    # =====================================================
+    # AGREEMENT LANGUAGE
+    # =====================================================
+
+    heading("AGREEMENT")
+
+    paragraph(
+        "The boxer acknowledges the bout terms, "
+        "compensation, weight, opponent, event, "
+        "travel arrangements and additional terms "
+        "listed in this agreement."
+    )
+
+    paragraph(
+        "The boxer agrees to comply with the rules "
+        "and requirements of the applicable boxing "
+        "commission and to complete all required "
+        "medical, licensing and regulatory obligations."
+    )
+
+    paragraph(
+        "Any modification to the financial or material "
+        "terms of this agreement should be documented "
+        "and approved by the appropriate parties."
+    )
+
+
+    # =====================================================
+    # SIGNATURES
+    # =====================================================
+
+    heading("SIGNATURES")
+
+    ensure_space(160)
+
+    y -= 15
+
+    pdf.line(
+        left,
+        y,
+        left + 220,
+        y,
+    )
+
+    pdf.line(
+        left + 275,
+        y,
+        right,
+        y,
+    )
+
+    y -= 14
+
+    pdf.setFont(
+        "Helvetica",
+        8,
+    )
+
+    pdf.drawString(
+        left,
+        y,
+        "Boxer Signature",
+    )
+
+    pdf.drawString(
+        left + 275,
+        y,
+        "Date",
+    )
+
+    y -= 50
+
+    pdf.line(
+        left,
+        y,
+        left + 220,
+        y,
+    )
+
+    pdf.line(
+        left + 275,
+        y,
+        right,
+        y,
+    )
+
+    y -= 14
+
+    pdf.drawString(
+        left,
+        y,
+        "Manager / Representative",
+    )
+
+    pdf.drawString(
+        left + 275,
+        y,
+        "Date",
+    )
+
+    y -= 50
+
+    pdf.line(
+        left,
+        y,
+        left + 220,
+        y,
+    )
+
+    pdf.line(
+        left + 275,
+        y,
+        right,
+        y,
+    )
+
+    y -= 14
+
+    pdf.drawString(
+        left,
+        y,
+        "Promoter / Matchmaker",
+    )
+
+    pdf.drawString(
+        left + 275,
+        y,
+        "Date",
+    )
+
+
+    # =====================================================
+    # FOOTER
+    # =====================================================
+
+    pdf.setFont(
+        "Helvetica",
+        7,
+    )
+
+    pdf.drawCentredString(
+        width / 2,
+        25,
+        (
+            "TNG Promotions | Contract "
+            f"#{contract.id}"
+        ),
+    )
+
+    pdf.save()
+
+    output.seek(0)
+
+    fighter_name = (
+        contract.boxer_name
+        or "fighter"
+    )
+
+    safe_name = "".join(
+        c
+        if c.isalnum() or c in "-_"
+        else "-"
+        for c in fighter_name
+    ).strip("-")
+
+    filename = (
+        f"{safe_name or 'fighter'}"
+        f"-contract-{contract.id}.pdf"
+    )
+
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                (
+                    'attachment; filename="'
+                    f'{filename}"'
+                ),
+            "Cache-Control":
+                "private, no-store, max-age=0",
+            "X-Content-Type-Options":
+                "nosniff",
+        },
+    )
 
 
 @router.get(

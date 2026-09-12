@@ -245,6 +245,85 @@ export default function FighterPortal({ onLogout }) {
   }
 
 
+  async function downloadMyFullContract(
+    contractId,
+    eventName
+  ) {
+    setContractWorkingId(contractId);
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/fighter/me/contracts/${contractId}/pdf`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        let detail =
+          "Could not download contract.";
+
+        try {
+          const body =
+            await response.json();
+
+          detail =
+            body.detail || detail;
+        } catch {
+          // PDF endpoint may return
+          // a non-JSON server error.
+        }
+
+        throw new Error(detail);
+      }
+
+      const blob =
+        await response.blob();
+
+      const url =
+        URL.createObjectURL(blob);
+
+      const link =
+        document.createElement("a");
+
+      link.href = url;
+
+      link.download =
+        `${eventName || "TNG"}-full-contract.pdf`
+          .replace(
+            /[^a-z0-9._-]+/gi,
+            "-"
+          );
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      URL.revokeObjectURL(url);
+
+    } catch (err) {
+      const notice =
+        err.message ||
+        "Could not download contract.";
+
+      setMessage(notice);
+
+      window.alert(notice);
+
+    } finally {
+      setContractWorkingId(null);
+    }
+  }
+
+
   async function downloadMySignedContract(
     contractId,
     eventName
@@ -1151,6 +1230,31 @@ export default function FighterPortal({ onLogout }) {
                       marginTop: 14,
                     }}
                   >
+                    <button
+                      type="button"
+                      disabled={
+                        contractWorkingId ===
+                        contract.contract_id
+                      }
+                      onClick={() =>
+                        downloadMyFullContract(
+                          contract.contract_id,
+                          contract.event_name
+                        )
+                      }
+                      style={{
+                        border: 0,
+                        borderRadius: 8,
+                        padding: "11px 16px",
+                        background: "#b71c1c",
+                        color: "#fff",
+                        fontWeight: 900,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Download Full Contract PDF
+                    </button>
+
                     <button
                       type="button"
                       disabled={
