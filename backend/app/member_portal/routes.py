@@ -4,7 +4,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 
 from ..database import Base, engine, get_db
@@ -366,6 +366,50 @@ def serialize_scan(s: InBodyScan):
         "bmr": s.bmr,
         "inbody_score": s.inbody_score,
         "source": s.source,
+    }
+
+
+
+@router.post("/inbody/webhook")
+async def inbody_webhook(request: Request):
+    """
+    LookinBody Web -> TNGOS callback.
+
+    InBody can be configured with a custom webhook header.
+    We use X-TNG-InBody-Webhook and compare it to an
+    environment variable stored securely on the backend.
+    """
+    expected_secret = os.getenv("INBODY_WEBHOOK_SECRET", "").strip()
+
+    if not expected_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="InBody webhook is not configured",
+        )
+
+    supplied_secret = request.headers.get(
+        "X-TNG-InBody-Webhook",
+        "",
+    ).strip()
+
+    if supplied_secret != expected_secret:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid webhook credentials",
+        )
+
+    # Parse the incoming request only to confirm that it is
+    # valid JSON. Do not log the body because it may contain
+    # member health/body-composition information.
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    return {
+        "ok": True,
+        "received": True,
+        "payload_type": type(payload).__name__,
     }
 
 
