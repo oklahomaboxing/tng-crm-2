@@ -136,7 +136,7 @@ export function buildOfficialContractHtml(contract) {
 <div class="info-box">
 
   <div class="info-col">
-    <div class="label">Boxer???s Information:</div>
+    <div class="label">Boxer&rsquo;s Information:</div>
     <br />
 
     Name:
@@ -156,7 +156,7 @@ export function buildOfficialContractHtml(contract) {
   </div>
 
   <div class="info-col">
-    <div class="label">Promoter???s Information:</div>
+    <div class="label">Promoter&rsquo;s Information:</div>
     <br />
 
     Name:
@@ -235,7 +235,7 @@ Boxers will be paid after the final bout of the evening.
   <div style="margin-top:6px;">
     <b>Per Diem:</b>
     $${money(contract.per_diem_daily)}
-    per day ?
+    per day &times;
     ${safe(contract.per_diem_days || 0)}
     days =
     <b>$${money(contract.per_diem_total)}</b>
@@ -256,7 +256,7 @@ in this event.
 </p>
 
 <div class="initials">
-  Boxer???s Initials: __________________
+  Boxer&rsquo;s Initials: __________________
 </div>
 
 <p>
@@ -270,7 +270,7 @@ the Commission.
 <p>
 Boxer agrees not to participate in another event within 30 days
 of this event unless approved by the promoter/matchmaker.
-<b>Boxer???s Initials:</b> __________________
+<b>Boxer&rsquo;s Initials:</b> __________________
 </p>
 
 <p>
@@ -283,7 +283,7 @@ the contestant
 <div class="signature-row">
 
   <div>
-    Boxer???s Signature:
+    Boxer&rsquo;s Signature:
     <span class="line"></span>
   </div>
 
@@ -293,7 +293,7 @@ the contestant
   </div>
 
   <div>
-    Boxer???s Manager:
+    Boxer&rsquo;s Manager:
     <span class="line">
       ${safe(contract.boxer_manager)}
     </span>
