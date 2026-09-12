@@ -4581,3 +4581,7 @@ def tng_ai_trainer_tts(
 from .member_portal.routes import router as member_portal_router
 app.include_router(member_portal_router)
 
+# TNG OS Fighter Portal v1
+from .fighter_portal.routes import router as fighter_portal_router
+app.include_router(fighter_portal_router)
+

@@ -36,6 +36,7 @@ import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
 import Matchmaker from "./pages/Matchmaker.jsx";
 import TicketingDashboard from "./pages/TicketingDashboard.jsx";
 import PublicTicketCheckout from "./pages/PublicTicketCheckout.jsx";
+import FighterActivate from "./pages/FighterActivate.jsx";
 import EventCalendar from "./pages/EventCalendar.jsx";
 import PublicFightCalendar from "./pages/PublicFightCalendar.jsx";
 import FighterRegistration from "./pages/FighterRegistration.jsx";
@@ -136,10 +137,17 @@ function PaymentMessage({ status }) {
 
 
 function RootEntry() {
+  const path = window.location.pathname;
+
   const isPublicTicketPage =
-    /^\/events\/\d+\/tickets\/?$/.test(
-      window.location.pathname
-    );
+    /^\/events\/\d+\/tickets\/?$/.test(path);
+
+  const isFighterActivationPage =
+    /^\/fighter\/activate\/?$/.test(path);
+
+  if (isFighterActivationPage) {
+    return <FighterActivate />;
+  }
 
   if (isPublicTicketPage) {
     return <PublicTicketCheckout />;
