@@ -27,6 +27,9 @@ export default function TicketingDashboard() {
   const [sellerQr, setSellerQr] = useState(null);
   const [sellerQrOpen, setSellerQrOpen] = useState(false);
   const [sellerActionMessage, setSellerActionMessage] = useState("");
+  const [ticketTypes, setTicketTypes] = useState([]);
+  const [ticketPriceMessage, setTicketPriceMessage] = useState("");
+  const [savingTicketTypeId, setSavingTicketTypeId] = useState(null);
 
   async function loadEvents() {
     try {
@@ -71,6 +74,131 @@ export default function TicketingDashboard() {
       setSummary(data);
     } catch (error) {
       setMessage(error.message);
+    }
+  }
+
+  async function loadTicketTypes(selectedEventId = eventId) {
+    if (!selectedEventId) {
+      setTicketTypes([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API}/api/ticketing/events/${selectedEventId}/ticket-types`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not load ticket prices"
+        );
+      }
+
+      setTicketTypes(
+        (Array.isArray(data) ? data : []).map((ticket) => ({
+          ...ticket,
+          price_display: (
+            (Number(ticket.price_cents) || 0) / 100
+          ).toFixed(2),
+          inventory_display:
+            ticket.inventory === null ||
+            ticket.inventory === undefined
+              ? ""
+              : String(ticket.inventory),
+        }))
+      );
+    } catch (error) {
+      setTicketPriceMessage(error.message);
+    }
+  }
+
+  function updateTicketTypeField(ticketId, field, value) {
+    setTicketTypes((current) =>
+      current.map((ticket) =>
+        ticket.id === ticketId
+          ? {
+              ...ticket,
+              [field]: value,
+            }
+          : ticket
+      )
+    );
+  }
+
+  async function saveTicketType(ticket) {
+    if (!eventId) return;
+
+    const price = Number(ticket.price_display);
+
+    if (!Number.isFinite(price) || price < 0) {
+      setTicketPriceMessage(
+        `Enter a valid price for ${ticket.name}.`
+      );
+      return;
+    }
+
+    const inventoryText = String(
+      ticket.inventory_display ?? ""
+    ).trim();
+
+    let inventory = null;
+
+    if (inventoryText !== "") {
+      inventory = Number(inventoryText);
+
+      if (
+        !Number.isInteger(inventory) ||
+        inventory < 0
+      ) {
+        setTicketPriceMessage(
+          `Enter a valid inventory for ${ticket.name}.`
+        );
+        return;
+      }
+    }
+
+    try {
+      setSavingTicketTypeId(ticket.id);
+      setTicketPriceMessage("");
+
+      const response = await fetch(
+        `${API}/api/ticketing/events/${eventId}/ticket-types/${ticket.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            ...authHeaders(),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            price_cents: Math.round(price * 100),
+            inventory,
+            active: Boolean(ticket.active),
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not update ticket type"
+        );
+      }
+
+      setTicketPriceMessage(
+        `${ticket.name} updated successfully.`
+      );
+
+      await loadTicketTypes(eventId);
+    } catch (error) {
+      setTicketPriceMessage(error.message);
+    } finally {
+      setSavingTicketTypeId(null);
     }
   }
 
@@ -145,6 +273,9 @@ export default function TicketingDashboard() {
   useEffect(() => {
     if (eventId) {
       loadSummary(eventId);
+      loadTicketTypes(eventId);
+    } else {
+      setTicketTypes([]);
     }
   }, [eventId]);
 
@@ -333,6 +464,270 @@ export default function TicketingDashboard() {
           Email Seller Reports
         </button>
       </div>
+
+      {eventId && (
+        <div
+          style={{
+            marginTop: 22,
+            marginBottom: 24,
+            padding: 20,
+            border: "1px solid #ddd",
+            borderRadius: 12,
+            background: "#fafafa",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+              marginBottom: 16,
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0 }}>
+                Ticket Prices
+              </h2>
+
+              <div
+                style={{
+                  marginTop: 4,
+                  color: "#666",
+                  fontSize: 14,
+                }}
+              >
+                Changes apply to new ticket purchases.
+                Previously sold tickets keep their original price.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => loadTicketTypes(eventId)}
+              disabled={!eventId}
+            >
+              Refresh Prices
+            </button>
+          </div>
+
+          {ticketPriceMessage && (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: 10,
+                borderRadius: 8,
+                background: "#fff",
+                border: "1px solid #ddd",
+              }}
+            >
+              {ticketPriceMessage}
+            </div>
+          )}
+
+          {ticketTypes.length === 0 ? (
+            <div style={{ color: "#666" }}>
+              No ticket types have been created for this event yet.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table
+                width="100%"
+                cellPadding="10"
+                style={{
+                  borderCollapse: "collapse",
+                  background: "#fff",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      borderBottom: "1px solid #ddd",
+                    }}
+                  >
+                    <th align="left">
+                      Ticket Type
+                    </th>
+
+                    <th align="left">
+                      Price
+                    </th>
+
+                    <th align="left">
+                      Inventory
+                    </th>
+
+                    <th align="center">
+                      On Sale
+                    </th>
+
+                    <th align="center">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {ticketTypes.map((ticket) => (
+                    <tr
+                      key={ticket.id}
+                      style={{
+                        borderBottom:
+                          "1px solid #eee",
+                      }}
+                    >
+                      <td>
+                        <strong>
+                          {ticket.name}
+                        </strong>
+
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#777",
+                            marginTop: 3,
+                          }}
+                        >
+                          Commission:{" "}
+                          {ticket.commission_type === "percent"
+                            ? `${ticket.commission_value}%`
+                            : ticket.commission_type === "flat"
+                            ? `$${Number(
+                                ticket.commission_value || 0
+                              ).toFixed(2)}`
+                            : "None"}
+                        </div>
+                      </td>
+
+                      <td>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <span>$</span>
+
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={
+                              ticket.price_display
+                            }
+                            onChange={(e) =>
+                              updateTicketTypeField(
+                                ticket.id,
+                                "price_display",
+                                e.target.value
+                              )
+                            }
+                            style={{
+                              width: 95,
+                              padding: 8,
+                            }}
+                          />
+                        </div>
+                      </td>
+
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="Unlimited"
+                          value={
+                            ticket.inventory_display
+                          }
+                          onChange={(e) =>
+                            updateTicketTypeField(
+                              ticket.id,
+                              "inventory_display",
+                              e.target.value
+                            )
+                          }
+                          style={{
+                            width: 110,
+                            padding: 8,
+                          }}
+                        />
+
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#777",
+                            marginTop: 3,
+                          }}
+                        >
+                          Blank = unlimited
+                        </div>
+                      </td>
+
+                      <td align="center">
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={Boolean(
+                              ticket.active
+                            )}
+                            onChange={(e) =>
+                              updateTicketTypeField(
+                                ticket.id,
+                                "active",
+                                e.target.checked
+                              )
+                            }
+                          />
+
+                          {ticket.active
+                            ? "Active"
+                            : "Off"}
+                        </label>
+                      </td>
+
+                      <td align="center">
+                        <button
+                          type="button"
+                          disabled={
+                            savingTicketTypeId ===
+                            ticket.id
+                          }
+                          onClick={() =>
+                            saveTicketType(ticket)
+                          }
+                          style={{
+                            background: "#d71920",
+                            color: "#fff",
+                            border: 0,
+                            borderRadius: 7,
+                            padding: "9px 14px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {savingTicketTypeId ===
+                          ticket.id
+                            ? "Saving..."
+                            : "Save"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {selectedEvent && (
         <div style={{ marginBottom: 18 }}>

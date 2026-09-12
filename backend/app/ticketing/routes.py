@@ -789,6 +789,190 @@ def download_event_report_pdf(
         },
     )
 
+
+@router.get("/events/{event_id}/ticket-types")
+def list_event_ticket_types(
+    event_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    rows = (
+        db.query(EventTicketType)
+        .filter(EventTicketType.event_id == event_id)
+        .order_by(EventTicketType.id.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": row.id,
+            "event_id": row.event_id,
+            "name": row.name,
+            "price_cents": row.price_cents,
+            "inventory": row.inventory,
+            "commission_type": row.commission_type,
+            "commission_value": (
+                float(row.commission_value)
+                if row.commission_value is not None
+                else 0
+            ),
+            "active": bool(row.active),
+        }
+        for row in rows
+    ]
+
+
+@router.patch("/events/{event_id}/ticket-types/{ticket_type_id}")
+def update_event_ticket_type(
+    event_id: int,
+    ticket_type_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin_or_staff(user)
+
+    row = (
+        db.query(EventTicketType)
+        .filter(
+            EventTicketType.id == ticket_type_id,
+            EventTicketType.event_id == event_id,
+        )
+        .first()
+    )
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket type not found",
+        )
+
+    if "name" in data:
+        name = str(data.get("name") or "").strip()
+
+        if not name:
+            raise HTTPException(
+                status_code=400,
+                detail="Ticket type name is required",
+            )
+
+        duplicate = (
+            db.query(EventTicketType)
+            .filter(
+                EventTicketType.event_id == event_id,
+                EventTicketType.name == name,
+                EventTicketType.id != ticket_type_id,
+            )
+            .first()
+        )
+
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail="Another ticket type already uses this name",
+            )
+
+        row.name = name
+
+    if "price_cents" in data:
+        try:
+            price_cents = int(data.get("price_cents"))
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid ticket price",
+            )
+
+        if price_cents < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Ticket price cannot be negative",
+            )
+
+        row.price_cents = price_cents
+
+    if "inventory" in data:
+        inventory = data.get("inventory")
+
+        if inventory in ("", None):
+            row.inventory = None
+        else:
+            try:
+                inventory = int(inventory)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid inventory",
+                )
+
+            if inventory < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Inventory cannot be negative",
+                )
+
+            row.inventory = inventory
+
+    if "commission_type" in data:
+        commission_type = str(
+            data.get("commission_type") or "none"
+        ).strip().lower()
+
+        if commission_type not in (
+            "percent",
+            "flat",
+            "none",
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid commission type",
+            )
+
+        row.commission_type = commission_type
+
+    if "commission_value" in data:
+        try:
+            commission_value = float(
+                data.get("commission_value") or 0
+            )
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid commission value",
+            )
+
+        if commission_value < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Commission cannot be negative",
+            )
+
+        row.commission_value = commission_value
+
+    if "active" in data:
+        row.active = bool(data.get("active"))
+
+    db.commit()
+    db.refresh(row)
+
+    return {
+        "id": row.id,
+        "event_id": row.event_id,
+        "name": row.name,
+        "price_cents": row.price_cents,
+        "inventory": row.inventory,
+        "commission_type": row.commission_type,
+        "commission_value": (
+            float(row.commission_value)
+            if row.commission_value is not None
+            else 0
+        ),
+        "active": bool(row.active),
+    }
+
+
 @router.post("/events/{event_id}/ticket-types")
 def create_event_ticket_type(
     event_id: int,
