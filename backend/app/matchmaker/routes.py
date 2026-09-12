@@ -1,4 +1,4 @@
-import resend
+﻿import resend
 from datetime import datetime
 import os
 import json
@@ -2424,7 +2424,7 @@ Rules:
 
             bout_lines.append(
                 f"BOUT {order}: "
-                f"{red_name} VS {blue_name} — "
+                f"{red_name} VS {blue_name} â€” "
                 f"{weight} {rounds}".strip()
             )
 
@@ -3771,3 +3771,4 @@ Do not add fake ticket information.
         return {"id": row.id, "status": row.status}
 
     return router
+
