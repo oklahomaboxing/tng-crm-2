@@ -1,5 +1,5 @@
 ﻿from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Float, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Float, Text, LargeBinary
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -51,3 +51,33 @@ class InBodyScan(Base):
     source = Column(String, default="manual")
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+
+
+class MemberProfilePhoto(Base):
+    __tablename__ = "member_profile_photos"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    member_id = Column(
+        Integer,
+        ForeignKey("members.id"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    file_name = Column(String, nullable=False)
+    content_type = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)
+    file_data = Column(LargeBinary, nullable=False)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )

@@ -5,13 +5,13 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFile, File, Response
 from sqlalchemy.orm import Session
 
 from ..database import Base, engine, get_db
 from ..models import User, Member
 from ..auth import hash_password, decode_token
-from .models import MemberAccount, MemberInvite, InBodyScan
+from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto
 from .schemas import ActivateMemberIn, InviteMemberIn, LinkInBodyIn, ManualInBodyScanIn
 
 # The main project currently creates tables before feature routers are loaded.
@@ -294,6 +294,158 @@ def activate_member(data: ActivateMemberIn, db: Session = Depends(get_db)):
     }
 
 
+
+@router.get("/me/photo")
+def member_profile_photo(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account = member_account_for_user(db, user)
+
+    photo = (
+        db.query(MemberProfilePhoto)
+        .filter(
+            MemberProfilePhoto.member_id
+            == account.member_id
+        )
+        .first()
+    )
+
+    if not photo:
+        raise HTTPException(
+            status_code=404,
+            detail="Profile photo not found.",
+        )
+
+    return Response(
+        content=photo.file_data,
+        media_type=photo.content_type,
+        headers={
+            "Cache-Control": "private, max-age=300"
+        },
+    )
+
+
+@router.post("/me/photo")
+async def upload_member_profile_photo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account = member_account_for_user(db, user)
+
+    member = (
+        db.query(Member)
+        .filter(Member.id == account.member_id)
+        .first()
+    )
+
+    if not member:
+        raise HTTPException(
+            status_code=404,
+            detail="Member profile not found.",
+        )
+
+    file_name = str(
+        file.filename or "profile-photo"
+    ).strip()
+
+    contents = await file.read()
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded photo is empty.",
+        )
+
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="Profile photo must be 5 MB or smaller.",
+        )
+
+    detected_type = None
+
+    if contents.startswith(b"\xff\xd8\xff"):
+        detected_type = "image/jpeg"
+
+    elif contents.startswith(b"\x89PNG\r\n\x1a\n"):
+        detected_type = "image/png"
+
+    elif (
+        len(contents) >= 12
+        and contents[0:4] == b"RIFF"
+        and contents[8:12] == b"WEBP"
+    ):
+        detected_type = "image/webp"
+
+    if not detected_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Photo must be JPG, PNG, or WEBP.",
+        )
+
+    photo = (
+        db.query(MemberProfilePhoto)
+        .filter(
+            MemberProfilePhoto.member_id
+            == member.id
+        )
+        .first()
+    )
+
+    if not photo:
+        photo = MemberProfilePhoto(
+            member_id=member.id,
+        )
+        db.add(photo)
+
+    photo.file_name = file_name
+    photo.content_type = detected_type
+    photo.file_size = len(contents)
+    photo.file_data = contents
+    photo.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "message": "Profile photo updated.",
+        "photo_url": "/api/member/me/photo",
+    }
+
+
+@router.delete("/me/photo")
+def delete_member_profile_photo(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account = member_account_for_user(db, user)
+
+    photo = (
+        db.query(MemberProfilePhoto)
+        .filter(
+            MemberProfilePhoto.member_id
+            == account.member_id
+        )
+        .first()
+    )
+
+    if not photo:
+        raise HTTPException(
+            status_code=404,
+            detail="Profile photo not found.",
+        )
+
+    db.delete(photo)
+    db.commit()
+
+    return {
+        "ok": True,
+        "message": "Profile photo removed.",
+    }
+
+
 @router.get("/me")
 def member_me(
     db: Session = Depends(get_db),
@@ -303,6 +455,15 @@ def member_me(
     member = db.query(Member).filter(Member.id == account.member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member profile not found")
+
+    profile_photo = (
+        db.query(MemberProfilePhoto)
+        .filter(
+            MemberProfilePhoto.member_id
+            == member.id
+        )
+        .first()
+    )
 
     latest_scan = (
         db.query(InBodyScan)
@@ -342,7 +503,11 @@ def member_me(
             "next_billing_date": member.next_billing_date,
             "autopay_enabled": member.autopay_enabled,
             "billing_status": member.billing_status,
-            "photo_url": member.photo_url,
+            "photo_url": (
+                "/api/member/me/photo"
+                if profile_photo
+                else member.photo_url
+            ),
         },
         "inbody": {
             "linked": bool(account.inbody_user_id),

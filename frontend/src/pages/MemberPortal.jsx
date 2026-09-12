@@ -41,6 +41,9 @@ function Metric({ label, value, suffix = "" }) {
 
 export default function MemberPortal({ onLogout }) {
   const [data, setData] = useState(null);
+
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+  const [photoWorking, setPhotoWorking] = useState(false);
   const [scans, setScans] = useState([]);
   const [error, setError] = useState("");
   const [showTrainer, setShowTrainer] = useState(false);
@@ -63,6 +66,190 @@ export default function MemberPortal({ onLogout }) {
     }
   }
 
+
+  async function loadMemberProfilePhoto(photoPath) {
+    if (!photoPath) {
+      setProfilePhotoUrl("");
+      return;
+    }
+
+    const token =
+      localStorage.getItem("token");
+
+    try {
+      const response = await fetch(
+        photoPath.startsWith("http")
+          ? photoPath
+          : `${API}${photoPath}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) return;
+
+      const blob = await response.blob();
+      const objectUrl =
+        URL.createObjectURL(blob);
+
+      setProfilePhotoUrl((current) => {
+        if (current) {
+          try {
+            URL.revokeObjectURL(current);
+          } catch (_) {}
+        }
+
+        return objectUrl;
+      });
+    } catch (err) {
+      console.error(
+        "Could not load member profile photo:",
+        err
+      );
+    }
+  }
+
+
+  async function uploadMemberProfilePhoto(file) {
+    if (!file) return;
+
+    if (
+      ![
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+      ].includes(file.type)
+    ) {
+      window.alert(
+        "Please choose a JPG, PNG, or WEBP image."
+      );
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      window.alert(
+        "Profile photo must be 5 MB or smaller."
+      );
+      return;
+    }
+
+    setPhotoWorking(true);
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(
+        `${API}/api/member/me/photo`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const body =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+            "Could not upload profile photo."
+        );
+      }
+
+      await loadMemberProfilePhoto(
+        "/api/member/me/photo"
+      );
+
+      setData((current) => ({
+        ...current,
+        member: {
+          ...current.member,
+          photo_url:
+            "/api/member/me/photo",
+        },
+      }));
+    } catch (err) {
+      window.alert(
+        err.message ||
+          "Could not upload profile photo."
+      );
+    } finally {
+      setPhotoWorking(false);
+    }
+  }
+
+
+  async function removeMemberProfilePhoto() {
+    const confirmed =
+      window.confirm(
+        "Remove your profile photo?"
+      );
+
+    if (!confirmed) return;
+
+    setPhotoWorking(true);
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/member/me/photo`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const body =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+            "Could not remove profile photo."
+        );
+      }
+
+      setProfilePhotoUrl((current) => {
+        if (current) {
+          try {
+            URL.revokeObjectURL(current);
+          } catch (_) {}
+        }
+
+        return "";
+      });
+
+      setData((current) => ({
+        ...current,
+        member: {
+          ...current.member,
+          photo_url: null,
+        },
+      }));
+    } catch (err) {
+      window.alert(
+        err.message ||
+          "Could not remove profile photo."
+      );
+    } finally {
+      setPhotoWorking(false);
+    }
+  }
+
+
   useEffect(() => { load(); }, []);
 
   if (error) {
@@ -72,6 +259,19 @@ export default function MemberPortal({ onLogout }) {
       </Container>
     );
   }
+
+  useEffect(() => {
+    const photoPath =
+      data?.member?.photo_url;
+
+    if (photoPath) {
+      loadMemberProfilePhoto(photoPath);
+    } else {
+      setProfilePhotoUrl("");
+    }
+  }, [data?.member?.photo_url]);
+
+
   if (!data) {
     return <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
   }
@@ -85,9 +285,78 @@ export default function MemberPortal({ onLogout }) {
         <Container maxWidth="lg">
           <Stack direction="row" alignItems="center" justifyContent="space-between">
             <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar src={m.photo_url || undefined}>
-                {m.first_name?.[0]}{m.last_name?.[0]}
-              </Avatar>
+              <Box sx={{ position: "relative" }}>
+                <label
+                  title="Change profile photo"
+                  style={{
+                    cursor: photoWorking
+                      ? "not-allowed"
+                      : "pointer",
+                  }}
+                >
+                  <Avatar
+                    src={profilePhotoUrl || undefined}
+                    sx={{
+                      width: 54,
+                      height: 54,
+                      border:
+                        "2px solid rgba(255,255,255,.35)",
+                    }}
+                  >
+                    {m.first_name?.[0]}
+                    {m.last_name?.[0]}
+                  </Avatar>
+
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={photoWorking}
+                    onChange={(e) => {
+                      const file =
+                        e.target.files?.[0];
+
+                      if (file) {
+                        uploadMemberProfilePhoto(
+                          file
+                        );
+                      }
+
+                      e.target.value = "";
+                    }}
+                    style={{
+                      display: "none",
+                    }}
+                  />
+                </label>
+
+                {profilePhotoUrl && (
+                  <button
+                    type="button"
+                    title="Remove profile photo"
+                    disabled={photoWorking}
+                    onClick={
+                      removeMemberProfilePhoto
+                    }
+                    style={{
+                      position: "absolute",
+                      right: -6,
+                      bottom: -5,
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      border:
+                        "2px solid #09090b",
+                      background: "#d71920",
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 900,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ?
+                  </button>
+                )}
+              </Box>
               <Box>
                 <Typography fontWeight={900}>TNG MEMBER</Typography>
                 <Typography variant="body2" sx={{ opacity: .75 }}>
