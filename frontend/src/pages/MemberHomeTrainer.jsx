@@ -129,6 +129,7 @@ export default function MemberHomeTrainer() {
 
   const timerRef = useRef(null);
   const promptRef = useRef(null);
+  const commandIndexRef = useRef(0);
   const stateRef = useRef({
     running: false,
     paused: false,
@@ -143,7 +144,7 @@ export default function MemberHomeTrainer() {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
+    utterance.rate = 0.9;
     utterance.pitch = 0.95;
     utterance.volume = 1;
 
@@ -163,12 +164,15 @@ export default function MemberHomeTrainer() {
   }
 
   function callNextPrompt() {
-    const next = getPrompt(commandIndex);
-    const upcoming = getPrompt(commandIndex + 1);
+    const index = commandIndexRef.current;
+    const next = getPrompt(index);
+    const upcoming = getPrompt(index + 1);
 
     setPrompt(next);
     setNextPrompt(upcoming);
-    setCommandIndex((old) => old + 1);
+
+    commandIndexRef.current = index + 1;
+    setCommandIndex(index + 1);
 
     speak(next);
   }
@@ -200,6 +204,7 @@ export default function MemberHomeTrainer() {
     setPhase("Ready");
     setCurrentRound(0);
     setTimeLeft(0);
+    commandIndexRef.current = 0;
     setCommandIndex(0);
     setPrompt("Ready to train");
     setNextPrompt("");
@@ -218,6 +223,8 @@ export default function MemberHomeTrainer() {
     setPhase("Work");
     setCurrentRound(roundNumber);
     setTimeLeft(seconds);
+
+    commandIndexRef.current = 0;
     setCommandIndex(0);
 
     speak(`Round ${roundNumber}. Begin.`);
@@ -236,7 +243,7 @@ export default function MemberHomeTrainer() {
       ) {
         callNextPrompt();
       }
-    }, 8000);
+    }, 12000);
   }
 
   function startRest(roundNumber) {
