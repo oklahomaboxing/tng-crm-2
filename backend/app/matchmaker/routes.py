@@ -2018,6 +2018,59 @@ Rules:
             bout_status = (bout.status or "draft").lower()
             is_active_bout = bout_status not in ("cancelled", "void")
 
+            red_contract = (
+                db.query(BoxingContract)
+                .filter(
+                    BoxingContract.bout_id == bout.id,
+                    BoxingContract.fighter_id ==
+                    bout.red_fighter_id,
+                )
+                .first()
+            )
+
+            blue_contract = (
+                db.query(BoxingContract)
+                .filter(
+                    BoxingContract.bout_id == bout.id,
+                    BoxingContract.fighter_id ==
+                    bout.blue_fighter_id,
+                )
+                .first()
+            )
+
+            def contract_summary(contract):
+                if not contract:
+                    return None
+
+                change_request = ""
+
+                terms = str(
+                    contract.additional_terms or ""
+                )
+
+                marker = "[FIGHTER CHANGE REQUEST]"
+
+                if marker in terms:
+                    change_request = (
+                        terms.split(marker)[-1].strip()
+                    )
+
+                return {
+                    "id": contract.id,
+                    "fighter_id": contract.fighter_id,
+                    "status": contract.status or "draft",
+                    "contract_date":
+                        contract.contract_date or "",
+                    "maximum_weight":
+                        contract.maximum_weight,
+                    "gross_purse":
+                        contract.gross_purse or 0,
+                    "travel_expense":
+                        contract.travel_expense or 0,
+                    "change_request":
+                        change_request,
+                }
+
             bout_rows.append({
                 "id": bout.id,
                 "bout_order": bout.bout_order or 0,
@@ -2048,6 +2101,12 @@ Rules:
                     event_series_payload(
                         bout.blue_fighter_id
                     ),
+
+                "red_contract":
+                    contract_summary(red_contract),
+
+                "blue_contract":
+                    contract_summary(blue_contract),
             })
 
 

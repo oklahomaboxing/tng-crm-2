@@ -1836,6 +1836,60 @@ the contestant
                                 "Red Corner"}
                             </Typography>
 
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              <Typography
+                                variant="body2"
+                                fontWeight={800}
+                              >
+                                Fighter Response:
+                              </Typography>
+
+                              <Chip
+                                size="small"
+                                label={
+                                  bout.red_contract?.status
+                                    ? String(
+                                        bout.red_contract.status
+                                      )
+                                        .replaceAll("_", " ")
+                                        .toUpperCase()
+                                    : "NOT SENT"
+                                }
+                                color={
+                                  bout.red_contract?.status ===
+                                    "accepted" ||
+                                  bout.red_contract?.status ===
+                                    "signed"
+                                    ? "success"
+                                    : bout.red_contract?.status ===
+                                        "declined"
+                                      ? "error"
+                                      : bout.red_contract?.status ===
+                                          "change_requested"
+                                        ? "warning"
+                                        : "default"
+                                }
+                              />
+                            </Stack>
+
+                            {bout.red_contract
+                              ?.change_request && (
+                              <Alert severity="warning">
+                                <strong>
+                                  Fighter requested:
+                                </strong>{" "}
+                                {
+                                  bout.red_contract
+                                    .change_request
+                                }
+                              </Alert>
+                            )}
+
                             <TextField
                               fullWidth
                               type="number"
@@ -1907,6 +1961,60 @@ the contestant
                               {bout.blue?.legal_name ||
                                 "Blue Corner"}
                             </Typography>
+
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              <Typography
+                                variant="body2"
+                                fontWeight={800}
+                              >
+                                Fighter Response:
+                              </Typography>
+
+                              <Chip
+                                size="small"
+                                label={
+                                  bout.blue_contract?.status
+                                    ? String(
+                                        bout.blue_contract.status
+                                      )
+                                        .replaceAll("_", " ")
+                                        .toUpperCase()
+                                    : "NOT SENT"
+                                }
+                                color={
+                                  bout.blue_contract?.status ===
+                                    "accepted" ||
+                                  bout.blue_contract?.status ===
+                                    "signed"
+                                    ? "success"
+                                    : bout.blue_contract?.status ===
+                                        "declined"
+                                      ? "error"
+                                      : bout.blue_contract?.status ===
+                                          "change_requested"
+                                        ? "warning"
+                                        : "default"
+                                }
+                              />
+                            </Stack>
+
+                            {bout.blue_contract
+                              ?.change_request && (
+                              <Alert severity="warning">
+                                <strong>
+                                  Fighter requested:
+                                </strong>{" "}
+                                {
+                                  bout.blue_contract
+                                    .change_request
+                                }
+                              </Alert>
+                            )}
 
                             <TextField
                               fullWidth
