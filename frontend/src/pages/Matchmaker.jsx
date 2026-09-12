@@ -209,17 +209,26 @@ export default function Matchmaker() {
       setMsgType("success");
 
       if (body.already_sent) {
-        setMsg(
-          `An activation email has already been sent to ${fighter.legal_name}.`
-        );
+        const notice =
+          `An activation email has already been sent to ${fighter.legal_name}.`;
+
+        setMsg(notice);
+        window.alert(notice);
+
       } else if (body.email_sent) {
-        setMsg(
-          `Fighter Portal activation email sent to ${fighter.email}.`
-        );
+        const notice =
+          `Fighter Portal activation email sent to ${fighter.email}.`;
+
+        setMsg(notice);
+        window.alert(notice);
+
       } else {
-        setMsg(
-          `Fighter invite created, but the email could not be sent. ${body.email_error || ""}`
-        );
+        const notice =
+          `Fighter invite created, but the email could not be sent. ${body.email_error || "Unknown email error."}`;
+
+        setMsgType("error");
+        setMsg(notice);
+        window.alert(notice);
       }
 
       await loadFighterInviteStatus(
@@ -227,11 +236,13 @@ export default function Matchmaker() {
       );
 
     } catch (error) {
-      setMsgType("error");
-      setMsg(
+      const notice =
         error.message ||
-        "Could not activate fighter login"
-      );
+        "Could not activate fighter login";
+
+      setMsgType("error");
+      setMsg(notice);
+      window.alert(notice);
     } finally {
       setFighterInviteLoading((current) => ({
         ...current,
