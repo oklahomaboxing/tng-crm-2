@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text, LargeBinary
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -242,6 +242,59 @@ class BoxingContract(Base):
     status = Column(String, default="draft")
 
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
+class BoxingSignedContractDocument(Base):
+    __tablename__ = "boxing_signed_contract_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # One current signed document per contract.
+    contract_id = Column(
+        Integer,
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    file_name = Column(String, default="")
+    content_type = Column(
+        String,
+        default="application/pdf",
+    )
+    file_size = Column(Integer, default=0)
+
+    # Stored privately in Postgres.
+    # This is never exposed through /uploads.
+    file_data = Column(
+        LargeBinary,
+        nullable=False,
+    )
+
+    source = Column(
+        String,
+        default="staff_upload",
+    )
+
+    uploaded_by_user_id = Column(
+        Integer,
+        nullable=True,
+    )
+    uploaded_by_name = Column(
+        String,
+        default="",
+    )
+
+    uploaded_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
     updated_at = Column(
         DateTime,
         default=datetime.utcnow,

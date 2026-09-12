@@ -4,11 +4,11 @@ import os
 import json
 import urllib.request
 import urllib.error
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, inspect, text
 from ..database import get_db, engine
-from .models import BoxingContract, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
+from .models import BoxingContract, BoxingSignedContractDocument, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -3178,6 +3178,237 @@ Do not add fake ticket information.
                 f"Contract email sent to {fighter_email}."
             ),
         }
+
+
+    @router.get("/contracts/{contract_id}/signed-status")
+    def signed_contract_status(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        document = (
+            db.query(BoxingSignedContractDocument)
+            .filter(
+                BoxingSignedContractDocument.contract_id
+                == contract.id
+            )
+            .first()
+        )
+
+        if not document:
+            return {
+                "contract_id": contract.id,
+                "signed_document": False,
+                "status": "not_uploaded",
+            }
+
+        return {
+            "contract_id": contract.id,
+            "signed_document": True,
+            "status": "signed_document_uploaded",
+            "document_id": document.id,
+            "file_name": document.file_name,
+            "file_size": document.file_size,
+            "content_type": document.content_type,
+            "source": document.source,
+            "uploaded_by_name":
+                document.uploaded_by_name,
+            "uploaded_at": document.uploaded_at,
+        }
+
+
+    @router.post("/contracts/{contract_id}/signed-upload")
+    async def upload_signed_contract(
+        contract_id: int,
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        file_name = str(
+            file.filename or "signed-contract.pdf"
+        ).strip()
+
+        if not file_name.lower().endswith(".pdf"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Signed contract must be a PDF."
+                ),
+            )
+
+        contents = await file.read()
+
+        if not contents:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded PDF is empty.",
+            )
+
+        max_size = 10 * 1024 * 1024
+
+        if len(contents) > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Signed contract PDF must be "
+                    "10 MB or smaller."
+                ),
+            )
+
+        # Verify the file actually begins like a PDF,
+        # rather than trusting only the filename.
+        if not contents.startswith(b"%PDF"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "The uploaded file is not a valid PDF."
+                ),
+            )
+
+        document = (
+            db.query(BoxingSignedContractDocument)
+            .filter(
+                BoxingSignedContractDocument.contract_id
+                == contract.id
+            )
+            .first()
+        )
+
+        if not document:
+            document = BoxingSignedContractDocument(
+                contract_id=contract.id,
+            )
+            db.add(document)
+
+        document.file_name = file_name
+        document.content_type = "application/pdf"
+        document.file_size = len(contents)
+        document.file_data = contents
+        document.source = "staff_upload"
+
+        document.uploaded_by_user_id = getattr(
+            user,
+            "id",
+            None,
+        )
+
+        document.uploaded_by_name = str(
+            getattr(user, "name", "")
+            or getattr(user, "email", "")
+            or ""
+        )
+
+        document.uploaded_at = datetime.utcnow()
+        document.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(document)
+
+        return {
+            "ok": True,
+            "contract_id": contract.id,
+            "document_id": document.id,
+            "status": "signed_document_uploaded",
+            "file_name": document.file_name,
+            "file_size": document.file_size,
+            "uploaded_by_name":
+                document.uploaded_by_name,
+            "uploaded_at": document.uploaded_at,
+            "message": (
+                "Signed contract uploaded securely."
+            ),
+        }
+
+
+    @router.get("/contracts/{contract_id}/signed-file")
+    def download_signed_contract(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        document = (
+            db.query(BoxingSignedContractDocument)
+            .filter(
+                BoxingSignedContractDocument.contract_id
+                == contract.id
+            )
+            .first()
+        )
+
+        if not document:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "No signed contract has been "
+                    "uploaded yet."
+                ),
+            )
+
+        safe_name = (
+            document.file_name
+            or f"contract-{contract.id}-signed.pdf"
+        ).replace('"', "")
+
+        return Response(
+            content=document.file_data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition":
+                    f'attachment; filename="{safe_name}"',
+                "Cache-Control":
+                    "private, no-store, max-age=0",
+                "X-Content-Type-Options":
+                    "nosniff",
+            },
+        )
 
 
     @router.patch("/contracts/{contract_id}")
