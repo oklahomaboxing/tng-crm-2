@@ -1,3 +1,4 @@
+import { openOfficialContract } from "../utils/officialContract";
 ﻿import { useEffect, useState } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
@@ -245,81 +246,16 @@ export default function FighterPortal({ onLogout }) {
   }
 
 
-  async function downloadMyFullContract(
-    contractId,
-    eventName
-  ) {
-    setContractWorkingId(contractId);
-
+  function viewMyFullContract(contract) {
     try {
-      const token =
-        localStorage.getItem("token");
-
-      const response = await fetch(
-        `${API}/api/fighter/me/contracts/${contractId}/pdf`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        let detail =
-          "Could not download contract.";
-
-        try {
-          const body =
-            await response.json();
-
-          detail =
-            body.detail || detail;
-        } catch {
-          // PDF endpoint may return
-          // a non-JSON server error.
-        }
-
-        throw new Error(detail);
-      }
-
-      const blob =
-        await response.blob();
-
-      const url =
-        URL.createObjectURL(blob);
-
-      const link =
-        document.createElement("a");
-
-      link.href = url;
-
-      link.download =
-        `${eventName || "TNG"}-full-contract.pdf`
-          .replace(
-            /[^a-z0-9._-]+/gi,
-            "-"
-          );
-
-      document.body.appendChild(link);
-
-      link.click();
-
-      link.remove();
-
-      URL.revokeObjectURL(url);
-
+      openOfficialContract(contract);
     } catch (err) {
       const notice =
         err.message ||
-        "Could not download contract.";
+        "Could not open contract.";
 
       setMessage(notice);
-
       window.alert(notice);
-
-    } finally {
-      setContractWorkingId(null);
     }
   }
 
@@ -1252,7 +1188,7 @@ export default function FighterPortal({ onLogout }) {
                         cursor: "pointer",
                       }}
                     >
-                      Download Full Contract PDF
+                      View / Print Full Contract
                     </button>
 
                     <button

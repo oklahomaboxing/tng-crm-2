@@ -711,6 +711,24 @@ def my_contracts(
                 "status": row.status,
                 "contract_date":
                     row.contract_date,
+                "boxer_name":
+                    row.boxer_name,
+                "boxer_federal_id":
+                    row.boxer_federal_id,
+                "boxer_address":
+                    row.boxer_address,
+                "boxer_phone":
+                    row.boxer_phone,
+                "boxer_manager":
+                    row.boxer_manager,
+                "promoter_name":
+                    row.promoter_name,
+                "promoter_address":
+                    row.promoter_address,
+                "promoter_phone":
+                    row.promoter_phone,
+                "promoter_matchmaker":
+                    row.promoter_matchmaker,
                 "event_name":
                     row.event_name,
                 "event_date":
@@ -727,6 +745,10 @@ def my_contracts(
                     row.maximum_weight,
                 "gross_purse":
                     row.gross_purse,
+                "deductions":
+                    row.deductions,
+                "cancellation_pay":
+                    row.cancellation_pay,
                 "travel_type":
                     getattr(
                         row,
