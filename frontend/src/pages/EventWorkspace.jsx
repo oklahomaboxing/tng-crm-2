@@ -255,6 +255,171 @@ export default function EventWorkspace({
     }));
   }
 
+  async function uploadSignedContract(
+    contractId,
+    fighterName
+  ) {
+    if (!contractId) {
+      window.alert(
+        "Generate the contract first."
+      );
+      return;
+    }
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/pdf,.pdf";
+
+    input.onchange = async () => {
+      const file = input.files?.[0];
+
+      if (!file) return;
+
+      if (
+        file.type &&
+        file.type !== "application/pdf"
+      ) {
+        window.alert(
+          "Please select a PDF contract."
+        );
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const token =
+          localStorage.getItem("token");
+
+        const response = await fetch(
+          `${API}/api/boxing/contracts/${contractId}/signed-upload`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          }
+        );
+
+        const body = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            body.detail ||
+              "Could not upload signed contract."
+          );
+        }
+
+        const notice =
+          body.message ||
+          `${fighterName} signed contract uploaded.`;
+
+        setMessage(notice);
+        window.alert(notice);
+
+        await load();
+      } catch (error) {
+        const notice =
+          error.message ||
+          "Could not upload signed contract.";
+
+        setMessage(notice);
+        window.alert(notice);
+      }
+    };
+
+    input.click();
+  }
+
+
+  async function downloadSignedContract(
+    contractId,
+    fighterName
+  ) {
+    if (!contractId) {
+      window.alert(
+        "Generate the contract first."
+      );
+      return;
+    }
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/boxing/contracts/${contractId}/signed-file`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        let detail =
+          "No signed contract is available yet.";
+
+        try {
+          const body = await response.json();
+          detail = body.detail || detail;
+        } catch {
+          // response may not be JSON
+        }
+
+        throw new Error(detail);
+      }
+
+      const blob = await response.blob();
+
+      const disposition =
+        response.headers.get(
+          "Content-Disposition"
+        ) || "";
+
+      const match =
+        disposition.match(
+          /filename="([^"]+)"/i
+        );
+
+      const fallbackName =
+        `${fighterName || "fighter"}-signed-contract.pdf`
+          .replace(/[^a-z0-9._-]+/gi, "-");
+
+      const fileName =
+        match?.[1] || fallbackName;
+
+      const url =
+        window.URL.createObjectURL(blob);
+
+      const link =
+        document.createElement("a");
+
+      link.href = url;
+      link.download = fileName;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(url);
+
+      setMessage(
+        `Downloaded signed contract for ${fighterName}.`
+      );
+    } catch (error) {
+      const notice =
+        error.message ||
+        "Could not download signed contract.";
+
+      setMessage(notice);
+      window.alert(notice);
+    }
+  }
+
+
   async function sendContractEmail(
     contractId,
     fighterName
@@ -2301,6 +2466,34 @@ the contestant
                             </Button>
 
                             <Button
+                              variant="outlined"
+                              disabled={!bout.red_contract?.id}
+                              onClick={() =>
+                                uploadSignedContract(
+                                  bout.red_contract?.id,
+                                  bout.red?.legal_name ||
+                                    "Red Corner"
+                                )
+                              }
+                            >
+                              Upload Signed PDF
+                            </Button>
+
+                            <Button
+                              variant="text"
+                              disabled={!bout.red_contract?.id}
+                              onClick={() =>
+                                downloadSignedContract(
+                                  bout.red_contract?.id,
+                                  bout.red?.legal_name ||
+                                    "Red Corner"
+                                )
+                              }
+                            >
+                              Download Signed PDF
+                            </Button>
+
+                            <Button
                               variant="contained"
                               onClick={() =>
                                 generateContract(
@@ -2642,6 +2835,34 @@ the contestant
                               }
                             >
                               Send Contract Email
+                            </Button>
+
+                            <Button
+                              variant="outlined"
+                              disabled={!bout.blue_contract?.id}
+                              onClick={() =>
+                                uploadSignedContract(
+                                  bout.blue_contract?.id,
+                                  bout.blue?.legal_name ||
+                                    "Blue Corner"
+                                )
+                              }
+                            >
+                              Upload Signed PDF
+                            </Button>
+
+                            <Button
+                              variant="text"
+                              disabled={!bout.blue_contract?.id}
+                              onClick={() =>
+                                downloadSignedContract(
+                                  bout.blue_contract?.id,
+                                  bout.blue?.legal_name ||
+                                    "Blue Corner"
+                                )
+                              }
+                            >
+                              Download Signed PDF
                             </Button>
 
                             <Button
