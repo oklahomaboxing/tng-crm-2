@@ -37,6 +37,7 @@ import Matchmaker from "./pages/Matchmaker.jsx";
 import TicketingDashboard from "./pages/TicketingDashboard.jsx";
 import PublicTicketCheckout from "./pages/PublicTicketCheckout.jsx";
 import FighterActivate from "./pages/FighterActivate.jsx";
+import FighterPortal from "./pages/FighterPortal.jsx";
 import EventCalendar from "./pages/EventCalendar.jsx";
 import PublicFightCalendar from "./pages/PublicFightCalendar.jsx";
 import FighterRegistration from "./pages/FighterRegistration.jsx";
@@ -322,7 +323,7 @@ async function submitPasswordReset() {
     const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
     try {
-      if (role !== "rep") {
+      if (!["rep", "member", "fighter"].includes(role)) {
         const dashboardResponse = await fetch(`${API}/api/dashboard`, { headers });
         if (dashboardResponse.ok) setDash(await dashboardResponse.json());
       }
@@ -726,6 +727,14 @@ if (window.location.pathname === "/register") return <JoinPage />;
 
   if (role === "member") {
     return <MemberPortal onLogout={() => window.location.reload()} />;
+  }
+
+  if (role === "fighter") {
+    return <FighterPortal onLogout={logout} />;
+  }
+
+  if (role === "fighter") {
+    return <FighterPortal onLogout={logout} />;
   }
 
 return (
