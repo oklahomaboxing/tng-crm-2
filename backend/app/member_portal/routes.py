@@ -398,18 +398,67 @@ async def inbody_webhook(request: Request):
             detail="Invalid webhook credentials",
         )
 
-    # Parse the incoming request only to confirm that it is
-    # valid JSON. Do not log the body because it may contain
-    # member health/body-composition information.
+    # Parse incoming JSON without logging the body because
+    # it may contain member health/body-composition information.
     try:
         payload = await request.json()
     except Exception:
-        payload = {}
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid webhook payload",
+        )
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="Webhook payload must be a JSON object",
+        )
+
+    # LookinBody webhook identifiers.
+    # UserID = member ID stored in LookinBody Web.
+    # TelHP = UserToken / mobile phone identifier.
+    user_id = str(payload.get("UserID") or "").strip()
+    user_token = str(payload.get("TelHP") or "").strip()
+    test_datetime = str(
+        payload.get("TestDatetimes") or ""
+    ).strip()
+
+    is_temp_raw = str(
+        payload.get("IsTempData") or ""
+    ).strip().lower()
+
+    is_temp = is_temp_raw in {
+        "true",
+        "1",
+        "yes",
+        "y",
+    }
+
+    # Temporary measurements are not available through the
+    # result API until reviewed/corrected in LookinBody Web.
+    if is_temp:
+        return {
+            "ok": True,
+            "received": True,
+            "status": "temporary_data_ignored",
+            "user_id_present": bool(user_id),
+            "user_token_present": bool(user_token),
+            "test_datetime_present": bool(test_datetime),
+        }
+
+    if not user_id and not user_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Webhook contains no UserID or UserToken",
+        )
 
     return {
         "ok": True,
         "received": True,
-        "payload_type": type(payload).__name__,
+        "status": "ready_for_result_sync",
+        "user_id_present": bool(user_id),
+        "user_token_present": bool(user_token),
+        "test_datetime_present": bool(test_datetime),
     }
 
 
