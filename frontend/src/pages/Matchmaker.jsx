@@ -9,6 +9,7 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import EventRoundedIcon from "@mui/icons-material/EventRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
+import TicketingDashboard from "./TicketingDashboard.jsx";
 import TicketSellerControls from "../components/tickets/TicketSellerControls.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -79,6 +80,7 @@ export default function Matchmaker() {
   const [fighterId, setFighterId] = useState("");
   const [eventId, setEventId] = useState("");
   const [eventWorkspaceId, setEventWorkspaceId] = useState("");
+  const [ticketSalesOpen, setTicketSalesOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -1145,6 +1147,22 @@ export default function Matchmaker() {
     [fighters]
   );
 
+  if (ticketSalesOpen) {
+    return (
+      <Box>
+        <Button
+          variant="outlined"
+          onClick={() => setTicketSalesOpen(false)}
+          sx={{ mb: 2 }}
+        >
+          Back to Matchmaker
+        </Button>
+
+        <TicketingDashboard />
+      </Box>
+    );
+  }
+
   if (eventWorkspaceId) {
     return (
       <EventWorkspace
@@ -1187,6 +1205,14 @@ export default function Matchmaker() {
               onClick={() => setEventsOpen(true)}
             >
               Events
+            </Button>
+
+            <Button
+              variant="outlined"
+              startIcon={<SportsMmaRoundedIcon />}
+              onClick={() => setTicketSalesOpen(true)}
+            >
+              Ticket Sales
             </Button>
 
             <Button
