@@ -30,6 +30,12 @@ export default function TicketingDashboard() {
   const [ticketTypes, setTicketTypes] = useState([]);
   const [ticketPriceMessage, setTicketPriceMessage] = useState("");
   const [savingTicketTypeId, setSavingTicketTypeId] = useState(null);
+  const [creatingTicketType, setCreatingTicketType] = useState(false);
+  const [newTicketType, setNewTicketType] = useState({
+    name: "",
+    price: "",
+    inventory: "",
+  });
 
   async function loadEvents() {
     try {
@@ -128,6 +134,92 @@ export default function TicketingDashboard() {
           : ticket
       )
     );
+  }
+
+  async function createTicketType() {
+    if (!eventId) return;
+
+    const name = newTicketType.name.trim();
+    const price = Number(newTicketType.price);
+
+    if (!name) {
+      setTicketPriceMessage("Enter a ticket type name.");
+      return;
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+      setTicketPriceMessage("Enter a valid ticket price.");
+      return;
+    }
+
+    const inventoryText = String(
+      newTicketType.inventory || ""
+    ).trim();
+
+    let inventory = null;
+
+    if (inventoryText !== "") {
+      inventory = Number(inventoryText);
+
+      if (
+        !Number.isInteger(inventory) ||
+        inventory < 0
+      ) {
+        setTicketPriceMessage(
+          "Inventory must be a whole number."
+        );
+        return;
+      }
+    }
+
+    try {
+      setCreatingTicketType(true);
+      setTicketPriceMessage("");
+
+      const response = await fetch(
+        `${API}/api/ticketing/events/${eventId}/ticket-types`,
+        {
+          method: "POST",
+          headers: {
+            ...authHeaders(),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            price_cents: Math.round(price * 100),
+            inventory,
+            commission_type: "none",
+            commission_value: 0,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not create ticket type"
+        );
+      }
+
+      setNewTicketType({
+        name: "",
+        price: "",
+        inventory: "",
+      });
+
+      setTicketPriceMessage(
+        `${name} created successfully.`
+      );
+
+      await loadTicketTypes(eventId);
+    } catch (error) {
+      setTicketPriceMessage(
+        error.message || "Could not create ticket type"
+      );
+    } finally {
+      setCreatingTicketType(false);
+    }
   }
 
   async function saveTicketType(ticket) {
@@ -510,6 +602,159 @@ export default function TicketingDashboard() {
             >
               Refresh Prices
             </button>
+          </div>
+
+          <div
+            style={{
+              marginBottom: 18,
+              padding: 16,
+              borderRadius: 10,
+              border: "1px solid #ddd",
+              background: "#fff",
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>
+              Add Ticket Type
+            </h3>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                flexWrap: "wrap",
+                alignItems: "end",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    marginBottom: 5,
+                  }}
+                >
+                  Ticket Name
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="General Admission"
+                  value={newTicketType.name}
+                  onChange={(e) =>
+                    setNewTicketType((old) => ({
+                      ...old,
+                      name: e.target.value,
+                    }))
+                  }
+                  style={{
+                    padding: 9,
+                    minWidth: 200,
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    marginBottom: 5,
+                  }}
+                >
+                  Price
+                </label>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <span>$</span>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="40.00"
+                    value={newTicketType.price}
+                    onChange={(e) =>
+                      setNewTicketType((old) => ({
+                        ...old,
+                        price: e.target.value,
+                      }))
+                    }
+                    style={{
+                      padding: 9,
+                      width: 110,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    marginBottom: 5,
+                  }}
+                >
+                  Inventory
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Unlimited"
+                  value={newTicketType.inventory}
+                  onChange={(e) =>
+                    setNewTicketType((old) => ({
+                      ...old,
+                      inventory: e.target.value,
+                    }))
+                  }
+                  style={{
+                    padding: 9,
+                    width: 120,
+                  }}
+                />
+
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#777",
+                    marginTop: 3,
+                  }}
+                >
+                  Leave blank for unlimited
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={createTicketType}
+                disabled={creatingTicketType}
+                style={{
+                  background: "#d71920",
+                  color: "#fff",
+                  border: 0,
+                  borderRadius: 8,
+                  padding: "10px 18px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                {creatingTicketType
+                  ? "Creating..."
+                  : "+ Add Ticket"}
+              </button>
+            </div>
           </div>
 
           {ticketPriceMessage && (
