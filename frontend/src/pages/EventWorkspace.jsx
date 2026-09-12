@@ -1069,7 +1069,7 @@ the contestant
                   variant="h4"
                   fontWeight={950}
                 >
-                  {bouts.length}
+                  {activeBouts.length}
                 </Typography>
               </CardContent>
             </Card>
