@@ -31,7 +31,6 @@ import Leads from "./pages/Leads.jsx";
 import FrontDesk from "./pages/FrontDesk.jsx";
 import Products from "./pages/Products.jsx";
 import DuplicateReview from "./pages/DuplicateReview.jsx";
-import AITrainer from "./pages/AITrainer.jsx";
 import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
 import Matchmaker from "./pages/Matchmaker.jsx";
 import TicketingDashboard from "./pages/TicketingDashboard.jsx";
@@ -763,7 +762,7 @@ return (
       {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
       {page === "Leads" && <Leads />}
       {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
-      {page === "TNG Academy" && role !== "rep" && <TNGAcademy />}
+      {page === "TNGTrainer" && role !== "rep" && <TNGAcademy />}
       {page === "Matchmaker" && role !== "rep" && <Matchmaker />}
       {page === "Ticket Sales" && role !== "rep" && <TicketingDashboard />}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}

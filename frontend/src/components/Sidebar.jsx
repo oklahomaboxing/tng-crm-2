@@ -28,7 +28,7 @@ export const ROLE_MENUS = {
   admin: [
     "Dashboard",
     "Members",
-    "TNG Academy",
+    "TNGTrainer",
     "Matchmaker",
     "Fight Calendar",
     "Products",
@@ -40,7 +40,6 @@ export const ROLE_MENUS = {
     "Marketing Center",
     "Clover",
     "Duplicate Review",
-    "AI Trainer",
     "Security Center",
     "Reports",
     "User Management",
@@ -52,7 +51,7 @@ export const ROLE_MENUS = {
     "Sales",
     "Leads",
     "QR Referrals",
-    "AI Trainer",
+    "TNGTrainer",
   ],
   rep: ["Sales", "Leads", "QR Referrals"],
 };
@@ -60,7 +59,7 @@ export const ROLE_MENUS = {
 const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
   Members: <PeopleAltRoundedIcon />,
-  "TNG Academy": <SchoolRoundedIcon />,
+  "TNGTrainer": <SportsMmaRoundedIcon />,
   Matchmaker: <SportsMmaRoundedIcon />,
   "Fight Calendar": <EventRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
@@ -72,7 +71,6 @@ const ICONS = {
   "Marketing Center": <CampaignRoundedIcon />,
   Clover: <SyncAltRoundedIcon />,
   "Duplicate Review": <ContentCopyRoundedIcon />,
-  "AI Trainer": <SportsMmaRoundedIcon />,
   Reports: <AssessmentRoundedIcon />,
   "User Management": <ManageAccountsRoundedIcon />,
 };
