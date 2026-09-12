@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -244,6 +244,13 @@ export default function PublicTicketCheckout() {
       return;
     }
 
+    if (total <= 0) {
+      setMessage(
+        "Select at least one paid ticket."
+      );
+      return;
+    }
+
     if (
       !buyerName.trim() ||
       !buyerEmail.trim()
@@ -456,7 +463,7 @@ export default function PublicTicketCheckout() {
         <div style={styles.eventInfo}>
           {data.event?.event_date}
           {data.event?.venue
-            ? ` • ${data.event.venue}`
+            ? ` â€¢ ${data.event.venue}`
             : ""}
         </div>
 
@@ -492,7 +499,14 @@ export default function PublicTicketCheckout() {
           >
             {(
               data.ticket_types || []
-            ).map((ticket) => (
+            )
+              .filter(
+                (ticket) =>
+                  Number(
+                    ticket.price_cents || 0
+                  ) > 0
+              )
+              .map((ticket) => (
               <div
                 key={ticket.id}
                 style={styles.ticket}
@@ -594,16 +608,14 @@ export default function PublicTicketCheckout() {
             </div>
 
             <button
-              disabled={submitting}
+              disabled={
+                submitting || total <= 0
+              }
               style={styles.buyButton}
             >
               {submitting
-                ? (total === 0
-                    ? "Issuing Ticket..."
-                    : "Opening Clover...")
-                : (total === 0
-                    ? "Get Free Ticket"
-                    : `Buy Tickets — ${money(total)}`)}
+                ? "Opening Clover..."
+                : `Buy Tickets - ${money(total)}`}
             </button>
 
             <div
@@ -764,3 +776,4 @@ const styles = {
     marginBottom: 20,
   },
 };
+
