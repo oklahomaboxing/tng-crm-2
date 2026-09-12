@@ -1793,8 +1793,7 @@ export default function Matchmaker() {
                               disabled={
                                 fighterInviteLoading[f.id] ||
                                 !(f.email || "").trim() ||
-                                fighterInviteStatus[f.id]?.activated ||
-                                fighterInviteStatus[f.id]?.invite_pending
+                                fighterInviteStatus[f.id]?.activated
                               }
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1808,7 +1807,7 @@ export default function Matchmaker() {
                                   : fighterInviteStatus[f.id]?.activated
                                     ? "Login Active"
                                     : fighterInviteStatus[f.id]?.invite_pending
-                                      ? "Invite Sent"
+                                      ? "Resend Invite"
                                       : "Activate Login"}
                             </Button>
 

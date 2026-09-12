@@ -282,22 +282,10 @@ def create_fighter_invite(
     )
 
     if active_invite:
-        return {
-            "fighter_id": fighter.id,
-            "email": email,
-            "already_sent": True,
-            "email_sent": False,
-            "message": (
-                "Activation email has "
-                "already been sent. "
-                "A new invitation cannot "
-                "be sent until the current "
-                "7-day invitation expires."
-            ),
-            "expires_at": (
-                active_invite.expires_at
-            ),
-        }
+        # Invalidate the old invite so a fresh activation
+        # token can be issued immediately.
+        active_invite.expires_at = datetime.utcnow()
+        db.commit()
 
     raw_token = secrets.token_urlsafe(32)
 
