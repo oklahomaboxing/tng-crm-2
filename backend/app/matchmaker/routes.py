@@ -8,8 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Respons
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, inspect, text
 from ..database import get_db, engine
-from .models import BoxingContract, BoxingSignedContractDocument, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
-        BoxingContractSignature,
+from .models import BoxingContract, BoxingSignedContractDocument, BoxingContractSignature, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
