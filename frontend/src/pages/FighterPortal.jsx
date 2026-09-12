@@ -267,20 +267,6 @@ export default function FighterPortal({ onLogout }) {
   }
 
 
-  function viewMyFullContract(contract) {
-    try {
-      openOfficialContract(contract);
-    } catch (err) {
-      const notice =
-        err.message ||
-        "Could not open contract.";
-
-      setMessage(notice);
-      window.alert(notice);
-    }
-  }
-
-
   async function downloadMySignedContract(
     contractId,
     eventName
@@ -1207,30 +1193,7 @@ export default function FighterPortal({ onLogout }) {
                       Download Contract PDF
                     </button>
 
-                    <button
-                      type="button"
-                      disabled={
-                        contractWorkingId ===
-                        contract.contract_id
-                      }
-                      onClick={() =>
-                        downloadMyFullContract(
-                          contract.contract_id,
-                          contract.event_name
-                        )
-                      }
-                      style={{
-                        border: 0,
-                        borderRadius: 8,
-                        padding: "11px 16px",
-                        background: "#b71c1c",
-                        color: "#fff",
-                        fontWeight: 900,
-                        cursor: "pointer",
-                      }}
-                    >
-                      View / Print Full Contract
-                    </button>
+                    
 
                     <button
                       type="button"
