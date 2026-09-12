@@ -1,3 +1,4 @@
+import resend
 from datetime import datetime
 import os
 import json
@@ -2983,6 +2984,199 @@ Do not add fake ticket information.
             "additional_terms": contract.additional_terms,
             "cancellation_pay": contract.cancellation_pay,
             "status": contract.status,
+        }
+
+
+    @router.post("/contracts/{contract_id}/send-email")
+    def send_contract_email(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(BoxingContract.id == contract_id)
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id == contract.fighter_id
+            )
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        fighter_email = str(
+            fighter.email or ""
+        ).strip()
+
+        if not fighter_email:
+            raise HTTPException(
+                status_code=400,
+                detail="Fighter does not have an email address.",
+            )
+
+        resend_api_key = os.getenv("RESEND_API_KEY")
+
+        if not resend_api_key:
+            raise HTTPException(
+                status_code=500,
+                detail="RESEND_API_KEY is not configured.",
+            )
+
+        resend.api_key = resend_api_key
+
+        sender_email = os.getenv(
+            "RESEND_FROM_EMAIL",
+            "TNG Boxing <marketing@tngboxinggym.com>",
+        )
+
+        frontend_url = os.getenv(
+            "FRONTEND_URL",
+            "https://tngos.tngboxinggym.com",
+        ).rstrip("/")
+
+        portal_url = frontend_url
+
+        subject = (
+            f"TNG Boxing Contract - "
+            f"{contract.event_name or 'Fight Agreement'}"
+        )
+
+        boxer_name = (
+            contract.boxer_name
+            or fighter.legal_name
+            or "Fighter"
+        )
+
+        opponent_name = (
+            contract.opponent_name
+            or "Opponent TBD"
+        )
+
+        event_name = (
+            contract.event_name
+            or "TNG Boxing Event"
+        )
+
+        event_date = contract.event_date or ""
+
+        resend.Emails.send(
+            {
+                "from": sender_email,
+                "to": [fighter_email],
+                "subject": subject,
+                "html": f"""
+                <div style="
+                    font-family:Arial,sans-serif;
+                    max-width:620px;
+                    margin:auto;
+                    padding:24px;
+                    color:#18181b;
+                ">
+                    <h2 style="margin-bottom:8px;">
+                        TNG Boxing Fight Contract
+                    </h2>
+
+                    <p>
+                        {boxer_name}, your fight contract
+                        is ready for review.
+                    </p>
+
+                    <div style="
+                        border:1px solid #ddd;
+                        border-radius:10px;
+                        padding:16px;
+                        margin:20px 0;
+                    ">
+                        <p>
+                            <strong>Event:</strong>
+                            {event_name}
+                        </p>
+
+                        <p>
+                            <strong>Date:</strong>
+                            {event_date}
+                        </p>
+
+                        <p>
+                            <strong>Opponent:</strong>
+                            {opponent_name}
+                        </p>
+
+                        <p>
+                            <strong>Weight:</strong>
+                            {contract.maximum_weight or ""}
+                            lbs
+                        </p>
+
+                        <p>
+                            <strong>Gross Purse:</strong>
+                            ${float(contract.gross_purse or 0):,.2f}
+                        </p>
+                    </div>
+
+                    <p>
+                        Log in to your TNGOS Fighter Portal
+                        to review the agreement and respond.
+                    </p>
+
+                    <p style="margin:30px 0;">
+                        <a
+                            href="{portal_url}"
+                            style="
+                                background:#111;
+                                color:#fff;
+                                padding:12px 20px;
+                                text-decoration:none;
+                                border-radius:6px;
+                                font-weight:bold;
+                            "
+                        >
+                            Open Fighter Portal
+                        </a>
+                    </p>
+
+                    <p>
+                        You will also be able to download,
+                        sign, or upload your signed contract
+                        from the portal as those contract
+                        options are enabled.
+                    </p>
+
+                    <p style="margin-top:30px;">
+                        <strong>
+                            TNG Boxing - Earned Not Given
+                        </strong>
+                    </p>
+                </div>
+                """,
+            }
+        )
+
+        return {
+            "ok": True,
+            "contract_id": contract.id,
+            "fighter_id": fighter.id,
+            "email": fighter_email,
+            "message": (
+                f"Contract email sent to {fighter_email}."
+            ),
         }
 
 

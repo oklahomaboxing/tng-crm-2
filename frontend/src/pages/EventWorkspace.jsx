@@ -255,6 +255,48 @@ export default function EventWorkspace({
     }));
   }
 
+  async function sendContractEmail(
+    contractId,
+    fighterName
+  ) {
+    if (!contractId) {
+      window.alert(
+        "Generate the contract first, then send it."
+      );
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/contracts/${contractId}/send-email`,
+        {
+          method: "POST",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not send contract email."
+        );
+      }
+
+      setMessage(body.message);
+      window.alert(body.message);
+    } catch (error) {
+      const notice =
+        error.message ||
+        "Could not send contract email.";
+
+      setMessage(notice);
+      window.alert(notice);
+    }
+  }
+
   async function generateContract(bout, corner) {
     const printWindow = window.open(
       "",
@@ -667,6 +709,8 @@ the contestant
       setMessage(
         `${contract.boxer_name} contract generated.`
       );
+
+      await load();
 
     } catch (error) {
       printWindow.close();
@@ -2243,6 +2287,20 @@ the contestant
                             </Grid>
 
                             <Button
+                              variant="outlined"
+                              disabled={!bout.red_contract?.id}
+                              onClick={() =>
+                                sendContractEmail(
+                                  bout.red_contract?.id,
+                                  bout.red?.legal_name ||
+                                    "Red Corner"
+                                )
+                              }
+                            >
+                              Send Contract Email
+                            </Button>
+
+                            <Button
                               variant="contained"
                               onClick={() =>
                                 generateContract(
@@ -2571,6 +2629,20 @@ the contestant
                                 />
                               </Grid>
                             </Grid>
+
+                            <Button
+                              variant="outlined"
+                              disabled={!bout.blue_contract?.id}
+                              onClick={() =>
+                                sendContractEmail(
+                                  bout.blue_contract?.id,
+                                  bout.blue?.legal_name ||
+                                    "Blue Corner"
+                                )
+                              }
+                            >
+                              Send Contract Email
+                            </Button>
 
                             <Button
                               variant="contained"
