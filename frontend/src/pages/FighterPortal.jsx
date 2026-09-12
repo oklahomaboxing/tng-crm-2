@@ -43,6 +43,9 @@ export default function FighterPortal({ onLogout }) {
   const [data, setData] = useState(null);
   const [ticketSales, setTicketSales] = useState(null);
   const [fightOffers, setFightOffers] = useState([]);
+  const [contracts, setContracts] = useState([]);
+  const [contractWorkingId, setContractWorkingId] =
+    useState(null);
   const [offerWorkingId, setOfferWorkingId] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -123,6 +126,196 @@ export default function FighterPortal({ onLogout }) {
     }
   }
 
+  async function loadContracts() {
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/fighter/me/contracts`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not load contracts."
+        );
+      }
+
+      setContracts(
+        Array.isArray(body.contracts)
+          ? body.contracts
+          : []
+      );
+    } catch (err) {
+      console.error(
+        "Could not load fighter contracts:",
+        err
+      );
+    }
+  }
+
+
+  async function uploadMySignedContract(
+    contractId
+  ) {
+    const input =
+      document.createElement("input");
+
+    input.type = "file";
+    input.accept = "application/pdf,.pdf";
+
+    input.onchange = async () => {
+      const file = input.files?.[0];
+
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      setContractWorkingId(contractId);
+
+      try {
+        const token =
+          localStorage.getItem("token");
+
+        const response = await fetch(
+          `${API}/api/fighter/me/contracts/${contractId}/signed-upload`,
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body: formData,
+          }
+        );
+
+        const body = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            body.detail ||
+            "Could not upload signed contract."
+          );
+        }
+
+        setMessage(
+          body.message ||
+          "Signed contract uploaded."
+        );
+
+        window.alert(
+          body.message ||
+          "Signed contract uploaded."
+        );
+
+        await loadContracts();
+
+        setFightOffers((current) =>
+          current.map((offer) =>
+            offer.contract_id === contractId
+              ? {
+                  ...offer,
+                  status: "signed",
+                }
+              : offer
+          )
+        );
+      } catch (err) {
+        const notice =
+          err.message ||
+          "Could not upload signed contract.";
+
+        setMessage(notice);
+        window.alert(notice);
+      } finally {
+        setContractWorkingId(null);
+      }
+    };
+
+    input.click();
+  }
+
+
+  async function downloadMySignedContract(
+    contractId,
+    eventName
+  ) {
+    setContractWorkingId(contractId);
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/fighter/me/contracts/${contractId}/signed-file`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        let detail =
+          "Signed contract is not available.";
+
+        try {
+          const body =
+            await response.json();
+
+          detail =
+            body.detail || detail;
+        } catch {
+          // Non-JSON error.
+        }
+
+        throw new Error(detail);
+      }
+
+      const blob = await response.blob();
+
+      const url =
+        URL.createObjectURL(blob);
+
+      const link =
+        document.createElement("a");
+
+      link.href = url;
+      link.download =
+        `${eventName || "TNG"}-signed-contract.pdf`
+          .replace(
+            /[^a-z0-9._-]+/gi,
+            "-"
+          );
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const notice =
+        err.message ||
+        "Could not download signed contract.";
+
+      setMessage(notice);
+      window.alert(notice);
+    } finally {
+      setContractWorkingId(null);
+    }
+  }
+
+
   async function respondToOffer(
     contractId,
     action,
@@ -190,6 +383,7 @@ export default function FighterPortal({ onLogout }) {
 
   useEffect(() => {
     load();
+    loadContracts();
   }, []);
 
   if (loading) {
@@ -239,8 +433,13 @@ export default function FighterPortal({ onLogout }) {
     },
     {
       title: "Contracts",
-      value: "Coming next",
-      note: "Review and electronically sign bout agreements.",
+      value: `${contracts.length} contract${
+        contracts.length === 1 ? "" : "s"
+      }`,
+      note:
+        contracts.length > 0
+          ? "Review and manage your bout agreements."
+          : "No bout contracts assigned yet.",
     },
     {
       title: "Medical Documents",
@@ -757,6 +956,262 @@ export default function FighterPortal({ onLogout }) {
             </div>
           )}
         </section>
+
+        <section
+          style={{
+            background: "#fff",
+            borderRadius: 14,
+            padding: 22,
+            marginBottom: 20,
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>
+            My Contracts
+          </h2>
+
+          {contracts.length === 0 ? (
+            <p style={{ color: "#666" }}>
+              No contracts are available yet.
+            </p>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gap: 14,
+              }}
+            >
+              {contracts.map((contract) => (
+                <div
+                  key={contract.contract_id}
+                  style={{
+                    border: "1px solid #ddd",
+                    borderRadius: 12,
+                    padding: 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent:
+                        "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 900,
+                          fontSize: 18,
+                        }}
+                      >
+                        {contract.event_name ||
+                          "Fight Contract"}
+                      </div>
+
+                      <div
+                        style={{
+                          color: "#555",
+                          marginTop: 4,
+                        }}
+                      >
+                        vs.{" "}
+                        {contract.opponent_name ||
+                          "Opponent TBD"}
+                      </div>
+                    </div>
+
+                    {statusBadge(
+                      contract.status ||
+                      "generated"
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 12,
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(160px, 1fr))",
+                      gap: 8,
+                      fontSize: 14,
+                    }}
+                  >
+                    <div>
+                      <strong>Date:</strong>{" "}
+                      {contract.event_date ||
+                        "TBD"}
+                    </div>
+
+                    <div>
+                      <strong>Weight:</strong>{" "}
+                      {contract.maximum_weight ||
+                        "TBD"}{" "}
+                      lb
+                    </div>
+
+                    <div>
+                      <strong>Purse:</strong>{" "}
+                      $
+                      {Number(
+                        contract.gross_purse || 0
+                      ).toFixed(2)}
+                    </div>
+
+                    <div>
+                      <strong>Signed PDF:</strong>{" "}
+                      {contract.signed_document
+                        ? "Uploaded"
+                        : "Not uploaded"}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: 12,
+                      background: "#f7f7f7",
+                      borderRadius: 8,
+                      fontSize: 14,
+                    }}
+                  >
+                    <strong>
+                      Travel / Hotel / Per Diem
+                    </strong>
+
+                    <div>
+                      Travel:{" "}
+                      {contract.travel_type ||
+                        "N/A"}
+                    </div>
+
+                    <div>
+                      Travel paid by:{" "}
+                      {contract.travel_paid_by ||
+                        "N/A"}
+                    </div>
+
+                    <div>
+                      Travel amount: $
+                      {Number(
+                        contract.travel_expense ||
+                          0
+                      ).toFixed(2)}
+                    </div>
+
+                    <div>
+                      Hotel:{" "}
+                      {contract.hotel_provided ||
+                        "N/A"}
+                      {contract.hotel_name
+                        ? ` - ${contract.hotel_name}`
+                        : ""}
+                    </div>
+
+                    <div>
+                      Hotel nights:{" "}
+                      {contract.hotel_nights || 0}
+                    </div>
+
+                    <div>
+                      Per diem: $
+                      {Number(
+                        contract.per_diem_daily ||
+                          0
+                      ).toFixed(2)}
+                      /day ?{" "}
+                      {contract.per_diem_days || 0}
+                      {" = $"}
+                      {Number(
+                        contract.per_diem_total ||
+                          0
+                      ).toFixed(2)}
+                    </div>
+                  </div>
+
+                  {contract.additional_terms && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        fontSize: 14,
+                      }}
+                    >
+                      <strong>
+                        Additional Terms:
+                      </strong>{" "}
+                      {contract.additional_terms}
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      marginTop: 14,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={
+                        contractWorkingId ===
+                        contract.contract_id
+                      }
+                      onClick={() =>
+                        uploadMySignedContract(
+                          contract.contract_id
+                        )
+                      }
+                      style={{
+                        border: 0,
+                        borderRadius: 8,
+                        padding: "11px 16px",
+                        background: "#111",
+                        color: "#fff",
+                        fontWeight: 900,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {contract.signed_document
+                        ? "Replace Signed PDF"
+                        : "Upload Signed PDF"}
+                    </button>
+
+                    {contract.signed_document && (
+                      <button
+                        type="button"
+                        disabled={
+                          contractWorkingId ===
+                          contract.contract_id
+                        }
+                        onClick={() =>
+                          downloadMySignedContract(
+                            contract.contract_id,
+                            contract.event_name
+                          )
+                        }
+                        style={{
+                          border:
+                            "1px solid #111",
+                          borderRadius: 8,
+                          padding:
+                            "11px 16px",
+                          background: "#fff",
+                          color: "#111",
+                          fontWeight: 900,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Download Signed PDF
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
 
         <section
           style={{

@@ -7,7 +7,7 @@ import qrcode
 from datetime import datetime, timedelta
 
 import resend
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, Response
 from sqlalchemy.orm import Session
 
 from ..auth import decode_token, hash_password
@@ -17,7 +17,7 @@ from ..matchmaker.models import (
     BoxingFighter,
     BoxingEvent,
     BoxingBout,
-    BoxingContract,
+    BoxingContract, BoxingSignedContractDocument,
 )
 from ..ticketing.models import EventSeller, IssuedTicket, SellerPayout
 from .models import FighterAccount, FighterInvite
@@ -30,6 +30,46 @@ router = APIRouter(
     prefix="/api/fighter",
     tags=["Fighter Portal"],
 )
+
+
+def _linked_fighter_account(
+    user,
+    db: Session,
+):
+    account = (
+        db.query(FighterAccount)
+        .filter(
+            FighterAccount.user_id
+            == user.id
+        )
+        .first()
+    )
+
+    if not account:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This login is not linked "
+                "to a fighter account."
+            ),
+        )
+
+    fighter = (
+        db.query(BoxingFighter)
+        .filter(
+            BoxingFighter.id
+            == account.fighter_id
+        )
+        .first()
+    )
+
+    if not fighter:
+        raise HTTPException(
+            status_code=404,
+            detail="Linked fighter profile not found.",
+        )
+
+    return account, fighter
 
 
 def _token_hash(token: str) -> str:
@@ -608,6 +648,366 @@ def activate_fighter(
     }
 
 
+
+
+@router.get("/me/contracts")
+def my_contracts(
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    contracts = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.fighter_id
+            == fighter.id
+        )
+        .order_by(
+            BoxingContract.id.desc()
+        )
+        .all()
+    )
+
+    contract_ids = [
+        row.id
+        for row in contracts
+    ]
+
+    documents = {}
+
+    if contract_ids:
+        document_rows = (
+            db.query(
+                BoxingSignedContractDocument
+            )
+            .filter(
+                BoxingSignedContractDocument.contract_id.in_(
+                    contract_ids
+                )
+            )
+            .all()
+        )
+
+        documents = {
+            row.contract_id: row
+            for row in document_rows
+        }
+
+    return {
+        "fighter_id": fighter.id,
+        "contracts": [
+            {
+                "contract_id": row.id,
+                "event_id": row.event_id,
+                "bout_id": row.bout_id,
+                "status": row.status,
+                "contract_date":
+                    row.contract_date,
+                "event_name":
+                    row.event_name,
+                "event_date":
+                    row.event_date,
+                "venue":
+                    row.venue,
+                "venue_address":
+                    row.venue_address,
+                "opponent_name":
+                    row.opponent_name,
+                "rounds":
+                    row.rounds,
+                "maximum_weight":
+                    row.maximum_weight,
+                "gross_purse":
+                    row.gross_purse,
+                "travel_type":
+                    getattr(
+                        row,
+                        "travel_type",
+                        "",
+                    ),
+                "travel_paid_by":
+                    getattr(
+                        row,
+                        "travel_paid_by",
+                        "",
+                    ),
+                "travel_expense":
+                    row.travel_expense,
+                "hotel_provided":
+                    getattr(
+                        row,
+                        "hotel_provided",
+                        "",
+                    ),
+                "hotel_name":
+                    getattr(
+                        row,
+                        "hotel_name",
+                        "",
+                    ),
+                "hotel_nights":
+                    getattr(
+                        row,
+                        "hotel_nights",
+                        0,
+                    ),
+                "per_diem_daily":
+                    getattr(
+                        row,
+                        "per_diem_daily",
+                        0,
+                    ),
+                "per_diem_days":
+                    getattr(
+                        row,
+                        "per_diem_days",
+                        0,
+                    ),
+                "per_diem_total":
+                    getattr(
+                        row,
+                        "per_diem_total",
+                        0,
+                    ),
+                "boxer_paid":
+                    row.boxer_paid,
+                "additional_terms":
+                    row.additional_terms,
+                "signed_document":
+                    row.id in documents,
+                "signed_file_name":
+                    (
+                        documents[row.id].file_name
+                        if row.id in documents
+                        else None
+                    ),
+                "signed_uploaded_at":
+                    (
+                        documents[row.id].uploaded_at
+                        if row.id in documents
+                        else None
+                    ),
+            }
+            for row in contracts
+        ],
+    }
+
+
+@router.post(
+    "/me/contracts/{contract_id}/signed-upload"
+)
+async def fighter_upload_signed_contract(
+    contract_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    # SECURITY:
+    # Contract must belong to the fighter linked
+    # to the current logged-in user.
+    contract = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.id == contract_id,
+            BoxingContract.fighter_id
+            == fighter.id,
+        )
+        .first()
+    )
+
+    if not contract:
+        raise HTTPException(
+            status_code=404,
+            detail="Contract not found.",
+        )
+
+    file_name = str(
+        file.filename
+        or "signed-contract.pdf"
+    ).strip()
+
+    if not file_name.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Signed contract must be a PDF."
+            ),
+        )
+
+    contents = await file.read()
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded PDF is empty.",
+        )
+
+    max_size = 10 * 1024 * 1024
+
+    if len(contents) > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Signed contract PDF must be "
+                "10 MB or smaller."
+            ),
+        )
+
+    if not contents.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The uploaded file is not "
+                "a valid PDF."
+            ),
+        )
+
+    document = (
+        db.query(
+            BoxingSignedContractDocument
+        )
+        .filter(
+            BoxingSignedContractDocument.contract_id
+            == contract.id
+        )
+        .first()
+    )
+
+    if not document:
+        document = (
+            BoxingSignedContractDocument(
+                contract_id=contract.id,
+            )
+        )
+        db.add(document)
+
+    document.file_name = file_name
+    document.content_type = (
+        "application/pdf"
+    )
+    document.file_size = len(contents)
+    document.file_data = contents
+    document.source = "fighter_upload"
+
+    document.uploaded_by_user_id = user.id
+    document.uploaded_by_name = (
+        fighter.legal_name
+        or getattr(user, "name", "")
+        or getattr(user, "email", "")
+        or ""
+    )
+
+    document.uploaded_at = datetime.utcnow()
+    document.updated_at = datetime.utcnow()
+
+    # Uploading the signed agreement advances
+    # the contract lifecycle to signed.
+    contract.status = "signed"
+    contract.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(document)
+    db.refresh(contract)
+
+    return {
+        "ok": True,
+        "contract_id": contract.id,
+        "status": contract.status,
+        "signed_document": True,
+        "file_name": document.file_name,
+        "uploaded_at":
+            document.uploaded_at,
+        "message": (
+            "Signed contract uploaded "
+            "successfully."
+        ),
+    }
+
+
+@router.get(
+    "/me/contracts/{contract_id}/signed-file"
+)
+def fighter_download_signed_contract(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    # SECURITY:
+    # No fighter_id comes from the browser.
+    # Ownership is derived from the login.
+    contract = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.id == contract_id,
+            BoxingContract.fighter_id
+            == fighter.id,
+        )
+        .first()
+    )
+
+    if not contract:
+        raise HTTPException(
+            status_code=404,
+            detail="Contract not found.",
+        )
+
+    document = (
+        db.query(
+            BoxingSignedContractDocument
+        )
+        .filter(
+            BoxingSignedContractDocument.contract_id
+            == contract.id
+        )
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No signed contract has "
+                "been uploaded yet."
+            ),
+        )
+
+    safe_name = (
+        document.file_name
+        or (
+            f"contract-{contract.id}"
+            "-signed.pdf"
+        )
+    ).replace('"', "")
+
+    return Response(
+        content=document.file_data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                (
+                    'attachment; filename="'
+                    f'{safe_name}"'
+                ),
+            "Cache-Control":
+                "private, no-store, max-age=0",
+            "X-Content-Type-Options":
+                "nosniff",
+        },
+    )
 
 
 @router.get("/me/fight-offers")
