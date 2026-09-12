@@ -246,6 +246,27 @@ export default function FighterPortal({ onLogout }) {
   }
 
 
+  function downloadMyFullContract(contract) {
+    try {
+      // Uses the exact same official contract
+      // renderer as Event Workspace.
+      // autoPrint=true opens the browser's
+      // Print / Save as PDF dialog.
+      openOfficialContract(
+        contract,
+        true
+      );
+    } catch (err) {
+      const notice =
+        err.message ||
+        "Could not download contract.";
+
+      setMessage(notice);
+      window.alert(notice);
+    }
+  }
+
+
   function viewMyFullContract(contract) {
     try {
       openOfficialContract(contract);
@@ -1166,6 +1187,26 @@ export default function FighterPortal({ onLogout }) {
                       marginTop: 14,
                     }}
                   >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadMyFullContract(
+                          contract
+                        )
+                      }
+                      style={{
+                        border: 0,
+                        borderRadius: 8,
+                        padding: "11px 16px",
+                        background: "#111",
+                        color: "#fff",
+                        fontWeight: 900,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Download Contract PDF
+                    </button>
+
                     <button
                       type="button"
                       disabled={

@@ -333,7 +333,10 @@ the contestant
 }
 
 
-export function openOfficialContract(contract) {
+export function openOfficialContract(
+  contract,
+  autoPrint = false
+) {
   const printWindow = window.open(
     "",
     "_blank",
@@ -352,4 +355,13 @@ export function openOfficialContract(contract) {
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
+
+  if (autoPrint) {
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 250);
+    };
+  }
 }
