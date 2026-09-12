@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, inspect, text
 from ..database import get_db, engine
 from .models import BoxingContract, BoxingSignedContractDocument, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
+        BoxingContractSignature,
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -2107,10 +2108,36 @@ Rules:
                         terms.split(marker)[-1].strip()
                     )
 
+                signature = (
+                    db.query(BoxingContractSignature)
+                    .filter(
+                        BoxingContractSignature.contract_id
+                        == contract.id
+                    )
+                    .first()
+                )
+
                 return {
                     "id": contract.id,
                     "fighter_id": contract.fighter_id,
                     "status": contract.status or "draft",
+                    "electronic_signature": (
+                        {
+                            "signed": True,
+                            "typed_legal_name":
+                                signature.typed_legal_name,
+                            "signed_at":
+                                signature.signed_at,
+                            "snapshot_sha256":
+                                signature.snapshot_sha256,
+                            "template_version":
+                                signature.template_version,
+                            "signer_user_id":
+                                signature.signer_user_id,
+                        }
+                        if signature
+                        else None
+                    ),
                     "contract_date":
                         contract.contract_date or "",
                     "maximum_weight":
@@ -3202,6 +3229,15 @@ Do not add fake ticket information.
                 detail="Contract not found",
             )
 
+        signature = (
+            db.query(BoxingContractSignature)
+            .filter(
+                BoxingContractSignature.contract_id
+                == contract.id
+            )
+            .first()
+        )
+
         document = (
             db.query(BoxingSignedContractDocument)
             .filter(
@@ -3214,12 +3250,48 @@ Do not add fake ticket information.
         if not document:
             return {
                 "contract_id": contract.id,
+            "electronically_signed":
+                signature is not None,
+            "electronic_signature": (
+                {
+                    "typed_legal_name":
+                        signature.typed_legal_name,
+                    "signed_at":
+                        signature.signed_at,
+                    "snapshot_sha256":
+                        signature.snapshot_sha256,
+                    "template_version":
+                        signature.template_version,
+                    "signer_user_id":
+                        signature.signer_user_id,
+                }
+                if signature
+                else None
+            ),
                 "signed_document": False,
                 "status": "not_uploaded",
             }
 
         return {
             "contract_id": contract.id,
+            "electronically_signed":
+                signature is not None,
+            "electronic_signature": (
+                {
+                    "typed_legal_name":
+                        signature.typed_legal_name,
+                    "signed_at":
+                        signature.signed_at,
+                    "snapshot_sha256":
+                        signature.snapshot_sha256,
+                    "template_version":
+                        signature.template_version,
+                    "signer_user_id":
+                        signature.signer_user_id,
+                }
+                if signature
+                else None
+            ),
             "signed_document": True,
             "status": "signed_document_uploaded",
             "document_id": document.id,
@@ -3430,6 +3502,26 @@ Do not add fake ticket information.
             raise HTTPException(
                 status_code=404,
                 detail="Contract not found",
+            )
+
+        signature = (
+            db.query(BoxingContractSignature)
+            .filter(
+                BoxingContractSignature.contract_id
+                == contract.id
+            )
+            .first()
+        )
+
+        if signature:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This contract has been electronically "
+                    "signed and its terms are locked. "
+                    "Create a new contract revision before "
+                    "changing material terms."
+                ),
             )
 
         allowed = {

@@ -1872,6 +1872,59 @@ export default function EventWorkspace({
                             </Stack>
 
                             {bout.red_contract
+                              ?.electronic_signature && (
+                              <Alert
+                                severity="success"
+                                sx={{ mb: 1.5 }}
+                              >
+                                <strong>
+                                  ELECTRONICALLY SIGNED
+                                </strong>
+                                <br />
+
+                                Signed by:{" "}
+                                <strong>
+                                  {
+                                    bout.red_contract
+                                      .electronic_signature
+                                      .typed_legal_name
+                                  }
+                                </strong>
+                                <br />
+
+                                Signed:{" "}
+                                {bout.red_contract
+                                  .electronic_signature
+                                  .signed_at
+                                  ? new Date(
+                                      bout.red_contract
+                                        .electronic_signature
+                                        .signed_at
+                                    ).toLocaleString()
+                                  : "N/A"}
+                                <br />
+
+                                Verification Hash:
+                                <br />
+                                <span
+                                  style={{
+                                    fontFamily:
+                                      "monospace",
+                                    fontSize: 11,
+                                    wordBreak:
+                                      "break-all",
+                                  }}
+                                >
+                                  {
+                                    bout.red_contract
+                                      .electronic_signature
+                                      .snapshot_sha256
+                                  }
+                                </span>
+                              </Alert>
+                            )}
+
+                            {bout.red_contract
                               ?.change_request && (
                               <Alert severity="warning">
                                 <strong>
@@ -2242,6 +2295,59 @@ export default function EventWorkspace({
                                 }
                               />
                             </Stack>
+
+                            {bout.blue_contract
+                              ?.electronic_signature && (
+                              <Alert
+                                severity="success"
+                                sx={{ mb: 1.5 }}
+                              >
+                                <strong>
+                                  ELECTRONICALLY SIGNED
+                                </strong>
+                                <br />
+
+                                Signed by:{" "}
+                                <strong>
+                                  {
+                                    bout.blue_contract
+                                      .electronic_signature
+                                      .typed_legal_name
+                                  }
+                                </strong>
+                                <br />
+
+                                Signed:{" "}
+                                {bout.blue_contract
+                                  .electronic_signature
+                                  .signed_at
+                                  ? new Date(
+                                      bout.blue_contract
+                                        .electronic_signature
+                                        .signed_at
+                                    ).toLocaleString()
+                                  : "N/A"}
+                                <br />
+
+                                Verification Hash:
+                                <br />
+                                <span
+                                  style={{
+                                    fontFamily:
+                                      "monospace",
+                                    fontSize: 11,
+                                    wordBreak:
+                                      "break-all",
+                                  }}
+                                >
+                                  {
+                                    bout.blue_contract
+                                      .electronic_signature
+                                      .snapshot_sha256
+                                  }
+                                </span>
+                              </Alert>
+                            )}
 
                             {bout.blue_contract
                               ?.change_request && (
