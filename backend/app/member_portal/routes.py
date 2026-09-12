@@ -563,23 +563,26 @@ async def inbody_webhook(request: Request):
             test_datetime=test_datetime,
         )
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "InBody result API returned HTTP "
-                f"{exc.response.status_code}"
-            ),
-        ) from exc
-    except httpx.RequestError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Unable to connect to InBody result API",
-        ) from exc
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=str(exc),
-        ) from exc
+        # Always acknowledge the webhook so InBody does not
+        # treat a result-API permission issue as a webhook failure.
+        return {
+            "ok": True,
+            "received": True,
+            "status": "result_sync_pending",
+            "result_api_status": exc.response.status_code,
+            "user_id_present": bool(user_id),
+            "user_token_present": bool(user_token),
+            "test_datetime_present": bool(test_datetime),
+        }
+    except (httpx.RequestError, RuntimeError):
+        return {
+            "ok": True,
+            "received": True,
+            "status": "result_sync_pending",
+            "user_id_present": bool(user_id),
+            "user_token_present": bool(user_token),
+            "test_datetime_present": bool(test_datetime),
+        }
 
     return {
         "ok": True,
