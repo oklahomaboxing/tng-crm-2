@@ -24,7 +24,7 @@ from ..matchmaker.models import (
     BoxingContractSignature,
 )
 from ..ticketing.models import EventSeller, IssuedTicket, SellerPayout
-from .models import FighterAccount, FighterInvite
+from .models import FighterAccount, FighterInvite, FighterPhoto
 from .schemas import ActivateFighterIn, InviteFighterIn
 
 
@@ -1789,6 +1789,333 @@ def fighter_ticket_sales(
             ),
         },
         "events": events,
+    }
+
+
+
+def _serialize_fighter_photo(photo):
+    return {
+        "id": photo.id,
+        "fighter_id": photo.fighter_id,
+        "file_name": photo.file_name,
+        "content_type": photo.content_type,
+        "file_size": photo.file_size,
+        "photo_type": photo.photo_type,
+        "is_primary": bool(photo.is_primary),
+        "created_at": (
+            photo.created_at.isoformat()
+            if photo.created_at
+            else None
+        ),
+        "image_url": (
+            f"/api/fighter/me/photos/"
+            f"{photo.id}/content"
+        ),
+    }
+
+
+@router.get("/me/photos")
+def fighter_list_photos(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    photos = (
+        db.query(FighterPhoto)
+        .filter(
+            FighterPhoto.fighter_id
+            == fighter.id
+        )
+        .order_by(
+            FighterPhoto.is_primary.desc(),
+            FighterPhoto.created_at.desc(),
+        )
+        .all()
+    )
+
+    return {
+        "photos": [
+            _serialize_fighter_photo(photo)
+            for photo in photos
+        ]
+    }
+
+
+@router.get("/me/photos/{photo_id}/content")
+def fighter_photo_content(
+    photo_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    photo = (
+        db.query(FighterPhoto)
+        .filter(
+            FighterPhoto.id == photo_id,
+            FighterPhoto.fighter_id
+            == fighter.id,
+        )
+        .first()
+    )
+
+    if not photo:
+        raise HTTPException(
+            status_code=404,
+            detail="Photo not found.",
+        )
+
+    return Response(
+        content=photo.file_data,
+        media_type=photo.content_type,
+        headers={
+            "Cache-Control": "private, max-age=300"
+        },
+    )
+
+
+@router.post("/me/photos")
+async def fighter_upload_photo(
+    file: UploadFile = File(...),
+    photo_type: str = "headshot",
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    photo_type = str(
+        photo_type or "headshot"
+    ).strip().lower()
+
+    allowed_types = {
+        "headshot",
+        "fight_pose",
+        "action_shot",
+    }
+
+    if photo_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Photo type must be headshot, "
+                "fight_pose, or action_shot."
+            ),
+        )
+
+    file_name = str(
+        file.filename or "fighter-photo"
+    ).strip()
+
+    contents = await file.read()
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded photo is empty.",
+        )
+
+    max_size = 5 * 1024 * 1024
+
+    if len(contents) > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Fighter photo must be "
+                "5 MB or smaller."
+            ),
+        )
+
+    detected_type = None
+
+    if contents.startswith(
+        (b"\xff\xd8\xff",)
+    ):
+        detected_type = "image/jpeg"
+
+    elif contents.startswith(b"\x89PNG\r\n\x1a\n"):
+        detected_type = "image/png"
+
+    elif (
+        len(contents) >= 12
+        and contents[0:4] == b"RIFF"
+        and contents[8:12] == b"WEBP"
+    ):
+        detected_type = "image/webp"
+
+    if not detected_type:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Photo must be a valid "
+                "JPG, PNG, or WEBP image."
+            ),
+        )
+
+    existing_count = (
+        db.query(FighterPhoto)
+        .filter(
+            FighterPhoto.fighter_id
+            == fighter.id
+        )
+        .count()
+    )
+
+    if existing_count >= 5:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Maximum of 5 fighter photos."
+            ),
+        )
+
+    # First uploaded photo becomes primary automatically.
+    is_primary = existing_count == 0
+
+    photo = FighterPhoto(
+        fighter_id=fighter.id,
+        file_name=file_name,
+        content_type=detected_type,
+        file_size=len(contents),
+        file_data=contents,
+        photo_type=photo_type,
+        is_primary=is_primary,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+    db.add(photo)
+    db.commit()
+    db.refresh(photo)
+
+    return {
+        "ok": True,
+        "message": (
+            "Fighter photo uploaded successfully."
+        ),
+        "photo": _serialize_fighter_photo(photo),
+    }
+
+
+@router.post("/me/photos/{photo_id}/primary")
+def fighter_set_primary_photo(
+    photo_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    photo = (
+        db.query(FighterPhoto)
+        .filter(
+            FighterPhoto.id == photo_id,
+            FighterPhoto.fighter_id
+            == fighter.id,
+        )
+        .first()
+    )
+
+    if not photo:
+        raise HTTPException(
+            status_code=404,
+            detail="Photo not found.",
+        )
+
+    (
+        db.query(FighterPhoto)
+        .filter(
+            FighterPhoto.fighter_id
+            == fighter.id
+        )
+        .update(
+            {
+                FighterPhoto.is_primary:
+                    False
+            },
+            synchronize_session=False,
+        )
+    )
+
+    photo.is_primary = True
+    photo.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(photo)
+
+    return {
+        "ok": True,
+        "message": "Primary flyer photo updated.",
+        "photo": _serialize_fighter_photo(photo),
+    }
+
+
+@router.delete("/me/photos/{photo_id}")
+def fighter_delete_photo(
+    photo_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    photo = (
+        db.query(FighterPhoto)
+        .filter(
+            FighterPhoto.id == photo_id,
+            FighterPhoto.fighter_id
+            == fighter.id,
+        )
+        .first()
+    )
+
+    if not photo:
+        raise HTTPException(
+            status_code=404,
+            detail="Photo not found.",
+        )
+
+    was_primary = bool(photo.is_primary)
+
+    db.delete(photo)
+    db.commit()
+
+    if was_primary:
+        replacement = (
+            db.query(FighterPhoto)
+            .filter(
+                FighterPhoto.fighter_id
+                == fighter.id
+            )
+            .order_by(
+                FighterPhoto.created_at.desc()
+            )
+            .first()
+        )
+
+        if replacement:
+            replacement.is_primary = True
+            replacement.updated_at = (
+                datetime.utcnow()
+            )
+            db.commit()
+
+    return {
+        "ok": True,
+        "message": "Fighter photo deleted.",
     }
 
 
