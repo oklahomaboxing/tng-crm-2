@@ -1347,8 +1347,21 @@ export default function AITrainer() {
 
   function repeatCurrentDrill() {
     if (!runningRef.current || phaseRef.current !== "Fight") return;
+
     setBlockTimeLeft(Number(paceSeconds));
-    speak(`${prompt}. ${subPrompt}`, { force: true });
+
+    // Repeat only what the coach originally called.
+    // Do not replay the full technical explanation.
+    speak(
+      currentSpokenRef.current || prompt,
+      {
+        force: true,
+        rate: Math.min(
+          0.96,
+          Number(voiceRateRef.current) || 0.96
+        ),
+      }
+    );
   }
 
   function skipCurrentDrill() {
@@ -1395,20 +1408,6 @@ export default function AITrainer() {
 
     const activeModule = currentModuleRef.current;
     const activeRoundNumber = currentRoundRef.current || 1;
-    const aiCommand = getNextAICommand(activeRoundNumber);
-    const command = aiCommand || generatePrompt(activeModule);
-
-    const next = command?.prompt || "1, 2";
-    const coachingCue =
-      command?.coaching_cue ||
-      (manual ? "Manual coach command." : moduleConfig.focus);
-
-    setPrompt(next);
-    setSubPrompt(coachingCue);
-    setBlockTimeLeft(Number(paceSeconds));
-    setCurrentDrillNumber(commandIndexRef.current);
-    const upcoming = getCommandPreview(activeRoundNumber);
-    setNextDrill(upcoming === next ? "Repeat with cleaner technique" : upcoming);
 
     const fastCoachMode = [
       "Heavy Bag",
@@ -1418,6 +1417,25 @@ export default function AITrainer() {
       "Boxing Conditioning",
       "Ring IQ",
     ].includes(activeModule);
+
+    /*
+     * Boxing modes always use the local structured engine.
+     * This prevents a background AI plan from replacing the
+     * combinations mid-round with repeated or overly wordy drills.
+     */
+    const command = fastCoachMode
+      ? generatePrompt(activeModule)
+      : getNextAICommand(activeRoundNumber) ||
+        generatePrompt(activeModule);
+
+    const next = command?.prompt || "1, 2";
+
+    const coachingCue =
+      command?.coaching_cue ||
+      (manual
+        ? "Manual coach command."
+        : TRAINING_MODULES[activeModule]?.focus ||
+          "Stay balanced and work clean.");
 
     const shortCues = [
       "Hands up",
@@ -1429,20 +1447,46 @@ export default function AITrainer() {
       "Finish strong",
     ];
 
+    const completedCommandNumber = commandIndexRef.current;
+
     const shortCoachCue =
-      fastCoachMode && commandIndexRef.current % 3 === 0
+      fastCoachMode &&
+      completedCommandNumber > 0 &&
+      completedCommandNumber % 3 === 0
         ? shortCues[
-            Math.floor(commandIndexRef.current / 3) %
+            Math.floor(completedCommandNumber / 3 - 1) %
               shortCues.length
           ]
         : "";
+
+    setPrompt(next);
+
+    // Boxing rounds stay short and coach-like on screen too.
+    setSubPrompt(
+      fastCoachMode
+        ? shortCoachCue || "Work it, reset."
+        : coachingCue
+    );
+
+    setBlockTimeLeft(Number(paceSeconds));
+    setCurrentDrillNumber(completedCommandNumber);
+
+    const upcoming = getCommandPreview(activeRoundNumber);
+
+    setNextDrill(
+      upcoming === next
+        ? "Next combination"
+        : upcoming
+    );
 
     currentSpokenRef.current = fastCoachMode
       ? `${next}${shortCoachCue ? `. ${shortCoachCue}` : ""}`
       : `${next}. ${coachingCue}`;
 
     setAiDetails({
-      objective: command?.objective || "Clean boxing fundamentals",
+      objective:
+        command?.objective ||
+        "Clean boxing fundamentals",
       opponentTrigger:
         command?.opponent_trigger ||
         "Visualize the opponent reacting and identify the next opening.",
@@ -1452,17 +1496,23 @@ export default function AITrainer() {
     });
 
     logPrompt(next);
-    const spokenIntro = introText ? `${introText} ` : "";
+
+    const spokenIntro = introText
+      ? `${introText} `
+      : "";
 
     if (fastCoachMode) {
       speak(
         `${spokenIntro}${next}${
-          shortCoachCue ? `. ${shortCoachCue}` : ""
+          shortCoachCue
+            ? `. ${shortCoachCue}`
+            : ""
         }`,
         {
-          rate: Math.max(
-            1.02,
-            Number(voiceRateRef.current) || 1
+          // Slightly slower and easier to follow.
+          rate: Math.min(
+            0.96,
+            Number(voiceRateRef.current) || 0.96
           ),
           pitch: 0.94,
         }
