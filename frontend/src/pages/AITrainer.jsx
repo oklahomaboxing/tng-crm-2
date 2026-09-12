@@ -635,12 +635,95 @@ function getLevelSpecificCue(levelName) {
   return LEVEL_GUIDANCE[levelName]?.description || LEVEL_GUIDANCE.intermediate.description;
 }
 
+const ORTHODOX_BASE_COMBOS = {
+  beginner: [
+    [1, 2],
+    [1, 1, 2],
+    [1, 3, 2],
+    [2, 3, 2],
+  ],
+  intermediate: [
+    [1, 2, 3, 2],
+    [1, 2, 5, 2],
+    [1, 3, 2],
+    [2, 3, 2],
+    [6, 3, 2],
+    [1, 1, 2, 3, 2],
+  ],
+  advanced: [
+    [1, 2, 3, 2],
+    [1, 2, 5, 2],
+    [6, 3, 2],
+    [1, 1, 2, 5, 2],
+    [2, 3, 6, 3, 2],
+    [1, 2, 3, 6, 3, 2],
+  ],
+};
+
+function getOrthodoxMovement(lastPunch, commandNumber) {
+  const rightSide = [2, 4, 6].includes(Number(lastPunch));
+  const side = rightSide ? "right" : "left";
+
+  // Bob means drop only. It has no direction.
+  if (commandNumber % 5 === 4) {
+    return "bob";
+  }
+
+  const movementType =
+    ["roll", "slip", "step"][commandNumber % 3];
+
+  return `${movementType} ${side}`;
+}
+
+function getOrthodoxCounter(lastPunch) {
+  return [2, 4, 6].includes(Number(lastPunch))
+    ? [2, 3]
+    : [3, 2];
+}
+
+function buildOrthodoxBoxingSequence(
+  levelName,
+  roundNumber,
+  commandNumber
+) {
+  const pool =
+    ORTHODOX_BASE_COMBOS[levelName] ||
+    ORTHODOX_BASE_COMBOS.intermediate;
+
+  const combo =
+    pickByIndex(pool, roundNumber, commandNumber);
+
+  const lastPunch = combo[combo.length - 1];
+  const movement =
+    getOrthodoxMovement(lastPunch, commandNumber);
+
+  // Some calls stay as pure combinations.
+  // Others add correct defensive movement and a counter.
+  if (commandNumber % 2 === 0) {
+    return combo.join(", ");
+  }
+
+  const counter = getOrthodoxCounter(lastPunch);
+
+  return `${combo.join(", ")}, ${movement}, ${counter.join(", ")}`;
+}
+
 function createModuleCommand(moduleName, levelName, roundNumber, commandNumber) {
   const engine = MODE_ENGINES[moduleName] || MODE_ENGINES["Heavy Bag"];
   const levelPool = engine.actions[levelName] || engine.actions.intermediate;
-  const action = engine.ordered
-    ? levelPool[(roundNumber - 1) % levelPool.length]
-    : pickByIndex(levelPool, roundNumber, commandNumber);
+  const generatedBoxingAction =
+    ["Heavy Bag", "Shadowboxing"].includes(moduleName)
+      ? buildOrthodoxBoxingSequence(
+          levelName,
+          roundNumber,
+          commandNumber
+        )
+      : null;
+
+  const action = generatedBoxingAction ||
+    (engine.ordered
+      ? levelPool[(roundNumber - 1) % levelPool.length]
+      : pickByIndex(levelPool, roundNumber, commandNumber));
   const cue = pickByIndex(engine.cues, roundNumber + 1, commandNumber);
   const trigger = pickByIndex(engine.triggers, roundNumber + 2, commandNumber);
   const exit = pickByIndex(engine.exits, roundNumber + 3, commandNumber);
