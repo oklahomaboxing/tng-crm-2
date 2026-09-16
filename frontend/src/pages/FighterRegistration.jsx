@@ -254,12 +254,8 @@ export default function FighterRegistration() {
                     set("submitted_by_role", e.target.value)
                   }
                 >
-                  <MenuItem value="boxer">Boxer</MenuItem>
-                  <MenuItem value="coach">Coach</MenuItem>
+                  <MenuItem value="boxer">Fighter</MenuItem>
                   <MenuItem value="manager">Manager</MenuItem>
-                  <MenuItem value="matchmaker">
-                    Matchmaker
-                  </MenuItem>
                 </Select>
               </FormControl>
             </Box>
