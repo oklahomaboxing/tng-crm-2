@@ -35,7 +35,6 @@ export const ROLE_MENUS = {
     "Front Desk",
     "Sales",
     "Leads",
-    "Sales Reps",
     "QR Referrals",
     "Marketing Center",
     "Clover",
@@ -53,7 +52,7 @@ export const ROLE_MENUS = {
     "QR Referrals",
     "TNGTrainer",
   ],
-  rep: ["Sales", "Leads", "QR Referrals"],
+  rep: ["My Sales"],
 };
 
 const ICONS = {
@@ -65,6 +64,7 @@ const ICONS = {
   Products: <Inventory2RoundedIcon />,
   "Front Desk": <QrCodeScannerRoundedIcon />,
   Sales: <PointOfSaleRoundedIcon />,
+  "My Sales": <PointOfSaleRoundedIcon />,
   Leads: <PersonSearchRoundedIcon />,
   "Sales Reps": <GroupsRoundedIcon />,
   "QR Referrals": <QrCode2RoundedIcon />,

@@ -82,7 +82,7 @@ const theme = createTheme({
 });
 
 function landingPageForRole(role) {
-  if (role === "rep") return "Sales";
+  if (role === "rep") return "My Sales";
   if (role === "staff") return "Front Desk";
   return "Dashboard";
 }
@@ -757,18 +757,22 @@ return (
       )}
       {page === "Members" && role !== "rep" && <Members />}
       {page === "Front Desk" && role !== "rep" && <FrontDesk />}
-      {page === "Sales" && <Sales />}
+
+      {page === "My Sales" && role === "rep" && (
+        <SalesRepDashboard />
+      )}
+
+      {page === "Sales" && role !== "rep" && <Sales />}
       {page === "Products" && role === "admin" && <Products />}
       {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
-      {page === "Leads" && <Leads />}
-      {page === "Sales Reps" && role === "admin" && <SalesRepDashboard />}
+      {page === "Leads" && role !== "rep" && <Leads />}
       {page === "TNGTrainer" && role !== "rep" && <TNGAcademy />}
       {page === "Matchmaker" && role !== "rep" && <Matchmaker />}
       {page === "Ticket Sales" && role !== "rep" && <TicketingDashboard />}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
-      {page === "QR Referrals" && <QRReferrals />}
+      {page === "QR Referrals" && role !== "rep" && <QRReferrals />}
 
       {page === "Marketing Center" && role === "admin" && (
         <MarketingCenter />
