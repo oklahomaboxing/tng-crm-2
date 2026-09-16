@@ -7,12 +7,16 @@ import {
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import EventRoundedIcon from "@mui/icons-material/EventRounded";
+import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
 import TicketingDashboard from "./TicketingDashboard.jsx";
 import TicketSellerControls from "../components/tickets/TicketSellerControls.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+const FIGHTER_REGISTRATION_URL =
+  "https://tngos.tngboxinggym.com/?fighter-register=1";
 
 const authHeaders = (extra = {}) => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -89,6 +93,21 @@ export default function Matchmaker() {
   const [existingFighterId, setExistingFighterId] = useState("");
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("info");
+
+  async function copyFighterRegistrationLink() {
+    try {
+      await navigator.clipboard.writeText(
+        FIGHTER_REGISTRATION_URL
+      );
+
+      setMsgType("success");
+      setMsg("Fighter registration link copied.");
+    } catch (error) {
+      setMsgType("error");
+      setMsg("Could not copy fighter registration link.");
+    }
+  }
+
 
   const [socialOpen, setSocialOpen] = useState(false);
   const [socialLoading, setSocialLoading] = useState(false);
@@ -1382,6 +1401,49 @@ export default function Matchmaker() {
 
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
+
+      <Card
+        sx={{
+          mb: 3,
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <CardContent>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={2}
+            alignItems={{ xs: "stretch", md: "center" }}
+            justifyContent="space-between"
+          >
+            <Box>
+              <Typography
+                variant="h5"
+                fontWeight={900}
+              >
+                Promoter
+              </Typography>
+
+              <Typography color="text.secondary">
+                Send fighters or managers your public fighter
+                registration link.
+              </Typography>
+            </Box>
+
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<ContentCopyRoundedIcon />}
+              onClick={copyFighterRegistrationLink}
+              sx={{ whiteSpace: "nowrap" }}
+            >
+              Copy Fighter Registration Link
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
+
       <Stack spacing={2}>
         <Stack
           direction={{ xs: "column", md: "row" }}

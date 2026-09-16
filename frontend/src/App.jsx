@@ -767,7 +767,7 @@ return (
       {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
       {page === "Leads" && role !== "rep" && <Leads />}
       {page === "TNGTrainer" && role !== "rep" && <TNGAcademy />}
-      {page === "Matchmaker" && role !== "rep" && <Matchmaker />}
+      {page === "Promoter" && role !== "rep" && <Matchmaker />}
       {page === "Ticket Sales" && role !== "rep" && <TicketingDashboard />}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === "User Management" && role === "admin" && <UserManagement />}
