@@ -1116,6 +1116,133 @@ def build_matchmaker_router(current_user_dependency):
         }
 
 
+
+    @router.delete("/fighters/{fighter_id}")
+    def delete_fighter_from_pool(
+        fighter_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        blockers = []
+
+        bout_count = (
+            db.query(BoxingBout)
+            .filter(
+                or_(
+                    BoxingBout.red_fighter_id == fighter_id,
+                    BoxingBout.blue_fighter_id == fighter_id,
+                )
+            )
+            .count()
+        )
+
+        if bout_count:
+            blockers.append(
+                f"{bout_count} event bout(s)"
+            )
+
+        contract_count = (
+            db.query(BoxingContract)
+            .filter(
+                or_(
+                    BoxingContract.fighter_id == fighter_id,
+                    BoxingContract.opponent_id == fighter_id,
+                )
+            )
+            .count()
+        )
+
+        if contract_count:
+            blockers.append(
+                f"{contract_count} contract(s)"
+            )
+
+        signed_count = (
+            db.query(BoxingSignedFighter)
+            .filter(
+                BoxingSignedFighter.fighter_id == fighter_id
+            )
+            .count()
+        )
+
+        if signed_count:
+            blockers.append(
+                f"{signed_count} signed fighter agreement(s)"
+            )
+
+        series_count = (
+            db.query(BoxingSeriesFighter)
+            .filter(
+                BoxingSeriesFighter.fighter_id == fighter_id
+            )
+            .count()
+        )
+
+        if series_count:
+            blockers.append(
+                f"{series_count} First 5 series record(s)"
+            )
+
+        if blockers:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{fighter.legal_name} cannot be deleted "
+                    "because they are connected to: "
+                    + ", ".join(blockers)
+                    + ". Remove those connections first."
+                ),
+            )
+
+        # Fighter portal records are safe to remove
+        # when no boxing/event history depends on fighter.
+        from ..fighter_portal.models import (
+            FighterAccount,
+            FighterInvite,
+            FighterPhoto,
+        )
+
+        db.query(FighterPhoto).filter(
+            FighterPhoto.fighter_id == fighter_id
+        ).delete(synchronize_session=False)
+
+        db.query(FighterInvite).filter(
+            FighterInvite.fighter_id == fighter_id
+        ).delete(synchronize_session=False)
+
+        db.query(FighterAccount).filter(
+            FighterAccount.fighter_id == fighter_id
+        ).delete(synchronize_session=False)
+
+        fighter_name = fighter.legal_name
+
+        db.delete(fighter)
+        db.commit()
+
+        return {
+            "success": True,
+            "fighter_id": fighter_id,
+            "fighter_name": fighter_name,
+            "message": (
+                f"{fighter_name} deleted from fighter pool."
+            ),
+        }
+
+
     @router.delete("/series-fighters/{series_fighter_id}")
     def remove_series_fighter(
         series_fighter_id: int,

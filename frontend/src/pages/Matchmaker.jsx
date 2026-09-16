@@ -915,6 +915,65 @@ export default function Matchmaker() {
     }
   }
 
+
+  async function deleteFighterFromPool(fighter) {
+    if (!fighter?.id) return;
+
+    const name =
+      fighter.legal_name || "this fighter";
+
+    const confirmed = window.confirm(
+      `Delete ${name} from the fighter pool?\n\n` +
+      "This cannot be undone. Fighters connected to " +
+      "bouts, contracts, signed agreements, or the " +
+      "First 5 series cannot be deleted."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/fighters/${fighter.id}`,
+        {
+          method: "DELETE",
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not delete fighter"
+        );
+      }
+
+      if (
+        Number(fighterId) ===
+        Number(fighter.id)
+      ) {
+        setFighterId("");
+        setResult(null);
+      }
+
+      setMsgType("success");
+      setMsg(
+        body.message ||
+        `${name} deleted from fighter pool.`
+      );
+
+      await load();
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not delete fighter"
+      );
+    }
+  }
+
+
   function openEditFighter(fighter) {
     setEditFighterId(fighter.id);
 
@@ -1831,6 +1890,18 @@ export default function Matchmaker() {
                               }}
                             >
                               Edit
+                            </Button>
+
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteFighterFromPool(f);
+                              }}
+                            >
+                              Delete
                             </Button>
                           </Stack>
                         </TableCell>
