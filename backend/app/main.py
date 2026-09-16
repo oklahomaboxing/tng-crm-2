@@ -2443,6 +2443,255 @@ def create_user_account(
         },
     }
 
+
+@app.patch("/api/users/{user_id}")
+def update_user_account(
+    user_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    account = db.query(User).filter(User.id == user_id).first()
+
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    name = (data.get("name") or account.name or "").strip()
+    email = (data.get("email") or account.email or "").strip().lower()
+    role = (data.get("role") or account.role or "").strip().lower()
+
+    if not name or not email:
+        raise HTTPException(
+            status_code=400,
+            detail="Name and email are required",
+        )
+
+    if role not in ["admin", "staff", "rep"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Role must be admin, staff, or rep",
+        )
+
+    # Protect the currently logged-in admin from locking
+    # themselves out of the system.
+    if account.id == user.id:
+        if role != "admin":
+            raise HTTPException(
+                status_code=400,
+                detail="You cannot remove your own admin role",
+            )
+
+        if data.get("active") is False:
+            raise HTTPException(
+                status_code=400,
+                detail="You cannot deactivate your own account",
+            )
+
+    duplicate_email = (
+        db.query(User)
+        .filter(
+            func.lower(User.email) == email,
+            User.id != user_id,
+        )
+        .first()
+    )
+
+    if duplicate_email:
+        raise HTTPException(
+            status_code=400,
+            detail="A user with this email already exists",
+        )
+
+    account.name = name
+    account.email = email
+    account.role = role
+
+    if "active" in data:
+        account.active = bool(data.get("active"))
+
+    rep = account.rep_profile
+
+    if role == "rep":
+        referral_slug = (
+            data.get("referral_slug")
+            or (rep.referral_slug if rep else "")
+            or ""
+        ).strip().lower()
+
+        phone = (
+            data.get("phone")
+            if data.get("phone") is not None
+            else (rep.phone if rep else "")
+        )
+        phone = str(phone or "").strip()
+
+        if not referral_slug:
+            raise HTTPException(
+                status_code=400,
+                detail="Referral slug is required for sales reps",
+            )
+
+        duplicate_slug_query = db.query(SalesRep).filter(
+            func.lower(SalesRep.referral_slug) == referral_slug
+        )
+
+        if rep:
+            duplicate_slug_query = duplicate_slug_query.filter(
+                SalesRep.id != rep.id
+            )
+
+        if duplicate_slug_query.first():
+            raise HTTPException(
+                status_code=400,
+                detail="Referral slug already exists",
+            )
+
+        if not rep:
+            rep = SalesRep(
+                user_id=account.id,
+                phone=phone,
+                referral_slug=referral_slug,
+                clover_link="",
+            )
+            db.add(rep)
+        else:
+            rep.phone = phone
+            rep.referral_slug = referral_slug
+
+    db.commit()
+    db.refresh(account)
+
+    rep = account.rep_profile
+
+    return {
+        "message": "User updated successfully",
+        "user": {
+            "id": account.id,
+            "name": account.name,
+            "email": account.email,
+            "role": account.role,
+            "active": account.active,
+            "sales_rep_id": rep.id if rep else None,
+            "phone": rep.phone if rep and role == "rep" else "",
+            "referral_slug": (
+                rep.referral_slug
+                if rep and role == "rep"
+                else ""
+            ),
+        },
+    }
+
+
+@app.post("/api/users/{user_id}/reset-password")
+def reset_user_password(
+    user_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    account = db.query(User).filter(User.id == user_id).first()
+
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    new_password = str(data.get("password") or "")
+
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters",
+        )
+
+    account.password_hash = hash_password(new_password)
+
+    db.commit()
+
+    return {
+        "message": f"Password reset for {account.name}",
+        "user_id": account.id,
+    }
+
+
+@app.delete("/api/users/{user_id}")
+def delete_user_account(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    account = db.query(User).filter(User.id == user_id).first()
+
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    if account.id == user.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot delete your own admin account",
+        )
+
+    rep = account.rep_profile
+
+    # Sales history must remain connected to its original rep.
+    # In that situation, deactivate instead of hard deleting.
+    if rep:
+        sale_count = (
+            db.query(Sale)
+            .filter(Sale.sales_rep_id == rep.id)
+            .count()
+        )
+
+        if sale_count:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{account.name} has {sale_count} sale record(s). "
+                    "Deactivate this account instead of deleting it."
+                ),
+            )
+
+    account_name = account.name
+
+    try:
+        if rep:
+            db.delete(rep)
+            db.flush()
+
+        db.delete(account)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{account_name} is connected to existing TNGOS records. "
+                "Deactivate this account instead of deleting it."
+            ),
+        )
+
+    return {
+        "success": True,
+        "user_id": user_id,
+        "message": f"{account_name} deleted successfully",
+    }
+
+
 @app.post("/api/clover/sync-sales")
 def sync_clover_sales(
     db: Session = Depends(get_db),
