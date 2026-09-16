@@ -841,6 +841,34 @@ def my_contracts(
                 "event_id": row.event_id,
                 "bout_id": row.bout_id,
                 "status": row.status,
+
+                # Adobe Acrobat Sign
+                "signature_provider":
+                    row.signature_provider or "tng",
+
+                "adobe_agreement_id":
+                    row.adobe_agreement_id or "",
+
+                "adobe_status":
+                    row.adobe_status or "",
+
+                "adobe_signing_available":
+                    bool(
+                        row.adobe_agreement_id
+                        and str(
+                            row.adobe_status or ""
+                        ).upper()
+                        not in {
+                            "SIGNED",
+                            "CANCELLED",
+                            "ABORTED",
+                            "EXPIRED",
+                        }
+                    ),
+
+                "adobe_signed_at":
+                    row.adobe_signed_at,
+
                 "contract_date":
                     row.contract_date,
                 "boxer_name":
@@ -952,6 +980,244 @@ def my_contracts(
             }
             for row in contracts
         ],
+    }
+
+
+
+@router.get("/me/contracts/{contract_id}/adobe-signing-url")
+def fighter_adobe_signing_url(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    """
+    Return an Acrobat Sign signing URL only when
+    this contract belongs to the logged-in fighter.
+    """
+
+    import requests
+
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    # SECURITY:
+    # Contract ID alone is never enough.
+    # It must belong to the authenticated fighter.
+    contract = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.id == contract_id,
+            BoxingContract.fighter_id
+            == fighter.id,
+        )
+        .first()
+    )
+
+    if not contract:
+        raise HTTPException(
+            status_code=404,
+            detail="Contract not found.",
+        )
+
+    agreement_id = str(
+        contract.adobe_agreement_id or ""
+    ).strip()
+
+    if not agreement_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This contract has not been sent "
+                "through Adobe Acrobat Sign."
+            ),
+        )
+
+    adobe_status = str(
+        contract.adobe_status or ""
+    ).strip().upper()
+
+    if adobe_status == "SIGNED":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This Adobe contract has already "
+                "been signed."
+            ),
+        )
+
+    if adobe_status in {
+        "CANCELLED",
+        "ABORTED",
+        "EXPIRED",
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This Adobe agreement is no longer "
+                "available for signing."
+            ),
+        )
+
+    token = str(
+        os.getenv(
+            "ADOBE_SIGN_ACCESS_TOKEN",
+            "",
+        )
+        or ""
+    ).strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Adobe Acrobat Sign is not "
+                "configured."
+            ),
+        )
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+
+    api_base = str(
+        os.getenv(
+            "ADOBE_SIGN_API_BASE_URL",
+            "",
+        )
+        or ""
+    ).strip().rstrip("/")
+
+    if not api_base:
+        base_response = requests.get(
+            (
+                "https://api.adobesign.com"
+                "/api/rest/v6/baseUris"
+            ),
+            headers=headers,
+            timeout=30,
+        )
+
+        if not base_response.ok:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Could not connect to "
+                    "Adobe Acrobat Sign."
+                ),
+            )
+
+        base_body = base_response.json()
+
+        api_base = str(
+            base_body.get("apiAccessPoint")
+            or ""
+        ).strip().rstrip("/")
+
+        if not api_base:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Adobe did not return an "
+                    "API access point."
+                ),
+            )
+
+    response = requests.get(
+        (
+            f"{api_base}/api/rest/v6/"
+            f"agreements/{agreement_id}/"
+            "signingUrls"
+        ),
+        headers=headers,
+        timeout=30,
+    )
+
+    if response.status_code == 404:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Adobe is still preparing the "
+                "agreement. Try again shortly."
+            ),
+        )
+
+    if not response.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Could not retrieve the Adobe "
+                "signing link."
+            ),
+        )
+
+    body = response.json()
+
+    fighter_email = str(
+        fighter.email or ""
+    ).strip().lower()
+
+    signing_url = ""
+
+    for url_set in (
+        body.get("signingUrlSetInfos")
+        or []
+    ):
+        for signer in (
+            url_set.get("signingUrls")
+            or []
+        ):
+            candidate = str(
+                signer.get("esignUrl")
+                or ""
+            ).strip()
+
+            signer_email = str(
+                signer.get("email")
+                or ""
+            ).strip().lower()
+
+            if not candidate:
+                continue
+
+            if (
+                fighter_email
+                and signer_email
+                == fighter_email
+            ):
+                signing_url = candidate
+                break
+
+            if not signing_url:
+                signing_url = candidate
+
+        if signing_url:
+            break
+
+    if not signing_url:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Adobe has not made the "
+                "signing link available yet."
+            ),
+        )
+
+    contract.adobe_signing_url = signing_url
+    contract.adobe_last_synced_at = (
+        datetime.utcnow()
+    )
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "contract_id": contract.id,
+        "adobe_status":
+            contract.adobe_status or "",
+        "signing_url": signing_url,
     }
 
 
