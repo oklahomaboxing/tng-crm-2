@@ -1137,80 +1137,11 @@ def build_matchmaker_router(current_user_dependency):
                 detail="Fighter not found",
             )
 
-        blockers = []
+        fighter_name = fighter.legal_name
 
-        bout_count = (
-            db.query(BoxingBout)
-            .filter(
-                BoxingBout.status.notin_(["cancelled", "void"]),
-                or_(
-                    BoxingBout.red_fighter_id == fighter_id,
-                    BoxingBout.blue_fighter_id == fighter_id,
-                ),
-            )
-            .count()
-        )
+        # Archive instead of destroying historical records.
+        fighter.available = False
 
-        if bout_count:
-            blockers.append(
-                f"{bout_count} event bout(s)"
-            )
-
-        contract_count = (
-            db.query(BoxingContract)
-            .filter(
-                or_(
-                    BoxingContract.fighter_id == fighter_id,
-                    BoxingContract.opponent_id == fighter_id,
-                )
-            )
-            .count()
-        )
-
-        if contract_count:
-            blockers.append(
-                f"{contract_count} contract(s)"
-            )
-
-        signed_count = (
-            db.query(BoxingSignedFighter)
-            .filter(
-                BoxingSignedFighter.fighter_id == fighter_id
-            )
-            .count()
-        )
-
-        if signed_count:
-            blockers.append(
-                f"{signed_count} signed fighter agreement(s)"
-            )
-
-        series_count = (
-            db.query(BoxingSeriesFighter)
-            .filter(
-                BoxingSeriesFighter.fighter_id == fighter_id
-            )
-            .count()
-        )
-
-        if series_count:
-            blockers.append(
-                f"{series_count} First 5 series record(s)"
-            )
-
-        if blockers:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"{fighter.legal_name} cannot be deleted "
-                    "because they are connected to: "
-                    + ", ".join(blockers)
-                    + ". Remove those connections first."
-                ),
-            )
-
-        # Fighter portal records are safe to remove
-        # when no boxing/event history depends on fighter.
         from ..fighter_portal.models import (
             FighterAccount,
             FighterInvite,
@@ -1229,17 +1160,15 @@ def build_matchmaker_router(current_user_dependency):
             FighterAccount.fighter_id == fighter_id
         ).delete(synchronize_session=False)
 
-        fighter_name = fighter.legal_name
-
-        db.delete(fighter)
         db.commit()
 
         return {
             "success": True,
             "fighter_id": fighter_id,
             "fighter_name": fighter_name,
+            "archived": True,
             "message": (
-                f"{fighter_name} deleted from fighter pool."
+                f"{fighter_name} removed from Fighter Pool."
             ),
         }
 
@@ -1281,7 +1210,17 @@ def build_matchmaker_router(current_user_dependency):
         require_staff(user)
         return [
             fighter_dict(f)
-            for f in db.query(BoxingFighter).order_by(BoxingFighter.legal_name.asc()).all()
+            for f in (
+                db.query(BoxingFighter)
+                .filter(
+                    or_(
+                        BoxingFighter.available.is_(True),
+                        BoxingFighter.available.is_(None),
+                    )
+                )
+                .order_by(BoxingFighter.legal_name.asc())
+                .all()
+            )
         ]
 
     @router.get("/fighters/by-boxrec/{boxrec_id}")
