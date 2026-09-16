@@ -860,13 +860,15 @@ export default function FighterPortal({ onLogout }) {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f4f4f5",
-        fontFamily: "Arial, sans-serif",
+        background:
+          "radial-gradient(circle at top right, rgba(215,25,32,.24), transparent 28%), linear-gradient(180deg, #080808 0%, #111114 48%, #090909 100%)",
+        color: "#fff",
+        fontFamily: "Inter, Arial, sans-serif",
       }}
     >
       <header
         style={{
-          background: "#111",
+          background: "rgba(7,7,8,.94)",
           color: "#fff",
           padding: "18px 24px",
           display: "flex",
@@ -874,14 +876,20 @@ export default function FighterPortal({ onLogout }) {
           alignItems: "center",
           gap: 15,
           flexWrap: "wrap",
+          borderBottom: "1px solid rgba(255,255,255,.08)",
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          backdropFilter: "blur(16px)",
         }}
       >
         <div>
           <div
             style={{
-              color: "#e31b23",
-              fontWeight: 900,
-              fontSize: 13,
+              color: "#ff3038",
+              fontWeight: 950,
+              fontSize: 12,
+              letterSpacing: "2.5px",
             }}
           >
             TNG BOXING
@@ -914,17 +922,22 @@ export default function FighterPortal({ onLogout }) {
 
       <main
         style={{
-          maxWidth: 1100,
+          maxWidth: 1180,
           margin: "0 auto",
-          padding: 24,
+          padding: "26px 18px 60px",
         }}
       >
         <section
           style={{
-            background: "#fff",
-            borderRadius: 14,
-            padding: 22,
-            marginBottom: 20,
+            background:
+              "linear-gradient(135deg, rgba(215,25,32,.94) 0%, rgba(92,5,10,.96) 42%, rgba(13,13,15,.98) 100%)",
+            borderRadius: 24,
+            padding: "30px 28px",
+            marginBottom: 22,
+            border: "1px solid rgba(255,255,255,.12)",
+            boxShadow: "0 24px 60px rgba(0,0,0,.34)",
+            position: "relative",
+            overflow: "hidden",
           }}
         >
           <div
@@ -938,9 +951,10 @@ export default function FighterPortal({ onLogout }) {
             <div>
               <div
                 style={{
-                  color: "#777",
-                  fontSize: 13,
-                  fontWeight: 700,
+                  color: "rgba(255,255,255,.68)",
+                  fontSize: 11,
+                  fontWeight: 900,
+                  letterSpacing: "2px",
                 }}
               >
                 WELCOME
@@ -948,13 +962,25 @@ export default function FighterPortal({ onLogout }) {
 
               <h1
                 style={{
-                  margin: "5px 0 8px",
+                  margin: "6px 0 8px",
+                  fontSize: "clamp(30px, 6vw, 52px)",
+                  lineHeight: .95,
+                  letterSpacing: "-1.8px",
+                  textTransform: "uppercase",
+                  fontWeight: 950,
+                  textShadow: "0 8px 26px rgba(0,0,0,.35)",
                 }}
               >
                 {fighter.legal_name}
               </h1>
 
-              <div style={{ color: "#666" }}>
+              <div
+                style={{
+                  color: "rgba(255,255,255,.78)",
+                  fontWeight: 700,
+                  fontSize: 15,
+                }}
+              >
                 {fighter.pro_record
                   ? `Professional Record: ${fighter.pro_record}`
                   : fighter.amateur_record
@@ -966,9 +992,11 @@ export default function FighterPortal({ onLogout }) {
             <div>
               <div
                 style={{
-                  fontSize: 12,
-                  color: "#777",
-                  marginBottom: 5,
+                  fontSize: 10,
+                  color: "rgba(255,255,255,.60)",
+                  marginBottom: 6,
+                  fontWeight: 900,
+                  letterSpacing: "1.5px",
                 }}
               >
                 BOXREC ID
@@ -985,27 +1013,34 @@ export default function FighterPortal({ onLogout }) {
           style={{
             display: "grid",
             gridTemplateColumns:
-              "repeat(auto-fit, minmax(220px, 1fr))",
+              "repeat(auto-fit, minmax(210px, 1fr))",
             gap: 14,
-            marginBottom: 20,
+            marginBottom: 24,
           }}
         >
           {cards.map((card) => (
             <div
               key={card.title}
               style={{
-                background: "#fff",
-                borderRadius: 12,
-                padding: 18,
-                minHeight: 125,
+                background:
+                  "linear-gradient(145deg, rgba(28,28,31,.98), rgba(14,14,16,.98))",
+                color: "#fff",
+                borderRadius: 20,
+                padding: 20,
+                minHeight: 140,
+                border: "1px solid rgba(255,255,255,.08)",
+                boxShadow: "0 14px 30px rgba(0,0,0,.22)",
+                position: "relative",
+                overflow: "hidden",
               }}
             >
               <div
                 style={{
-                  color: "#777",
-                  fontSize: 12,
-                  fontWeight: 800,
+                  color: "#ff3c43",
+                  fontSize: 10,
+                  fontWeight: 950,
                   textTransform: "uppercase",
+                  letterSpacing: "1.7px",
                 }}
               >
                 {card.title}
@@ -1013,10 +1048,11 @@ export default function FighterPortal({ onLogout }) {
 
               <div
                 style={{
-                  fontSize: 21,
-                  fontWeight: 900,
-                  margin: "9px 0",
+                  fontSize: 28,
+                  fontWeight: 950,
+                  margin: "12px 0 8px",
                   textTransform: "capitalize",
+                  letterSpacing: "-.8px",
                 }}
               >
                 {card.value}
@@ -1024,9 +1060,9 @@ export default function FighterPortal({ onLogout }) {
 
               <div
                 style={{
-                  color: "#666",
-                  fontSize: 13,
-                  lineHeight: 1.4,
+                  color: "rgba(255,255,255,.58)",
+                  fontSize: 12,
+                  lineHeight: 1.5,
                 }}
               >
                 {card.note}
