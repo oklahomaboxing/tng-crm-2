@@ -41,23 +41,23 @@ export default function UserManagement() {
     setSaving(true);
 
     try {
-      const endpoint = role === "rep" ? "/api/reps" : "/api/staff";
+      const endpoint = "/api/users";
 
-      const body =
-        role === "rep"
-          ? {
-              name: name.trim(),
-              email: email.trim().toLowerCase(),
-              password,
-              phone: "",
-              referral_slug: referralSlug.trim().toLowerCase(),
-              clover_link: cloverLink.trim(),
-            }
-          : {
-              name: name.trim(),
-              email: email.trim().toLowerCase(),
-              password,
-            };
+      const body = {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        role,
+        phone: "",
+        referral_slug:
+          role === "rep"
+            ? referralSlug.trim().toLowerCase()
+            : "",
+        clover_link:
+          role === "rep"
+            ? cloverLink.trim()
+            : "",
+      };
 
       const response = await fetch(`${API}${endpoint}`, {
         method: "POST",
