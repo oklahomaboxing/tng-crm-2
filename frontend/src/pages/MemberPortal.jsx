@@ -44,9 +44,67 @@ export default function MemberPortal({ onLogout }) {
 
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [photoWorking, setPhotoWorking] = useState(false);
+  const [renewalWorking, setRenewalWorking] = useState(false);
   const [scans, setScans] = useState([]);
   const [error, setError] = useState("");
   const [showTrainer, setShowTrainer] = useState(false);
+
+
+  function memberDate(value) {
+    if (!value) return "Not available";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Not available";
+    }
+
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+
+  async function renewMembership() {
+    setRenewalWorking(true);
+
+    try {
+      const response = await fetch(
+        `${API}/api/member/me/renew-checkout`,
+        {
+          method: "POST",
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not start membership renewal."
+        );
+      }
+
+      if (!body.checkout_url) {
+        throw new Error(
+          "Clover did not return a payment link."
+        );
+      }
+
+      window.location.href = body.checkout_url;
+    } catch (err) {
+      window.alert(
+        err.message ||
+        "Could not start membership renewal."
+      );
+
+      setRenewalWorking(false);
+    }
+  }
+
 
   async function load() {
     setError("");
@@ -399,11 +457,113 @@ export default function MemberPortal({ onLogout }) {
                 </Stack>
                 <Divider sx={{ my: 3 }} />
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}><Metric label="Membership" value={m.membership_type || m.membership_level || "Member"} /></Grid>
-                  <Grid item xs={12} sm={6}><Metric label="Total Check-ins" value={m.total_checkins ?? 0} /></Grid>
-                  <Grid item xs={12} sm={6}><Metric label="Member #" value={m.member_number || "â€”"} /></Grid>
-                  <Grid item xs={12} sm={6}><Metric label="Waiver" value={m.waiver_signed ? "Complete" : "Needed"} /></Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Metric
+                      label="Membership"
+                      value={
+                        m.membership_type ||
+                        m.membership_level ||
+                        "Member"
+                      }
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Metric
+                      label="Membership Ends"
+                      value={memberDate(m.membership_end)}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Metric
+                      label="Last Membership Payment"
+                      value={memberDate(m.last_payment_date)}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Metric
+                      label={
+                        m.autopay_enabled
+                          ? "Next Billing Date"
+                          : "Renewal Date"
+                      }
+                      value={memberDate(
+                        m.next_billing_date ||
+                        m.membership_end
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Metric
+                      label="Total Check-ins"
+                      value={m.total_checkins ?? 0}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Metric
+                      label="Member #"
+                      value={m.member_number || "?"}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Metric
+                      label="Waiver"
+                      value={
+                        m.waiver_signed
+                          ? "Complete"
+                          : "Needed"
+                      }
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Metric
+                      label="Billing Status"
+                      value={
+                        m.billing_status ||
+                        m.membership_status ||
+                        "Unknown"
+                      }
+                    />
+                  </Grid>
                 </Grid>
+
+                <Divider sx={{ my: 3 }} />
+
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  disabled={renewalWorking}
+                  onClick={renewMembership}
+                  sx={{
+                    py: 1.4,
+                    fontWeight: 900,
+                  }}
+                >
+                  {renewalWorking
+                    ? "Opening Clover..."
+                    : "Renew Membership"}
+                </Button>
+
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    display: "block",
+                    textAlign: "center",
+                    mt: 1.25,
+                  }}
+                >
+                  Secure Clover checkout for your
+                  membership only. No registration fee.
+                </Typography>
+
               </CardContent>
             </Card>
           </Grid>

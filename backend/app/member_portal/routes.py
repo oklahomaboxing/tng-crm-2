@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFi
 from sqlalchemy.orm import Session
 
 from ..database import Base, engine, get_db
-from ..models import User, Member
+from ..models import User, Member, MembershipProduct
 from ..auth import hash_password, decode_token
 from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto
 from .schemas import ActivateMemberIn, InviteMemberIn, LinkInBodyIn, ManualInBodyScanIn
@@ -446,6 +446,214 @@ def delete_member_profile_photo(
     }
 
 
+
+@router.post("/me/renew-checkout")
+def create_member_renewal_checkout(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account = member_account_for_user(db, user)
+
+    member = (
+        db.query(Member)
+        .filter(Member.id == account.member_id)
+        .first()
+    )
+
+    if not member:
+        raise HTTPException(
+            status_code=404,
+            detail="Member profile not found.",
+        )
+
+    current_plan = (
+        member.membership_type
+        or member.membership_level
+        or ""
+    ).strip().lower()
+
+    if not current_plan:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No membership plan is assigned "
+                "to this account."
+            ),
+        )
+
+    products = (
+        db.query(MembershipProduct)
+        .filter(
+            MembershipProduct.active == True,
+            MembershipProduct.is_membership == True,
+        )
+        .all()
+    )
+
+    product = None
+
+    for candidate in products:
+        candidate_name = (
+            candidate.name or ""
+        ).strip().lower()
+
+        if candidate_name == current_plan:
+            product = candidate
+            break
+
+    if not product:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Your current membership plan "
+                "is not available for online renewal. "
+                "Please contact TNG Boxing."
+            ),
+        )
+
+    merchant_id = os.getenv(
+        "CLOVER_MERCHANT_ID",
+        "",
+    ).strip()
+
+    api_token = (
+        os.getenv(
+            "CLOVER_ECOMMERCE_PRIVATE_KEY",
+            "",
+        ).strip()
+        or os.getenv(
+            "CLOVER_API_TOKEN",
+            "",
+        ).strip()
+    )
+
+    clover_env = os.getenv(
+        "CLOVER_ENV",
+        "production",
+    ).lower()
+
+    if not merchant_id or not api_token:
+        raise HTTPException(
+            status_code=500,
+            detail="Clover credentials missing.",
+        )
+
+    base_url = (
+        "https://api.clover.com"
+        if clover_env == "production"
+        else "https://apisandbox.dev.clover.com"
+    )
+
+    app_url = os.getenv(
+        "TNG_APP_URL",
+        "https://tngos.tngboxinggym.com",
+    ).rstrip("/")
+
+    payload = {
+        "customer": {
+            "firstName": member.first_name or "",
+            "lastName": member.last_name or "",
+            "email": member.email or user.email or "",
+            "phoneNumber": member.phone or "",
+        },
+        "redirectUrls": {
+            "success": (
+                f"{app_url}/"
+                "?member_renewal=success"
+            ),
+            "failure": (
+                f"{app_url}/"
+                "?member_renewal=failed"
+            ),
+        },
+        "shoppingCart": {
+            "lineItems": [
+                {
+                    "name": product.name,
+                    "price": int(
+                        float(product.price or 0) * 100
+                    ),
+                    "unitQty": 1,
+                }
+            ]
+        },
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "X-Clover-Merchant-Id": merchant_id,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    try:
+        response = httpx.post(
+            (
+                f"{base_url}"
+                "/invoicingcheckoutservice/v1/checkouts"
+            ),
+            json=payload,
+            headers=headers,
+            timeout=20.0,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Could not connect to Clover."
+            ),
+        ) from exc
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Clover could not create "
+                "the renewal checkout."
+            ),
+        )
+
+    try:
+        checkout = response.json()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Invalid response from Clover.",
+        ) from exc
+
+    checkout_id = (
+        checkout.get("checkoutSessionId")
+        or checkout.get("id")
+    )
+
+    checkout_url = (
+        checkout.get("href")
+        or checkout.get("url")
+        or checkout.get("checkoutUrl")
+        or checkout.get("checkout_url")
+    )
+
+    if not checkout_id or not checkout_url:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Clover did not return "
+                "a checkout link."
+            ),
+        )
+
+    return {
+        "success": True,
+        "checkout_id": str(checkout_id),
+        "checkout_url": checkout_url,
+        "membership": {
+            "id": product.id,
+            "name": product.name,
+            "price": float(product.price or 0),
+        },
+    }
+
+
 @router.get("/me")
 def member_me(
     db: Session = Depends(get_db),
@@ -491,6 +699,10 @@ def member_me(
             "qr_code": member.qr_code,
             "membership_start": member.membership_start,
             "membership_end": member.membership_end,
+            "last_payment_date": member.last_payment_date,
+            "next_billing_date": member.next_billing_date,
+            "autopay_enabled": member.autopay_enabled,
+            "billing_status": member.billing_status,
             "membership_status": member.membership_status,
             "membership_type": member.membership_type,
             "membership_level": member.membership_level,
