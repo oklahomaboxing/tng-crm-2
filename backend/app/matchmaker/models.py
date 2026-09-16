@@ -241,6 +241,37 @@ class BoxingContract(Base):
 
     status = Column(String, default="draft")
 
+    # Acrobat Sign integration
+    signature_provider = Column(
+        String,
+        default="tng",
+    )
+    adobe_agreement_id = Column(
+        String,
+        default="",
+        index=True,
+    )
+    adobe_status = Column(
+        String,
+        default="",
+    )
+    adobe_signing_url = Column(
+        Text,
+        default="",
+    )
+    adobe_sent_at = Column(
+        DateTime,
+        nullable=True,
+    )
+    adobe_signed_at = Column(
+        DateTime,
+        nullable=True,
+    )
+    adobe_last_synced_at = Column(
+        DateTime,
+        nullable=True,
+    )
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(
         DateTime,

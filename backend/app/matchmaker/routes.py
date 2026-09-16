@@ -4,13 +4,828 @@ import os
 import json
 import urllib.request
 import urllib.error
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
+from io import BytesIO
+from xml.sax.saxutils import escape as xml_escape
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+    KeepTogether,
+)
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, inspect, text
 from ..database import get_db, engine
 from .models import BoxingContract, BoxingSignedContractDocument, BoxingContractSignature, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
+
+
+
+
+def _adobe_sign_access_token():
+    token = os.getenv(
+        "ADOBE_SIGN_ACCESS_TOKEN",
+        "",
+    ).strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Adobe Sign is not configured. "
+                "ADOBE_SIGN_ACCESS_TOKEN is missing."
+            ),
+        )
+
+    return token
+
+
+def _adobe_sign_headers(token):
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+
+
+def _adobe_sign_error(response, fallback):
+    try:
+        body = response.json()
+
+        message = (
+            body.get("message")
+            or body.get("code")
+            or body.get("error_description")
+            or body.get("error")
+        )
+
+        if message:
+            return str(message)
+
+    except Exception:
+        pass
+
+    text_value = str(
+        getattr(response, "text", "") or ""
+    ).strip()
+
+    if text_value:
+        return text_value[:500]
+
+    return fallback
+
+
+def _adobe_sign_api_base(token):
+    """
+    Resolve the account-specific Acrobat Sign shard.
+
+    ADOBE_SIGN_API_BASE_URL may optionally be supplied
+    to avoid resolving /baseUris repeatedly.
+    """
+
+    configured = os.getenv(
+        "ADOBE_SIGN_API_BASE_URL",
+        "",
+    ).strip()
+
+    if configured:
+        return configured.rstrip("/")
+
+    import requests
+
+    response = requests.get(
+        (
+            "https://api.adobesign.com"
+            "/api/rest/v6/baseUris"
+        ),
+        headers=_adobe_sign_headers(token),
+        timeout=30,
+    )
+
+    if not response.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Adobe Sign base URI lookup failed: "
+                + _adobe_sign_error(
+                    response,
+                    "Could not resolve Adobe Sign API base URI.",
+                )
+            ),
+        )
+
+    body = response.json()
+
+    api_base = (
+        body.get("apiAccessPoint")
+        or body.get("api_access_point")
+        or ""
+    )
+
+    api_base = str(api_base).strip().rstrip("/")
+
+    if not api_base:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Adobe Sign did not return an "
+                "apiAccessPoint."
+            ),
+        )
+
+    return api_base
+
+
+def _adobe_signing_url_from_response(
+    payload,
+    signer_email="",
+):
+    signer_email = str(
+        signer_email or ""
+    ).strip().lower()
+
+    sets = (
+        payload.get("signingUrlSetInfos")
+        or payload.get("signing_url_set_infos")
+        or []
+    )
+
+    fallback = ""
+
+    for item in sets:
+        urls = (
+            item.get("signingUrls")
+            or item.get("signing_urls")
+            or []
+        )
+
+        for row in urls:
+            url = (
+                row.get("esignUrl")
+                or row.get("esign_url")
+                or ""
+            )
+
+            email = str(
+                row.get("email") or ""
+            ).strip().lower()
+
+            if url and not fallback:
+                fallback = url
+
+            if (
+                url
+                and signer_email
+                and email == signer_email
+            ):
+                return url
+
+    return fallback
+
+
+
+def _adobe_download_completed_pdf(
+    api_base,
+    token,
+    agreement_id,
+):
+    import requests
+
+    response = requests.get(
+        (
+            f"{api_base}/api/rest/v6/agreements/"
+            f"{agreement_id}/combinedDocument"
+        ),
+        headers=_adobe_sign_headers(token),
+        timeout=60,
+    )
+
+    if not response.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Could not download completed Adobe contract: "
+                + _adobe_sign_error(
+                    response,
+                    "Adobe completed document download failed.",
+                )
+            ),
+        )
+
+    contents = response.content
+
+    if not contents or not contents.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Adobe did not return a valid signed PDF."
+            ),
+        )
+
+    return contents
+
+
+def _store_adobe_signed_pdf(
+    db,
+    contract,
+    pdf_bytes,
+):
+    from datetime import datetime
+
+    document = (
+        db.query(BoxingSignedContractDocument)
+        .filter(
+            BoxingSignedContractDocument.contract_id
+            == contract.id
+        )
+        .first()
+    )
+
+    if not document:
+        document = BoxingSignedContractDocument(
+            contract_id=contract.id,
+        )
+        db.add(document)
+
+    document.file_name = (
+        f"contract-{contract.id}-adobe-signed.pdf"
+    )
+    document.content_type = "application/pdf"
+    document.file_size = len(pdf_bytes)
+    document.file_data = pdf_bytes
+    document.source = "adobe_sign"
+    document.uploaded_by_user_id = None
+    document.uploaded_by_name = (
+        "Adobe Acrobat Sign"
+    )
+    document.uploaded_at = datetime.utcnow()
+
+    contract.signature_provider = "adobe"
+    contract.adobe_status = "SIGNED"
+    contract.adobe_signed_at = (
+        contract.adobe_signed_at
+        or datetime.utcnow()
+    )
+    contract.adobe_last_synced_at = (
+        datetime.utcnow()
+    )
+
+    # Keep the existing TNGOS contract workflow
+    # compatible with signed contract logic.
+    contract.status = "signed"
+
+    return document
+
+
+def _adobe_get_signing_url(
+    api_base,
+    token,
+    agreement_id,
+    signer_email="",
+):
+    import requests
+
+    response = requests.get(
+        (
+            f"{api_base}/api/rest/v6/agreements/"
+            f"{agreement_id}/signingUrls"
+        ),
+        headers=_adobe_sign_headers(token),
+        timeout=30,
+    )
+
+    # Agreement creation is asynchronous.
+    # Adobe can temporarily return 404 while processing.
+    if response.status_code == 404:
+        return ""
+
+    if not response.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Could not retrieve Adobe signing URL: "
+                + _adobe_sign_error(
+                    response,
+                    "Adobe Sign signing URL request failed.",
+                )
+            ),
+        )
+
+    return _adobe_signing_url_from_response(
+        response.json(),
+        signer_email,
+    )
+
+
+def build_official_contract_pdf(
+    contract,
+    fighter,
+    opponent,
+    event,
+    bout=None,
+):
+    """
+    Build the authoritative TNGOS Oklahoma boxing contract PDF.
+
+    This same PDF will be used for:
+    - staff download
+    - Acrobat Sign
+    - completed contract storage
+    - eventual commission submission
+    """
+
+    def value(obj, name, default=""):
+        if obj is None:
+            return default
+
+        result = getattr(obj, name, default)
+
+        if result is None:
+            return default
+
+        return result
+
+
+    def text_value(obj, name, default=""):
+        return str(
+            value(obj, name, default)
+        ).strip()
+
+
+    def money(value):
+        try:
+            number = float(value or 0)
+        except (TypeError, ValueError):
+            number = 0
+
+        if number.is_integer():
+            return f"{int(number):,}"
+
+        return f"{number:,.2f}"
+
+
+    def fighter_address(row):
+        direct = text_value(row, "address")
+
+        if direct:
+            return direct
+
+        parts = [
+            text_value(row, "city"),
+            text_value(row, "state"),
+            text_value(row, "country"),
+        ]
+
+        return ", ".join(
+            part for part in parts if part
+        )
+
+
+    def safe(value):
+        return xml_escape(
+            str(value or "")
+        )
+
+
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.55 * inch,
+        leftMargin=0.55 * inch,
+        topMargin=0.48 * inch,
+        bottomMargin=0.48 * inch,
+        title=(
+            f"{text_value(fighter, 'legal_name', 'Boxer')} "
+            "Professional Boxing Contract"
+        ),
+        author="TNG Promotions",
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "TNGContractTitle",
+        parent=styles["Heading1"],
+        fontName="Times-Bold",
+        fontSize=15,
+        leading=18,
+        alignment=TA_CENTER,
+        spaceAfter=5,
+    )
+
+    subtitle_style = ParagraphStyle(
+        "TNGContractSubtitle",
+        parent=styles["Heading2"],
+        fontName="Times-Bold",
+        fontSize=14,
+        leading=17,
+        alignment=TA_CENTER,
+        spaceAfter=14,
+    )
+
+    body_style = ParagraphStyle(
+        "TNGContractBody",
+        parent=styles["BodyText"],
+        fontName="Times-Roman",
+        fontSize=10.5,
+        leading=14,
+        spaceAfter=8,
+    )
+
+    small_style = ParagraphStyle(
+        "TNGContractSmall",
+        parent=body_style,
+        fontSize=9,
+        leading=11,
+    )
+
+    center_bold = ParagraphStyle(
+        "TNGCenterBold",
+        parent=body_style,
+        alignment=TA_CENTER,
+        fontName="Times-Bold",
+    )
+
+    tag_style = ParagraphStyle(
+        "AdobeTag",
+        parent=body_style,
+        fontSize=1,
+        leading=1,
+        textColor=colors.white,
+        spaceAfter=0,
+        spaceBefore=0,
+    )
+
+    story = []
+
+    boxer_name = text_value(
+        fighter,
+        "legal_name",
+        "Boxer",
+    )
+
+    opponent_name = text_value(
+        opponent,
+        "legal_name",
+        "Opponent",
+    )
+
+    federal_id = (
+        text_value(fighter, "federal_id")
+        or text_value(fighter, "federal_id_number")
+        or ""
+    )
+
+    manager_name = (
+        text_value(fighter, "manager_name")
+        or text_value(contract, "boxer_manager")
+        or ""
+    )
+
+    event_date = (
+        text_value(event, "event_date")
+        or text_value(event, "date")
+    )
+
+    venue = text_value(event, "venue")
+
+    venue_address = (
+        text_value(event, "venue_address")
+        or text_value(event, "address")
+    )
+
+    rounds = (
+        text_value(bout, "rounds")
+        or text_value(bout, "scheduled_rounds")
+        or text_value(contract, "rounds")
+    )
+
+    story.append(
+        Paragraph(
+            "OKLAHOMA STATE ATHLETIC COMMISSION",
+            title_style,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "PROFESSIONAL BOXING CONTRACT REPORT",
+            subtitle_style,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            (
+                "Date the contract for this event is entered "
+                f"into: <b>{safe(value(contract, 'contract_date'))}</b>"
+            ),
+            body_style,
+        )
+    )
+
+    boxer_info = Paragraph(
+        (
+            "<b>Boxer's Information:</b><br/><br/>"
+            f"Name: <b>{safe(boxer_name)}</b><br/>"
+            f"Federal ID Number: <b>{safe(federal_id)}</b>"
+            "<br/><br/>"
+            f"Address: {safe(fighter_address(fighter))}"
+            "<br/><br/>"
+            f"Telephone: {safe(text_value(fighter, 'phone'))}"
+        ),
+        small_style,
+    )
+
+    promoter_info = Paragraph(
+        (
+            "<b>Promoter's Information:</b><br/><br/>"
+            f"Name: {safe(value(contract, 'promoter_name'))}<br/>"
+            f"Address: {safe(value(contract, 'promoter_address'))}"
+            "<br/><br/>"
+            f"Telephone: {safe(value(contract, 'promoter_phone'))}"
+        ),
+        small_style,
+    )
+
+    info_table = Table(
+        [[boxer_info, promoter_info]],
+        colWidths=[3.65 * inch, 3.65 * inch],
+    )
+
+    info_table.setStyle(
+        TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.8, colors.black),
+            ("INNERGRID", (0, 0), (-1, -1), 0.8, colors.black),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ])
+    )
+
+    story.append(info_table)
+    story.append(Spacer(1, 10))
+
+    story.append(
+        Paragraph(
+            (
+                "Boxer agrees to participate in a "
+                f"<b>{safe(rounds)}</b> round bout against "
+                f"<b>{safe(opponent_name)}</b> at the maximum "
+                f"weight of <b>{safe(value(contract, 'maximum_weight'))}</b> "
+                "pounds. The event will be held on "
+                f"<b>{safe(event_date)}</b> at "
+                f"<b>{safe(venue)}</b>, located at "
+                f"<b>{safe(venue_address)}</b>. "
+                "Boxers will be paid after the final bout "
+                "of the evening."
+            ),
+            body_style,
+        )
+    )
+
+    travel_rows = [
+        [
+            Paragraph(
+                "<b>TRAVEL / HOTEL / PER DIEM</b>",
+                center_bold,
+            )
+        ],
+        [
+            Paragraph(
+                (
+                    "<b>Travel Type:</b> "
+                    f"{safe(value(contract, 'travel_type', 'N/A'))}<br/>"
+                    "<b>Travel Paid By:</b> "
+                    f"{safe(value(contract, 'travel_paid_by', 'N/A'))}<br/>"
+                    "<b>Travel Allowance / Reimbursement:</b> "
+                    f"${money(value(contract, 'travel_expense'))}<br/>"
+                    "<b>Hotel Provided:</b> "
+                    f"{safe(value(contract, 'hotel_provided', 'No'))}<br/>"
+                    "<b>Hotel:</b> "
+                    f"{safe(value(contract, 'hotel_name', 'N/A'))}<br/>"
+                    "<b>Hotel Nights:</b> "
+                    f"{safe(value(contract, 'hotel_nights', 0))}<br/>"
+                    "<b>Per Diem:</b> "
+                    f"${money(value(contract, 'per_diem_daily'))} per day x "
+                    f"{safe(value(contract, 'per_diem_days', 0))} days = "
+                    f"<b>${money(value(contract, 'per_diem_total'))}</b>"
+                ),
+                small_style,
+            )
+        ],
+    ]
+
+    travel_table = Table(
+        travel_rows,
+        colWidths=[7.3 * inch],
+    )
+
+    travel_table.setStyle(
+        TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.8, colors.black),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ])
+    )
+
+    story.append(travel_table)
+    story.append(Spacer(1, 8))
+
+    story.append(
+        Paragraph(
+            (
+                "<b>Additional Terms:</b> "
+                f"{safe(value(contract, 'additional_terms'))}"
+            ),
+            body_style,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            (
+                "Boxer hereby releases the Promoter, sponsors, "
+                "and the State of Oklahoma, or any agent, "
+                "representative or employee thereof, from any "
+                "and all claims for liability, known or unknown "
+                "at this time, arising from injuries, mental and "
+                "physical, which may be sustained by Boxer during "
+                "participation in this event."
+            ),
+            body_style,
+        )
+    )
+
+    # Adobe converts these hidden text tags into signing fields.
+    story.append(
+        Paragraph(
+            "{{TNGInitials1_es_:signer1:initials}}",
+            tag_style,
+        )
+    )
+
+    initials_one = Table(
+        [[Paragraph(
+            "<b>Boxer's Initials:</b> __________________",
+            center_bold,
+        )]],
+        colWidths=[7.3 * inch],
+    )
+
+    initials_one.setStyle(
+        TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.8, colors.black),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ])
+    )
+
+    story.append(initials_one)
+    story.append(Spacer(1, 8))
+
+    story.append(
+        Paragraph(
+            (
+                "<b>Failure to appear:</b> If a boxer signs "
+                "a contract and fails to appear at an event, "
+                "Boxer will be suspended for a period of 90 days "
+                "unless documentation of extenuating circumstances "
+                "is provided and approved by the Commission."
+            ),
+            body_style,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            (
+                "Boxer agrees not to participate in another event "
+                "within 30 days of this event unless approved by "
+                "the promoter/matchmaker."
+            ),
+            body_style,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "{{TNGInitials2_es_:signer1:initials}}",
+            tag_style,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "<b>Boxer's Initials:</b> __________________",
+            body_style,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            (
+                "In the event the opponent fails to appear or the "
+                "event is canceled due to no fault of the contestant "
+                "named herein, promoter will pay the contestant "
+                f"<b>${money(value(contract, 'cancellation_pay'))}</b>."
+            ),
+            body_style,
+        )
+    )
+
+    signature_left = Paragraph(
+        (
+            "<b>Boxer's Signature:</b><br/><br/>"
+            "____________________________________<br/><br/>"
+            "<b>Boxer's Manager:</b><br/>"
+            f"{safe(manager_name)}"
+            "<br/><br/>"
+            "<b>Promoter/Matchmaker:</b><br/>"
+            f"{safe(value(contract, 'promoter_matchmaker'))}"
+        ),
+        body_style,
+    )
+
+    money_right = Paragraph(
+        (
+            "<b>GROSS PURSE:</b> "
+            f"${money(value(contract, 'gross_purse'))}<br/><br/>"
+            "<b>TRAVEL ALLOWANCE:</b> "
+            f"${money(value(contract, 'travel_expense'))}<br/><br/>"
+            "<b>Deductions:</b> "
+            f"${money(value(contract, 'deductions'))}"
+        ),
+        body_style,
+    )
+
+    signature_table = Table(
+        [[signature_left, money_right]],
+        colWidths=[4.4 * inch, 2.9 * inch],
+    )
+
+    signature_table.setStyle(
+        TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ])
+    )
+
+    story.append(
+        KeepTogether([
+            Paragraph(
+                "{{TNGSignature_es_:signer1:signature}}",
+                tag_style,
+            ),
+            signature_table,
+        ])
+    )
+
+    story.append(Spacer(1, 12))
+
+    boxer_paid = value(contract, "boxer_paid")
+
+    if boxer_paid in ("", None):
+        try:
+            boxer_paid = (
+                float(value(contract, "gross_purse", 0))
+                + float(value(contract, "travel_expense", 0))
+                - float(value(contract, "deductions", 0))
+            )
+        except (TypeError, ValueError):
+            boxer_paid = 0
+
+    story.append(
+        Paragraph(
+            (
+                "<b>BOXER WILL BE PAID: "
+                f"${money(boxer_paid)}</b>"
+            ),
+            center_bold,
+        )
+    )
+
+    doc.build(story)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
 
 
 def ensure_contract_travel_schema():
@@ -40,6 +855,13 @@ def ensure_contract_travel_schema():
         "per_diem_daily": "FLOAT",
         "per_diem_days": "INTEGER",
         "per_diem_total": "FLOAT",
+        "signature_provider": "VARCHAR",
+        "adobe_agreement_id": "VARCHAR",
+        "adobe_status": "VARCHAR",
+        "adobe_signing_url": "TEXT",
+        "adobe_sent_at": "TIMESTAMP",
+        "adobe_signed_at": "TIMESTAMP",
+        "adobe_last_synced_at": "TIMESTAMP",
     }
 
     missing = [
@@ -3149,6 +3971,981 @@ Do not add fake ticket information.
             "cancellation_pay": contract.cancellation_pay,
             "status": contract.status,
         }
+
+
+    @router.get("/contracts/{contract_id}/official-pdf")
+    def download_official_contract_pdf(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(BoxingContract.id == contract_id)
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id == contract.fighter_id
+            )
+            .first()
+        )
+
+        opponent = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id == contract.opponent_id
+            )
+            .first()
+        )
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(
+                BoxingEvent.id == contract.event_id
+            )
+            .first()
+        )
+
+        bout = (
+            db.query(BoxingBout)
+            .filter(
+                BoxingBout.id == contract.bout_id
+            )
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract fighter not found",
+            )
+
+        if not opponent:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract opponent not found",
+            )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract event not found",
+            )
+
+        pdf_bytes = build_official_contract_pdf(
+            contract=contract,
+            fighter=fighter,
+            opponent=opponent,
+            event=event,
+            bout=bout,
+        )
+
+        safe_boxer = (
+            fighter.legal_name or "fighter"
+        ).replace(" ", "-")
+
+        filename = (
+            f"{safe_boxer}-contract-{contract.id}.pdf"
+        )
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition":
+                    f'inline; filename="{filename}"',
+                "Cache-Control":
+                    "private, no-store, max-age=0",
+                "X-Content-Type-Options":
+                    "nosniff",
+            },
+        )
+
+
+    @router.post("/contracts/{contract_id}/adobe/send")
+    def send_contract_with_adobe(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        import requests
+        from datetime import datetime
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id
+                == contract.fighter_id
+            )
+            .first()
+        )
+
+        opponent = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id
+                == contract.opponent_id
+            )
+            .first()
+        )
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(
+                BoxingEvent.id
+                == contract.event_id
+            )
+            .first()
+        )
+
+        bout = (
+            db.query(BoxingBout)
+            .filter(
+                BoxingBout.id
+                == contract.bout_id
+            )
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract fighter not found",
+            )
+
+        fighter_email = str(
+            getattr(fighter, "email", "") or ""
+        ).strip()
+
+        if not fighter_email:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Fighter must have an email address "
+                    "before sending with Adobe Sign."
+                ),
+            )
+
+        if not opponent:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract opponent not found",
+            )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract event not found",
+            )
+
+        # Avoid accidentally creating duplicate
+        # live Adobe agreements.
+        existing_agreement_id = str(
+            getattr(
+                contract,
+                "adobe_agreement_id",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if existing_agreement_id:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This contract already has an "
+                    "Adobe Sign agreement. Use status "
+                    "or signing-url instead of sending "
+                    "another agreement."
+                ),
+            )
+
+        token = _adobe_sign_access_token()
+        api_base = _adobe_sign_api_base(token)
+
+        pdf_bytes = build_official_contract_pdf(
+            contract=contract,
+            fighter=fighter,
+            opponent=opponent,
+            event=event,
+            bout=bout,
+        )
+
+        safe_name = (
+            str(
+                getattr(
+                    fighter,
+                    "legal_name",
+                    "fighter",
+                )
+                or "fighter"
+            )
+            .strip()
+            .replace(" ", "-")
+        )
+
+        filename = (
+            f"{safe_name}-contract-{contract.id}.pdf"
+        )
+
+        # --------------------------------------------------
+        # 1. Upload PDF as transient document
+        # --------------------------------------------------
+
+        transient_response = requests.post(
+            (
+                f"{api_base}"
+                "/api/rest/v6/transientDocuments"
+            ),
+            headers=_adobe_sign_headers(token),
+            files={
+                "File": (
+                    filename,
+                    pdf_bytes,
+                    "application/pdf",
+                )
+            },
+            timeout=60,
+        )
+
+        if not transient_response.ok:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Adobe transient document upload failed: "
+                    + _adobe_sign_error(
+                        transient_response,
+                        "Adobe PDF upload failed.",
+                    )
+                ),
+            )
+
+        transient_body = (
+            transient_response.json()
+        )
+
+        transient_id = str(
+            transient_body.get(
+                "transientDocumentId",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not transient_id:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Adobe Sign did not return a "
+                    "transientDocumentId."
+                ),
+            )
+
+        # --------------------------------------------------
+        # 2. Create Adobe agreement
+        # --------------------------------------------------
+
+        event_name = (
+            str(
+                getattr(
+                    event,
+                    "name",
+                    "",
+                )
+                or getattr(
+                    event,
+                    "event_name",
+                    "",
+                )
+                or "TNG Boxing"
+            ).strip()
+        )
+
+        agreement_name = (
+            f"{event_name} - "
+            f"{getattr(fighter, 'legal_name', 'Fighter')} "
+            "Bout Contract"
+        )
+
+        agreement_payload = {
+            "fileInfos": [
+                {
+                    "transientDocumentId":
+                        transient_id,
+                }
+            ],
+            "name": agreement_name,
+            "participantSetsInfo": [
+                {
+                    "memberInfos": [
+                        {
+                            "email":
+                                fighter_email,
+                        }
+                    ],
+                    "order": 1,
+                    "role": "SIGNER",
+                }
+            ],
+            "signatureType": "ESIGN",
+            "state": "IN_PROCESS",
+        }
+
+        agreement_response = requests.post(
+            (
+                f"{api_base}"
+                "/api/rest/v6/agreements"
+            ),
+            headers={
+                **_adobe_sign_headers(token),
+                "Content-Type":
+                    "application/json",
+            },
+            json=agreement_payload,
+            timeout=60,
+        )
+
+        if not agreement_response.ok:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Adobe agreement creation failed: "
+                    + _adobe_sign_error(
+                        agreement_response,
+                        "Could not create Adobe agreement.",
+                    )
+                ),
+            )
+
+        agreement_body = (
+            agreement_response.json()
+        )
+
+        agreement_id = str(
+            agreement_body.get("id") or ""
+        ).strip()
+
+        if not agreement_id:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Adobe Sign did not return an "
+                    "agreement ID."
+                ),
+            )
+
+        now = datetime.utcnow()
+
+        contract.signature_provider = "adobe"
+        contract.adobe_agreement_id = (
+            agreement_id
+        )
+        contract.adobe_status = "IN_PROCESS"
+        contract.adobe_sent_at = now
+        contract.adobe_last_synced_at = now
+
+        # Agreement creation is asynchronous.
+        # Try once, but do not fail the send if Adobe
+        # has not generated the signing URL yet.
+        try:
+            signing_url = (
+                _adobe_get_signing_url(
+                    api_base=api_base,
+                    token=token,
+                    agreement_id=agreement_id,
+                    signer_email=fighter_email,
+                )
+            )
+        except HTTPException:
+            signing_url = ""
+
+        if signing_url:
+            contract.adobe_signing_url = (
+                signing_url
+            )
+
+        db.commit()
+        db.refresh(contract)
+
+        return {
+            "ok": True,
+            "contract_id": contract.id,
+            "signature_provider": "adobe",
+            "agreement_id":
+                contract.adobe_agreement_id,
+            "status":
+                contract.adobe_status,
+            "signing_url":
+                contract.adobe_signing_url
+                or "",
+            "message": (
+                "Contract sent through Adobe Sign."
+            ),
+        }
+
+
+    @router.get("/contracts/{contract_id}/adobe/status")
+    def get_adobe_contract_status(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        import requests
+        from datetime import datetime
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        agreement_id = str(
+            getattr(
+                contract,
+                "adobe_agreement_id",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not agreement_id:
+            return {
+                "contract_id": contract.id,
+                "signature_provider":
+                    contract.signature_provider
+                    or "tng",
+                "agreement_id": "",
+                "status": "",
+                "signing_url": "",
+                "sent": False,
+            }
+
+        token = _adobe_sign_access_token()
+        api_base = _adobe_sign_api_base(token)
+
+        response = requests.get(
+            (
+                f"{api_base}"
+                "/api/rest/v6/agreements/"
+                f"{agreement_id}"
+            ),
+            headers=_adobe_sign_headers(token),
+            timeout=30,
+        )
+
+        if not response.ok:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Could not retrieve Adobe "
+                    "agreement status: "
+                    + _adobe_sign_error(
+                        response,
+                        "Adobe agreement status failed.",
+                    )
+                ),
+            )
+
+        body = response.json()
+
+        adobe_status = str(
+            body.get("status") or ""
+        ).strip()
+
+        now = datetime.utcnow()
+
+        if adobe_status:
+            contract.adobe_status = adobe_status
+
+        contract.adobe_last_synced_at = now
+
+        if adobe_status.upper() == "SIGNED":
+            contract.adobe_signed_at = (
+                contract.adobe_signed_at
+                or now
+            )
+
+        db.commit()
+        db.refresh(contract)
+
+        return {
+            "contract_id": contract.id,
+            "signature_provider": "adobe",
+            "agreement_id":
+                contract.adobe_agreement_id,
+            "status":
+                contract.adobe_status or "",
+            "signing_url":
+                contract.adobe_signing_url or "",
+            "sent": True,
+            "signed_at":
+                contract.adobe_signed_at,
+        }
+
+
+    @router.post("/contracts/{contract_id}/adobe/sync")
+    def sync_adobe_contract(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        import requests
+        from datetime import datetime
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        agreement_id = str(
+            getattr(
+                contract,
+                "adobe_agreement_id",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not agreement_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This contract has not been sent "
+                    "through Adobe Sign."
+                ),
+            )
+
+        token = _adobe_sign_access_token()
+        api_base = _adobe_sign_api_base(token)
+
+        response = requests.get(
+            (
+                f"{api_base}/api/rest/v6/agreements/"
+                f"{agreement_id}"
+            ),
+            headers=_adobe_sign_headers(token),
+            timeout=30,
+        )
+
+        if not response.ok:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Adobe agreement sync failed: "
+                    + _adobe_sign_error(
+                        response,
+                        "Could not sync Adobe agreement.",
+                    )
+                ),
+            )
+
+        body = response.json()
+
+        status = str(
+            body.get("status") or ""
+        ).strip().upper()
+
+        contract.adobe_status = status
+        contract.adobe_last_synced_at = (
+            datetime.utcnow()
+        )
+
+        imported_pdf = False
+
+        if status == "SIGNED":
+            pdf_bytes = (
+                _adobe_download_completed_pdf(
+                    api_base=api_base,
+                    token=token,
+                    agreement_id=agreement_id,
+                )
+            )
+
+            _store_adobe_signed_pdf(
+                db=db,
+                contract=contract,
+                pdf_bytes=pdf_bytes,
+            )
+
+            imported_pdf = True
+
+        db.commit()
+        db.refresh(contract)
+
+        return {
+            "ok": True,
+            "contract_id": contract.id,
+            "agreement_id": agreement_id,
+            "status": contract.adobe_status,
+            "signed":
+                contract.adobe_status == "SIGNED",
+            "signed_pdf_imported":
+                imported_pdf,
+            "signed_at":
+                contract.adobe_signed_at,
+        }
+
+
+    @router.get("/contracts/{contract_id}/adobe/signing-url")
+    def get_adobe_contract_signing_url(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        from datetime import datetime
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        agreement_id = str(
+            getattr(
+                contract,
+                "adobe_agreement_id",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not agreement_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This contract has not been "
+                    "sent through Adobe Sign."
+                ),
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id
+                == contract.fighter_id
+            )
+            .first()
+        )
+
+        fighter_email = str(
+            getattr(fighter, "email", "")
+            or ""
+        ).strip()
+
+        token = _adobe_sign_access_token()
+        api_base = _adobe_sign_api_base(token)
+
+        signing_url = _adobe_get_signing_url(
+            api_base=api_base,
+            token=token,
+            agreement_id=agreement_id,
+            signer_email=fighter_email,
+        )
+
+        if not signing_url:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Adobe is still preparing the "
+                    "agreement. Try again shortly."
+                ),
+            )
+
+        contract.adobe_signing_url = (
+            signing_url
+        )
+        contract.adobe_last_synced_at = (
+            datetime.utcnow()
+        )
+
+        db.commit()
+
+        return {
+            "contract_id": contract.id,
+            "agreement_id": agreement_id,
+            "signing_url": signing_url,
+        }
+
+
+    @router.get("/adobe/webhook")
+    def verify_adobe_webhook(
+        request: Request,
+    ):
+        import json
+
+        received_client_id = str(
+            request.headers.get(
+                "x-adobesign-clientid",
+                "",
+            )
+            or ""
+        ).strip()
+
+        expected_client_id = str(
+            os.getenv(
+                "ADOBE_SIGN_CLIENT_ID",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not expected_client_id:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Adobe webhook client ID "
+                    "is not configured."
+                ),
+            )
+
+        if (
+            not received_client_id
+            or received_client_id
+            != expected_client_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid Adobe webhook client ID.",
+            )
+
+        return Response(
+            content=json.dumps({
+                "xAdobeSignClientId":
+                    received_client_id,
+            }),
+            media_type="application/json",
+            headers={
+                "X-AdobeSign-ClientId":
+                    received_client_id,
+            },
+        )
+
+
+    @router.post("/adobe/webhook")
+    async def receive_adobe_webhook(
+        request: Request,
+        db: Session = Depends(get_db),
+    ):
+        import json
+        from datetime import datetime
+
+        received_client_id = str(
+            request.headers.get(
+                "x-adobesign-clientid",
+                "",
+            )
+            or ""
+        ).strip()
+
+        expected_client_id = str(
+            os.getenv(
+                "ADOBE_SIGN_CLIENT_ID",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not expected_client_id:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Adobe webhook client ID "
+                    "is not configured."
+                ),
+            )
+
+        if (
+            not received_client_id
+            or received_client_id
+            != expected_client_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid Adobe webhook client ID.",
+            )
+
+        raw_body = await request.body()
+
+        try:
+            payload = (
+                json.loads(raw_body.decode("utf-8"))
+                if raw_body
+                else {}
+            )
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Adobe webhook payload.",
+            )
+
+        agreement = (
+            payload.get("agreement")
+            or {}
+        )
+
+        agreement_id = str(
+            agreement.get("id")
+            or payload.get(
+                "eventResourceParentId"
+            )
+            or ""
+        ).strip()
+
+        status = str(
+            agreement.get("status")
+            or ""
+        ).strip().upper()
+
+        # Adobe may send verification-like POSTs.
+        # Echo the client ID even when there is
+        # no agreement resource yet.
+        if not agreement_id:
+            return Response(
+                content=json.dumps({
+                    "xAdobeSignClientId":
+                        received_client_id,
+                }),
+                media_type="application/json",
+                headers={
+                    "X-AdobeSign-ClientId":
+                        received_client_id,
+                },
+            )
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.adobe_agreement_id
+                == agreement_id
+            )
+            .first()
+        )
+
+        # Do not fail Adobe delivery just because
+        # the agreement is unrelated to TNGOS.
+        if not contract:
+            return Response(
+                content=json.dumps({
+                    "xAdobeSignClientId":
+                        received_client_id,
+                }),
+                media_type="application/json",
+                headers={
+                    "X-AdobeSign-ClientId":
+                        received_client_id,
+                },
+            )
+
+        contract.adobe_status = (
+            status
+            or contract.adobe_status
+            or ""
+        )
+
+        contract.adobe_last_synced_at = (
+            datetime.utcnow()
+        )
+
+        if status == "SIGNED":
+            token = _adobe_sign_access_token()
+            api_base = _adobe_sign_api_base(
+                token
+            )
+
+            pdf_bytes = (
+                _adobe_download_completed_pdf(
+                    api_base=api_base,
+                    token=token,
+                    agreement_id=agreement_id,
+                )
+            )
+
+            _store_adobe_signed_pdf(
+                db=db,
+                contract=contract,
+                pdf_bytes=pdf_bytes,
+            )
+
+        elif status in (
+            "CANCELLED",
+            "ABORTED",
+            "EXPIRED",
+        ):
+            contract.status = (
+                status.lower()
+            )
+
+        db.commit()
+
+        return Response(
+            content=json.dumps({
+                "xAdobeSignClientId":
+                    received_client_id,
+            }),
+            media_type="application/json",
+            headers={
+                "X-AdobeSign-ClientId":
+                    received_client_id,
+            },
+        )
 
 
     @router.post("/contracts/{contract_id}/send-email")
