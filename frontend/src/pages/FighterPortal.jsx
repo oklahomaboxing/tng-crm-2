@@ -612,6 +612,110 @@ export default function FighterPortal({ onLogout }) {
   }
 
 
+  async function openAdobeSigning(contract) {
+    const contractId = contract.contract_id;
+
+    // Open the tab immediately so mobile/browser
+    // popup blockers do not block Adobe after fetch.
+    const signingWindow = window.open(
+      "",
+      "_blank"
+    );
+
+    if (!signingWindow) {
+      window.alert(
+        "Please allow popups for TNGOS, then try again."
+      );
+      return;
+    }
+
+    signingWindow.document.write(
+      `
+        <html>
+          <body style="
+            margin:0;
+            background:#080808;
+            color:white;
+            font-family:Arial,sans-serif;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            min-height:100vh;
+            text-align:center;
+          ">
+            <div>
+              <div style="
+                color:#ef233c;
+                font-size:14px;
+                font-weight:900;
+                letter-spacing:2px;
+              ">
+                TNG BOXING
+              </div>
+              <h2>Opening Adobe Acrobat Sign...</h2>
+              <p style="color:#aaa;">
+                Secure contract signature
+              </p>
+            </div>
+          </body>
+        </html>
+      `
+    );
+
+    setContractWorkingId(contractId);
+    setMessage("");
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/fighter/me/contracts/${contractId}/adobe-signing-url`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not open Adobe Acrobat Sign."
+        );
+      }
+
+      if (!body.signing_url) {
+        throw new Error(
+          "Adobe signing link is not available yet."
+        );
+      }
+
+      signingWindow.location.replace(
+        body.signing_url
+      );
+
+    } catch (err) {
+      try {
+        signingWindow.close();
+      } catch (_) {}
+
+      const notice =
+        err.message ||
+        "Could not open Adobe Acrobat Sign.";
+
+      setMessage(notice);
+      window.alert(notice);
+
+    } finally {
+      setContractWorkingId(null);
+    }
+  }
+
+
   function downloadMyFullContract(contract) {
     try {
       // Uses the exact same official contract
@@ -1734,9 +1838,15 @@ export default function FighterPortal({ onLogout }) {
                 <div
                   key={contract.contract_id}
                   style={{
-                    border: "1px solid #ddd",
-                    borderRadius: 12,
-                    padding: 16,
+                    border:
+                      "1px solid rgba(255,255,255,.12)",
+                    borderRadius: 18,
+                    padding: 18,
+                    background:
+                      "linear-gradient(145deg, #17171a 0%, #0d0d0f 100%)",
+                    color: "#fff",
+                    boxShadow:
+                      "0 16px 34px rgba(0,0,0,.28)",
                   }}
                 >
                   <div
@@ -1761,7 +1871,8 @@ export default function FighterPortal({ onLogout }) {
 
                       <div
                         style={{
-                          color: "#555",
+                          color:
+                            "rgba(255,255,255,.62)",
                           marginTop: 4,
                         }}
                       >
@@ -1893,6 +2004,310 @@ export default function FighterPortal({ onLogout }) {
                     </div>
                   )}
 
+                  {String(
+                    contract.adobe_status || ""
+                  ).toUpperCase() === "SIGNED" ? (
+                    <div
+                      style={{
+                        marginTop: 18,
+                        padding: 20,
+                        border:
+                          "1px solid rgba(38,208,124,.55)",
+                        borderRadius: 16,
+                        background:
+                          "linear-gradient(135deg, rgba(12,54,36,.96), rgba(7,18,14,.98))",
+                        boxShadow:
+                          "0 12px 34px rgba(0,0,0,.28)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          color: "#4ade80",
+                          fontWeight: 950,
+                          fontSize: 19,
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            width: 30,
+                            height: 30,
+                            borderRadius: "50%",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background:
+                              "rgba(74,222,128,.15)",
+                            border:
+                              "1px solid rgba(74,222,128,.45)",
+                          }}
+                        >
+                          ?
+                        </span>
+
+                        CONTRACT SIGNED
+                      </div>
+
+                      <div
+                        style={{
+                          color: "#fff",
+                          marginTop: 10,
+                          fontWeight: 800,
+                        }}
+                      >
+                        Adobe Acrobat Sign
+                      </div>
+
+                      {contract.adobe_signed_at && (
+                        <div
+                          style={{
+                            color:
+                              "rgba(255,255,255,.62)",
+                            marginTop: 5,
+                            fontSize: 13,
+                          }}
+                        >
+                          Completed{" "}
+                          {new Date(
+                            contract.adobe_signed_at
+                          ).toLocaleString()}
+                        </div>
+                      )}
+
+                      {contract.signed_document && (
+                        <button
+                          type="button"
+                          disabled={
+                            contractWorkingId ===
+                            contract.contract_id
+                          }
+                          onClick={() =>
+                            downloadMySignedContract(
+                              contract.contract_id,
+                              contract.event_name
+                            )
+                          }
+                          style={{
+                            marginTop: 16,
+                            width: "100%",
+                            border:
+                              "1px solid rgba(74,222,128,.5)",
+                            borderRadius: 10,
+                            padding: "13px 16px",
+                            background:
+                              "rgba(74,222,128,.12)",
+                            color: "#fff",
+                            fontWeight: 950,
+                            fontSize: 14,
+                            cursor: "pointer",
+                          }}
+                        >
+                          DOWNLOAD SIGNED CONTRACT
+                        </button>
+                      )}
+                    </div>
+                  ) : contract.adobe_signing_available ? (
+                    <div
+                      style={{
+                        marginTop: 18,
+                        padding: 20,
+                        border:
+                          "1px solid rgba(239,35,60,.45)",
+                        borderRadius: 18,
+                        background:
+                          "linear-gradient(145deg, #161619 0%, #0b0b0d 100%)",
+                        boxShadow:
+                          "0 16px 38px rgba(0,0,0,.34)",
+                        color: "#fff",
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: "#ef233c",
+                          fontSize: 12,
+                          fontWeight: 950,
+                          letterSpacing: 2,
+                        }}
+                      >
+                        ADOBE SIGN
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 7,
+                          fontSize: 21,
+                          fontWeight: 950,
+                        }}
+                      >
+                        CONTRACT READY
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 8,
+                          color:
+                            "rgba(255,255,255,.66)",
+                          fontSize: 13,
+                        }}
+                      >
+                        Secure electronic signature
+                        through Adobe Acrobat Sign.
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(120px, 1fr))",
+                          gap: 9,
+                          marginTop: 16,
+                        }}
+                      >
+                        <div
+                          style={{
+                            padding: 11,
+                            background:
+                              "rgba(255,255,255,.05)",
+                            borderRadius: 10,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color:
+                                "rgba(255,255,255,.5)",
+                              fontWeight: 900,
+                              letterSpacing: 1,
+                            }}
+                          >
+                            PURSE
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontWeight: 950,
+                              fontSize: 17,
+                            }}
+                          >
+                            $
+                            {Number(
+                              contract.gross_purse ||
+                                0
+                            ).toFixed(2)}
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            padding: 11,
+                            background:
+                              "rgba(255,255,255,.05)",
+                            borderRadius: 10,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color:
+                                "rgba(255,255,255,.5)",
+                              fontWeight: 900,
+                              letterSpacing: 1,
+                            }}
+                          >
+                            OPPONENT
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontWeight: 900,
+                              fontSize: 14,
+                            }}
+                          >
+                            {contract.opponent_name ||
+                              "TBD"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={
+                          contractWorkingId ===
+                          contract.contract_id
+                        }
+                        onClick={() =>
+                          openAdobeSigning(contract)
+                        }
+                        style={{
+                          marginTop: 18,
+                          width: "100%",
+                          border: 0,
+                          borderRadius: 11,
+                          padding: "15px 18px",
+                          background:
+                            "linear-gradient(135deg, #ef233c, #c1121f)",
+                          color: "#fff",
+                          fontWeight: 950,
+                          fontSize: 15,
+                          letterSpacing: 0.5,
+                          cursor:
+                            contractWorkingId ===
+                            contract.contract_id
+                              ? "wait"
+                              : "pointer",
+                          boxShadow:
+                            "0 10px 24px rgba(239,35,60,.28)",
+                        }}
+                      >
+                        {contractWorkingId ===
+                        contract.contract_id
+                          ? "OPENING ADOBE..."
+                          : "REVIEW & SIGN WITH ADOBE"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          loadContracts()
+                        }
+                        style={{
+                          marginTop: 9,
+                          width: "100%",
+                          border:
+                            "1px solid rgba(255,255,255,.16)",
+                          borderRadius: 9,
+                          padding: "10px 14px",
+                          background: "transparent",
+                          color:
+                            "rgba(255,255,255,.75)",
+                          fontWeight: 800,
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        REFRESH CONTRACT STATUS
+                      </button>
+
+                      <div
+                        style={{
+                          textAlign: "center",
+                          marginTop: 10,
+                          color:
+                            "rgba(255,255,255,.42)",
+                          fontSize: 11,
+                        }}
+                      >
+                        After signing in Adobe,
+                        return here and refresh status.
+                      </div>
+                    </div>
+                  ) : null}
+
                   {![
                     "signed",
                     "declined",
@@ -1919,7 +2334,9 @@ export default function FighterPortal({ onLogout }) {
                           marginBottom: 8,
                         }}
                       >
-                        Electronic Signature
+                        {contract.adobe_agreement_id
+                          ? "Other Signing Option"
+                          : "Electronic Signature"}
                       </div>
 
                       <div
@@ -1929,8 +2346,9 @@ export default function FighterPortal({ onLogout }) {
                           marginBottom: 12,
                         }}
                       >
-                        Review and download the official
-                        contract before signing.
+                        {contract.adobe_agreement_id
+                          ? "If you cannot use Adobe, you may use the TNGOS electronic signature below."
+                          : "Review and download the official contract before signing."}
                       </div>
 
                       <label
