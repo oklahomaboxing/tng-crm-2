@@ -1142,10 +1142,11 @@ def build_matchmaker_router(current_user_dependency):
         bout_count = (
             db.query(BoxingBout)
             .filter(
+                BoxingBout.status.notin_(["cancelled", "void"]),
                 or_(
                     BoxingBout.red_fighter_id == fighter_id,
                     BoxingBout.blue_fighter_id == fighter_id,
-                )
+                ),
             )
             .count()
         )
