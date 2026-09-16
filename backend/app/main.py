@@ -740,6 +740,21 @@ def create_staff(
         "message": "Staff account created",
     }
 
+
+def rep_profile_photo_url(user_id: int):
+    rep_upload_dir = os.path.join("uploads", "reps")
+    os.makedirs(rep_upload_dir, exist_ok=True)
+
+    for extension in ("jpg", "jpeg", "png", "webp"):
+        filename = f"rep_{user_id}.{extension}"
+        full_path = os.path.join(rep_upload_dir, filename)
+
+        if os.path.exists(full_path):
+            return f"/uploads/reps/{filename}"
+
+    return ""
+
+
 @app.get("/api/reps/me")
 def my_rep_profile(
     db: Session = Depends(get_db),
@@ -757,7 +772,170 @@ def my_rep_profile(
         "phone": rep.phone,
         "slug": rep.referral_slug,
         "referral_url": f"https://tngos.tngboxinggym.com?join={rep.referral_slug}",
+        "photo_url": rep_profile_photo_url(user.id),
     }
+
+
+
+@app.post("/api/reps/me/photo")
+async def upload_my_rep_photo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    if user.role != "rep" or not user.rep_profile:
+        raise HTTPException(
+            status_code=403,
+            detail="Sales rep profile required",
+        )
+
+    allowed_types = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+
+    content_type = (file.content_type or "").lower()
+
+    if content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Upload a JPG, PNG, or WEBP image",
+        )
+
+    contents = await file.read()
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="Photo file is empty",
+        )
+
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="Profile photo must be 5 MB or smaller",
+        )
+
+    rep_upload_dir = os.path.join("uploads", "reps")
+    os.makedirs(rep_upload_dir, exist_ok=True)
+
+    # Remove any prior profile photo for this rep.
+    for extension in ("jpg", "jpeg", "png", "webp"):
+        old_path = os.path.join(
+            rep_upload_dir,
+            f"rep_{user.id}.{extension}",
+        )
+
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+    extension = allowed_types[content_type]
+    filename = f"rep_{user.id}.{extension}"
+    full_path = os.path.join(rep_upload_dir, filename)
+
+    with open(full_path, "wb") as destination:
+        destination.write(contents)
+
+    return {
+        "success": True,
+        "photo_url": f"/uploads/reps/{filename}",
+    }
+
+
+@app.get("/api/reps/me/members")
+def my_rep_members(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    if user.role != "rep" or not user.rep_profile:
+        raise HTTPException(
+            status_code=403,
+            detail="Sales rep profile required",
+        )
+
+    rep = user.rep_profile
+
+    member_ids = (
+        db.query(Sale.member_id)
+        .filter(
+            Sale.sales_rep_id == rep.id,
+            Sale.member_id != None,
+        )
+        .distinct()
+        .subquery()
+    )
+
+    members = (
+        db.query(Member)
+        .filter(
+            Member.id.in_(
+                db.query(member_ids.c.member_id)
+            )
+        )
+        .order_by(
+            Member.last_name.asc(),
+            Member.first_name.asc(),
+        )
+        .all()
+    )
+
+    results = []
+
+    for member in members:
+        member_sales = (
+            db.query(Sale)
+            .filter(
+                Sale.sales_rep_id == rep.id,
+                Sale.member_id == member.id,
+            )
+            .order_by(Sale.sale_date.desc())
+            .all()
+        )
+
+        membership_sales = [
+            sale
+            for sale in member_sales
+            if is_membership_sale(sale)
+        ]
+
+        latest_membership_sale = (
+            membership_sales[0]
+            if membership_sales
+            else None
+        )
+
+        results.append({
+            "id": member.id,
+            "name": (
+                f"{member.first_name or ''} "
+                f"{member.last_name or ''}"
+            ).strip(),
+            "email": member.email or "",
+            "phone": member.phone or "",
+            "membership_status": (
+                member.membership_status or ""
+            ),
+            "member_number": member.member_number or "",
+            "membership": (
+                latest_membership_sale.product.name
+                if (
+                    latest_membership_sale
+                    and latest_membership_sale.product
+                )
+                else ""
+            ),
+            "signup_date": (
+                latest_membership_sale.sale_date.isoformat()
+                if (
+                    latest_membership_sale
+                    and latest_membership_sale.sale_date
+                )
+                else None
+            ),
+        })
+
+    return results
 
 
 @app.get("/api/reps/me/qr")
@@ -1061,6 +1239,11 @@ def list_members(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    if user.role == "rep":
+        raise HTTPException(
+            status_code=403,
+            detail="Sales reps may only access their own members",
+        )
     cutoff_date = datetime(2026, 7, 20, 23, 59, 59)
 
     paid_membership_member_ids = (
@@ -1531,9 +1714,14 @@ def my_dashboard(db: Session = Depends(get_db), user: User = Depends(current_use
         extract("year", Sale.sale_date) == now.year
     )
 
-    sales = q.all()
+    sales = [
+        sale
+        for sale in q.all()
+        if is_membership_sale(sale)
+    ]
+
     count = len(sales)
-    revenue = sum(s.amount for s in sales)
+    revenue = sum(float(s.amount or 0) for s in sales)
     rate = commission_rate(count)
 
     if count < 10:
@@ -1544,7 +1732,14 @@ def my_dashboard(db: Session = Depends(get_db), user: User = Depends(current_use
         next_tier = "Max tier reached"
 
     recent_sales = []
-    for s in sales[-5:]:
+
+    ordered_sales = sorted(
+        sales,
+        key=lambda sale: sale.sale_date or datetime.min,
+        reverse=True,
+    )
+
+    for s in ordered_sales[:5]:
         member = db.query(Member).filter(Member.id == s.member_id).first()
         product = db.query(MembershipProduct).filter(MembershipProduct.id == s.product_id).first()
 
@@ -1607,7 +1802,17 @@ def create_lead(data: LeadCreate, db: Session = Depends(get_db)):
     }
 @app.get("/api/leads")
 def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    leads = db.query(Lead).order_by(Lead.created_at.desc()).all()
+    query = db.query(Lead)
+
+    if user.role == "rep":
+        if not user.rep_profile:
+            return []
+
+        query = query.filter(
+            Lead.sales_rep_id == user.rep_profile.id
+        )
+
+    leads = query.order_by(Lead.created_at.desc()).all()
     results = []
 
     for lead in leads:
