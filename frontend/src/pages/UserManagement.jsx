@@ -19,7 +19,6 @@ export default function UserManagement() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [referralSlug, setReferralSlug] = useState("");
-  const [cloverLink, setCloverLink] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -53,10 +52,6 @@ export default function UserManagement() {
           role === "rep"
             ? referralSlug.trim().toLowerCase()
             : "",
-        clover_link:
-          role === "rep"
-            ? cloverLink.trim()
-            : "",
       };
 
       const response = await fetch(`${API}${endpoint}`, {
@@ -84,7 +79,6 @@ export default function UserManagement() {
       setEmail("");
       setPassword("");
       setReferralSlug("");
-      setCloverLink("");
     } catch (err) {
       setError(err.message || "Could not create user.");
     } finally {
@@ -148,12 +142,6 @@ export default function UserManagement() {
                   fullWidth
                 />
 
-                <TextField
-                  label="Clover Link"
-                  value={cloverLink}
-                  onChange={(event) => setCloverLink(event.target.value)}
-                  fullWidth
-                />
               </>
             )}
 
