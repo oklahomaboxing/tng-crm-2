@@ -336,6 +336,15 @@ export default function MemberPortal({ onLogout }) {
 
   const m = data.member;
   const latest = data.inbody?.latest_scan;
+  const hasActiveMembership =
+    (m.membership_status || "").toLowerCase() === "active";
+
+
+  useEffect(() => {
+    if (!hasActiveMembership && showTrainer) {
+      setShowTrainer(false);
+    }
+  }, [hasActiveMembership, showTrainer]);
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f6f7f9", pb: 8 }}>
@@ -584,7 +593,74 @@ export default function MemberPortal({ onLogout }) {
           </Grid>
 
           <Grid item xs={12}>
-            {!showTrainer ? (
+            {!hasActiveMembership ? (
+              <Card
+                sx={{
+                  borderRadius: 4,
+                  bgcolor: "#161616",
+                  color: "white",
+                  border: "1px solid",
+                  borderColor: "error.main",
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Stack
+                    direction={{
+                      xs: "column",
+                      sm: "row",
+                    }}
+                    spacing={2}
+                    alignItems={{
+                      xs: "flex-start",
+                      sm: "center",
+                    }}
+                    justifyContent="space-between"
+                  >
+                    <Stack
+                      direction="row"
+                      spacing={1.5}
+                      alignItems="center"
+                    >
+                      <SportsMmaRoundedIcon
+                        color="disabled"
+                        sx={{ fontSize: 38 }}
+                      />
+
+                      <Box>
+                        <Typography
+                          variant="h5"
+                          fontWeight={900}
+                        >
+                          TNGTrainer Locked
+                        </Typography>
+
+                        <Typography
+                          sx={{ color: "grey.400" }}
+                        >
+                          An active TNG Boxing membership
+                          is required to use TNGTrainer.
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    <Button
+                      variant="contained"
+                      color="error"
+                      disabled={renewalWorking}
+                      onClick={renewMembership}
+                      sx={{
+                        fontWeight: 900,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {renewalWorking
+                        ? "Opening Clover..."
+                        : "Renew Membership"}
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ) : !showTrainer ? (
               <Card
                 sx={{
                   borderRadius: 4,
@@ -636,7 +712,9 @@ export default function MemberPortal({ onLogout }) {
                     <Button
                       variant="contained"
                       color="error"
-                      onClick={() => setShowTrainer(true)}
+                      onClick={() =>
+                        setShowTrainer(true)
+                      }
                       sx={{
                         fontWeight: 900,
                         whiteSpace: "nowrap",
@@ -650,8 +728,12 @@ export default function MemberPortal({ onLogout }) {
             ) : (
               <Stack spacing={1.5}>
                 <Button
-                  onClick={() => setShowTrainer(false)}
-                  sx={{ alignSelf: "flex-start" }}
+                  onClick={() =>
+                    setShowTrainer(false)
+                  }
+                  sx={{
+                    alignSelf: "flex-start",
+                  }}
                 >
                   Back to Member Account
                 </Button>
