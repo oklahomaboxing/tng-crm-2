@@ -3009,6 +3009,22 @@ Rules:
                     "id": contract.id,
                     "fighter_id": contract.fighter_id,
                     "status": contract.status or "draft",
+
+                    "signature_provider":
+                        contract.signature_provider or "tng",
+
+                    "adobe_agreement_id":
+                        contract.adobe_agreement_id or "",
+
+                    "adobe_status":
+                        contract.adobe_status or "",
+
+                    "adobe_sent_at":
+                        contract.adobe_sent_at,
+
+                    "adobe_signed_at":
+                        contract.adobe_signed_at,
+
                     "electronic_signature": (
                         {
                             "signed": True,

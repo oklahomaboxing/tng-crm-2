@@ -526,6 +526,191 @@ export default function EventWorkspace({
     }
   }
 
+  async function sendContractWithAdobe(
+    contractId,
+    fighterName
+  ) {
+    if (!contractId) {
+      window.alert(
+        "Generate the contract first."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Send ${fighterName}'s contract through Adobe Acrobat Sign?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/contracts/${contractId}/adobe/send`,
+        {
+          method: "POST",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+            "Could not send contract with Adobe."
+        );
+      }
+
+      const notice =
+        body.message ||
+        `${fighterName}'s contract was sent with Adobe Acrobat Sign.`;
+
+      setMessage(notice);
+      window.alert(notice);
+
+      await load();
+
+    } catch (error) {
+      const notice =
+        error.message ||
+        "Could not send contract with Adobe.";
+
+      setMessage(notice);
+      window.alert(notice);
+    }
+  }
+
+
+  async function syncAdobeContract(
+    contractId,
+    fighterName
+  ) {
+    if (!contractId) return;
+
+    try {
+      const response = await fetch(
+        `${API}/api/boxing/contracts/${contractId}/adobe/sync`,
+        {
+          method: "POST",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+            "Could not sync Adobe contract."
+        );
+      }
+
+      const status =
+        body.adobe_status ||
+        body.status ||
+        "Updated";
+
+      const notice =
+        `${fighterName} Adobe status: ${status}`;
+
+      setMessage(notice);
+      window.alert(notice);
+
+      await load();
+
+    } catch (error) {
+      const notice =
+        error.message ||
+        "Could not sync Adobe contract.";
+
+      setMessage(notice);
+      window.alert(notice);
+    }
+  }
+
+
+  async function viewOfficialContractPdf(
+    contractId
+  ) {
+    if (!contractId) {
+      window.alert(
+        "Generate the contract first."
+      );
+      return;
+    }
+
+    const pdfWindow = window.open(
+      "",
+      "_blank"
+    );
+
+    if (!pdfWindow) {
+      window.alert(
+        "Please allow popups for TNGOS."
+      );
+      return;
+    }
+
+    pdfWindow.document.write(
+      "<p style='font-family:Arial;padding:30px'>Loading official contract...</p>"
+    );
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API}/api/boxing/contracts/${contractId}/official-pdf`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        let detail =
+          "Could not load official contract PDF.";
+
+        try {
+          const body = await response.json();
+          detail = body.detail || detail;
+        } catch (_) {}
+
+        throw new Error(detail);
+      }
+
+      const blob = await response.blob();
+
+      const url =
+        window.URL.createObjectURL(blob);
+
+      pdfWindow.location.href = url;
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 60000);
+
+    } catch (error) {
+      try {
+        pdfWindow.close();
+      } catch (_) {}
+
+      const notice =
+        error.message ||
+        "Could not load official contract PDF.";
+
+      setMessage(notice);
+      window.alert(notice);
+    }
+  }
+
+
   async function generateContract(bout, corner) {
     const printWindow = window.open(
       "",
@@ -2300,6 +2485,91 @@ export default function EventWorkspace({
                               </Grid>
                             </Grid>
 
+                            {/* SEND WITH ADOBE - RED */}
+
+                            {bout.red_contract?.id && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 900,
+                                  color:
+                                    String(
+                                      bout.red_contract
+                                        ?.adobe_status || ""
+                                    ).toUpperCase() ===
+                                    "SIGNED"
+                                      ? "success.main"
+                                      : "text.secondary",
+                                }}
+                              >
+                                Adobe Status:{" "}
+                                {bout.red_contract
+                                  ?.adobe_agreement_id
+                                  ? String(
+                                      bout.red_contract
+                                        ?.adobe_status ||
+                                        "IN PROCESS"
+                                    ).replaceAll("_", " ")
+                                  : "Not Sent"}
+                              </Typography>
+                            )}
+
+                            {!bout.red_contract
+                              ?.adobe_agreement_id ? (
+                              <Button
+                                variant="contained"
+                                color="error"
+                                disabled={
+                                  !bout.red_contract?.id
+                                }
+                                onClick={() =>
+                                  sendContractWithAdobe(
+                                    bout.red_contract?.id,
+                                    bout.red?.legal_name ||
+                                      "Red Corner"
+                                  )
+                                }
+                              >
+                                Send With Adobe
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outlined"
+                                color={
+                                  String(
+                                    bout.red_contract
+                                      ?.adobe_status || ""
+                                  ).toUpperCase() ===
+                                  "SIGNED"
+                                    ? "success"
+                                    : "warning"
+                                }
+                                onClick={() =>
+                                  syncAdobeContract(
+                                    bout.red_contract?.id,
+                                    bout.red?.legal_name ||
+                                      "Red Corner"
+                                  )
+                                }
+                              >
+                                Sync Adobe
+                              </Button>
+                            )}
+
+                            <Button
+                              variant="outlined"
+                              disabled={
+                                !bout.red_contract?.id
+                              }
+                              onClick={() =>
+                                viewOfficialContractPdf(
+                                  bout.red_contract?.id
+                                )
+                              }
+                            >
+                              View Official PDF
+                            </Button>
+
                             <Button
                               variant="outlined"
                               disabled={!bout.red_contract?.id}
@@ -2724,6 +2994,91 @@ export default function EventWorkspace({
                                 />
                               </Grid>
                             </Grid>
+
+                            {/* SEND WITH ADOBE - BLUE */}
+
+                            {bout.blue_contract?.id && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 900,
+                                  color:
+                                    String(
+                                      bout.blue_contract
+                                        ?.adobe_status || ""
+                                    ).toUpperCase() ===
+                                    "SIGNED"
+                                      ? "success.main"
+                                      : "text.secondary",
+                                }}
+                              >
+                                Adobe Status:{" "}
+                                {bout.blue_contract
+                                  ?.adobe_agreement_id
+                                  ? String(
+                                      bout.blue_contract
+                                        ?.adobe_status ||
+                                        "IN PROCESS"
+                                    ).replaceAll("_", " ")
+                                  : "Not Sent"}
+                              </Typography>
+                            )}
+
+                            {!bout.blue_contract
+                              ?.adobe_agreement_id ? (
+                              <Button
+                                variant="contained"
+                                color="error"
+                                disabled={
+                                  !bout.blue_contract?.id
+                                }
+                                onClick={() =>
+                                  sendContractWithAdobe(
+                                    bout.blue_contract?.id,
+                                    bout.blue?.legal_name ||
+                                      "Blue Corner"
+                                  )
+                                }
+                              >
+                                Send With Adobe
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outlined"
+                                color={
+                                  String(
+                                    bout.blue_contract
+                                      ?.adobe_status || ""
+                                  ).toUpperCase() ===
+                                  "SIGNED"
+                                    ? "success"
+                                    : "warning"
+                                }
+                                onClick={() =>
+                                  syncAdobeContract(
+                                    bout.blue_contract?.id,
+                                    bout.blue?.legal_name ||
+                                      "Blue Corner"
+                                  )
+                                }
+                              >
+                                Sync Adobe
+                              </Button>
+                            )}
+
+                            <Button
+                              variant="outlined"
+                              disabled={
+                                !bout.blue_contract?.id
+                              }
+                              onClick={() =>
+                                viewOfficialContractPdf(
+                                  bout.blue_contract?.id
+                                )
+                              }
+                            >
+                              View Official PDF
+                            </Button>
 
                             <Button
                               variant="outlined"
