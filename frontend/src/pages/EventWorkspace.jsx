@@ -28,6 +28,7 @@ import BloodtypeRoundedIcon from "@mui/icons-material/BloodtypeRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import { buildOfficialContractHtml } from "../utils/officialContract";
+import EventRevenue from "./EventRevenue";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -1265,7 +1266,7 @@ export default function EventWorkspace({
             <Typography color="text.secondary">
               {event.event_date || "No date"}
               {event.venue
-                ? ` • ${event.venue}`
+                ? ` - ${event.venue}`
                 : ""}
             </Typography>
 
@@ -1529,6 +1530,7 @@ export default function EventWorkspace({
             <Tab label="Matchmaker Checklist" />
             <Tab label="Bloodwork" />
             <Tab label="Fees" />
+            <Tab label="Revenue" />
           </Tabs>
         </Card>
 
@@ -1583,9 +1585,9 @@ export default function EventWorkspace({
                           {bout.weight_agreed
                             ? `${bout.weight_agreed} lb`
                             : "Weight TBD"}
-                          {" • "}
+                          {" ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ "}
                           {bout.rounds} rounds
-                          {" • "}
+                          {" ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ "}
                           {bout.status}
                         </Typography>
                       </Box>
@@ -1710,8 +1712,8 @@ export default function EventWorkspace({
                             label={
                               bout.red_series.status ===
                               "graduated"
-                                ? "FIRST 5 FIGHTS SERIES — GRADUATED"
-                                : `FIRST 5 FIGHTS SERIES — FIGHT ${bout.red_series.next_fight_number} OF ${bout.red_series.target_fights}`
+                                ? "FIRST 5 FIGHTS SERIES ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â GRADUATED"
+                                : `FIRST 5 FIGHTS SERIES ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â FIGHT ${bout.red_series.next_fight_number} OF ${bout.red_series.target_fights}`
                             }
                           />
                         )}
@@ -1750,8 +1752,8 @@ export default function EventWorkspace({
                             label={
                               bout.blue_series.status ===
                               "graduated"
-                                ? "FIRST 5 FIGHTS SERIES — GRADUATED"
-                                : `FIRST 5 FIGHTS SERIES — FIGHT ${bout.blue_series.next_fight_number} OF ${bout.blue_series.target_fights}`
+                                ? "FIRST 5 FIGHTS SERIES ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â GRADUATED"
+                                : `FIRST 5 FIGHTS SERIES ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â FIGHT ${bout.blue_series.next_fight_number} OF ${bout.blue_series.target_fights}`
                             }
                           />
                         )}
@@ -1966,7 +1968,7 @@ export default function EventWorkspace({
                               size="small"
                               color="primary"
                               label={
-                                `RED: ${bout.red?.legal_name || "Fighter"} — First 5 Fight ${bout.red_series.next_fight_number} of ${bout.red_series.target_fights}`
+                                `RED: ${bout.red?.legal_name || "Fighter"} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â First 5 Fight ${bout.red_series.next_fight_number} of ${bout.red_series.target_fights}`
                               }
                             />
                           )}
@@ -1978,7 +1980,7 @@ export default function EventWorkspace({
                               size="small"
                               color="primary"
                               label={
-                                `BLUE: ${bout.blue?.legal_name || "Fighter"} — First 5 Fight ${bout.blue_series.next_fight_number} of ${bout.blue_series.target_fights}`
+                                `BLUE: ${bout.blue?.legal_name || "Fighter"} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â First 5 Fight ${bout.blue_series.next_fight_number} of ${bout.blue_series.target_fights}`
                               }
                             />
                           )}
@@ -3166,23 +3168,23 @@ export default function EventWorkspace({
 
                       <Typography>
                         BoxRec #
-                        {bout.red?.boxrec_id || "—"}
+                        {bout.red?.boxrec_id || "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                       </Typography>
 
                       <Typography>
                         Phone:{" "}
-                        {bout.red?.phone || "—"}
+                        {bout.red?.phone || "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                       </Typography>
 
                       <Typography>
                         Email:{" "}
-                        {bout.red?.email || "—"}
+                        {bout.red?.email || "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                       </Typography>
 
                       <Typography>
                         Manager:{" "}
                         {bout.red?.manager_name ||
-                          "—"}
+                          "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                       </Typography>
                     </Grid>
 
@@ -3208,23 +3210,23 @@ export default function EventWorkspace({
                       <Typography>
                         BoxRec #
                         {bout.blue?.boxrec_id ||
-                          "—"}
+                          "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                       </Typography>
 
                       <Typography>
                         Phone:{" "}
-                        {bout.blue?.phone || "—"}
+                        {bout.blue?.phone || "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                       </Typography>
 
                       <Typography>
                         Email:{" "}
-                        {bout.blue?.email || "—"}
+                        {bout.blue?.email || "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                       </Typography>
 
                       <Typography>
                         Manager:{" "}
                         {bout.blue?.manager_name ||
-                          "—"}
+                          "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â"}
                       </Typography>
                     </Grid>
                   </Grid>
@@ -3420,7 +3422,7 @@ export default function EventWorkspace({
                         color="text.secondary"
                       >
                         {fighter.pro_record || "Record N/A"}
-                        {" • "}
+                        {" ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ "}
                         {fighter.fight_weight
                           ? `${fighter.fight_weight} lb`
                           : "Weight N/A"}
@@ -3733,6 +3735,10 @@ export default function EventWorkspace({
         )}
 
       </Stack>
+      {tab === 7 && (
+        <EventRevenue eventId={eventId} />
+      )}
+
       <Dialog
         open={cancelBoutOpen}
         onClose={() => {
@@ -3809,3 +3815,6 @@ export default function EventWorkspace({
     </Box>
   );
 }
+
+
+
