@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+load_dotenv(override=False)
 import os
 from app.ticketing.routes import router as ticketing_router
 from app.ticketing.checkout_routes import router as ticketing_checkout_router
@@ -13,7 +14,6 @@ from .services.memberships import (
     recalculate_member_from_payments,
 )
 logger = logging.getLogger(__name__)
-load_dotenv(override=False)
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -45,6 +45,8 @@ from .services.password_reset_service import (
 from sqlalchemy import text
 from .database import Base, engine, get_db
 from .matchmaker import models as matchmaker_models
+from .revenue import models as revenue_models
+from .revenue.routes import router as revenue_router
 from .matchmaker.routes import build_matchmaker_router
 from .services.sms_service import send_sms
 from .models import (
@@ -278,6 +280,7 @@ app.include_router(ticketing_router)
 app.include_router(ticketing_checkout_router)
 
 app.include_router(academy_router)
+app.include_router(revenue_router)
 
 # TNG Boxing Matchmaker
 app.include_router(build_matchmaker_router(current_user))
@@ -5038,4 +5041,6 @@ app.include_router(member_portal_router)
 # TNG OS Fighter Portal v1
 from .fighter_portal.routes import router as fighter_portal_router
 app.include_router(fighter_portal_router)
+
+
 
