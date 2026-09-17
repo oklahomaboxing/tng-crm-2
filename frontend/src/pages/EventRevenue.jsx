@@ -86,6 +86,114 @@ function MetricCard({ label, value, subtext }) {
           {subtext}
         </div>
       ) : null}
+      {proposalDraft ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 760,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              background: "#111116",
+              border: "1px solid #33333c",
+              borderRadius: 16,
+              padding: 24,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 16,
+                alignItems: "flex-start",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#e6202d",
+                    fontWeight: 900,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  AI Proposal Draft
+                </div>
+
+                <h2
+                  style={{
+                    margin: "6px 0 0",
+                  }}
+                >
+                  {proposalDraft.title}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                style={smallButtonStyle}
+                onClick={() => setProposalDraft(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div
+              style={{
+                marginTop: 20,
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.6,
+                color: "#d7d7dc",
+              }}
+            >
+              {proposalDraft.message}
+            </div>
+
+            {proposalDraft.clover_payment_url ? (
+              <div style={{ marginTop: 20 }}>
+                <a
+                  href={proposalDraft.clover_payment_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "inline-block",
+                    background: "#e6202d",
+                    color: "white",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    textDecoration: "none",
+                    fontWeight: 900,
+                  }}
+                >
+                  Open Clover Payment Link
+                </a>
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                marginTop: 22,
+                color: "#858590",
+                fontSize: 12,
+              }}
+            >
+              Draft saved in TNGOS. It has not been emailed yet.
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </div>
   );
 }
@@ -107,6 +215,8 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [scoutResults, setScoutResults] = useState([]);
   const [scoutLoading, setScoutLoading] = useState(false);
   const [addingSponsor, setAddingSponsor] = useState("");
+  const [proposalLoadingId, setProposalLoadingId] = useState(null);
+  const [proposalDraft, setProposalDraft] = useState(null);
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -268,6 +378,57 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       );
     } finally {
       setAddingSponsor("");
+    }
+  }
+
+  async function generateProposal(prospect) {
+    setProposalLoadingId(prospect.id);
+    setScoutError("");
+
+    try {
+      const eventName =
+        event?.name ||
+        event?.title ||
+        event?.event_name ||
+        `TNG Event ${eventId}`;
+
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/proposals/generate-ai`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prospect_id: prospect.id,
+            package_id: prospect.recommended_package_id || null,
+            event_name: eventName,
+            event_date: event?.event_date || null,
+            event_venue: event?.venue || null,
+            event_address: event?.venue_address || null,
+            additional_instructions: null,
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+          `Proposal generation failed (${response.status})`
+        );
+      }
+
+      setProposalDraft(body);
+    } catch (err) {
+      console.error(err);
+
+      setScoutError(
+        err.message || "Unable to generate proposal."
+      );
+    } finally {
+      setProposalLoadingId(null);
     }
   }
 
@@ -861,8 +1022,16 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                         <button
                           type="button"
                           style={smallButtonStyle}
+                          disabled={
+                            proposalLoadingId === prospect.id
+                          }
+                          onClick={() =>
+                            generateProposal(prospect)
+                          }
                         >
-                          Proposal
+                          {proposalLoadingId === prospect.id
+                            ? "Generating..."
+                            : "Proposal"}
                         </button>
 
                         <button

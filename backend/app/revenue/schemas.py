@@ -239,3 +239,15 @@ class SponsorScoutPipelineCreate(BaseModel):
 
     verified_sponsorship_history: Optional[bool] = None
     lead_source: str = "OPENAI_WEB_SEARCH"
+
+
+class AIRevenueProposalRequest(BaseModel):
+    prospect_id: int
+    package_id: Optional[int] = None
+
+    event_name: str
+    event_date: Optional[str] = None
+    event_venue: Optional[str] = None
+    event_address: Optional[str] = None
+
+    additional_instructions: Optional[str] = None

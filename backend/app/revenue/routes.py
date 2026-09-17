@@ -898,3 +898,200 @@ def add_scout_sponsor_to_pipeline(
         "fit_score": prospect.fit_score,
         "message": "Sponsor added to pipeline",
     }
+
+
+@router.post("/proposals/generate-ai")
+def generate_ai_revenue_proposal(
+    event_id: int,
+    payload: schemas.AIRevenueProposalRequest,
+    db: Session = Depends(get_db),
+):
+    import json
+    import os
+
+    from openai import OpenAI
+
+    prospect = (
+        db.query(models.EventRevenueProspect)
+        .filter(
+            models.EventRevenueProspect.id == payload.prospect_id,
+            models.EventRevenueProspect.event_id == event_id,
+        )
+        .first()
+    )
+
+    if not prospect:
+        raise HTTPException(
+            status_code=404,
+            detail="Prospect not found",
+        )
+
+    organization = (
+        db.query(models.RevenueOrganization)
+        .filter(
+            models.RevenueOrganization.id
+            == prospect.organization_id
+        )
+        .first()
+    )
+
+    if not organization:
+        raise HTTPException(
+            status_code=404,
+            detail="Organization not found",
+        )
+
+    package = None
+
+    if payload.package_id:
+        package = (
+            db.query(models.EventRevenuePackage)
+            .filter(
+                models.EventRevenuePackage.id
+                == payload.package_id,
+                models.EventRevenuePackage.event_id
+                == event_id,
+            )
+            .first()
+        )
+
+        if not package:
+            raise HTTPException(
+                status_code=404,
+                detail="Revenue package not found",
+            )
+
+    evidence = {}
+
+    if organization.marketing_evidence_json:
+        try:
+            evidence = json.loads(
+                organization.marketing_evidence_json
+            )
+        except Exception:
+            evidence = {}
+
+    package_text = "No specific package selected."
+
+    if package:
+        package_text = f"""
+Package: {package.name}
+Price: ${package.price:,.2f}
+Description: {package.description or ""}
+Payment Link: {package.clover_payment_url or "Not yet assigned"}
+"""
+
+    client = OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY"),
+        timeout=45.0,
+        max_retries=0,
+    )
+
+    prompt = f"""
+You are the sponsorship proposal assistant for TNG Promotions.
+
+Write a professional, persuasive sponsorship proposal for a real business.
+
+EVENT
+Name: {payload.event_name}
+Date: {payload.event_date or "Not provided"}
+Venue: {payload.event_venue or "Not provided"}
+Address: {payload.event_address or "Not provided"}
+
+SPONSOR
+Business: {organization.business_name}
+Industry: {organization.industry or "Not provided"}
+City: {organization.city or ""}
+State: {organization.state or ""}
+Website: {organization.website or ""}
+
+TNGOS SPONSOR FIT
+Fit score: {prospect.fit_score}/100
+Marketing activity score: {prospect.marketing_activity_score}/100
+Sponsorship history score: {prospect.sponsorship_history_score}/100
+Audience fit score: {prospect.audience_fit_score}/100
+Business capacity score: {prospect.business_capacity_score}/100
+
+WHY THEY FIT
+{organization.notes or "No notes provided"}
+
+RESEARCH EVIDENCE
+{json.dumps(evidence, indent=2)}
+
+PACKAGE
+{package_text}
+
+ADDITIONAL INSTRUCTIONS
+{payload.additional_instructions or "None"}
+
+Write specifically for this business.
+
+Do not invent claims, audience numbers, sponsorship history,
+deliverables, attendance, or benefits that are not provided.
+
+Return ONLY valid JSON:
+
+{{
+  "title": "proposal title",
+  "message": "complete proposal body"
+}}
+"""
+
+    try:
+        response = client.responses.create(
+            model="gpt-5.6-luna",
+            input=prompt,
+        )
+
+        raw = response.output_text.strip()
+
+        if raw.startswith("```"):
+            raw = raw.replace("```json", "", 1)
+            raw = raw.replace("```", "").strip()
+
+        generated = json.loads(raw)
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI proposal generation failed: {exc}",
+        )
+
+    title = generated.get("title")
+    message = generated.get("message")
+
+    if not title or not message:
+        raise HTTPException(
+            status_code=503,
+            detail="AI proposal response was incomplete",
+        )
+
+    proposal = models.EventRevenueProposal(
+        event_id=event_id,
+        prospect_id=prospect.id,
+        package_id=payload.package_id,
+        title=title,
+        message=message,
+        clover_payment_url=(
+            package.clover_payment_url
+            if package
+            else None
+        ),
+    )
+
+    db.add(proposal)
+
+    prospect.status = "PROPOSAL_SENT" if False else "INTERESTED"
+
+    db.commit()
+    db.refresh(proposal)
+
+    return {
+        "proposal_id": proposal.id,
+        "prospect_id": prospect.id,
+        "title": proposal.title,
+        "message": proposal.message,
+        "package_id": proposal.package_id,
+        "clover_payment_url": proposal.clover_payment_url,
+        "status": proposal.status,
+    }
