@@ -86,113 +86,7 @@ function MetricCard({ label, value, subtext }) {
           {subtext}
         </div>
       ) : null}
-      {proposalDraft ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.75)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-            zIndex: 9999,
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 760,
-              maxHeight: "90vh",
-              overflowY: "auto",
-              background: "#111116",
-              border: "1px solid #33333c",
-              borderRadius: 16,
-              padding: 24,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 16,
-                alignItems: "flex-start",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#e6202d",
-                    fontWeight: 900,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  AI Proposal Draft
-                </div>
 
-                <h2
-                  style={{
-                    margin: "6px 0 0",
-                  }}
-                >
-                  {proposalDraft.title}
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                style={smallButtonStyle}
-                onClick={() => setProposalDraft(null)}
-              >
-                Close
-              </button>
-            </div>
-
-            <div
-              style={{
-                marginTop: 20,
-                whiteSpace: "pre-wrap",
-                lineHeight: 1.6,
-                color: "#d7d7dc",
-              }}
-            >
-              {proposalDraft.message}
-            </div>
-
-            {proposalDraft.clover_payment_url ? (
-              <div style={{ marginTop: 20 }}>
-                <a
-                  href={proposalDraft.clover_payment_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    display: "inline-block",
-                    background: "#e6202d",
-                    color: "white",
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    textDecoration: "none",
-                    fontWeight: 900,
-                  }}
-                >
-                  Open Clover Payment Link
-                </a>
-              </div>
-            ) : null}
-
-            <div
-              style={{
-                marginTop: 22,
-                color: "#858590",
-                fontSize: 12,
-              }}
-            >
-              Draft saved in TNGOS. It has not been emailed yet.
-            </div>
-          </div>
-        </div>
-      ) : null}
 
     </div>
   );
@@ -1049,6 +943,114 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
           </div>
         )}
       </div>
+      {proposalDraft ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 760,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              background: "#111116",
+              border: "1px solid #33333c",
+              borderRadius: 16,
+              padding: 24,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 16,
+                alignItems: "flex-start",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#e6202d",
+                    fontWeight: 900,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  AI Proposal Draft
+                </div>
+
+                <h2
+                  style={{
+                    margin: "6px 0 0",
+                  }}
+                >
+                  {proposalDraft.title}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                style={smallButtonStyle}
+                onClick={() => setProposalDraft(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div
+              style={{
+                marginTop: 20,
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.6,
+                color: "#d7d7dc",
+              }}
+            >
+              {proposalDraft.message}
+            </div>
+
+            {proposalDraft.clover_payment_url ? (
+              <div style={{ marginTop: 20 }}>
+                <a
+                  href={proposalDraft.clover_payment_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "inline-block",
+                    background: "#e6202d",
+                    color: "white",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    textDecoration: "none",
+                    fontWeight: 900,
+                  }}
+                >
+                  Open Clover Payment Link
+                </a>
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                marginTop: 22,
+                color: "#858590",
+                fontSize: 12,
+              }}
+            >
+              Draft saved in TNGOS. It has not been emailed yet.
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </div>
   );
 }
