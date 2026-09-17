@@ -1461,13 +1461,6 @@ export default function Matchmaker() {
           </Box>
 
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button
-              variant="outlined"
-              startIcon={<EventRoundedIcon />}
-              onClick={() => setEventsOpen(true)}
-            >
-              Events
-            </Button>
 
             <Button
               variant="outlined"
@@ -1497,7 +1490,101 @@ export default function Matchmaker() {
 
         {msg && <Alert severity={msgType}>{msg}</Alert>}
 
-        <Grid container spacing={2}>
+                <Box sx={{ mb: 3 }}>
+          <Typography
+            variant="h6"
+            fontWeight={950}
+            sx={{ mb: 1 }}
+          >
+            Event Workspaces
+          </Typography>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 1.5 }}
+          >
+            Select an event to open its fight card, contracts,
+            checklists, revenue, and event operations.
+          </Typography>
+
+          {!events.length ? (
+            <Button
+              variant="outlined"
+              startIcon={<EventRoundedIcon />}
+              onClick={() => setEventOpen(true)}
+            >
+              Add Your First Event
+            </Button>
+          ) : (
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              flexWrap="wrap"
+            >
+              {events.map((event) => {
+                const selected =
+                  Number(eventId) === Number(event.id);
+
+                return (
+                  <Button
+                    key={event.id}
+                    variant={
+                      selected ? "contained" : "outlined"
+                    }
+                    color="error"
+                    startIcon={<EventRoundedIcon />}
+                    onClick={() => {
+                      setEventId(event.id);
+                      setResult(null);
+                      setEventWorkspaceId(event.id);
+                    }}
+                    sx={{
+                      borderRadius: 2.5,
+                      px: 2,
+                      py: 1.25,
+                      textAlign: "left",
+                      textTransform: "none",
+                      fontWeight: 900,
+                    }}
+                  >
+                    <Box
+                      component="span"
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        lineHeight: 1.15,
+                      }}
+                    >
+                      <Box component="span">
+                        {event.name}
+                      </Box>
+
+                      <Box
+                        component="span"
+                        sx={{
+                          fontSize: 11,
+                          opacity: 0.75,
+                          fontWeight: 700,
+                          mt: 0.4,
+                        }}
+                      >
+                        {event.event_date || "Date not set"}
+                        {event.venue
+                          ? ` - ${event.venue}`
+                          : ""}
+                      </Box>
+                    </Box>
+                  </Button>
+                );
+              })}
+            </Stack>
+          )}
+        </Box>
+
+<Grid container spacing={2}>
           <Grid item xs={12} sm={4}>
             <Card>
               <CardContent>
