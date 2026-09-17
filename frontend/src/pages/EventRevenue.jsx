@@ -42,6 +42,50 @@ function ScoreBadge({ score }) {
   );
 }
 
+function EmailStatusBadge({ status }) {
+  const value = (status || "NOT_SENT").toUpperCase();
+
+  const labels = {
+    NOT_SENT: "Not Sent",
+    DRAFT: "Draft",
+    QUEUED: "Queued",
+    SENT: "Sent",
+    DELIVERED: "Delivered",
+    OPENED: "Opened",
+    CLICKED: "Clicked",
+    REPLIED: "Replied",
+    BOUNCED: "Bounced",
+    FAILED: "Failed",
+    COMPLAINED: "Complained",
+    CANCELLED: "Cancelled",
+  };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        padding: "5px 9px",
+        borderRadius: 999,
+        border: "1px solid #34343d",
+        background:
+          value === "OPENED" ||
+          value === "CLICKED" ||
+          value === "REPLIED"
+            ? "#12251a"
+            : value === "BOUNCED" ||
+              value === "FAILED" ||
+              value === "COMPLAINED"
+            ? "#2a1114"
+            : "#17171d",
+        fontSize: 12,
+        fontWeight: 800,
+      }}
+    >
+      {labels[value] || value}
+    </span>
+  );
+}
+
 function MetricCard({ label, value, subtext }) {
   return (
     <div
@@ -887,6 +931,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                   <th style={thStyle}>Distance</th>
                   <th style={thStyle}>Suggested Ask</th>
                   <th style={thStyle}>Status</th>
+                  <th style={thStyle}>Email Status</th>
                   <th style={thStyle}>Actions</th>
                 </tr>
               </thead>
@@ -945,6 +990,24 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
 
                     <td style={tdStyle}>
                       {prospect.status || "NEW"}
+                    </td>
+
+                    <td style={tdStyle}>
+                      <EmailStatusBadge
+                        status={prospect.email_status}
+                      />
+
+                      {prospect.email_opened_at ? (
+                        <div
+                          style={{
+                            color: "#777783",
+                            fontSize: 11,
+                            marginTop: 5,
+                          }}
+                        >
+                          Open tracked
+                        </div>
+                      ) : null}
                     </td>
 
                     <td style={tdStyle}>

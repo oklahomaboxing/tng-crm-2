@@ -245,6 +245,19 @@ def list_prospects(
     results = []
 
     for row in rows:
+        latest_outreach = (
+            db.query(models.RevenueOutreachMessage)
+            .filter(
+                models.RevenueOutreachMessage.event_id == event_id,
+                models.RevenueOutreachMessage.prospect_id == row.id,
+                models.RevenueOutreachMessage.channel == "EMAIL",
+            )
+            .order_by(
+                models.RevenueOutreachMessage.created_at.desc()
+            )
+            .first()
+        )
+
         results.append({
             "id": row.id,
             "event_id": row.event_id,
@@ -287,6 +300,32 @@ def list_prospects(
             "recommended_package_id": row.recommended_package_id,
             "last_contacted_at": row.last_contacted_at,
             "next_follow_up_at": row.next_follow_up_at,
+
+            "email_status": (
+                latest_outreach.status
+                if latest_outreach
+                else None
+            ),
+            "email_sent_at": (
+                latest_outreach.sent_at
+                if latest_outreach
+                else None
+            ),
+            "email_opened_at": (
+                latest_outreach.opened_at
+                if latest_outreach
+                else None
+            ),
+            "email_clicked_at": (
+                latest_outreach.clicked_at
+                if latest_outreach
+                else None
+            ),
+            "email_bounced_at": (
+                latest_outreach.bounced_at
+                if latest_outreach
+                else None
+            ),
         })
 
     return results
