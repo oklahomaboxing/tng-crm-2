@@ -736,3 +736,165 @@ def scout_sponsors(
             status_code=503,
             detail=str(exc),
         )
+
+
+@router.post("/scout/sponsors/add-to-pipeline")
+def add_scout_sponsor_to_pipeline(
+    event_id: int,
+    payload: schemas.SponsorScoutPipelineCreate,
+    db: Session = Depends(get_db),
+):
+    import json
+
+    organization = (
+        db.query(models.RevenueOrganization)
+        .filter(
+            models.RevenueOrganization.business_name
+            == payload.business_name
+        )
+        .first()
+    )
+
+    if not organization and payload.website:
+        organization = (
+            db.query(models.RevenueOrganization)
+            .filter(
+                models.RevenueOrganization.website
+                == payload.website
+            )
+            .first()
+        )
+
+    evidence_payload = {
+        "marketing_evidence": payload.marketing_evidence,
+        "sponsorship_evidence": payload.sponsorship_evidence,
+        "source_urls": payload.source_urls,
+    }
+
+    if organization is None:
+        organization = models.RevenueOrganization(
+            business_name=payload.business_name,
+            website=payload.website,
+            city=payload.city,
+            state=payload.state,
+            industry=payload.industry,
+            notes=payload.why_good_fit,
+            marketing_propensity=payload.marketing_propensity,
+            verified_sponsorship_history=(
+                payload.verified_sponsorship_history
+            ),
+            marketing_evidence_json=json.dumps(
+                evidence_payload
+            ),
+        )
+
+        db.add(organization)
+        db.flush()
+
+    else:
+        if payload.website and not organization.website:
+            organization.website = payload.website
+
+        if payload.city and not organization.city:
+            organization.city = payload.city
+
+        if payload.state and not organization.state:
+            organization.state = payload.state
+
+        if payload.industry and not organization.industry:
+            organization.industry = payload.industry
+
+        organization.marketing_propensity = (
+            payload.marketing_propensity
+        )
+
+        organization.verified_sponsorship_history = (
+            payload.verified_sponsorship_history
+        )
+
+        organization.marketing_evidence_json = json.dumps(
+            evidence_payload
+        )
+
+        if payload.why_good_fit:
+            organization.notes = payload.why_good_fit
+
+    existing = (
+        db.query(models.EventRevenueProspect)
+        .filter(
+            models.EventRevenueProspect.event_id == event_id,
+            models.EventRevenueProspect.organization_id
+            == organization.id,
+            models.EventRevenueProspect.prospect_type
+            == "SPONSOR",
+        )
+        .first()
+    )
+
+    if existing:
+        db.commit()
+
+        return {
+            "added": False,
+            "already_exists": True,
+            "organization_id": organization.id,
+            "prospect_id": existing.id,
+            "fit_score": existing.fit_score,
+            "message": (
+                "Sponsor is already in this event pipeline"
+            ),
+        }
+
+    fit = build_fit_summary(
+        marketing_activity_score=(
+            payload.marketing_activity_score
+        ),
+        sponsorship_history_score=(
+            payload.sponsorship_history_score
+        ),
+        audience_fit_score=payload.audience_fit_score,
+        business_capacity_score=(
+            payload.business_capacity_score
+        ),
+        distance_score=payload.distance_score,
+        relationship_score=payload.relationship_score,
+    )
+
+    prospect = models.EventRevenueProspect(
+        event_id=event_id,
+        organization_id=organization.id,
+        prospect_type="SPONSOR",
+
+        status="NEW",
+        fit_score=fit["fit_score"],
+
+        marketing_activity_score=(
+            payload.marketing_activity_score
+        ),
+        sponsorship_history_score=(
+            payload.sponsorship_history_score
+        ),
+        audience_fit_score=payload.audience_fit_score,
+        business_capacity_score=(
+            payload.business_capacity_score
+        ),
+        distance_score=payload.distance_score,
+        relationship_score=payload.relationship_score,
+
+        lead_source=payload.lead_source,
+        distance_miles=payload.distance_miles,
+    )
+
+    db.add(prospect)
+    db.commit()
+    db.refresh(organization)
+    db.refresh(prospect)
+
+    return {
+        "added": True,
+        "already_exists": False,
+        "organization_id": organization.id,
+        "prospect_id": prospect.id,
+        "fit_score": prospect.fit_score,
+        "message": "Sponsor added to pipeline",
+    }

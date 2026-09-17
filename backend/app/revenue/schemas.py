@@ -206,3 +206,36 @@ class RevenueOrganizationUpdate(BaseModel):
     ] = None
 
     verified_sponsorship_history: Optional[bool] = None
+
+
+class SponsorScoutPipelineCreate(BaseModel):
+    business_name: str
+    website: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    industry: Optional[str] = None
+
+    why_good_fit: Optional[str] = None
+
+    marketing_evidence: list[str] = []
+    sponsorship_evidence: list[str] = []
+    source_urls: list[str] = []
+
+    marketing_activity_score: int = Field(default=0, ge=0, le=100)
+    sponsorship_history_score: int = Field(default=0, ge=0, le=100)
+    audience_fit_score: int = Field(default=0, ge=0, le=100)
+    business_capacity_score: int = Field(default=0, ge=0, le=100)
+    distance_score: int = Field(default=0, ge=0, le=100)
+    relationship_score: int = Field(default=20, ge=0, le=100)
+
+    distance_miles: Optional[float] = Field(default=None, ge=0)
+
+    marketing_propensity: Literal[
+        "HIGH",
+        "MEDIUM",
+        "LOW",
+        "UNKNOWN",
+    ] = "UNKNOWN"
+
+    verified_sponsorship_history: Optional[bool] = None
+    lead_source: str = "OPENAI_WEB_SEARCH"

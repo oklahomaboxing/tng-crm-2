@@ -106,6 +106,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
 
   const [scoutResults, setScoutResults] = useState([]);
   const [scoutLoading, setScoutLoading] = useState(false);
+  const [addingSponsor, setAddingSponsor] = useState("");
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -168,6 +169,107 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       (prospect) => Number(prospect.fit_score || 0) >= 80
     ).length;
   }, [prospects]);
+
+  async function addSponsorToPipeline(candidate) {
+    const key = candidate.business_name || "";
+
+    setAddingSponsor(key);
+    setScoutError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/scout/sponsors/add-to-pipeline`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            business_name: candidate.business_name,
+            website: candidate.website || null,
+            city: candidate.city || null,
+            state: candidate.state || null,
+            industry: candidate.industry || null,
+
+            why_good_fit:
+              candidate.why_good_fit || null,
+
+            marketing_evidence:
+              candidate.marketing_evidence || [],
+
+            sponsorship_evidence:
+              candidate.sponsorship_evidence || [],
+
+            source_urls:
+              candidate.source_urls || [],
+
+            marketing_activity_score:
+              candidate.marketing_activity_score || 0,
+
+            sponsorship_history_score:
+              candidate.sponsorship_history_score || 0,
+
+            audience_fit_score:
+              candidate.audience_fit_score || 0,
+
+            business_capacity_score:
+              candidate.business_capacity_score || 0,
+
+            distance_score:
+              candidate.distance_score || 0,
+
+            relationship_score:
+              candidate.relationship_score || 20,
+
+            distance_miles:
+              candidate.distance_miles ?? null,
+
+            marketing_propensity:
+              candidate.marketing_propensity || "UNKNOWN",
+
+            verified_sponsorship_history:
+              candidate.verified_sponsorship_history ?? null,
+
+            lead_source:
+              candidate.lead_source || "OPENAI_WEB_SEARCH",
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+          `Unable to add sponsor (${response.status})`
+        );
+      }
+
+      await loadData();
+
+      setScoutResults((current) =>
+        current.filter(
+          (item) =>
+            item.business_name !== candidate.business_name
+        )
+      );
+
+      if (body.already_exists) {
+        alert(
+          `${candidate.business_name} is already in this event pipeline.`
+        );
+      }
+    } catch (err) {
+      console.error(err);
+
+      setScoutError(
+        err.message ||
+        "Unable to add sponsor to pipeline."
+      );
+    } finally {
+      setAddingSponsor("");
+    }
+  }
 
   async function runSponsorScout() {
     if (tab !== "SPONSOR") {
@@ -557,13 +659,16 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                       background: "#e6202d",
                       borderColor: "#e6202d",
                     }}
+                    disabled={
+                      addingSponsor === candidate.business_name
+                    }
                     onClick={() =>
-                      alert(
-                        `Add ${candidate.business_name} to Pipeline is the next connection.`
-                      )
+                      addSponsorToPipeline(candidate)
                     }
                   >
-                    Add to Pipeline
+                    {addingSponsor === candidate.business_name
+                      ? "Adding..."
+                      : "Add to Pipeline"}
                   </button>
                 </div>
               </div>
