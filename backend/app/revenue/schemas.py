@@ -251,3 +251,12 @@ class AIRevenueProposalRequest(BaseModel):
     event_address: Optional[str] = None
 
     additional_instructions: Optional[str] = None
+
+
+class SponsorContactSearchRequest(BaseModel):
+    prospect_id: int
+
+    business_name: str
+    website: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None

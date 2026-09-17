@@ -155,6 +155,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [addingSponsor, setAddingSponsor] = useState("");
   const [proposalLoadingId, setProposalLoadingId] = useState(null);
   const [emailSendingId, setEmailSendingId] = useState(null);
+  const [contactFindingId, setContactFindingId] = useState(null);
   const [proposalDraft, setProposalDraft] = useState(null);
   const [scoutError, setScoutError] = useState("");
 
@@ -317,6 +318,69 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       );
     } finally {
       setAddingSponsor("");
+    }
+  }
+
+  async function findSponsorContact(prospect) {
+    setContactFindingId(prospect.id);
+    setScoutError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospect.id}/find-contact`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prospect_id: prospect.id,
+            business_name:
+              prospect.business_name || "",
+            website:
+              prospect.website || null,
+            city:
+              prospect.city || null,
+            state:
+              prospect.state || null,
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+          `Contact research failed (${response.status})`
+        );
+      }
+
+      await loadData();
+
+      const contactName =
+        [body.first_name, body.last_name]
+          .filter(Boolean)
+          .join(" ") || "Contact";
+
+      if (body.email) {
+        alert(
+          `${contactName} found\n${body.job_title || ""}\n${body.email}`
+        );
+      } else {
+        alert(
+          `${contactName} found, but no verified public email was located.`
+        );
+      }
+    } catch (err) {
+      console.error(err);
+
+      setScoutError(
+        err.message ||
+        "Unable to research sponsor contact."
+      );
+    } finally {
+      setContactFindingId(null);
     }
   }
 
@@ -1021,8 +1085,18 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                         <button
                           type="button"
                           style={smallButtonStyle}
+                          disabled={
+                            contactFindingId === prospect.id
+                          }
+                          onClick={() =>
+                            findSponsorContact(prospect)
+                          }
                         >
-                          View
+                          {contactFindingId === prospect.id
+                            ? "Finding..."
+                            : prospect.email
+                            ? "Refresh Contact"
+                            : "Find Contact"}
                         </button>
 
                         <button

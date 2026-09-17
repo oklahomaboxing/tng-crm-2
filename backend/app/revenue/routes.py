@@ -1326,3 +1326,196 @@ async def resend_revenue_webhook(
         "outreach_id": outreach.id,
         "status": outreach.status,
     }
+
+
+@router.post("/prospects/{prospect_id}/find-contact")
+def find_sponsor_contact(
+    event_id: int,
+    prospect_id: int,
+    payload: schemas.SponsorContactSearchRequest,
+    db: Session = Depends(get_db),
+):
+    import json
+    import os
+
+    from openai import OpenAI
+
+    prospect = (
+        db.query(models.EventRevenueProspect)
+        .filter(
+            models.EventRevenueProspect.id == prospect_id,
+            models.EventRevenueProspect.event_id == event_id,
+        )
+        .first()
+    )
+
+    if not prospect:
+        raise HTTPException(
+            status_code=404,
+            detail="Prospect not found",
+        )
+
+    organization = (
+        db.query(models.RevenueOrganization)
+        .filter(
+            models.RevenueOrganization.id
+            == prospect.organization_id
+        )
+        .first()
+    )
+
+    if not organization:
+        raise HTTPException(
+            status_code=404,
+            detail="Organization not found",
+        )
+
+    client = OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY"),
+        timeout=60.0,
+        max_retries=0,
+    )
+
+    prompt = f"""
+Research the best public business contact for a sponsorship proposal.
+
+BUSINESS
+Name: {payload.business_name}
+Website: {payload.website or organization.website or "Unknown"}
+City: {payload.city or organization.city or ""}
+State: {payload.state or organization.state or ""}
+
+CONTACT PRIORITY
+1. Marketing Director / CMO
+2. Partnerships / Sponsorship Manager
+3. Community Relations / Community Engagement
+4. Business Development
+5. Owner / General Manager
+
+Find a real publicly listed contact.
+
+IMPORTANT:
+- Never guess or infer an email address.
+- Only return an email if it is explicitly found on a public source.
+- Prefer the company's official website.
+- LinkedIn or reputable public directories may be used as supporting evidence.
+- Do not use private/personal data.
+- If you find a person but no public email, return email as null.
+- Include source URLs.
+- Mark verified true only when the contact/email is directly supported by a source.
+
+Return ONLY JSON:
+
+{{
+  "first_name": "",
+  "last_name": "",
+  "job_title": "",
+  "email": null,
+  "phone": null,
+  "source_urls": [],
+  "source_type": "website",
+  "verified": false,
+  "confidence": 0,
+  "notes": ""
+}}
+"""
+
+    try:
+        response = client.responses.create(
+            model="gpt-5.6-luna",
+            tools=[{"type": "web_search"}],
+            input=prompt,
+        )
+
+        raw = response.output_text.strip()
+
+        if raw.startswith("```"):
+            raw = raw.replace("```json", "", 1)
+            raw = raw.replace("```", "").strip()
+
+        result = json.loads(raw)
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Contact research failed: {exc}",
+        )
+
+    first_name = result.get("first_name") or ""
+    last_name = result.get("last_name") or ""
+    job_title = result.get("job_title")
+    email = result.get("email")
+    phone = result.get("phone")
+    source_urls = result.get("source_urls") or []
+    verified = bool(result.get("verified"))
+    confidence = result.get("confidence") or 0
+
+    # Avoid duplicates.
+    existing_contact = None
+
+    if email:
+        existing_contact = (
+            db.query(models.RevenueOrganizationContact)
+            .filter(
+                models.RevenueOrganizationContact.organization_id
+                == organization.id,
+                models.RevenueOrganizationContact.email == email,
+            )
+            .first()
+        )
+
+    if existing_contact:
+        contact = existing_contact
+    else:
+        contact = models.RevenueOrganizationContact(
+            organization_id=organization.id,
+            first_name=first_name,
+            last_name=last_name,
+            job_title=job_title,
+            email=email,
+            phone=phone,
+            primary_contact=True,
+            source="ai_web_research",
+            verified=verified,
+        )
+
+        # Clear old primary flag.
+        (
+            db.query(models.RevenueOrganizationContact)
+            .filter(
+                models.RevenueOrganizationContact.organization_id
+                == organization.id,
+                models.RevenueOrganizationContact.primary_contact
+                == True,
+            )
+            .update(
+                {"primary_contact": False},
+                synchronize_session=False,
+            )
+        )
+
+        db.add(contact)
+        db.flush()
+
+    # If we found a verified public business email,
+    # use it as the organization's primary send-to email.
+    if email and verified:
+        organization.email = email
+
+    db.commit()
+    db.refresh(contact)
+    db.refresh(organization)
+
+    return {
+        "contact_id": contact.id,
+        "organization_id": organization.id,
+        "first_name": contact.first_name,
+        "last_name": contact.last_name,
+        "job_title": contact.job_title,
+        "email": contact.email,
+        "phone": contact.phone,
+        "verified": contact.verified,
+        "confidence": confidence,
+        "source_urls": source_urls,
+        "notes": result.get("notes"),
+    }
