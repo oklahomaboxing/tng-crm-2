@@ -1095,3 +1095,47 @@ Return ONLY valid JSON:
         "clover_payment_url": proposal.clover_payment_url,
         "status": proposal.status,
     }
+
+
+@router.post("/prospects/{prospect_id}/send-latest-proposal")
+def send_latest_proposal_email(
+    event_id: int,
+    prospect_id: int,
+    db: Session = Depends(get_db),
+):
+    prospect = (
+        db.query(models.EventRevenueProspect)
+        .filter(
+            models.EventRevenueProspect.id == prospect_id,
+            models.EventRevenueProspect.event_id == event_id,
+        )
+        .first()
+    )
+
+    if not prospect:
+        raise HTTPException(
+            status_code=404,
+            detail="Prospect not found",
+        )
+
+    proposal = (
+        db.query(models.EventRevenueProposal)
+        .filter(
+            models.EventRevenueProposal.event_id == event_id,
+            models.EventRevenueProposal.prospect_id == prospect_id,
+        )
+        .order_by(models.EventRevenueProposal.created_at.desc())
+        .first()
+    )
+
+    if not proposal:
+        raise HTTPException(
+            status_code=400,
+            detail="Generate a proposal before sending email",
+        )
+
+    return send_proposal_email(
+        event_id=event_id,
+        proposal_id=proposal.id,
+        db=db,
+    )

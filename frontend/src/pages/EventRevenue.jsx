@@ -110,6 +110,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [scoutLoading, setScoutLoading] = useState(false);
   const [addingSponsor, setAddingSponsor] = useState("");
   const [proposalLoadingId, setProposalLoadingId] = useState(null);
+  const [emailSendingId, setEmailSendingId] = useState(null);
   const [proposalDraft, setProposalDraft] = useState(null);
   const [scoutError, setScoutError] = useState("");
 
@@ -272,6 +273,54 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       );
     } finally {
       setAddingSponsor("");
+    }
+  }
+
+  async function sendSponsorEmail(prospect) {
+    const businessName =
+      prospect.business_name || "this sponsor";
+
+    if (
+      !window.confirm(
+        `Send the latest saved proposal to ${businessName}?`
+      )
+    ) {
+      return;
+    }
+
+    setEmailSendingId(prospect.id);
+    setScoutError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospect.id}/send-latest-proposal`,
+        {
+          method: "POST",
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+          `Email failed with status ${response.status}`
+        );
+      }
+
+      await loadData();
+
+      alert(
+        `Proposal sent successfully to ${businessName}.`
+      );
+    } catch (err) {
+      console.error(err);
+
+      setScoutError(
+        err.message || "Unable to send proposal email."
+      );
+    } finally {
+      setEmailSendingId(null);
     }
   }
 
@@ -931,8 +980,16 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                         <button
                           type="button"
                           style={smallButtonStyle}
+                          disabled={
+                            emailSendingId === prospect.id
+                          }
+                          onClick={() =>
+                            sendSponsorEmail(prospect)
+                          }
                         >
-                          Email
+                          {emailSendingId === prospect.id
+                            ? "Sending..."
+                            : "Email"}
                         </button>
                       </div>
                     </td>
