@@ -46,7 +46,7 @@ from sqlalchemy import text
 from .database import Base, engine, get_db
 from .matchmaker import models as matchmaker_models
 from .revenue import models as revenue_models
-from .revenue.routes import router as revenue_router
+from .revenue.routes import router as revenue_router, webhook_router as revenue_webhook_router
 from .matchmaker.routes import build_matchmaker_router
 from .services.sms_service import send_sms
 from .models import (
@@ -281,6 +281,7 @@ app.include_router(ticketing_checkout_router)
 
 app.include_router(academy_router)
 app.include_router(revenue_router)
+app.include_router(revenue_webhook_router)
 
 # TNG Boxing Matchmaker
 app.include_router(build_matchmaker_router(current_user))
@@ -4947,7 +4948,7 @@ def send_test_email():
                         <h1>TNG OS Email Test</h1>
                         <p>Congratulations!</p>
                         <p>Your TNG OS Resend integration is working.</p>
-                        <p><strong>TNG Boxing — Earned Not Given</strong></p>
+                        <p><strong>TNG Boxing â€” Earned Not Given</strong></p>
                     </div>
                 """,
             }
@@ -4968,7 +4969,7 @@ def send_test_email():
 def test_sms():
     result = send_sms(
         to_phone="+16512390916",
-        message="🎉 TNG OS is now connected to Twilio!"
+        message="ðŸŽ‰ TNG OS is now connected to Twilio!"
     )
     return {
         "success": True,

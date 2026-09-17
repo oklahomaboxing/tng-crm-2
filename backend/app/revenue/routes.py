@@ -18,6 +18,11 @@ router = APIRouter(
     tags=["event-revenue"],
 )
 
+webhook_router = APIRouter(
+    prefix="/api/revenue",
+    tags=["revenue-webhooks"],
+)
+
 
 @router.post("/organizations")
 def create_organization(
@@ -1139,3 +1144,146 @@ def send_latest_proposal_email(
         proposal_id=proposal.id,
         db=db,
     )
+
+
+# ============================================================
+# RESEND EMAIL STATUS WEBHOOK
+# ============================================================
+
+from fastapi import Request
+import json
+import os
+import resend
+
+
+@webhook_router.post("/webhooks/resend")
+async def resend_revenue_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    webhook_secret = os.getenv("RESEND_WEBHOOK_SECRET")
+
+    if not webhook_secret:
+        raise HTTPException(
+            status_code=500,
+            detail="RESEND_WEBHOOK_SECRET is not configured",
+        )
+
+    raw_body = await request.body()
+    payload = raw_body.decode("utf-8")
+
+    try:
+        event = resend.Webhooks.verify(
+            {
+                "payload": payload,
+                "headers": {
+                    "svix-id": request.headers.get("svix-id"),
+                    "svix-timestamp": request.headers.get("svix-timestamp"),
+                    "svix-signature": request.headers.get("svix-signature"),
+                },
+                "secret": webhook_secret,
+            }
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid Resend webhook signature: {exc}",
+        )
+
+    if not isinstance(event, dict):
+        event = dict(event)
+
+    event_type = event.get("type")
+    data = event.get("data") or {}
+
+    email_id = data.get("email_id")
+
+    if not email_id:
+        return {
+            "ok": True,
+            "ignored": True,
+            "reason": "No email_id",
+        }
+
+    outreach = (
+        db.query(models.RevenueOutreachMessage)
+        .filter(
+            models.RevenueOutreachMessage.provider_message_id
+            == email_id
+        )
+        .order_by(
+            models.RevenueOutreachMessage.created_at.desc()
+        )
+        .first()
+    )
+
+    if not outreach:
+        return {
+            "ok": True,
+            "ignored": True,
+            "reason": "No matching outreach message",
+        }
+
+    now = datetime.utcnow()
+
+    if event_type == "email.sent":
+        outreach.status = "SENT"
+
+        if not outreach.sent_at:
+            outreach.sent_at = now
+
+    elif event_type == "email.delivered":
+        outreach.status = "DELIVERED"
+
+    elif event_type == "email.opened":
+        outreach.status = "OPENED"
+
+        if not outreach.opened_at:
+            outreach.opened_at = now
+
+    elif event_type == "email.clicked":
+        outreach.status = "CLICKED"
+
+        if not outreach.clicked_at:
+            outreach.clicked_at = now
+
+    elif event_type == "email.bounced":
+        outreach.status = "BOUNCED"
+
+        if not outreach.bounced_at:
+            outreach.bounced_at = now
+
+    elif event_type == "email.failed":
+        outreach.status = "FAILED"
+
+    elif event_type == "email.complained":
+        outreach.status = "COMPLAINED"
+
+        prospect = (
+            db.query(models.EventRevenueProspect)
+            .filter(
+                models.EventRevenueProspect.id
+                == outreach.prospect_id
+            )
+            .first()
+        )
+
+        if prospect:
+            prospect.do_not_contact = True
+
+    else:
+        return {
+            "ok": True,
+            "ignored": True,
+            "event_type": event_type,
+        }
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "event_type": event_type,
+        "outreach_id": outreach.id,
+        "status": outreach.status,
+    }
