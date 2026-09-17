@@ -688,3 +688,51 @@ def update_organization(
     db.refresh(organization)
 
     return organization
+
+
+# ============================================================
+# SPONSOR SCOUT
+# ============================================================
+
+from typing import Optional
+from pydantic import BaseModel, Field
+from fastapi import HTTPException
+
+from .scout import run_sponsor_scout
+
+
+class SponsorScoutRequest(BaseModel):
+    event_name: str
+    event_address: str
+    radius_miles: float = Field(default=15, ge=1, le=50)
+    category: Optional[str] = None
+    max_results: int = Field(default=20, ge=1, le=30)
+
+
+@router.post("/scout/sponsors")
+def scout_sponsors(
+    event_id: int,
+    payload: SponsorScoutRequest,
+):
+    try:
+        results = run_sponsor_scout(
+            event_name=payload.event_name,
+            event_address=payload.event_address,
+            radius_miles=payload.radius_miles,
+            category=payload.category,
+            max_results=payload.max_results,
+        )
+
+        return {
+            "event_id": event_id,
+            "count": len(results),
+            "radius_miles": payload.radius_miles,
+            "category": payload.category,
+            "results": results,
+        }
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+        )

@@ -90,7 +90,7 @@ function MetricCard({ label, value, subtext }) {
   );
 }
 
-export default function EventRevenue({ eventId = 1 }) {
+export default function EventRevenue({ eventId = 1, event = {} }) {
   const [tab, setTab] = useState("SPONSOR");
 
   const [dashboard, setDashboard] = useState({
@@ -103,6 +103,10 @@ export default function EventRevenue({ eventId = 1 }) {
 
   const [prospects, setProspects] = useState([]);
   const [packages, setPackages] = useState([]);
+
+  const [scoutResults, setScoutResults] = useState([]);
+  const [scoutLoading, setScoutLoading] = useState(false);
+  const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -165,10 +169,62 @@ export default function EventRevenue({ eventId = 1 }) {
     ).length;
   }, [prospects]);
 
-  function openPlaceholder(type) {
-    alert(
-      `${type} Scout is the next build step. This button will search for real businesses, rank them, and add qualified leads into this event.`
-    );
+  async function runSponsorScout() {
+    if (tab !== "SPONSOR") {
+      alert("Vendor Scout will be connected next.");
+      return;
+    }
+
+    setScoutLoading(true);
+    setScoutError("");
+    setScoutResults([]);
+
+    const eventName =
+      event?.name ||
+      event?.title ||
+      event?.event_name ||
+      `TNG Event ${eventId}`;
+
+    const eventAddress =
+      event?.venue_address ||
+      event?.venue ||
+      "Oklahoma City, OK";
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/scout/sponsors`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            event_name: eventName,
+            event_address: eventAddress,
+            radius_miles: 10,
+            max_results: 5,
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+          `Sponsor Scout failed with status ${response.status}`
+        );
+      }
+
+      setScoutResults(body.results || []);
+    } catch (err) {
+      console.error(err);
+      setScoutError(
+        err.message || "Unable to run Sponsor Scout."
+      );
+    } finally {
+      setScoutLoading(false);
+    }
   }
 
   return (
@@ -225,9 +281,8 @@ export default function EventRevenue({ eventId = 1 }) {
 
         <button
           type="button"
-          onClick={() =>
-            openPlaceholder(tab === "SPONSOR" ? "Sponsor" : "Vendor")
-          }
+          onClick={runSponsorScout}
+          disabled={scoutLoading}
           style={{
             border: 0,
             background: "#e6202d",
@@ -238,7 +293,11 @@ export default function EventRevenue({ eventId = 1 }) {
             cursor: "pointer",
           }}
         >
-          {tab === "SPONSOR" ? "Find Sponsors" : "Find Vendors"}
+          {scoutLoading
+            ? "Searching..."
+            : tab === "SPONSOR"
+            ? "Find Sponsors"
+            : "Find Vendors"}
         </button>
       </div>
 
@@ -328,6 +387,190 @@ export default function EventRevenue({ eventId = 1 }) {
           subtext="Paid revenue"
         />
       </div>
+
+      {scoutError ? (
+        <div
+          style={{
+            marginTop: 20,
+            padding: 14,
+            borderRadius: 12,
+            background: "#2a1114",
+            border: "1px solid #6f2028",
+            color: "#ffb4ba",
+          }}
+        >
+          {scoutError}
+        </div>
+      ) : null}
+
+      {scoutResults.length > 0 ? (
+        <div
+          style={{
+            marginTop: 24,
+            background: "#0f0f14",
+            border: "1px solid #27272f",
+            borderRadius: 16,
+            padding: 20,
+          }}
+        >
+          <div style={{ marginBottom: 16 }}>
+            <h2 style={{ margin: 0, fontSize: 20 }}>
+              Sponsor Scout Results
+            </h2>
+
+            <div
+              style={{
+                color: "#81818d",
+                fontSize: 13,
+                marginTop: 5,
+              }}
+            >
+              AI-researched businesses ranked for this event.
+              These have not been added to your pipeline yet.
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+            }}
+          >
+            {scoutResults.map((candidate, index) => (
+              <div
+                key={`${candidate.business_name}-${index}`}
+                style={{
+                  border: "1px solid #292931",
+                  borderRadius: 12,
+                  padding: 16,
+                  background: "#141419",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 14,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 900,
+                      }}
+                    >
+                      {candidate.business_name}
+                    </div>
+
+                    <div
+                      style={{
+                        color: "#92929d",
+                        fontSize: 13,
+                        marginTop: 4,
+                      }}
+                    >
+                      {candidate.industry || "Business"}
+                      {candidate.city
+                        ? ` · ${candidate.city}${
+                            candidate.state
+                              ? `, ${candidate.state}`
+                              : ""
+                          }`
+                        : ""}
+                    </div>
+                  </div>
+
+                  <ScoreBadge
+                    score={candidate.discovery_score}
+                  />
+                </div>
+
+                {candidate.why_good_fit ? (
+                  <div
+                    style={{
+                      color: "#d0d0d6",
+                      marginTop: 12,
+                      lineHeight: 1.5,
+                      fontSize: 14,
+                    }}
+                  >
+                    {candidate.why_good_fit}
+                  </div>
+                ) : null}
+
+                {candidate.marketing_evidence?.length > 0 ? (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      color: "#aaaab4",
+                      fontSize: 13,
+                    }}
+                  >
+                    <strong>Marketing evidence:</strong>{" "}
+                    {candidate.marketing_evidence.join(" • ")}
+                  </div>
+                ) : null}
+
+                {candidate.sponsorship_evidence?.length > 0 ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      color: "#aaaab4",
+                      fontSize: 13,
+                    }}
+                  >
+                    <strong>Sponsorship evidence:</strong>{" "}
+                    {candidate.sponsorship_evidence.join(" • ")}
+                  </div>
+                ) : null}
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    marginTop: 14,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {candidate.website ? (
+                    <button
+                      type="button"
+                      style={smallButtonStyle}
+                      onClick={() =>
+                        window.open(
+                          candidate.website,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                    >
+                      Website
+                    </button>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    style={{
+                      ...smallButtonStyle,
+                      background: "#e6202d",
+                      borderColor: "#e6202d",
+                    }}
+                    onClick={() =>
+                      alert(
+                        `Add ${candidate.business_name} to Pipeline is the next connection.`
+                      )
+                    }
+                  >
+                    Add to Pipeline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div
         style={{
