@@ -758,6 +758,12 @@ def send_proposal_email(
 
     prospect.status = "PROPOSAL_SENT"
     prospect.last_contacted_at = datetime.utcnow()
+
+    from datetime import timedelta
+
+    prospect.next_follow_up_at = (
+        datetime.utcnow() + timedelta(days=3)
+    )
     prospect.updated_at = datetime.utcnow()
 
     db.commit()
