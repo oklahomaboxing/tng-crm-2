@@ -1592,3 +1592,254 @@ Return ONLY JSON:
         "source_urls": source_urls,
         "notes": result.get("notes"),
     }
+
+
+@router.post("/prospects/{prospect_id}/auto-outreach")
+def auto_sponsor_outreach(
+    event_id: int,
+    prospect_id: int,
+    payload: schemas.AutoSponsorOutreachRequest,
+    db: Session = Depends(get_db),
+):
+    import os
+
+    prospect = (
+        db.query(models.EventRevenueProspect)
+        .filter(
+            models.EventRevenueProspect.id == prospect_id,
+            models.EventRevenueProspect.event_id == event_id,
+        )
+        .first()
+    )
+
+    if not prospect:
+        raise HTTPException(
+            status_code=404,
+            detail="Prospect not found",
+        )
+
+    if prospect.do_not_contact:
+        return {
+            "ok": False,
+            "stage": "DO_NOT_CONTACT",
+            "message": "This organization is marked do not contact.",
+        }
+
+    organization = (
+        db.query(models.RevenueOrganization)
+        .filter(
+            models.RevenueOrganization.id
+            == prospect.organization_id
+        )
+        .first()
+    )
+
+    if not organization:
+        raise HTTPException(
+            status_code=404,
+            detail="Organization not found",
+        )
+
+    # --------------------------------------------------
+    # STEP 1: FIND / VERIFY CONTACT
+    # --------------------------------------------------
+
+    contact = (
+        db.query(models.RevenueOrganizationContact)
+        .filter(
+            models.RevenueOrganizationContact.organization_id
+            == organization.id,
+            models.RevenueOrganizationContact.primary_contact
+            == True,
+            models.RevenueOrganizationContact.verified
+            == True,
+        )
+        .order_by(
+            models.RevenueOrganizationContact.created_at.desc()
+        )
+        .first()
+    )
+
+    if not contact or not contact.email:
+        contact_result = find_sponsor_contact(
+            event_id=event_id,
+            prospect_id=prospect_id,
+            payload=schemas.SponsorContactSearchRequest(
+                prospect_id=prospect_id,
+                business_name=organization.business_name,
+                website=organization.website,
+                city=organization.city,
+                state=organization.state,
+            ),
+            db=db,
+        )
+
+        contact = (
+            db.query(models.RevenueOrganizationContact)
+            .filter(
+                models.RevenueOrganizationContact.organization_id
+                == organization.id,
+                models.RevenueOrganizationContact.primary_contact
+                == True,
+            )
+            .order_by(
+                models.RevenueOrganizationContact.created_at.desc()
+            )
+            .first()
+        )
+
+        if (
+            not contact
+            or not contact.email
+            or not contact.verified
+        ):
+            prospect.status = "NEEDS_CONTACT"
+            db.commit()
+
+            return {
+                "ok": True,
+                "stage": "NEEDS_CONTACT",
+                "message": (
+                    "Sponsor added, but no verified public "
+                    "email was found."
+                ),
+                "contact": contact_result,
+            }
+
+    # Keep organization send-to address synchronized
+    organization.email = contact.email
+
+    # --------------------------------------------------
+    # STEP 2: GENERATE PROPOSAL IF ONE DOES NOT EXIST
+    # --------------------------------------------------
+
+    latest_proposal = (
+        db.query(models.EventRevenueProposal)
+        .filter(
+            models.EventRevenueProposal.event_id == event_id,
+            models.EventRevenueProposal.prospect_id == prospect_id,
+        )
+        .order_by(
+            models.EventRevenueProposal.created_at.desc()
+        )
+        .first()
+    )
+
+    if not latest_proposal:
+        proposal_result = generate_ai_revenue_proposal(
+            event_id=event_id,
+            payload=schemas.AIRevenueProposalRequest(
+                prospect_id=prospect_id,
+                package_id=prospect.recommended_package_id,
+                event_name=payload.event_name,
+                event_date=payload.event_date,
+                event_venue=payload.event_venue,
+                event_address=payload.event_address,
+                additional_instructions=(
+                    payload.additional_instructions
+                    or (
+                        "Create a concise professional sponsorship "
+                        "proposal customized to this business and "
+                        "the event audience."
+                    )
+                ),
+            ),
+            db=db,
+        )
+
+        latest_proposal = (
+            db.query(models.EventRevenueProposal)
+            .filter(
+                models.EventRevenueProposal.event_id == event_id,
+                models.EventRevenueProposal.prospect_id
+                == prospect_id,
+            )
+            .order_by(
+                models.EventRevenueProposal.created_at.desc()
+            )
+            .first()
+        )
+    else:
+        proposal_result = {
+            "proposal_id": latest_proposal.id,
+            "existing": True,
+        }
+
+    if not latest_proposal:
+        raise HTTPException(
+            status_code=500,
+            detail="Proposal generation did not create a proposal.",
+        )
+
+    prospect.status = "READY_TO_SEND"
+    db.commit()
+
+    # --------------------------------------------------
+    # STEP 3: AUTO-SEND ONLY WHEN ENABLED
+    # --------------------------------------------------
+
+    auto_send_enabled = (
+        os.getenv("AUTO_SPONSOR_SEND", "false")
+        .strip()
+        .lower()
+        in {"1", "true", "yes", "on"}
+    )
+
+    if not payload.send_if_ready or not auto_send_enabled:
+        return {
+            "ok": True,
+            "stage": "READY_TO_SEND",
+            "contact_email": contact.email,
+            "contact_name": (
+                f"{contact.first_name or ''} "
+                f"{contact.last_name or ''}"
+            ).strip(),
+            "proposal_id": latest_proposal.id,
+            "auto_send_enabled": auto_send_enabled,
+            "message": (
+                "Contact verified and proposal generated. "
+                "Waiting for external email sending to be enabled."
+            ),
+        }
+
+    # Prevent accidental duplicate sends
+    already_sent = (
+        db.query(models.RevenueOutreachMessage)
+        .filter(
+            models.RevenueOutreachMessage.event_id == event_id,
+            models.RevenueOutreachMessage.prospect_id
+            == prospect_id,
+            models.RevenueOutreachMessage.channel == "EMAIL",
+            models.RevenueOutreachMessage.status.in_(
+                [
+                    "SENT",
+                    "DELIVERED",
+                    "OPENED",
+                    "CLICKED",
+                    "REPLIED",
+                ]
+            ),
+        )
+        .first()
+    )
+
+    if already_sent:
+        return {
+            "ok": True,
+            "stage": already_sent.status,
+            "message": "Initial outreach has already been sent.",
+        }
+
+    send_result = send_latest_proposal_email(
+        event_id=event_id,
+        prospect_id=prospect_id,
+        db=db,
+    )
+
+    return {
+        "ok": True,
+        "stage": "SENT",
+        "contact_email": contact.email,
+        "proposal_id": latest_proposal.id,
+        "send_result": send_result,
+    }

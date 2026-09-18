@@ -260,3 +260,12 @@ class SponsorContactSearchRequest(BaseModel):
     website: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+
+
+class AutoSponsorOutreachRequest(BaseModel):
+    event_name: str
+    event_date: Optional[str] = None
+    event_venue: Optional[str] = None
+    event_address: Optional[str] = None
+    additional_instructions: Optional[str] = None
+    send_if_ready: bool = True

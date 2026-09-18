@@ -295,6 +295,60 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
         );
       }
 
+      const prospectId =
+        body.prospect_id || body.id;
+
+      if (prospectId) {
+        try {
+          const autoResponse = await fetch(
+            `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospectId}/auto-outreach`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                event_name:
+                  event?.name ||
+                  event?.title ||
+                  event?.event_name ||
+                  "TNG Boxing Event",
+
+                event_date:
+                  event?.event_date || null,
+
+                event_venue:
+                  event?.venue || null,
+
+                event_address:
+                  event?.venue_address || null,
+
+                send_if_ready: true,
+              }),
+            }
+          );
+
+          const autoBody = await autoResponse.json();
+
+          if (!autoResponse.ok) {
+            console.error(
+              "Automatic outreach failed:",
+              autoBody
+            );
+          } else {
+            console.log(
+              "Automatic outreach:",
+              autoBody
+            );
+          }
+        } catch (autoError) {
+          console.error(
+            "Automatic sponsor outreach error:",
+            autoError
+          );
+        }
+      }
+
       await loadData();
 
       setScoutResults((current) =>
