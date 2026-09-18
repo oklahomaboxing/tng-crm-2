@@ -1849,3 +1849,19 @@ def auto_sponsor_outreach(
         "proposal_id": latest_proposal.id,
         "send_result": send_result,
     }
+
+
+@router.post("/process-followups")
+def process_revenue_followups(
+    event_id: int,
+    db: Session = Depends(get_db),
+):
+    from .followups import run_due_followups
+
+    result = run_due_followups(db)
+
+    return {
+        "ok": True,
+        "event_id": event_id,
+        "result": result,
+    }

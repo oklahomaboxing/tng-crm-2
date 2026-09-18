@@ -176,6 +176,22 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     return response.json();
   }
 
+  async function processDueFollowups() {
+    try {
+      await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/process-followups`,
+        {
+          method: "POST",
+        }
+      );
+    } catch (err) {
+      console.error(
+        "Automatic sponsor follow-up check failed:",
+        err
+      );
+    }
+  }
+
   async function loadData() {
     setLoading(true);
     setError("");
@@ -205,7 +221,12 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   }
 
   useEffect(() => {
-    loadData();
+    async function refreshRevenue() {
+      await processDueFollowups();
+      await loadData();
+    }
+
+    refreshRevenue();
   }, [eventId, tab]);
 
   const tabPipeline = useMemo(() => {
