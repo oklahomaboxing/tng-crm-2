@@ -118,7 +118,11 @@ def run_due_followups(db):
             continue
 
         api_key = os.getenv("RESEND_API_KEY")
-        email_from = os.getenv("EMAIL_FROM")
+        email_from = (
+            os.getenv("RESEND_FROM_EMAIL")
+            or os.getenv("EMAIL_FROM")
+            or "TNG Boxing <marketing@tngboxinggym.com>"
+        )
 
         if not api_key or not email_from:
             summary["skipped"] += 1

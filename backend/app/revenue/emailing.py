@@ -103,9 +103,10 @@ def send_revenue_proposal_email(
     """
 
     from_email = (
-        os.getenv("EMAIL_FROM")
+        os.getenv("RESEND_FROM_EMAIL")
+        or os.getenv("EMAIL_FROM")
         or os.getenv("TICKET_FROM_EMAIL")
-        or "TNG Promotions <onboarding@resend.dev>"
+        or "TNG Boxing <marketing@tngboxinggym.com>"
     )
 
     return resend.Emails.send({
