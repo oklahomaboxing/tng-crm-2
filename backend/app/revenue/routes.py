@@ -245,6 +245,20 @@ def list_prospects(
     results = []
 
     for row in rows:
+        primary_contact = (
+            db.query(models.RevenueOrganizationContact)
+            .filter(
+                models.RevenueOrganizationContact.organization_id
+                == row.organization_id,
+                models.RevenueOrganizationContact.primary_contact
+                == True,
+            )
+            .order_by(
+                models.RevenueOrganizationContact.created_at.desc()
+            )
+            .first()
+        )
+
         latest_outreach = (
             db.query(models.RevenueOutreachMessage)
             .filter(
@@ -284,6 +298,65 @@ def list_prospects(
                 row.organization.phone
                 if row.organization
                 else None
+            ),
+            "website": (
+                row.organization.website
+                if row.organization
+                else None
+            ),
+            "city": (
+                row.organization.city
+                if row.organization
+                else None
+            ),
+            "state": (
+                row.organization.state
+                if row.organization
+                else None
+            ),
+
+            "contact_id": (
+                primary_contact.id
+                if primary_contact
+                else None
+            ),
+            "contact_first_name": (
+                primary_contact.first_name
+                if primary_contact
+                else None
+            ),
+            "contact_last_name": (
+                primary_contact.last_name
+                if primary_contact
+                else None
+            ),
+            "contact_name": (
+                (
+                    f"{primary_contact.first_name or ''} "
+                    f"{primary_contact.last_name or ''}"
+                ).strip()
+                if primary_contact
+                else None
+            ),
+            "contact_title": (
+                primary_contact.job_title
+                if primary_contact
+                else None
+            ),
+            "contact_email": (
+                primary_contact.email
+                if primary_contact
+                else None
+            ),
+            "contact_phone": (
+                primary_contact.phone
+                if primary_contact
+                else None
+            ),
+            "contact_verified": (
+                primary_contact.verified
+                if primary_contact
+                else False
             ),
             "marketing_propensity": (
                 row.organization.marketing_propensity

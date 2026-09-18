@@ -990,6 +990,9 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                   }}
                 >
                   <th style={thStyle}>Business</th>
+                  <th style={thStyle}>Contact</th>
+                  <th style={thStyle}>Title</th>
+                  <th style={thStyle}>Email</th>
                   <th style={thStyle}>Fit</th>
                   <th style={thStyle}>Industry</th>
                   <th style={thStyle}>Distance</th>
@@ -1025,8 +1028,73 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                           marginTop: 3,
                         }}
                       >
-                        {prospect.email || prospect.phone || "No contact yet"}
+                        {prospect.city || ""}
+                        {prospect.city && prospect.state ? ", " : ""}
+                        {prospect.state || ""}
                       </div>
+                    </td>
+
+                    <td style={tdStyle}>
+                      <div
+                        style={{
+                          fontWeight: 800,
+                          color: "#ffffff",
+                        }}
+                      >
+                        {prospect.contact_name || "No contact"}
+                      </div>
+
+                      {prospect.contact_verified ? (
+                        <div
+                          style={{
+                            color: "#8fca9a",
+                            fontSize: 11,
+                            marginTop: 3,
+                          }}
+                        >
+                          Verified public contact
+                        </div>
+                      ) : null}
+                    </td>
+
+                    <td style={tdStyle}>
+                      {prospect.contact_title || "--"}
+                    </td>
+
+                    <td style={tdStyle}>
+                      {prospect.contact_email ? (
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#ffffff",
+                            }}
+                          >
+                            {prospect.contact_email}
+                          </div>
+
+                          {prospect.contact_phone ? (
+                            <div
+                              style={{
+                                color: "#777783",
+                                fontSize: 11,
+                                marginTop: 3,
+                              }}
+                            >
+                              {prospect.contact_phone}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span
+                          style={{
+                            color: "#777783",
+                            fontSize: 12,
+                          }}
+                        >
+                          Not found
+                        </span>
+                      )}
                     </td>
 
                     <td style={tdStyle}>
@@ -1094,7 +1162,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                         >
                           {contactFindingId === prospect.id
                             ? "Finding..."
-                            : prospect.email
+                            : prospect.contact_email
                             ? "Refresh Contact"
                             : "Find Contact"}
                         </button>
@@ -1118,7 +1186,8 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                           type="button"
                           style={smallButtonStyle}
                           disabled={
-                            emailSendingId === prospect.id
+                            emailSendingId === prospect.id ||
+                            !prospect.contact_email
                           }
                           onClick={() =>
                             sendSponsorEmail(prospect)
@@ -1126,7 +1195,9 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                         >
                           {emailSendingId === prospect.id
                             ? "Sending..."
-                            : "Email"}
+                            : prospect.contact_email
+                            ? "Email Proposal"
+                            : "Find Contact First"}
                         </button>
                       </div>
                     </td>
