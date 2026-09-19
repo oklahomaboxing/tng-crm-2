@@ -1,4 +1,4 @@
-import re
+﻿import re
 from datetime import datetime
 from sqlalchemy import or_
 from .models import BoxingFighter, BoxingBout
@@ -32,13 +32,21 @@ def is_eligible(f):
         and f.available is not False
     )
 
+
+def clean_display_text(value):
+    text = str(value or "").strip()
+    bad_markers = ("Ã", "Â", "Æ", "�")
+    if any(marker in text for marker in bad_markers):
+        return ""
+    return text
+
 def fighter_dict(f):
     return {
         "id": f.id,
         "legal_name": f.legal_name,
         "dob": f.dob,
         "phone": f.phone,
-        "email": f.email,
+        "email": clean_display_text(f.email),
         "city": f.city,
         "state": f.state,
         "country": f.country,
@@ -62,9 +70,9 @@ def fighter_dict(f):
         "submitted_by_role": getattr(f, "submitted_by_role", "") or "",
         "submitted_by_phone": getattr(f, "submitted_by_phone", "") or "",
         "submitted_by_email": getattr(f, "submitted_by_email", "") or "",
-        "manager_name": f.manager_name,
-        "manager_phone": f.manager_phone,
-        "manager_email": f.manager_email,
+        "manager_name": clean_display_text(f.manager_name),
+        "manager_phone": clean_display_text(f.manager_phone),
+        "manager_email": clean_display_text(f.manager_email),
         "ok_license_status": f.ok_license_status,
         "federal_id_status": f.federal_id_status,
         "suspension_status": f.suspension_status,
@@ -363,3 +371,4 @@ def ranked_matches(db, fighter_id, event_id=None, limit=40):
         )
     )
     return fighter_dict(base), results[:limit]
+
