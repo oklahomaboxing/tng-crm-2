@@ -1973,7 +1973,9 @@ def build_matchmaker_router(current_user_dependency):
         fighter_name = fighter.legal_name
 
         # Archive instead of destroying historical records.
-        fighter.available = False`r`n        fighter.boxrec_id = ""`r`n        fighter.boxrec_url = ""
+        fighter.available = False
+        fighter.boxrec_id = ""
+        fighter.boxrec_url = ""
 
         from ..fighter_portal.models import (
             FighterAccount,
@@ -5732,6 +5734,7 @@ Do not add fake ticket information.
         return {"id": row.id, "status": row.status}
 
     return router
+
 
 
 
