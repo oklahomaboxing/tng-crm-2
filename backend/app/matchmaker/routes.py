@@ -1183,13 +1183,24 @@ def build_matchmaker_router(current_user_dependency):
             )
 
             if existing:
-                raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        f"This BoxRec ID is already registered to "
-                        f"{existing.legal_name}"
-                    ),
-                )
+                old_email = str(getattr(existing, "email", "") or "").strip()
+                old_phone = str(getattr(existing, "phone", "") or "").strip()
+                old_name = str(getattr(existing, "legal_name", "") or "").strip()
+
+                reusable = not old_email and not old_phone
+
+                if reusable:
+                    existing.boxrec_id = ""
+                    existing.boxrec_url = ""
+                    db.commit()
+                else:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"This BoxRec ID is already registered to "
+                            f"{old_name or 'another fighter'}"
+                        ),
+                    )
 
         fight_weight = data.fight_weight
 
@@ -5721,5 +5732,6 @@ Do not add fake ticket information.
         return {"id": row.id, "status": row.status}
 
     return router
+
 
 
