@@ -2396,6 +2396,45 @@ async function seedSponsorshipInventory() {
                       {mockupLogoName}
                     </div>
                   ) : null}
+                  {mockupLogoUrl ? (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: 10,
+                        border: "1px solid #32323b",
+                        borderRadius: 10,
+                        background: "#101015",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 900,
+                          color: "#858590",
+                          marginBottom: 8,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.7,
+                        }}
+                      >
+                        Uploaded Logo Preview
+                      </div>
+
+                      <img
+                        src={mockupLogoUrl}
+                        alt="Uploaded sponsor logo"
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          maxWidth: 220,
+                          maxHeight: 100,
+                          objectFit: "contain",
+                          background: "#ffffff",
+                          padding: 8,
+                          borderRadius: 6,
+                        }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
 
                 <div style={{ marginBottom: 15 }}>
@@ -2649,6 +2688,8 @@ async function seedSponsorshipInventory() {
                               src={mockupLogoUrl}
                               alt="Sponsor logo preview"
                               style={{
+                                display: "block",
+                                width: "100%",
                                 maxWidth: "100%",
                                 maxHeight: 110,
                                 objectFit: "contain",
@@ -2682,7 +2723,10 @@ async function seedSponsorshipInventory() {
                         background:
                           String(mockupBuilder.asset_name || "")
                             .toLowerCase()
-                            .includes("skirt")
+                            .includes("skirt") ||
+                          String(mockupBuilder.asset_name || "")
+                            .toLowerCase()
+                            .includes("ring side")
                             ? "linear-gradient(#7d151e,#30080d)"
                             : "linear-gradient(#292930,#101014)",
                         border: "2px solid #4b4b55",
@@ -2700,6 +2744,9 @@ async function seedSponsorshipInventory() {
                         .includes("skirt") ||
                       String(mockupBuilder.asset_name || "")
                         .toLowerCase()
+                        .includes("ring side") ||
+                      String(mockupBuilder.asset_name || "")
+                        .toLowerCase()
                         .includes("full ring") ? (
                         mockupLogoUrl ? (
                           <img
@@ -2710,6 +2757,7 @@ async function seedSponsorshipInventory() {
                                 25,
                                 mockupScale
                               )}%`,
+                              display: "block",
                               maxHeight: "75%",
                               objectFit: "contain",
                             }}
@@ -2764,6 +2812,59 @@ async function seedSponsorshipInventory() {
                       />
                     ))}
 
+                    {String(mockupBuilder.asset_name || "")
+                      .toLowerCase()
+                      .includes("rope") ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "50%",
+                          top: "24%",
+                          transform:
+                            "translate(-50%, -50%) translateZ(82px)",
+                          width: `${Math.max(
+                            28,
+                            Math.min(60, mockupScale)
+                          )}%`,
+                          minHeight: 34,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "rgba(255,255,255,0.94)",
+                          border: "2px solid #ffd43b",
+                          borderRadius: 5,
+                          padding: "5px 10px",
+                          boxShadow:
+                            "0 5px 12px rgba(0,0,0,0.45)",
+                          zIndex: 10,
+                        }}
+                      >
+                        {mockupLogoUrl ? (
+                          <img
+                            src={mockupLogoUrl}
+                            alt="Sponsor rope branding"
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              maxHeight: 36,
+                              objectFit: "contain",
+                            }}
+                          />
+                        ) : (
+                          <span
+                            style={{
+                              color: "#111",
+                              fontSize: 9,
+                              fontWeight: 900,
+                            }}
+                          >
+                            {mockupBuilder.sponsor_name ||
+                              "SPONSOR"}
+                          </span>
+                        )}
+                      </div>
+                    ) : null}
+
                     {/* Corner posts */}
                     {[
                       { left: "7%", top: "7%", label: "A" },
@@ -2816,6 +2917,7 @@ async function seedSponsorshipInventory() {
                                 src={mockupLogoUrl}
                                 alt="Sponsor corner post logo"
                                 style={{
+                                  display: "block",
                                   width: "85%",
                                   maxHeight: "80%",
                                   objectFit: "contain",
