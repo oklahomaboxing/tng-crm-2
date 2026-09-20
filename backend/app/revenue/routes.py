@@ -651,6 +651,7 @@ def send_proposal_email(
     event_id: int,
     proposal_id: int,
     db: Session = Depends(get_db),
+    recipient_email: Optional[str] = None,
 ):
     proposal = (
         db.query(models.EventRevenueProposal)
@@ -696,10 +697,12 @@ def send_proposal_email(
             detail="Organization not found",
         )
 
-    if not organization.email:
+    to_email = str(recipient_email or organization.email or "").strip()
+
+    if not to_email:
         raise HTTPException(
             status_code=400,
-            detail="Organization does not have an email address",
+            detail="Enter an email address before sending",
         )
 
     package = None
@@ -715,7 +718,7 @@ def send_proposal_email(
 
     try:
         email_result = send_revenue_proposal_email(
-            to_email=organization.email,
+            to_email=to_email,
             business_name=organization.business_name,
             proposal_title=proposal.title,
             proposal_message=proposal.message,
@@ -773,7 +776,7 @@ def send_proposal_email(
         "proposal_id": proposal.id,
         "prospect_id": prospect.id,
         "business_name": organization.business_name,
-        "email": organization.email,
+        "email": to_email,
         "status": "SENT",
         "provider_message_id": provider_message_id,
     }
@@ -1225,6 +1228,7 @@ def send_latest_proposal_email(
     event_id: int,
     prospect_id: int,
     db: Session = Depends(get_db),
+    recipient_email: Optional[str] = None,
 ):
     prospect = (
         db.query(models.EventRevenueProspect)
@@ -1261,6 +1265,7 @@ def send_latest_proposal_email(
         event_id=event_id,
         proposal_id=proposal.id,
         db=db,
+        recipient_email=recipient_email,
     )
 
 

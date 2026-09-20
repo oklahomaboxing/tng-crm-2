@@ -155,6 +155,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [addingSponsor, setAddingSponsor] = useState("");
   const [proposalLoadingId, setProposalLoadingId] = useState(null);
   const [emailSendingId, setEmailSendingId] = useState(null);
+  const [customRecipientEmails, setCustomRecipientEmails] = useState({});
   const [contactFindingId, setContactFindingId] = useState(null);
   const [proposalDraft, setProposalDraft] = useState(null);
   const [scoutError, setScoutError] = useState("");
@@ -463,9 +464,20 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     const businessName =
       prospect.business_name || "this sponsor";
 
+    const recipientEmail = (
+      customRecipientEmails[prospect.id] ||
+      prospect.contact_email ||
+      ""
+    ).trim();
+
+    if (!recipientEmail) {
+      setScoutError("Enter an email address before sending.");
+      return;
+    }
+
     if (
       !window.confirm(
-        `Send the latest saved proposal to ${businessName}?`
+        `Send the latest saved proposal for ${businessName} to ${recipientEmail}?`
       )
     ) {
       return;
@@ -476,7 +488,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
 
     try {
       const response = await fetch(
-        `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospect.id}/send-latest-proposal`,
+        `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospect.id}/send-latest-proposal?recipient_email=${encodeURIComponent(recipientEmail)}`,
         {
           method: "POST",
         }
@@ -494,7 +506,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       await loadData();
 
       alert(
-        `Proposal sent successfully to ${businessName}.`
+        `Proposal sent successfully to ${recipientEmail}.`
       );
     } catch (err) {
       console.error(err);
@@ -1257,12 +1269,34 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                             : "Proposal"}
                         </button>
 
+                        <input
+                          type="email"
+                          placeholder="Send to email"
+                          value={customRecipientEmails[prospect.id] || ""}
+                          onChange={(e) =>
+                            setCustomRecipientEmails((old) => ({
+                              ...old,
+                              [prospect.id]: e.target.value,
+                            }))
+                          }
+                          style={{
+                            minWidth: 220,
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            border: "1px solid #3a3a44",
+                            background: "#101014",
+                            color: "#fff",
+                          }}
+                        />
+
                         <button
                           type="button"
                           style={smallButtonStyle}
                           disabled={
                             emailSendingId === prospect.id ||
-                            !prospect.contact_email
+                            (!(
+                              customRecipientEmails[prospect.id] || ""
+                            ).trim() && !prospect.contact_email)
                           }
                           onClick={() =>
                             sendSponsorEmail(prospect)
@@ -1270,9 +1304,9 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                         >
                           {emailSendingId === prospect.id
                             ? "Sending..."
-                            : prospect.contact_email
+                            : ((customRecipientEmails[prospect.id] || "").trim() || prospect.contact_email)
                             ? "Email Proposal"
-                            : "Find Contact First"}
+                            : "Enter Email"}
                         </button>
                       </div>
                     </td>
