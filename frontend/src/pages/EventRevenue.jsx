@@ -1505,7 +1505,7 @@ async function seedSponsorshipInventory() {
               fontWeight: 900,
             }}
           >
-            Event Revenue Engine
+            Sponsors and Vendors
           </h1>
 
           <p

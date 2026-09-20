@@ -1381,6 +1381,25 @@ export default function EventWorkspace({
           </Grid>
         </Grid>
 
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+          {[
+            { label: "Venue", value: 8 },
+            { label: "Ticket Sales", value: 9 },
+            { label: "Sponsors and Vendors", value: 7 },
+          ].map((section) => (
+            <Button
+              key={section.value}
+              size="large"
+              variant={tab === section.value ? "contained" : "outlined"}
+              aria-pressed={tab === section.value}
+              onClick={() => setTab(section.value)}
+              sx={{ flex: 1, fontWeight: 900, py: 1.5 }}
+            >
+              {section.label}
+            </Button>
+          ))}
+        </Stack>
+
         <Card>
           <Card
           sx={{
@@ -1457,58 +1476,8 @@ export default function EventWorkspace({
           </CardContent>
         </Card>
 
-        <Card
-          sx={{
-            mb: 2,
-            border: "1px solid",
-            borderColor: tab === 7 ? "primary.main" : "divider",
-            background:
-              tab === 7
-                ? "linear-gradient(135deg, rgba(25,118,210,0.16), rgba(17,17,22,1))"
-                : "background.paper",
-          }}
-        >
-          <CardContent>
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={2}
-              alignItems={{ xs: "stretch", md: "center" }}
-              justifyContent="space-between"
-            >
-              <Box>
-                <Typography variant="h5" fontWeight={950}>
-                  Revenue Engine
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.5 }}
-                >
-                  Manage sponsors, vendors, proposals, follow-ups,
-                  Clover payments, and event revenue.
-                </Typography>
-              </Box>
-
-              <Button
-                size="large"
-                variant={tab === 7 ? "contained" : "outlined"}
-                onClick={() => setTab(7)}
-                sx={{
-                  minWidth: 190,
-                  fontWeight: 900,
-                  py: 1.25,
-                }}
-              >
-                {tab === 7
-                  ? "Revenue Open"
-                  : "Open Revenue Engine"}
-              </Button>
-            </Stack>
-          </CardContent>
-        </Card>
         <Tabs
-            value={tab === 7 ? false : tab}
+            value={tab >= 7 ? false : tab}
             onChange={(_, value) =>
               setTab(value)
             }
@@ -1522,7 +1491,6 @@ export default function EventWorkspace({
             <Tab label="Matchmaker Checklist" />
             <Tab label="Bloodwork" />
             <Tab label="Fees" />
-            <Tab label="Venue" value={8} />
           </Tabs>
         </Card>
 
@@ -1588,10 +1556,13 @@ export default function EventWorkspace({
                 </Typography>
               </CardContent>
             </Card>
-            <Card>
-              <TicketingDashboard key={eventId} eventId={eventId} event={event} />
-            </Card>
           </Stack>
+        )}
+
+        {tab === 9 && (
+          <Card>
+            <TicketingDashboard key={eventId} eventId={eventId} event={event} />
+          </Card>
         )}
 
         {/* OVERVIEW */}
