@@ -173,6 +173,10 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [mockupSurface, setMockupSurface] = useState("canvas");
   const [mockupPlacements, setMockupPlacements] = useState({});
   const [mockupLogos, setMockupLogos] = useState({});
+  const [mockupRopeBranding, setMockupRopeBranding] = useState({
+    type: "website",
+    value: "",
+  });
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -644,6 +648,12 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     setMockupSurface(firstSurface);
     setMockupPlacements(nextPlacements);
     setMockupLogos(nextLogos);
+    setMockupRopeBranding(
+      saved?.rope_branding || {
+        type: "website",
+        value: "",
+      }
+    );
 
     setMockupBuilder({
       package_id: pkg.id,
@@ -659,6 +669,10 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     setMockupSavedAt("");
     setMockupPlacements({});
     setMockupLogos({});
+    setMockupRopeBranding({
+      type: "website",
+      value: "",
+    });
     setMockupSurface("canvas");
     setMockupBuilder(null);
   }
@@ -764,6 +778,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
           mockupLogoName ||
           "",
         logos: mockupLogos,
+        rope_branding: mockupRopeBranding,
         scale: Number(mockupScale),
         x: Number(mockupX),
         y: Number(mockupY),
@@ -2596,98 +2611,227 @@ async function seedSponsorshipInventory() {
                   />
                 </div>
 
-                <div style={{ marginBottom: 18 }}>
+                {mockupSurface === "ropes" ? (
                   <div
                     style={{
-                      fontSize: 11,
-                      color: "#9999a5",
-                      fontWeight: 900,
-                      marginBottom: 7,
+                      marginBottom: 18,
+                      padding: 12,
+                      border: "1px solid #32323b",
+                      borderRadius: 10,
+                      background: "#101015",
                     }}
                   >
-                    LOGO FOR{" "}
-                    {mockupSurfaceOptions(
-                      mockupBuilder.asset_name
-                    ).find(
-                      (surface) =>
-                        surface.key === mockupSurface
-                    )?.label || "SELECTED LOCATION"}
-                  </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "#9999a5",
+                        fontWeight: 900,
+                        marginBottom: 10,
+                      }}
+                    >
+                      ROPE BRANDING
+                    </div>
 
-                  <label
-                    style={{
-                      display: "inline-block",
-                      background: "#18181f",
-                      border: "1px solid #3a3a44",
-                      borderRadius: 8,
-                      padding: "9px 12px",
-                      fontSize: 12,
-                      fontWeight: 900,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Choose Logo
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 8,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMockupRopeBranding((old) => ({
+                            ...old,
+                            type: "website",
+                          }));
+                          setMockupSavedAt("");
+                        }}
+                        style={{
+                          ...smallButtonStyle,
+                          background:
+                            mockupRopeBranding.type === "website"
+                              ? "#e6202d"
+                              : smallButtonStyle.background,
+                        }}
+                      >
+                        Website
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMockupRopeBranding((old) => ({
+                            ...old,
+                            type: "phone",
+                          }));
+                          setMockupSavedAt("");
+                        }}
+                        style={{
+                          ...smallButtonStyle,
+                          background:
+                            mockupRopeBranding.type === "phone"
+                              ? "#e6202d"
+                              : smallButtonStyle.background,
+                        }}
+                      >
+                        Telephone
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        color: "#858590",
+                        fontSize: 10,
+                        fontWeight: 900,
+                        marginBottom: 6,
+                      }}
+                    >
+                      {mockupRopeBranding.type === "phone"
+                        ? "TELEPHONE NUMBER"
+                        : "WEBSITE ADDRESS"}
+                    </div>
+
                     <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={handleMockupLogoChange}
-                      style={{ display: "none" }}
+                      type={
+                        mockupRopeBranding.type === "phone"
+                          ? "tel"
+                          : "text"
+                      }
+                      value={mockupRopeBranding.value}
+                      onChange={(e) => {
+                        setMockupRopeBranding((old) => ({
+                          ...old,
+                          value: e.target.value,
+                        }));
+                        setMockupSavedAt("");
+                      }}
+                      placeholder={
+                        mockupRopeBranding.type === "phone"
+                          ? "(405) 555-1234"
+                          : "www.company.com"
+                      }
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "10px 11px",
+                        background: "#0d0d12",
+                        color: "#fff",
+                        border: "1px solid #34343d",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 800,
+                      }}
                     />
-                  </label>
 
-                  {getMockupLogo(mockupSurface).name ? (
                     <div
                       style={{
                         marginTop: 8,
-                        color: "#858590",
-                        fontSize: 11,
-                        wordBreak: "break-all",
+                        color: "#71717c",
+                        fontSize: 10,
+                        lineHeight: 1.4,
                       }}
                     >
-                      {getMockupLogo(mockupSurface).name}
+                      Ring ropes support website addresses or telephone
+                      numbers only.
                     </div>
-                  ) : null}
-                  {getMockupLogo(mockupSurface).url ? (
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 18 }}>
                     <div
                       style={{
-                        marginTop: 12,
-                        padding: 10,
-                        border: "1px solid #32323b",
-                        borderRadius: 10,
-                        background: "#101015",
+                        fontSize: 11,
+                        color: "#9999a5",
+                        fontWeight: 900,
+                        marginBottom: 7,
                       }}
                     >
+                      LOGO FOR{" "}
+                      {mockupSurfaceOptions(
+                        mockupBuilder.asset_name
+                      ).find(
+                        (surface) =>
+                          surface.key === mockupSurface
+                      )?.label || "SELECTED LOCATION"}
+                    </div>
+
+                    <label
+                      style={{
+                        display: "inline-block",
+                        background: "#18181f",
+                        border: "1px solid #3a3a44",
+                        borderRadius: 8,
+                        padding: "9px 12px",
+                        fontSize: 12,
+                        fontWeight: 900,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Choose Logo
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={handleMockupLogoChange}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+
+                    {getMockupLogo(mockupSurface).name ? (
                       <div
                         style={{
-                          fontSize: 10,
-                          fontWeight: 900,
+                          marginTop: 8,
                           color: "#858590",
-                          marginBottom: 8,
-                          textTransform: "uppercase",
-                          letterSpacing: 0.7,
+                          fontSize: 11,
+                          wordBreak: "break-all",
                         }}
                       >
-                        Uploaded Logo Preview
+                        {getMockupLogo(mockupSurface).name}
                       </div>
+                    ) : null}
 
-                      <img
-                        src={getMockupLogo(mockupSurface).url}
-                        alt="Uploaded sponsor logo"
+                    {getMockupLogo(mockupSurface).url ? (
+                      <div
                         style={{
-                          display: "block",
-                          width: "100%",
-                          maxWidth: 220,
-                          maxHeight: 100,
-                          objectFit: "contain",
-                          background: "#ffffff",
-                          padding: 8,
-                          borderRadius: 6,
+                          marginTop: 12,
+                          padding: 10,
+                          border: "1px solid #32323b",
+                          borderRadius: 10,
+                          background: "#101015",
                         }}
-                      />
-                    </div>
-                  ) : null}
-                </div>
+                      >
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 900,
+                            color: "#858590",
+                            marginBottom: 8,
+                            textTransform: "uppercase",
+                            letterSpacing: 0.7,
+                          }}
+                        >
+                          Uploaded Logo Preview
+                        </div>
 
+                        <img
+                          src={getMockupLogo(mockupSurface).url}
+                          alt="Uploaded sponsor logo"
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            maxWidth: 220,
+                            maxHeight: 100,
+                            objectFit: "contain",
+                            background: "#ffffff",
+                            padding: 8,
+                            borderRadius: 6,
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
                 <div style={{ marginBottom: 16 }}>
                   <div
                     style={{
@@ -3429,31 +3573,26 @@ async function seedSponsorshipInventory() {
                           zIndex: 10,
                         }}
                       >
-                        {getMockupLogo("ropes").url ? (
-                          <img
-                            src={getMockupLogo("ropes").url}
-                            alt="Sponsor rope branding"
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              height: "100%",
-                              objectFit:
-                                getMockupPlacement("ropes").fit,
-                            }}
-                          />
-                        ) : (
-                          <span
-                            style={{
-                              color: "#111",
-                              fontSize: 9,
-                              fontWeight: 900,
-                              textAlign: "center",
-                            }}
-                          >
-                            {mockupBuilder.sponsor_name ||
-                              "SPONSOR"}
-                          </span>
-                        )}
+                        <span
+                          style={{
+                            color: "#111",
+                            fontSize: 11,
+                            fontWeight: 900,
+                            textAlign: "center",
+                            whiteSpace: "nowrap",
+                            width: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            padding: "0 6px",
+                            boxSizing: "border-box",
+                            letterSpacing: 0.3,
+                          }}
+                        >
+                          {mockupRopeBranding.value ||
+                            (mockupRopeBranding.type === "phone"
+                              ? "(405) 555-1234"
+                              : "www.company.com")}
+                        </span>
                       </div>
                     ) : null}
 
