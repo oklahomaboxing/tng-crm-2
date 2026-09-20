@@ -162,6 +162,12 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [inventorySeeding, setInventorySeeding] = useState(false);
   const [packageEditor, setPackageEditor] = useState(null);
   const [packageSaving, setPackageSaving] = useState(false);
+  const [mockupBuilder, setMockupBuilder] = useState(null);
+  const [mockupLogoUrl, setMockupLogoUrl] = useState("");
+  const [mockupLogoName, setMockupLogoName] = useState("");
+  const [mockupScale, setMockupScale] = useState(42);
+  const [mockupX, setMockupX] = useState(50);
+  const [mockupY, setMockupY] = useState(50);
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -368,6 +374,95 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       )
     ).length;
   }, [prospects]);
+  function mockupDefaultsForAsset(assetName) {
+    const name = String(assetName || "").toLowerCase();
+
+    if (name.includes("side a")) return { x: 50, y: 16, scale: 32 };
+    if (name.includes("side b")) return { x: 84, y: 50, scale: 28 };
+    if (name.includes("side c")) return { x: 50, y: 84, scale: 32 };
+    if (name.includes("side d")) return { x: 16, y: 50, scale: 28 };
+    if (name.includes("corner post")) return { x: 14, y: 14, scale: 22 };
+    if (name.includes("corner pad")) return { x: 86, y: 14, scale: 22 };
+    if (name.includes("ring skirt")) return { x: 50, y: 91, scale: 38 };
+    if (name.includes("rope")) return { x: 50, y: 22, scale: 30 };
+
+    return { x: 50, y: 50, scale: 42 };
+  }
+
+  function openMockupBuilder(pkg) {
+    const defaults = mockupDefaultsForAsset(pkg?.name);
+
+    if (mockupLogoUrl) {
+      URL.revokeObjectURL(mockupLogoUrl);
+    }
+
+    setMockupLogoUrl("");
+    setMockupLogoName("");
+    setMockupScale(defaults.scale);
+    setMockupX(defaults.x);
+    setMockupY(defaults.y);
+
+    setMockupBuilder({
+      package_id: pkg.id,
+      asset_name: pkg.name || "",
+      price: Number(pkg.price || 0),
+      sponsor_name: "",
+    });
+  }
+
+  function closeMockupBuilder() {
+    if (mockupLogoUrl) {
+      URL.revokeObjectURL(mockupLogoUrl);
+    }
+
+    setMockupLogoUrl("");
+    setMockupLogoName("");
+    setMockupBuilder(null);
+  }
+
+  function resetMockupPlacement() {
+    if (!mockupBuilder) return;
+
+    const defaults = mockupDefaultsForAsset(
+      mockupBuilder.asset_name
+    );
+
+    setMockupScale(defaults.scale);
+    setMockupX(defaults.x);
+    setMockupY(defaults.y);
+  }
+
+  function handleMockupLogoChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const allowed = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowed.includes(file.type)) {
+      alert("Please select a JPG, PNG, or WEBP image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Sponsor logo must be 5 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+
+    if (mockupLogoUrl) {
+      URL.revokeObjectURL(mockupLogoUrl);
+    }
+
+    setMockupLogoUrl(URL.createObjectURL(file));
+    setMockupLogoName(file.name || "Sponsor logo");
+    event.target.value = "";
+  }
   function editPackage(pkg) {
     setPackageEditor({
       id: pkg.id,
@@ -1569,6 +1664,17 @@ async function seedSponsorshipInventory() {
                         >
                           Edit Asset
                         </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...smallButtonStyle,
+                            background: "#241014",
+                            borderColor: "#6f2028",
+                          }}
+                          onClick={() => openMockupBuilder(pkg)}
+                        >
+                          Create Mockup
+                        </button>
 
                         {pkg.clover_payment_url ? (
                           <a
@@ -1943,6 +2049,558 @@ async function seedSponsorshipInventory() {
           </div>
         )}
       </div>
+      {mockupBuilder ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.82)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            zIndex: 11000,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 980,
+              maxHeight: "94vh",
+              overflowY: "auto",
+              background: "#111116",
+              border: "1px solid #33333c",
+              borderRadius: 16,
+              padding: 24,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color: "#e6202d",
+                    fontSize: 12,
+                    fontWeight: 900,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Sponsorship Preview
+                </div>
+
+                <h2 style={{ margin: "6px 0 0" }}>
+                  Sponsor Ring Mockup
+                </h2>
+
+                <div
+                  style={{
+                    marginTop: 5,
+                    color: "#858590",
+                    fontSize: 13,
+                  }}
+                >
+                  Browser preview only. This logo is not saved or uploaded.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={smallButtonStyle}
+                onClick={closeMockupBuilder}
+              >
+                Close
+              </button>
+            </div>
+
+            <div
+              style={{
+                marginTop: 22,
+                display: "grid",
+                gridTemplateColumns:
+                  "minmax(260px, 0.8fr) minmax(420px, 1.5fr)",
+                gap: 22,
+              }}
+            >
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#9999a5",
+                      fontWeight: 900,
+                      marginBottom: 6,
+                    }}
+                  >
+                    RING ASSET
+                  </div>
+
+                  <select
+                    value={mockupBuilder.package_id}
+                    onChange={(e) => {
+                      const id = Number(e.target.value);
+                      const pkg = packages.find(
+                        (item) => Number(item.id) === id
+                      );
+
+                      if (!pkg) return;
+
+                      const defaults =
+                        mockupDefaultsForAsset(pkg.name);
+
+                      setMockupBuilder((old) => ({
+                        ...old,
+                        package_id: pkg.id,
+                        asset_name: pkg.name || "",
+                        price: Number(pkg.price || 0),
+                      }));
+
+                      setMockupScale(defaults.scale);
+                      setMockupX(defaults.x);
+                      setMockupY(defaults.y);
+                    }}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: 11,
+                      borderRadius: 9,
+                      border: "1px solid #33333c",
+                      background: "#0d0d12",
+                      color: "#fff",
+                    }}
+                  >
+                    {packages.map((pkg) => (
+                      <option key={pkg.id} value={pkg.id}>
+                        {pkg.name} - {money(pkg.price)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#9999a5",
+                      fontWeight: 900,
+                      marginBottom: 6,
+                    }}
+                  >
+                    SPONSOR / BUSINESS NAME
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="Example: Delta Dental"
+                    value={mockupBuilder.sponsor_name}
+                    onChange={(e) =>
+                      setMockupBuilder((old) => ({
+                        ...old,
+                        sponsor_name: e.target.value,
+                      }))
+                    }
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: 11,
+                      borderRadius: 9,
+                      border: "1px solid #33333c",
+                      background: "#0d0d12",
+                      color: "#fff",
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#9999a5",
+                      fontWeight: 900,
+                      marginBottom: 7,
+                    }}
+                  >
+                    SPONSOR LOGO
+                  </div>
+
+                  <label
+                    style={{
+                      display: "inline-block",
+                      background: "#18181f",
+                      border: "1px solid #3a3a44",
+                      borderRadius: 8,
+                      padding: "9px 12px",
+                      fontSize: 12,
+                      fontWeight: 900,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Choose Logo
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleMockupLogoChange}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+
+                  {mockupLogoName ? (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        color: "#858590",
+                        fontSize: 11,
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {mockupLogoName}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div style={{ marginBottom: 15 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#9999a5",
+                      fontSize: 11,
+                      fontWeight: 900,
+                    }}
+                  >
+                    <span>LOGO SIZE</span>
+                    <span>{mockupScale}%</span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="10"
+                    max="80"
+                    value={mockupScale}
+                    onChange={(e) =>
+                      setMockupScale(Number(e.target.value))
+                    }
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 15 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#9999a5",
+                      fontSize: 11,
+                      fontWeight: 900,
+                    }}
+                  >
+                    <span>LEFT / RIGHT</span>
+                    <span>{mockupX}%</span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="5"
+                    max="95"
+                    value={mockupX}
+                    onChange={(e) =>
+                      setMockupX(Number(e.target.value))
+                    }
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#9999a5",
+                      fontSize: 11,
+                      fontWeight: 900,
+                    }}
+                  >
+                    <span>UP / DOWN</span>
+                    <span>{mockupY}%</span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="5"
+                    max="95"
+                    value={mockupY}
+                    onChange={(e) =>
+                      setMockupY(Number(e.target.value))
+                    }
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  style={smallButtonStyle}
+                  onClick={resetMockupPlacement}
+                >
+                  Reset Placement
+                </button>
+
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: 12,
+                    borderRadius: 10,
+                    background: "#18181f",
+                    border: "1px solid #292931",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#858590",
+                      fontSize: 11,
+                      fontWeight: 900,
+                    }}
+                  >
+                    SELECTED INVENTORY
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 5,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {mockupBuilder.asset_name}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 3,
+                      color: "#7ee787",
+                      fontWeight: 900,
+                    }}
+                  >
+                    {money(mockupBuilder.price)}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#9999a5",
+                    fontWeight: 900,
+                    marginBottom: 8,
+                  }}
+                >
+                  LIVE RING PREVIEW
+                </div>
+
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    maxHeight: 620,
+                    overflow: "hidden",
+                    borderRadius: 14,
+                    background:
+                      "linear-gradient(135deg, #18181f 0%, #0c0c10 100%)",
+                    border: "1px solid #3a3a44",
+                  }}
+                >
+                  {/* Canvas */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "12%",
+                      top: "12%",
+                      width: "76%",
+                      height: "76%",
+                      background:
+                        "linear-gradient(135deg, #eeeeea, #c9c9c3)",
+                      border: "5px solid #55555e",
+                      boxSizing: "border-box",
+                    }}
+                  />
+
+                  {/* Rope lines */}
+                  {[17, 21, 25].map((offset) => (
+                    <div
+                      key={`top-rope-${offset}`}
+                      style={{
+                        position: "absolute",
+                        left: "10%",
+                        top: `${offset}%`,
+                        width: "80%",
+                        height: 3,
+                        background: "#e6202d",
+                      }}
+                    />
+                  ))}
+
+                  {[75, 79, 83].map((offset) => (
+                    <div
+                      key={`bottom-rope-${offset}`}
+                      style={{
+                        position: "absolute",
+                        left: "10%",
+                        top: `${offset}%`,
+                        width: "80%",
+                        height: 3,
+                        background: "#222229",
+                      }}
+                    />
+                  ))}
+
+                  {/* Corner posts */}
+                  {[
+                    ["9%", "9%"],
+                    ["87%", "9%"],
+                    ["9%", "87%"],
+                    ["87%", "87%"],
+                  ].map(([left, top], index) => (
+                    <div
+                      key={`post-${index}`}
+                      style={{
+                        position: "absolute",
+                        left,
+                        top,
+                        width: 18,
+                        height: 18,
+                        borderRadius: 4,
+                        background:
+                          index < 2 ? "#e6202d" : "#222229",
+                        transform: "translate(-50%, -50%)",
+                        border: "2px solid #fff",
+                      }}
+                    />
+                  ))}
+
+                  {/* Ring skirt */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "15%",
+                      bottom: "4%",
+                      width: "70%",
+                      minHeight: 34,
+                      background: "#16161c",
+                      border: "1px solid #44444d",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#777783",
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    TNG BOXING
+                  </div>
+
+                  {/* Sponsor logo / name overlay */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: `${mockupX}%`,
+                      top: `${mockupY}%`,
+                      transform: "translate(-50%, -50%)",
+                      width: `${mockupScale}%`,
+                      maxHeight: "42%",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {mockupLogoUrl ? (
+                      <img
+                        src={mockupLogoUrl}
+                        alt="Sponsor logo preview"
+                        style={{
+                          display: "block",
+                          maxWidth: "100%",
+                          maxHeight: 150,
+                          objectFit: "contain",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          padding: "10px 14px",
+                          background: "rgba(255,255,255,0.92)",
+                          border: "2px dashed #777",
+                          color: "#111",
+                          fontSize: 16,
+                          fontWeight: 900,
+                          borderRadius: 6,
+                        }}
+                      >
+                        {mockupBuilder.sponsor_name ||
+                          "SPONSOR LOGO"}
+                      </div>
+                    )}
+
+                    {mockupLogoUrl &&
+                    mockupBuilder.sponsor_name ? (
+                      <div
+                        style={{
+                          marginTop: 5,
+                          padding: "3px 7px",
+                          background: "rgba(0,0,0,0.72)",
+                          color: "#fff",
+                          fontSize: 10,
+                          fontWeight: 900,
+                          borderRadius: 4,
+                        }}
+                      >
+                        {mockupBuilder.sponsor_name}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 10,
+                      bottom: 10,
+                      padding: "5px 8px",
+                      background: "rgba(0,0,0,0.72)",
+                      borderRadius: 6,
+                      color: "#fff",
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {mockupBuilder.asset_name}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    color: "#858590",
+                    fontSize: 11,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  This is a conceptual sales mockup, not a production print
+                  proof. Final logo dimensions and placement can be confirmed
+                  after the sponsorship is sold.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {packageEditor ? (
         <div
           style={{
