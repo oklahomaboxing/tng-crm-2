@@ -70,6 +70,14 @@ class EventRevenuePackageCreate(BaseModel):
     active: bool = True
 
 
+class EventRevenuePackageUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[float] = Field(default=None, ge=0)
+    quantity_available: Optional[int] = Field(default=None, ge=0)
+    clover_payment_url: Optional[str] = None
+    active: Optional[bool] = None
+
 class EventRevenueProspectCreate(BaseModel):
     organization_id: int
 

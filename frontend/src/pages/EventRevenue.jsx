@@ -159,6 +159,9 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [contactFindingId, setContactFindingId] = useState(null);
   const [proposalDraft, setProposalDraft] = useState(null);
   const [proposalActionLoading, setProposalActionLoading] = useState(false);
+  const [inventorySeeding, setInventorySeeding] = useState(false);
+  const [packageEditor, setPackageEditor] = useState(null);
+  const [packageSaving, setPackageSaving] = useState(false);
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -365,6 +368,108 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       )
     ).length;
   }, [prospects]);
+  function editPackage(pkg) {
+    setPackageEditor({
+      id: pkg.id,
+      name: pkg.name || "",
+      description: pkg.description || "",
+      price: Number(pkg.price || 0),
+      quantity_available:
+        pkg.quantity_available == null
+          ? ""
+          : Number(pkg.quantity_available),
+      clover_payment_url: pkg.clover_payment_url || "",
+      active: pkg.active !== false,
+    });
+  }
+
+  async function savePackageEdits() {
+    if (!packageEditor?.id) return;
+
+    setPackageSaving(true);
+    setScoutError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/packages/${packageEditor.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: packageEditor.name,
+            description: packageEditor.description || null,
+            price: Number(packageEditor.price || 0),
+            quantity_available:
+              packageEditor.quantity_available === ""
+                ? null
+                : Number(packageEditor.quantity_available),
+            clover_payment_url:
+              packageEditor.clover_payment_url || null,
+            active: Boolean(packageEditor.active),
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+            `Unable to update sponsorship asset (${response.status})`
+        );
+      }
+
+      setPackageEditor(null);
+      await loadData();
+      alert("Sponsorship asset updated.");
+    } catch (err) {
+      console.error(err);
+      setScoutError(
+        err.message || "Unable to update sponsorship asset."
+      );
+    } finally {
+      setPackageSaving(false);
+    }
+  }
+async function seedSponsorshipInventory() {
+    setInventorySeeding(true);
+    setScoutError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/packages/seed-sponsorship-inventory`,
+        {
+          method: "POST",
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+            `Unable to add sponsorship inventory (${response.status})`
+        );
+      }
+
+      await loadData();
+
+      alert(
+        body?.created
+          ? `${body.created} sponsorship inventory items added.`
+          : "Ring sponsorship inventory is already loaded."
+      );
+    } catch (err) {
+      console.error(err);
+      setScoutError(
+        err.message || "Unable to add sponsorship inventory."
+      );
+    } finally {
+      setInventorySeeding(false);
+    }
+  }
   async function addSponsorToPipeline(candidate) {
     const key = candidate.business_name || "";
 
@@ -1239,7 +1344,267 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
             flexWrap: "wrap",
           }}
         >
-          <div>
+          {/* SPONSORSHIP INVENTORY PANEL */}
+      {tab === "SPONSOR" ? (
+        <div
+          style={{
+            marginTop: 24,
+            background: "#0f0f14",
+            border: "1px solid #27272f",
+            borderRadius: 16,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#e6202d",
+                  fontWeight: 900,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.8,
+                }}
+              >
+                Sellable Ring Assets
+              </div>
+
+              <h2
+                style={{
+                  margin: "5px 0 0",
+                  fontSize: 21,
+                }}
+              >
+                Sponsorship Inventory
+              </h2>
+
+              <div
+                style={{
+                  marginTop: 6,
+                  color: "#858590",
+                  fontSize: 13,
+                  maxWidth: 650,
+                }}
+              >
+                Sell individual ring branding positions or combine them
+                into larger sponsorship packages.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={inventorySeeding}
+              onClick={seedSponsorshipInventory}
+              style={{
+                border: 0,
+                background: "#e6202d",
+                color: "#fff",
+                borderRadius: 9,
+                padding: "10px 14px",
+                fontWeight: 900,
+                cursor: inventorySeeding ? "default" : "pointer",
+                opacity: inventorySeeding ? 0.65 : 1,
+              }}
+            >
+              {inventorySeeding
+                ? "Adding..."
+                : packages.length > 0
+                ? "Add Missing Ring Inventory"
+                : "Add Ring Inventory"}
+            </button>
+          </div>
+
+          {packages.length === 0 ? (
+            <div
+              style={{
+                marginTop: 18,
+                border: "1px dashed #33333c",
+                borderRadius: 12,
+                padding: 24,
+                textAlign: "center",
+                color: "#858590",
+              }}
+            >
+              No sponsor inventory is loaded yet. Add the standard ring
+              inventory to begin selling branding positions.
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 18,
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(230px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {packages.map((pkg) => {
+                const available =
+                  pkg.quantity_available == null
+                    ? null
+                    : Math.max(
+                        Number(pkg.quantity_available || 0) -
+                          Number(pkg.quantity_sold || 0),
+                        0
+                      );
+
+                return (
+                  <div
+                    key={`inventory-${pkg.id}`}
+                    style={{
+                      background: "#15151b",
+                      border: "1px solid #2b2b34",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        minHeight: 105,
+                        padding: 15,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textAlign: "center",
+                        background:
+                          pkg.name === "Full Ring Package"
+                            ? "linear-gradient(135deg, #3a0d12, #15151b)"
+                            : pkg.name === "Center Canvas"
+                            ? "linear-gradient(135deg, #292932, #111116)"
+                            : "#18181f",
+                        borderBottom: "1px solid #2b2b34",
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            color: "#e6202d",
+                            fontSize: 10,
+                            fontWeight: 900,
+                            textTransform: "uppercase",
+                            letterSpacing: 0.8,
+                          }}
+                        >
+                          Ring Sponsorship
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 7,
+                            fontWeight: 900,
+                            fontSize: 18,
+                          }}
+                        >
+                          {pkg.name}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ padding: 15 }}>
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 900,
+                        }}
+                      >
+                        {money(pkg.price)}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 7,
+                          color: "#9999a5",
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          minHeight: 54,
+                        }}
+                      >
+                        {pkg.description ||
+                          "Sponsor branding opportunity."}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 13,
+                          paddingTop: 11,
+                          borderTop: "1px solid #292931",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          color: "#858590",
+                          fontSize: 12,
+                        }}
+                      >
+                        <span>
+                          Sold: {Number(pkg.quantity_sold || 0)}
+                        </span>
+
+                        <span>
+                          {available == null
+                            ? "Open inventory"
+                            : `${available} available`}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          marginTop: 13,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          style={smallButtonStyle}
+                          onClick={() => editPackage(pkg)}
+                        >
+                          Edit Asset
+                        </button>
+
+                        {pkg.clover_payment_url ? (
+                          <a
+                            href={pkg.clover_payment_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              ...smallButtonStyle,
+                              display: "inline-block",
+                              textDecoration: "none",
+                            }}
+                          >
+                            Test Clover Link
+                          </a>
+                        ) : (
+                          <span
+                            style={{
+                              color: "#f2cc60",
+                              fontSize: 11,
+                              fontWeight: 800,
+                              alignSelf: "center",
+                            }}
+                          >
+                            No Clover link
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
+      <div>
             <h2
               style={{
                 margin: 0,
@@ -1578,6 +1943,295 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
           </div>
         )}
       </div>
+      {packageEditor ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.78)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            zIndex: 10000,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 680,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              background: "#111116",
+              border: "1px solid #33333c",
+              borderRadius: 16,
+              padding: 24,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 16,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color: "#e6202d",
+                    fontSize: 12,
+                    fontWeight: 900,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Sponsorship Inventory
+                </div>
+
+                <h2 style={{ margin: "6px 0 0" }}>
+                  Edit Sponsorship Asset
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                style={smallButtonStyle}
+                disabled={packageSaving}
+                onClick={() => setPackageEditor(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div style={{ marginTop: 22 }}>
+              <div style={{ fontSize: 11, color: "#9999a5", fontWeight: 900, marginBottom: 6 }}>
+                ASSET NAME
+              </div>
+
+              <input
+                type="text"
+                value={packageEditor.name}
+                onChange={(e) =>
+                  setPackageEditor((old) => ({
+                    ...old,
+                    name: e.target.value,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: 12,
+                  borderRadius: 9,
+                  border: "1px solid #33333c",
+                  background: "#0d0d12",
+                  color: "#fff",
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                marginTop: 18,
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: 14,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 11, color: "#9999a5", fontWeight: 900, marginBottom: 6 }}>
+                  PRICE
+                </div>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={packageEditor.price}
+                  onChange={(e) =>
+                    setPackageEditor((old) => ({
+                      ...old,
+                      price: e.target.value,
+                    }))
+                  }
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: 12,
+                    borderRadius: 9,
+                    border: "1px solid #33333c",
+                    background: "#0d0d12",
+                    color: "#fff",
+                  }}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 11, color: "#9999a5", fontWeight: 900, marginBottom: 6 }}>
+                  QUANTITY AVAILABLE
+                </div>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={packageEditor.quantity_available}
+                  onChange={(e) =>
+                    setPackageEditor((old) => ({
+                      ...old,
+                      quantity_available: e.target.value,
+                    }))
+                  }
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: 12,
+                    borderRadius: 9,
+                    border: "1px solid #33333c",
+                    background: "#0d0d12",
+                    color: "#fff",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 11, color: "#9999a5", fontWeight: 900, marginBottom: 6 }}>
+                DESCRIPTION
+              </div>
+
+              <textarea
+                rows={6}
+                value={packageEditor.description}
+                onChange={(e) =>
+                  setPackageEditor((old) => ({
+                    ...old,
+                    description: e.target.value,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: 12,
+                  borderRadius: 9,
+                  border: "1px solid #33333c",
+                  background: "#0d0d12",
+                  color: "#fff",
+                  resize: "vertical",
+                  lineHeight: 1.5,
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 11, color: "#9999a5", fontWeight: 900, marginBottom: 6 }}>
+                CLOVER PAYMENT LINK
+              </div>
+
+              <input
+                type="url"
+                placeholder="https://..."
+                value={packageEditor.clover_payment_url}
+                onChange={(e) =>
+                  setPackageEditor((old) => ({
+                    ...old,
+                    clover_payment_url: e.target.value,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: 12,
+                  borderRadius: 9,
+                  border: "1px solid #33333c",
+                  background: "#0d0d12",
+                  color: "#fff",
+                }}
+              />
+
+              {packageEditor.clover_payment_url ? (
+                <a
+                  href={packageEditor.clover_payment_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "inline-block",
+                    marginTop: 10,
+                    color: "#fff",
+                    textDecoration: "none",
+                    border: "1px solid #3a3a44",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    fontSize: 12,
+                    fontWeight: 900,
+                  }}
+                >
+                  Test Clover Payment Link
+                </a>
+              ) : null}
+            </div>
+
+            <label
+              style={{
+                marginTop: 20,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                cursor: "pointer",
+                fontWeight: 800,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={packageEditor.active}
+                onChange={(e) =>
+                  setPackageEditor((old) => ({
+                    ...old,
+                    active: e.target.checked,
+                  }))
+                }
+              />
+
+              Active Sponsorship Asset
+            </label>
+
+            <div
+              style={{
+                marginTop: 24,
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                disabled={packageSaving}
+                onClick={savePackageEdits}
+                style={{
+                  border: 0,
+                  background: "#e6202d",
+                  color: "#fff",
+                  borderRadius: 9,
+                  padding: "10px 16px",
+                  fontWeight: 900,
+                  cursor: packageSaving ? "default" : "pointer",
+                  opacity: packageSaving ? 0.65 : 1,
+                }}
+              >
+                {packageSaving ? "Saving..." : "Save Changes"}
+              </button>
+
+              <button
+                type="button"
+                style={smallButtonStyle}
+                disabled={packageSaving}
+                onClick={() => setPackageEditor(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {proposalDraft ? (
         <div
           style={{

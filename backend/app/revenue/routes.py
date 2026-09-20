@@ -100,6 +100,174 @@ def create_package(
     return package
 
 
+@router.patch("/packages/{package_id}")
+def update_package(
+    event_id: int,
+    package_id: int,
+    payload: schemas.EventRevenuePackageUpdate,
+    db: Session = Depends(get_db),
+):
+    package = (
+        db.query(models.EventRevenuePackage)
+        .filter(
+            models.EventRevenuePackage.id == package_id,
+            models.EventRevenuePackage.event_id == event_id,
+        )
+        .first()
+    )
+
+    if not package:
+        raise HTTPException(
+            status_code=404,
+            detail="Revenue package not found",
+        )
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    for field, value in updates.items():
+        setattr(package, field, value)
+
+    package.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(package)
+
+    return package
+
+@router.post("/packages/seed-sponsorship-inventory")
+def seed_sponsorship_inventory(
+    event_id: int,
+    db: Session = Depends(get_db),
+):
+    inventory = [
+        {
+            "name": "Center Canvas",
+            "description": (
+                "Premium sponsor placement in the center of the boxing ring canvas. "
+                "Designed for maximum visibility in event photography, video, streaming, "
+                "fighter introductions, and in-ring presentations."
+            ),
+            "price": 5000.0,
+            "quantity_available": 1,
+        },
+        {
+            "name": "Full Ring Package",
+            "description": (
+                "Premium full-ring sponsorship package combining major ring branding "
+                "placements for maximum event visibility. Final included placements "
+                "can be customized before the proposal is sent."
+            ),
+            "price": 10000.0,
+            "quantity_available": 1,
+        },
+        {
+            "name": "Ring Skirt",
+            "description": (
+                "Sponsor branding displayed on the ring skirt for strong visibility "
+                "to spectators, photography, and event video."
+            ),
+            "price": 2500.0,
+            "quantity_available": 4,
+        },
+        {
+            "name": "Ring Ropes",
+            "description": (
+                "Sponsor branding placement associated with the ring ropes for repeated "
+                "visibility throughout the event."
+            ),
+            "price": 2000.0,
+            "quantity_available": 4,
+        },
+        {
+            "name": "Corner Posts",
+            "description": (
+                "Sponsor branding on a ring corner post with strong camera and audience visibility."
+            ),
+            "price": 1500.0,
+            "quantity_available": 4,
+        },
+        {
+            "name": "Corner Pads",
+            "description": (
+                "Sponsor branding on ring corner pads visible during rounds, introductions, "
+                "photography, and video."
+            ),
+            "price": 1250.0,
+            "quantity_available": 4,
+        },
+        {
+            "name": "Ring Side A",
+            "description": (
+                "Exclusive sponsor placement assigned to one side of the boxing ring."
+            ),
+            "price": 1500.0,
+            "quantity_available": 1,
+        },
+        {
+            "name": "Ring Side B",
+            "description": (
+                "Exclusive sponsor placement assigned to one side of the boxing ring."
+            ),
+            "price": 1500.0,
+            "quantity_available": 1,
+        },
+        {
+            "name": "Ring Side C",
+            "description": (
+                "Exclusive sponsor placement assigned to one side of the boxing ring."
+            ),
+            "price": 1500.0,
+            "quantity_available": 1,
+        },
+        {
+            "name": "Ring Side D",
+            "description": (
+                "Exclusive sponsor placement assigned to one side of the boxing ring."
+            ),
+            "price": 1500.0,
+            "quantity_available": 1,
+        },
+    ]
+
+    created = []
+    existing_names = {
+        row.name
+        for row in db.query(models.EventRevenuePackage)
+        .filter(
+            models.EventRevenuePackage.event_id == event_id,
+            models.EventRevenuePackage.package_type == "SPONSOR",
+        )
+        .all()
+    }
+
+    for item in inventory:
+        if item["name"] in existing_names:
+            continue
+
+        package = models.EventRevenuePackage(
+            event_id=event_id,
+            package_type="SPONSOR",
+            name=item["name"],
+            description=item["description"],
+            price=item["price"],
+            quantity_available=item["quantity_available"],
+            quantity_sold=0,
+            active=True,
+        )
+
+        db.add(package)
+        created.append(package)
+
+    db.commit()
+
+    for package in created:
+        db.refresh(package)
+
+    return {
+        "created": len(created),
+        "packages": created,
+    }
+
 @router.get("/packages")
 def list_packages(
     event_id: int,
