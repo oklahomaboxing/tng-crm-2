@@ -1537,7 +1537,7 @@ export default function EventWorkspace({
                 >
                   Event Venue
                 </Typography>
-    
+
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={5}>
                     <TextField
@@ -1549,7 +1549,7 @@ export default function EventWorkspace({
                       }
                     />
                   </Grid>
-    
+
                   <Grid item xs={12} md={5}>
                     <TextField
                       fullWidth
@@ -1560,7 +1560,7 @@ export default function EventWorkspace({
                       }
                     />
                   </Grid>
-    
+
                   <Grid item xs={12} md={2}>
                     <Button
                       fullWidth
@@ -1576,7 +1576,7 @@ export default function EventWorkspace({
                     </Button>
                   </Grid>
                 </Grid>
-    
+
                 <Typography
                   variant="caption"
                   color="text.secondary"
@@ -2047,7 +2047,7 @@ export default function EventWorkspace({
                       </Stack>
                     )}
 
-                    
+
                   </Stack>
 
                   <Divider sx={{ my: 2 }} />
