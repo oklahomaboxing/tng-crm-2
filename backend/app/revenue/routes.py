@@ -574,6 +574,11 @@ def list_prospects(
                 if latest_proposal
                 else None
             ),
+            "proposal_package_id": (
+                latest_proposal.package_id
+                if latest_proposal
+                else None
+            ),
             "proposal_clover_payment_url": (
                 latest_proposal.clover_payment_url
                 if latest_proposal
@@ -979,6 +984,9 @@ def send_proposal_email(
     proposal_id: int,
     db: Session = Depends(get_db),
     recipient_email: Optional[str] = None,
+    mockup_image_base64: Optional[str] = None,
+    mockup_asset_name: Optional[str] = None,
+    mockup_sponsor_name: Optional[str] = None,
 ):
     proposal = (
         db.query(models.EventRevenueProposal)
@@ -1058,6 +1066,9 @@ def send_proposal_email(
             package_name=package.name if package else "",
             package_price=float(package.price or 0) if package else 0,
             clover_payment_url=proposal.clover_payment_url,
+            mockup_image_base64=mockup_image_base64,
+            mockup_asset_name=mockup_asset_name,
+            mockup_sponsor_name=mockup_sponsor_name,
         )
 
     except Exception as exc:
@@ -1558,6 +1569,7 @@ Return ONLY valid JSON:
 def send_latest_proposal_email(
     event_id: int,
     prospect_id: int,
+    payload: Optional[schemas.RevenueProposalEmailSend] = None,
     db: Session = Depends(get_db),
     recipient_email: Optional[str] = None,
 ):
@@ -1582,7 +1594,9 @@ def send_latest_proposal_email(
             models.EventRevenueProposal.event_id == event_id,
             models.EventRevenueProposal.prospect_id == prospect_id,
         )
-        .order_by(models.EventRevenueProposal.created_at.desc())
+        .order_by(
+            models.EventRevenueProposal.created_at.desc()
+        )
         .first()
     )
 
@@ -1592,13 +1606,39 @@ def send_latest_proposal_email(
             detail="Generate a proposal before sending email",
         )
 
+    mockup_image_base64 = (
+        payload.mockup_image_base64
+        if payload
+        else None
+    )
+
+    # Keep the email request reasonably sized.
+    if (
+        mockup_image_base64
+        and len(mockup_image_base64) > 8_000_000
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Sponsorship mockup image is too large",
+        )
+
     return send_proposal_email(
         event_id=event_id,
         proposal_id=proposal.id,
         db=db,
         recipient_email=recipient_email,
+        mockup_image_base64=mockup_image_base64,
+        mockup_asset_name=(
+            payload.mockup_asset_name
+            if payload
+            else None
+        ),
+        mockup_sponsor_name=(
+            payload.mockup_sponsor_name
+            if payload
+            else None
+        ),
     )
-
 
 # ============================================================
 # RESEND EMAIL STATUS WEBHOOK

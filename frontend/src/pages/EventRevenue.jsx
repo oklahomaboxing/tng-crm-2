@@ -1,3 +1,4 @@
+import html2canvas from "html2canvas";
 import { useEffect, useMemo, useState } from "react";
 
 const API_BASE =
@@ -168,6 +169,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [mockupScale, setMockupScale] = useState(42);
   const [mockupX, setMockupX] = useState(50);
   const [mockupY, setMockupY] = useState(50);
+  const [mockupSavedAt, setMockupSavedAt] = useState("");
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -377,46 +379,63 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   function mockupDefaultsForAsset(assetName) {
     const name = String(assetName || "").toLowerCase();
 
-    if (name.includes("side a")) return { x: 50, y: 16, scale: 32 };
-    if (name.includes("side b")) return { x: 84, y: 50, scale: 28 };
-    if (name.includes("side c")) return { x: 50, y: 84, scale: 32 };
-    if (name.includes("side d")) return { x: 16, y: 50, scale: 28 };
-    if (name.includes("corner post")) return { x: 14, y: 14, scale: 22 };
-    if (name.includes("corner pad")) return { x: 86, y: 14, scale: 22 };
-    if (name.includes("ring skirt")) return { x: 50, y: 91, scale: 38 };
-    if (name.includes("rope")) return { x: 50, y: 22, scale: 30 };
+    if (name.includes("side a")) return { x: 50, y: 18, scale: 30 };
+    if (name.includes("side b")) return { x: 82, y: 48, scale: 24 };
+    if (name.includes("side c")) return { x: 50, y: 83, scale: 30 };
+    if (name.includes("side d")) return { x: 18, y: 48, scale: 24 };
+    if (name.includes("corner post")) return { x: 18, y: 24, scale: 20 };
+    if (name.includes("corner pad")) return { x: 82, y: 24, scale: 20 };
+    if (name.includes("ring skirt")) return { x: 50, y: 82, scale: 34 };
+    if (name.includes("rope")) return { x: 50, y: 26, scale: 26 };
 
-    return { x: 50, y: 50, scale: 42 };
+    return { x: 50, y: 50, scale: 38 };
+  }
+
+  function mockupStorageKey(packageId) {
+    return `tng-revenue-mockup-${eventId}-${packageId}`;
   }
 
   function openMockupBuilder(pkg) {
     const defaults = mockupDefaultsForAsset(pkg?.name);
+    const storageKey = mockupStorageKey(pkg.id);
 
-    if (mockupLogoUrl) {
-      URL.revokeObjectURL(mockupLogoUrl);
+    let saved = null;
+
+    try {
+      const raw = localStorage.getItem(storageKey);
+
+      if (raw) {
+        saved = JSON.parse(raw);
+      }
+    } catch (err) {
+      console.warn("Unable to read saved mockup", err);
     }
 
-    setMockupLogoUrl("");
-    setMockupLogoName("");
-    setMockupScale(defaults.scale);
-    setMockupX(defaults.x);
-    setMockupY(defaults.y);
+    setMockupLogoUrl(saved?.logo_data_url || "");
+    setMockupLogoName(saved?.logo_name || "");
+    setMockupScale(
+      Number(saved?.scale ?? defaults.scale)
+    );
+    setMockupX(
+      Number(saved?.x ?? defaults.x)
+    );
+    setMockupY(
+      Number(saved?.y ?? defaults.y)
+    );
+    setMockupSavedAt(saved?.saved_at || "");
 
     setMockupBuilder({
       package_id: pkg.id,
       asset_name: pkg.name || "",
       price: Number(pkg.price || 0),
-      sponsor_name: "",
+      sponsor_name: saved?.sponsor_name || "",
     });
   }
 
   function closeMockupBuilder() {
-    if (mockupLogoUrl) {
-      URL.revokeObjectURL(mockupLogoUrl);
-    }
-
     setMockupLogoUrl("");
     setMockupLogoName("");
+    setMockupSavedAt("");
     setMockupBuilder(null);
   }
 
@@ -449,19 +468,93 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Sponsor logo must be 5 MB or smaller.");
+    if (file.size > 1500 * 1024) {
+      alert(
+        "For saved mockups, please use a logo smaller than 1.5 MB."
+      );
       event.target.value = "";
       return;
     }
 
-    if (mockupLogoUrl) {
-      URL.revokeObjectURL(mockupLogoUrl);
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      setMockupLogoUrl(String(reader.result || ""));
+      setMockupLogoName(file.name || "Sponsor logo");
+      setMockupSavedAt("");
+    };
+
+    reader.onerror = () => {
+      alert("Unable to read that image.");
+    };
+
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  }
+
+  async function saveMockup() {
+    if (!mockupBuilder?.package_id) return;
+
+    const preview = document.getElementById(
+      "sponsorship-mockup-capture"
+    );
+
+    if (!preview) {
+      alert("Mockup preview could not be captured.");
+      return;
     }
 
-    setMockupLogoUrl(URL.createObjectURL(file));
-    setMockupLogoName(file.name || "Sponsor logo");
-    event.target.value = "";
+    try {
+      const canvas = await html2canvas(preview, {
+        backgroundColor: "#101015",
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+      });
+
+      const pngDataUrl = canvas.toDataURL("image/png");
+      const savedAt = new Date().toISOString();
+
+      const payload = {
+        package_id: mockupBuilder.package_id,
+        asset_name: mockupBuilder.asset_name,
+        sponsor_name: mockupBuilder.sponsor_name || "",
+        logo_data_url: mockupLogoUrl || "",
+        logo_name: mockupLogoName || "",
+        scale: Number(mockupScale),
+        x: Number(mockupX),
+        y: Number(mockupY),
+        mockup_png_data_url: pngDataUrl,
+        saved_at: savedAt,
+      };
+
+      localStorage.setItem(
+        mockupStorageKey(mockupBuilder.package_id),
+        JSON.stringify(payload)
+      );
+
+      setMockupSavedAt(savedAt);
+
+      alert(
+        "Mockup saved and prepared for proposal email."
+      );
+    } catch (err) {
+      console.error(err);
+
+      alert(
+        "Unable to capture the sponsorship mockup image."
+      );
+    }
+  }
+  function clearSavedMockup() {
+    if (!mockupBuilder?.package_id) return;
+
+    localStorage.removeItem(
+      mockupStorageKey(mockupBuilder.package_id)
+    );
+
+    setMockupSavedAt("");
+    alert("Saved mockup removed.");
   }
   function editPackage(pkg) {
     setPackageEditor({
@@ -810,13 +903,54 @@ async function seedSponsorshipInventory() {
     setScoutError("");
 
     try {
+      const proposalPackageId =
+        prospect.proposal_package_id ||
+        prospect.recommended_package_id ||
+        null;
+
+      let savedMockup = null;
+
+      if (proposalPackageId) {
+        try {
+          const rawMockup = localStorage.getItem(
+            mockupStorageKey(proposalPackageId)
+          );
+
+          if (rawMockup) {
+            savedMockup = JSON.parse(rawMockup);
+          }
+        } catch (err) {
+          console.warn(
+            "Unable to read saved sponsorship mockup",
+            err
+          );
+        }
+      }
+
+      const mockupImage =
+        savedMockup?.mockup_png_data_url || "";
+
+      const mockupBase64 = mockupImage.includes(",")
+        ? mockupImage.split(",")[1]
+        : mockupImage;
+
       const response = await fetch(
         `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospect.id}/send-latest-proposal?recipient_email=${encodeURIComponent(recipientEmail)}`,
         {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mockup_image_base64:
+              mockupBase64 || null,
+            mockup_asset_name:
+              savedMockup?.asset_name || null,
+            mockup_sponsor_name:
+              savedMockup?.sponsor_name || null,
+          }),
         }
       );
-
       const body = await response.json();
 
       if (!response.ok) {
@@ -2106,7 +2240,7 @@ async function seedSponsorshipInventory() {
                     fontSize: 13,
                   }}
                 >
-                  Browser preview only. This logo is not saved or uploaded.
+                  Build a 3D sales preview and save it for this event and asset.
                 </div>
               </div>
 
@@ -2349,6 +2483,54 @@ async function seedSponsorshipInventory() {
                 >
                   Reset Placement
                 </button>
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={saveMockup}
+                    style={{
+                      border: 0,
+                      background: "#e6202d",
+                      color: "#fff",
+                      borderRadius: 8,
+                      padding: "9px 13px",
+                      fontSize: 12,
+                      fontWeight: 900,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Save Mockup
+                  </button>
+
+                  {mockupSavedAt ? (
+                    <button
+                      type="button"
+                      style={smallButtonStyle}
+                      onClick={clearSavedMockup}
+                    >
+                      Remove Saved Mockup
+                    </button>
+                  ) : null}
+                </div>
+
+                {mockupSavedAt ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      color: "#7ee787",
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Saved for this asset
+                  </div>
+                ) : null}
 
                 <div
                   style={{
@@ -2403,187 +2585,295 @@ async function seedSponsorshipInventory() {
                 </div>
 
                 <div
+                  id="sponsorship-mockup-capture"
                   style={{
                     position: "relative",
                     width: "100%",
-                    aspectRatio: "1 / 1",
-                    maxHeight: 620,
+                    aspectRatio: "4 / 3",
+                    minHeight: 430,
                     overflow: "hidden",
                     borderRadius: 14,
                     background:
-                      "linear-gradient(135deg, #18181f 0%, #0c0c10 100%)",
+                      "radial-gradient(circle at 50% 30%, #2b2b34 0%, #101015 58%, #07070a 100%)",
                     border: "1px solid #3a3a44",
+                    perspective: 1000,
                   }}
                 >
-                  {/* Canvas */}
                   <div
                     style={{
                       position: "absolute",
-                      left: "12%",
-                      top: "12%",
-                      width: "76%",
-                      height: "76%",
-                      background:
-                        "linear-gradient(135deg, #eeeeea, #c9c9c3)",
-                      border: "5px solid #55555e",
-                      boxSizing: "border-box",
+                      left: "50%",
+                      bottom: "5%",
+                      width: "78%",
+                      height: "68%",
+                      transform:
+                        "translateX(-50%) rotateX(58deg) rotateZ(-28deg)",
+                      transformStyle: "preserve-3d",
                     }}
-                  />
-
-                  {/* Rope lines */}
-                  {[17, 21, 25].map((offset) => (
+                  >
+                    {/* Canvas floor */}
                     <div
-                      key={`top-rope-${offset}`}
                       style={{
                         position: "absolute",
-                        left: "10%",
-                        top: `${offset}%`,
-                        width: "80%",
-                        height: 3,
-                        background: "#e6202d",
-                      }}
-                    />
-                  ))}
-
-                  {[75, 79, 83].map((offset) => (
-                    <div
-                      key={`bottom-rope-${offset}`}
-                      style={{
-                        position: "absolute",
-                        left: "10%",
-                        top: `${offset}%`,
-                        width: "80%",
-                        height: 3,
-                        background: "#222229",
-                      }}
-                    />
-                  ))}
-
-                  {/* Corner posts */}
-                  {[
-                    ["9%", "9%"],
-                    ["87%", "9%"],
-                    ["9%", "87%"],
-                    ["87%", "87%"],
-                  ].map(([left, top], index) => (
-                    <div
-                      key={`post-${index}`}
-                      style={{
-                        position: "absolute",
-                        left,
-                        top,
-                        width: 18,
-                        height: 18,
-                        borderRadius: 4,
+                        inset: "7%",
                         background:
-                          index < 2 ? "#e6202d" : "#222229",
-                        transform: "translate(-50%, -50%)",
-                        border: "2px solid #fff",
+                          "linear-gradient(135deg, #f2f2ed, #c5c5be)",
+                        border:
+                          String(mockupBuilder.asset_name || "")
+                            .toLowerCase()
+                            .includes("canvas")
+                            ? "8px solid #e6202d"
+                            : "6px solid #55555e",
+                        boxShadow:
+                          "0 28px 50px rgba(0,0,0,0.55)",
                       }}
-                    />
-                  ))}
+                    >
+                      {String(mockupBuilder.asset_name || "")
+                        .toLowerCase()
+                        .includes("canvas") ||
+                      String(mockupBuilder.asset_name || "")
+                        .toLowerCase()
+                        .includes("full ring") ? (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: `${mockupX}%`,
+                            top: `${mockupY}%`,
+                            transform: "translate(-50%, -50%)",
+                            width: `${mockupScale}%`,
+                            textAlign: "center",
+                          }}
+                        >
+                          {mockupLogoUrl ? (
+                            <img
+                              src={mockupLogoUrl}
+                              alt="Sponsor logo preview"
+                              style={{
+                                maxWidth: "100%",
+                                maxHeight: 110,
+                                objectFit: "contain",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                padding: "8px 10px",
+                                color: "#111",
+                                fontWeight: 900,
+                                fontSize: 14,
+                              }}
+                            >
+                              {mockupBuilder.sponsor_name ||
+                                "SPONSOR LOGO"}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
 
-                  {/* Ring skirt */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "15%",
-                      bottom: "4%",
-                      width: "70%",
-                      minHeight: 34,
-                      background: "#16161c",
-                      border: "1px solid #44444d",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#777783",
-                      fontSize: 10,
-                      fontWeight: 900,
-                    }}
-                  >
-                    TNG BOXING
-                  </div>
+                    {/* Front skirt surface */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: "10%",
+                        right: "10%",
+                        bottom: "-7%",
+                        height: "19%",
+                        background:
+                          String(mockupBuilder.asset_name || "")
+                            .toLowerCase()
+                            .includes("skirt")
+                            ? "linear-gradient(#7d151e,#30080d)"
+                            : "linear-gradient(#292930,#101014)",
+                        border: "2px solid #4b4b55",
+                        transform:
+                          "rotateX(-90deg) translateZ(1px)",
+                        transformOrigin: "top",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {String(mockupBuilder.asset_name || "")
+                        .toLowerCase()
+                        .includes("skirt") ||
+                      String(mockupBuilder.asset_name || "")
+                        .toLowerCase()
+                        .includes("full ring") ? (
+                        mockupLogoUrl ? (
+                          <img
+                            src={mockupLogoUrl}
+                            alt="Sponsor skirt logo"
+                            style={{
+                              maxWidth: `${Math.max(
+                                25,
+                                mockupScale
+                              )}%`,
+                              maxHeight: "75%",
+                              objectFit: "contain",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              color: "#fff",
+                              fontWeight: 900,
+                            }}
+                          >
+                            {mockupBuilder.sponsor_name ||
+                              "SPONSOR"}
+                          </div>
+                        )
+                      ) : (
+                        <div
+                          style={{
+                            color: "#777783",
+                            fontWeight: 900,
+                            fontSize: 11,
+                          }}
+                        >
+                          TNG BOXING
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Sponsor logo / name overlay */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: `${mockupX}%`,
-                      top: `${mockupY}%`,
-                      transform: "translate(-50%, -50%)",
-                      width: `${mockupScale}%`,
-                      maxHeight: "42%",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {mockupLogoUrl ? (
-                      <img
-                        src={mockupLogoUrl}
-                        alt="Sponsor logo preview"
+                    {/* Four ropes */}
+                    {[0, 1, 2, 3].map((rope) => (
+                      <div
+                        key={`rope-front-${rope}`}
                         style={{
-                          display: "block",
-                          maxWidth: "100%",
-                          maxHeight: 150,
-                          objectFit: "contain",
+                          position: "absolute",
+                          left: "7%",
+                          right: "7%",
+                          top: `${12 + rope * 6}%`,
+                          height: 4,
+                          background:
+                            String(mockupBuilder.asset_name || "")
+                              .toLowerCase()
+                              .includes("rope")
+                              ? "#ffd43b"
+                              : rope < 2
+                              ? "#e6202d"
+                              : "#23232a",
+                          transform:
+                            "translateZ(70px)",
+                          boxShadow:
+                            "0 2px 4px rgba(0,0,0,0.45)",
                         }}
                       />
-                    ) : (
-                      <div
-                        style={{
-                          padding: "10px 14px",
-                          background: "rgba(255,255,255,0.92)",
-                          border: "2px dashed #777",
-                          color: "#111",
-                          fontSize: 16,
-                          fontWeight: 900,
-                          borderRadius: 6,
-                        }}
-                      >
-                        {mockupBuilder.sponsor_name ||
-                          "SPONSOR LOGO"}
-                      </div>
-                    )}
+                    ))}
 
-                    {mockupLogoUrl &&
-                    mockupBuilder.sponsor_name ? (
-                      <div
-                        style={{
-                          marginTop: 5,
-                          padding: "3px 7px",
-                          background: "rgba(0,0,0,0.72)",
-                          color: "#fff",
-                          fontSize: 10,
-                          fontWeight: 900,
-                          borderRadius: 4,
-                        }}
-                      >
-                        {mockupBuilder.sponsor_name}
-                      </div>
-                    ) : null}
+                    {/* Corner posts */}
+                    {[
+                      { left: "7%", top: "7%", label: "A" },
+                      { left: "93%", top: "7%", label: "B" },
+                      { left: "7%", top: "93%", label: "C" },
+                      { left: "93%", top: "93%", label: "D" },
+                    ].map((post, index) => {
+                      const postSelected =
+                        String(mockupBuilder.asset_name || "")
+                          .toLowerCase()
+                          .includes("corner post") ||
+                        String(mockupBuilder.asset_name || "")
+                          .toLowerCase()
+                          .includes("corner pad") ||
+                        String(mockupBuilder.asset_name || "")
+                          .toLowerCase()
+                          .includes("full ring");
+
+                      return (
+                        <div
+                          key={`three-d-post-${index}`}
+                          style={{
+                            position: "absolute",
+                            left: post.left,
+                            top: post.top,
+                            width: 22,
+                            height: 100,
+                            transform:
+                              "translate(-50%, -72%) rotateX(-58deg)",
+                            transformOrigin: "bottom",
+                            background: postSelected
+                              ? "linear-gradient(90deg,#7e151e,#e6202d,#7e151e)"
+                              : "linear-gradient(90deg,#17171d,#494951,#17171d)",
+                            border: postSelected
+                              ? "2px solid #ff6069"
+                              : "2px solid #65656f",
+                            borderRadius: 5,
+                            boxShadow:
+                              "8px 10px 15px rgba(0,0,0,0.45)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {postSelected &&
+                          index === 1 ? (
+                            mockupLogoUrl ? (
+                              <img
+                                src={mockupLogoUrl}
+                                alt="Sponsor corner post logo"
+                                style={{
+                                  width: "85%",
+                                  maxHeight: "80%",
+                                  objectFit: "contain",
+                                  transform: "rotate(90deg)",
+                                }}
+                              />
+                            ) : (
+                              <span
+                                style={{
+                                  color: "#fff",
+                                  fontSize: 7,
+                                  fontWeight: 900,
+                                  writingMode: "vertical-rl",
+                                }}
+                              >
+                                {mockupBuilder.sponsor_name ||
+                                  "SPONSOR"}
+                              </span>
+                            )
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Asset indicator */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 12,
+                      top: 12,
+                      padding: "7px 10px",
+                      background: "rgba(0,0,0,0.72)",
+                      border: "1px solid #40404a",
+                      borderRadius: 7,
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 900,
+                    }}
+                  >
+                    3D VIEW · {mockupBuilder.asset_name}
                   </div>
 
                   <div
                     style={{
                       position: "absolute",
-                      left: 10,
-                      bottom: 10,
-                      padding: "5px 8px",
+                      right: 12,
+                      bottom: 12,
+                      padding: "7px 10px",
                       background: "rgba(0,0,0,0.72)",
-                      borderRadius: 6,
-                      color: "#fff",
+                      borderRadius: 7,
+                      color: "#aaaab4",
                       fontSize: 10,
-                      fontWeight: 900,
                     }}
                   >
-                    {mockupBuilder.asset_name}
+                    Highlighted surface = selected inventory
                   </div>
                 </div>
-
                 <div
                   style={{
                     marginTop: 10,

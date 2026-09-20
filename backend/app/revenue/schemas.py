@@ -283,3 +283,9 @@ class AutoSponsorOutreachRequest(BaseModel):
     event_address: Optional[str] = None
     additional_instructions: Optional[str] = None
     send_if_ready: bool = True
+
+
+class RevenueProposalEmailSend(BaseModel):
+    mockup_image_base64: Optional[str] = None
+    mockup_asset_name: Optional[str] = None
+    mockup_sponsor_name: Optional[str] = None
