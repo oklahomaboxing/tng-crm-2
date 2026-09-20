@@ -1317,6 +1317,210 @@ async def resend_revenue_webhook(
 
     email_id = data.get("email_id")
 
+    # --------------------------------------------------
+    # INBOUND REVENUE EMAILS
+    # --------------------------------------------------
+    if event_type == "email.received":
+        from email.utils import parseaddr
+
+        if not email_id:
+            return {
+                "ok": True,
+                "ignored": True,
+                "reason": "Inbound email has no email_id",
+            }
+
+        # Prevent duplicate webhook deliveries from creating
+        # duplicate inbound messages.
+        existing_inbound = (
+            db.query(models.RevenueOutreachMessage)
+            .filter(
+                models.RevenueOutreachMessage.provider_message_id
+                == email_id
+            )
+            .first()
+        )
+
+        if existing_inbound:
+            return {
+                "ok": True,
+                "duplicate": True,
+                "outreach_id": existing_inbound.id,
+            }
+
+        api_key = os.getenv("RESEND_API_KEY")
+
+        if not api_key:
+            raise HTTPException(
+                status_code=500,
+                detail="RESEND_API_KEY is not configured",
+            )
+
+        resend.api_key = api_key
+
+        try:
+            received = resend.Emails.Receiving.get(email_id)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not retrieve inbound email: {exc}",
+            )
+
+        if not isinstance(received, dict):
+            received = dict(received)
+
+        sender_raw = str(received.get("from") or "").strip()
+        sender_email = parseaddr(sender_raw)[1].strip().lower()
+
+        if not sender_email:
+            return {
+                "ok": True,
+                "ignored": True,
+                "reason": "Could not determine sender email",
+            }
+
+        contact = (
+            db.query(models.RevenueOrganizationContact)
+            .filter(
+                models.RevenueOrganizationContact.email.ilike(
+                    sender_email
+                )
+            )
+            .order_by(
+                models.RevenueOrganizationContact.created_at.desc()
+            )
+            .first()
+        )
+
+        organization = None
+
+        if contact:
+            organization = (
+                db.query(models.RevenueOrganization)
+                .filter(
+                    models.RevenueOrganization.id
+                    == contact.organization_id
+                )
+                .first()
+            )
+
+        if not organization:
+            organization = (
+                db.query(models.RevenueOrganization)
+                .filter(
+                    models.RevenueOrganization.email.ilike(
+                        sender_email
+                    )
+                )
+                .first()
+            )
+
+        if not organization:
+            return {
+                "ok": True,
+                "ignored": True,
+                "reason": "Sender is not a Revenue prospect",
+                "sender": sender_email,
+            }
+
+        prospect_ids = [
+            row[0]
+            for row in (
+                db.query(models.EventRevenueProspect.id)
+                .filter(
+                    models.EventRevenueProspect.organization_id
+                    == organization.id
+                )
+                .all()
+            )
+        ]
+
+        if not prospect_ids:
+            return {
+                "ok": True,
+                "ignored": True,
+                "reason": "No event prospect found for sender",
+                "sender": sender_email,
+            }
+
+        previous_outreach = (
+            db.query(models.RevenueOutreachMessage)
+            .filter(
+                models.RevenueOutreachMessage.prospect_id.in_(
+                    prospect_ids
+                ),
+                models.RevenueOutreachMessage.channel == "EMAIL",
+            )
+            .order_by(
+                models.RevenueOutreachMessage.created_at.desc()
+            )
+            .first()
+        )
+
+        if not previous_outreach:
+            return {
+                "ok": True,
+                "ignored": True,
+                "reason": "No previous Revenue outreach found",
+                "sender": sender_email,
+            }
+
+        now = datetime.utcnow()
+
+        subject = str(
+            received.get("subject") or "(No subject)"
+        ).strip()
+
+        message_body = (
+            received.get("text")
+            or received.get("html")
+            or "(No message body)"
+        )
+
+        inbound_message = models.RevenueOutreachMessage(
+            event_id=previous_outreach.event_id,
+            prospect_id=previous_outreach.prospect_id,
+            channel="EMAIL_INBOUND",
+            subject=subject,
+            body=message_body,
+            status="REPLIED",
+            provider_message_id=email_id,
+            replied_at=now,
+        )
+
+        db.add(inbound_message)
+
+        previous_outreach.status = "REPLIED"
+
+        if not previous_outreach.replied_at:
+            previous_outreach.replied_at = now
+
+        prospect = (
+            db.query(models.EventRevenueProspect)
+            .filter(
+                models.EventRevenueProspect.id
+                == previous_outreach.prospect_id
+            )
+            .first()
+        )
+
+        if prospect:
+            prospect.status = "REPLIED"
+
+        db.commit()
+        db.refresh(inbound_message)
+
+        return {
+            "ok": True,
+            "event_type": "email.received",
+            "event_id": inbound_message.event_id,
+            "prospect_id": inbound_message.prospect_id,
+            "outreach_id": inbound_message.id,
+            "sender": sender_email,
+            "subject": subject,
+            "status": "REPLIED",
+        }
+
     if not email_id:
         return {
             "ok": True,

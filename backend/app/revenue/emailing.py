@@ -112,6 +112,7 @@ def send_revenue_proposal_email(
     return resend.Emails.send({
         "from": from_email,
         "to": [to_email],
+        "reply_to": [os.getenv("REVENUE_REPLY_TO") or "revenue@inbound.tngboxinggym.com"],
         "subject": proposal_title,
         "html": email_html,
     })

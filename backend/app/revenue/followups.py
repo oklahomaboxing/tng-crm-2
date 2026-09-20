@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta
+from datetime import datetime, timedelta
 import os
 
 import resend
@@ -198,6 +198,7 @@ TNG Promotions
             result = resend.Emails.send({
                 "from": email_from,
                 "to": [organization.email],
+                "reply_to": [os.getenv("REVENUE_REPLY_TO") or "revenue@inbound.tngboxinggym.com"],
                 "subject": subject,
                 "text": body,
             })
