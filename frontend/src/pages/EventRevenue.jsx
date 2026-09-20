@@ -172,6 +172,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [mockupSavedAt, setMockupSavedAt] = useState("");
   const [mockupSurface, setMockupSurface] = useState("canvas");
   const [mockupPlacements, setMockupPlacements] = useState({});
+  const [mockupLogos, setMockupLogos] = useState({});
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -551,6 +552,33 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       (placement.orientation === "vertical" ? 90 : 0)
     );
   }
+  function getMockupLogo(surface) {
+    return (
+      mockupLogos?.[surface] || {
+        url: "",
+        name: "",
+      }
+    );
+  }
+
+  function applyCurrentLogoToAllCornerPads() {
+    const current = getMockupLogo(mockupSurface);
+
+    if (!current?.url) {
+      alert("Choose a logo for this corner pad first.");
+      return;
+    }
+
+    setMockupLogos((old) => ({
+      ...old,
+      corner_pad_1: { ...current },
+      corner_pad_2: { ...current },
+      corner_pad_3: { ...current },
+      corner_pad_4: { ...current },
+    }));
+
+    setMockupSavedAt("");
+  }
   function mockupStorageKey(packageId) {
     return `tng-revenue-mockup-${eventId}-${packageId}`;
   }
@@ -591,15 +619,31 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
       "canvas";
 
     const nextPlacements = {};
+    const nextLogos = {};
 
     surfaceOptions.forEach((surface) => {
       nextPlacements[surface.key] =
         saved?.placements?.[surface.key] ||
         defaultMockupPlacement(surface.key);
+
+      nextLogos[surface.key] =
+        saved?.logos?.[surface.key] ||
+        (saved?.logo_data_url
+          ? {
+              url: saved.logo_data_url,
+              name:
+                saved.logo_name ||
+                "Sponsor logo",
+            }
+          : {
+              url: "",
+              name: "",
+            });
     });
 
     setMockupSurface(firstSurface);
     setMockupPlacements(nextPlacements);
+    setMockupLogos(nextLogos);
 
     setMockupBuilder({
       package_id: pkg.id,
@@ -614,6 +658,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     setMockupLogoName("");
     setMockupSavedAt("");
     setMockupPlacements({});
+    setMockupLogos({});
     setMockupSurface("canvas");
     setMockupBuilder(null);
   }
@@ -658,8 +703,20 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     const reader = new FileReader();
 
     reader.onload = () => {
-      setMockupLogoUrl(String(reader.result || ""));
-      setMockupLogoName(file.name || "Sponsor logo");
+      const nextUrl = String(reader.result || "");
+      const nextName = file.name || "Sponsor logo";
+
+      setMockupLogoUrl(nextUrl);
+      setMockupLogoName(nextName);
+
+      setMockupLogos((old) => ({
+        ...old,
+        [mockupSurface]: {
+          url: nextUrl,
+          name: nextName,
+        },
+      }));
+
       setMockupSavedAt("");
     };
 
@@ -698,8 +755,15 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
         package_id: mockupBuilder.package_id,
         asset_name: mockupBuilder.asset_name,
         sponsor_name: mockupBuilder.sponsor_name || "",
-        logo_data_url: mockupLogoUrl || "",
-        logo_name: mockupLogoName || "",
+        logo_data_url:
+          getMockupLogo(mockupSurface).url ||
+          mockupLogoUrl ||
+          "",
+        logo_name:
+          getMockupLogo(mockupSurface).name ||
+          mockupLogoName ||
+          "",
+        logos: mockupLogos,
         scale: Number(mockupScale),
         x: Number(mockupX),
         y: Number(mockupY),
@@ -2541,7 +2605,13 @@ async function seedSponsorshipInventory() {
                       marginBottom: 7,
                     }}
                   >
-                    SPONSOR LOGO
+                    LOGO FOR{" "}
+                    {mockupSurfaceOptions(
+                      mockupBuilder.asset_name
+                    ).find(
+                      (surface) =>
+                        surface.key === mockupSurface
+                    )?.label || "SELECTED LOCATION"}
                   </div>
 
                   <label
@@ -2565,7 +2635,7 @@ async function seedSponsorshipInventory() {
                     />
                   </label>
 
-                  {mockupLogoName ? (
+                  {getMockupLogo(mockupSurface).name ? (
                     <div
                       style={{
                         marginTop: 8,
@@ -2574,10 +2644,10 @@ async function seedSponsorshipInventory() {
                         wordBreak: "break-all",
                       }}
                     >
-                      {mockupLogoName}
+                      {getMockupLogo(mockupSurface).name}
                     </div>
                   ) : null}
-                  {mockupLogoUrl ? (
+                  {getMockupLogo(mockupSurface).url ? (
                     <div
                       style={{
                         marginTop: 12,
@@ -2601,7 +2671,7 @@ async function seedSponsorshipInventory() {
                       </div>
 
                       <img
-                        src={mockupLogoUrl}
+                        src={getMockupLogo(mockupSurface).url}
                         alt="Uploaded sponsor logo"
                         style={{
                           display: "block",
@@ -2958,15 +3028,27 @@ async function seedSponsorshipInventory() {
                   String(mockupSurface).startsWith(
                     "corner_pad"
                   ) ? (
-                    <button
-                      type="button"
-                      style={smallButtonStyle}
-                      onClick={
-                        applyCurrentPlacementToAllCornerPads
-                      }
-                    >
-                      Apply to All 4 Corner Pads
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        style={smallButtonStyle}
+                        onClick={
+                          applyCurrentPlacementToAllCornerPads
+                        }
+                      >
+                        Apply Placement to All 4 Pads
+                      </button>
+
+                      <button
+                        type="button"
+                        style={smallButtonStyle}
+                        onClick={
+                          applyCurrentLogoToAllCornerPads
+                        }
+                      >
+                        Apply Logo to All 4 Pads
+                      </button>
+                    </>
                   ) : null}
                 </div>
                 <div
@@ -3148,9 +3230,9 @@ async function seedSponsorshipInventory() {
                             overflow: "hidden",
                           }}
                         >
-                          {mockupLogoUrl ? (
+                          {getMockupLogo("canvas").url ? (
                             <img
-                              src={mockupLogoUrl}
+                              src={getMockupLogo("canvas").url}
                               alt="Sponsor canvas logo"
                               style={{
                                 display: "block",
@@ -3239,9 +3321,9 @@ async function seedSponsorshipInventory() {
                             overflow: "hidden",
                           }}
                         >
-                          {mockupLogoUrl ? (
+                          {getMockupLogo("front_skirt").url ? (
                             <img
-                              src={mockupLogoUrl}
+                              src={getMockupLogo("front_skirt").url}
                               alt="Sponsor skirt logo"
                               style={{
                                 display: "block",
@@ -3347,9 +3429,9 @@ async function seedSponsorshipInventory() {
                           zIndex: 10,
                         }}
                       >
-                        {mockupLogoUrl ? (
+                        {getMockupLogo("ropes").url ? (
                           <img
-                            src={mockupLogoUrl}
+                            src={getMockupLogo("ropes").url}
                             alt="Sponsor rope branding"
                             style={{
                               display: "block",
@@ -3456,9 +3538,9 @@ async function seedSponsorshipInventory() {
                                 overflow: "hidden",
                               }}
                             >
-                              {mockupLogoUrl ? (
+                              {getMockupLogo(surfaceKey).url ? (
                                 <img
-                                  src={mockupLogoUrl}
+                                  src={getMockupLogo(surfaceKey).url}
                                   alt={`Sponsor corner ${post.label} logo`}
                                   style={{
                                     display: "block",
