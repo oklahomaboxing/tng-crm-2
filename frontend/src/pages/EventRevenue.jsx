@@ -170,6 +170,8 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [mockupX, setMockupX] = useState(50);
   const [mockupY, setMockupY] = useState(50);
   const [mockupSavedAt, setMockupSavedAt] = useState("");
+  const [mockupSurface, setMockupSurface] = useState("canvas");
+  const [mockupPlacements, setMockupPlacements] = useState({});
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -384,13 +386,171 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     if (name.includes("side c")) return { x: 50, y: 83, scale: 30 };
     if (name.includes("side d")) return { x: 18, y: 48, scale: 24 };
     if (name.includes("corner post")) return { x: 18, y: 24, scale: 20 };
-    if (name.includes("corner pad")) return { x: 82, y: 24, scale: 20 };
+    if (name.includes("corner pad")) return { x: 82, y: 24, scale: 48 };
     if (name.includes("ring skirt")) return { x: 50, y: 82, scale: 34 };
     if (name.includes("rope")) return { x: 50, y: 26, scale: 26 };
 
     return { x: 50, y: 50, scale: 38 };
   }
 
+  function mockupSurfaceOptions(assetName) {
+    const name = String(assetName || "").toLowerCase();
+
+    if (name.includes("full ring")) {
+      return [
+        { key: "canvas", label: "Center Canvas" },
+        { key: "front_skirt", label: "Front Ring Skirt" },
+        { key: "ropes", label: "Ropes" },
+        { key: "corner_pad_1", label: "Corner Pad 1" },
+        { key: "corner_pad_2", label: "Corner Pad 2" },
+        { key: "corner_pad_3", label: "Corner Pad 3" },
+        { key: "corner_pad_4", label: "Corner Pad 4" },
+      ];
+    }
+
+    if (name.includes("corner pad")) {
+      return [{ key: "corner_pad_2", label: "Corner Pad" }];
+    }
+
+    if (name.includes("corner post")) {
+      return [{ key: "corner_pad_2", label: "Corner Post" }];
+    }
+
+    if (name.includes("rope")) {
+      return [{ key: "ropes", label: "Ropes" }];
+    }
+
+    if (
+      name.includes("skirt") ||
+      name.includes("ring side")
+    ) {
+      return [{ key: "front_skirt", label: "Ring Skirt / Side" }];
+    }
+
+    return [{ key: "canvas", label: "Center Canvas" }];
+  }
+
+  function defaultMockupPlacement(surface) {
+    if (String(surface).startsWith("corner_pad")) {
+      return {
+        x: 50,
+        y: 50,
+        width: 92,
+        height: 84,
+        rotation: 0,
+        orientation: "horizontal",
+        fit: "contain",
+        lockAspect: true,
+      };
+    }
+
+    if (surface === "ropes") {
+      return {
+        x: 50,
+        y: 24,
+        width: 58,
+        height: 18,
+        rotation: 0,
+        orientation: "horizontal",
+        fit: "contain",
+        lockAspect: false,
+      };
+    }
+
+    if (surface === "front_skirt") {
+      return {
+        x: 50,
+        y: 50,
+        width: 58,
+        height: 70,
+        rotation: 0,
+        orientation: "horizontal",
+        fit: "contain",
+        lockAspect: false,
+      };
+    }
+
+    return {
+      x: 50,
+      y: 50,
+      width: 42,
+      height: 28,
+      rotation: 0,
+      orientation: "horizontal",
+      fit: "contain",
+      lockAspect: true,
+    };
+  }
+
+  function getMockupPlacement(surface) {
+    return (
+      mockupPlacements?.[surface] ||
+      defaultMockupPlacement(surface)
+    );
+  }
+
+  function updateMockupPlacement(field, value) {
+    setMockupPlacements((old) => {
+      const current =
+        old?.[mockupSurface] ||
+        defaultMockupPlacement(mockupSurface);
+
+      const next = {
+        ...current,
+        [field]: value,
+      };
+
+      if (current.lockAspect && field === "width") {
+        next.height = value;
+      }
+
+      if (current.lockAspect && field === "height") {
+        next.width = value;
+      }
+
+      return {
+        ...old,
+        [mockupSurface]: next,
+      };
+    });
+
+    setMockupSavedAt("");
+  }
+
+  function resetCurrentMockupSurface() {
+    setMockupPlacements((old) => ({
+      ...old,
+      [mockupSurface]:
+        defaultMockupPlacement(mockupSurface),
+    }));
+
+    setMockupSavedAt("");
+  }
+
+  function applyCurrentPlacementToAllCornerPads() {
+    const current = {
+      ...getMockupPlacement(mockupSurface),
+    };
+
+    setMockupPlacements((old) => ({
+      ...old,
+      corner_pad_1: { ...current },
+      corner_pad_2: { ...current },
+      corner_pad_3: { ...current },
+      corner_pad_4: { ...current },
+    }));
+
+    setMockupSavedAt("");
+  }
+
+  function mockupPlacementRotation(surface) {
+    const placement = getMockupPlacement(surface);
+
+    return (
+      Number(placement.rotation || 0) +
+      (placement.orientation === "vertical" ? 90 : 0)
+    );
+  }
   function mockupStorageKey(packageId) {
     return `tng-revenue-mockup-${eventId}-${packageId}`;
   }
@@ -424,6 +584,23 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     );
     setMockupSavedAt(saved?.saved_at || "");
 
+    const surfaceOptions = mockupSurfaceOptions(pkg?.name);
+    const firstSurface =
+      saved?.active_surface ||
+      surfaceOptions[0]?.key ||
+      "canvas";
+
+    const nextPlacements = {};
+
+    surfaceOptions.forEach((surface) => {
+      nextPlacements[surface.key] =
+        saved?.placements?.[surface.key] ||
+        defaultMockupPlacement(surface.key);
+    });
+
+    setMockupSurface(firstSurface);
+    setMockupPlacements(nextPlacements);
+
     setMockupBuilder({
       package_id: pkg.id,
       asset_name: pkg.name || "",
@@ -436,6 +613,8 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     setMockupLogoUrl("");
     setMockupLogoName("");
     setMockupSavedAt("");
+    setMockupPlacements({});
+    setMockupSurface("canvas");
     setMockupBuilder(null);
   }
 
@@ -525,6 +704,8 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
         x: Number(mockupX),
         y: Number(mockupY),
         mockup_png_data_url: pngDataUrl,
+        active_surface: mockupSurface,
+        placements: mockupPlacements,
         saved_at: savedAt,
       };
 
@@ -2437,6 +2618,95 @@ async function seedSponsorshipInventory() {
                   ) : null}
                 </div>
 
+                <div style={{ marginBottom: 16 }}>
+                  <div
+                    style={{
+                      color: "#9999a5",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      marginBottom: 7,
+                    }}
+                  >
+                    LOCATION
+                  </div>
+
+                  <select
+                    value={mockupSurface}
+                    onChange={(e) =>
+                      setMockupSurface(e.target.value)
+                    }
+                    style={{
+                      width: "100%",
+                      background: "#101015",
+                      color: "#fff",
+                      border: "1px solid #34343d",
+                      borderRadius: 8,
+                      padding: "10px 11px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    {mockupSurfaceOptions(
+                      mockupBuilder.asset_name
+                    ).map((surface) => (
+                      <option
+                        key={surface.key}
+                        value={surface.key}
+                      >
+                        {surface.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div
+                  style={{
+                    marginBottom: 16,
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 8,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateMockupPlacement(
+                        "orientation",
+                        "horizontal"
+                      )
+                    }
+                    style={{
+                      ...smallButtonStyle,
+                      background:
+                        getMockupPlacement(mockupSurface)
+                          .orientation === "horizontal"
+                          ? "#e6202d"
+                          : smallButtonStyle.background,
+                    }}
+                  >
+                    Horizontal
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateMockupPlacement(
+                        "orientation",
+                        "vertical"
+                      )
+                    }
+                    style={{
+                      ...smallButtonStyle,
+                      background:
+                        getMockupPlacement(mockupSurface)
+                          .orientation === "vertical"
+                          ? "#e6202d"
+                          : smallButtonStyle.background,
+                    }}
+                  >
+                    Vertical
+                  </button>
+                </div>
+
                 <div style={{ marginBottom: 15 }}>
                   <div
                     style={{
@@ -2447,17 +2717,57 @@ async function seedSponsorshipInventory() {
                       fontWeight: 900,
                     }}
                   >
-                    <span>LOGO SIZE</span>
-                    <span>{mockupScale}%</span>
+                    <span>WIDTH</span>
+                    <span>
+                      {getMockupPlacement(mockupSurface).width}%
+                    </span>
                   </div>
 
                   <input
                     type="range"
                     min="10"
-                    max="80"
-                    value={mockupScale}
+                    max="100"
+                    value={
+                      getMockupPlacement(mockupSurface).width
+                    }
                     onChange={(e) =>
-                      setMockupScale(Number(e.target.value))
+                      updateMockupPlacement(
+                        "width",
+                        Number(e.target.value)
+                      )
+                    }
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 15 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#9999a5",
+                      fontSize: 11,
+                      fontWeight: 900,
+                    }}
+                  >
+                    <span>HEIGHT</span>
+                    <span>
+                      {getMockupPlacement(mockupSurface).height}%
+                    </span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={
+                      getMockupPlacement(mockupSurface).height
+                    }
+                    onChange={(e) =>
+                      updateMockupPlacement(
+                        "height",
+                        Number(e.target.value)
+                      )
                     }
                     style={{ width: "100%" }}
                   />
@@ -2474,22 +2784,27 @@ async function seedSponsorshipInventory() {
                     }}
                   >
                     <span>LEFT / RIGHT</span>
-                    <span>{mockupX}%</span>
+                    <span>
+                      {getMockupPlacement(mockupSurface).x}%
+                    </span>
                   </div>
 
                   <input
                     type="range"
-                    min="5"
-                    max="95"
-                    value={mockupX}
+                    min="0"
+                    max="100"
+                    value={getMockupPlacement(mockupSurface).x}
                     onChange={(e) =>
-                      setMockupX(Number(e.target.value))
+                      updateMockupPlacement(
+                        "x",
+                        Number(e.target.value)
+                      )
                     }
                     style={{ width: "100%" }}
                   />
                 </div>
 
-                <div style={{ marginBottom: 18 }}>
+                <div style={{ marginBottom: 15 }}>
                   <div
                     style={{
                       display: "flex",
@@ -2500,28 +2815,160 @@ async function seedSponsorshipInventory() {
                     }}
                   >
                     <span>UP / DOWN</span>
-                    <span>{mockupY}%</span>
+                    <span>
+                      {getMockupPlacement(mockupSurface).y}%
+                    </span>
                   </div>
 
                   <input
                     type="range"
-                    min="5"
-                    max="95"
-                    value={mockupY}
+                    min="0"
+                    max="100"
+                    value={getMockupPlacement(mockupSurface).y}
                     onChange={(e) =>
-                      setMockupY(Number(e.target.value))
+                      updateMockupPlacement(
+                        "y",
+                        Number(e.target.value)
+                      )
                     }
                     style={{ width: "100%" }}
                   />
                 </div>
 
-                <button
-                  type="button"
-                  style={smallButtonStyle}
-                  onClick={resetMockupPlacement}
+                <div style={{ marginBottom: 15 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#9999a5",
+                      fontSize: 11,
+                      fontWeight: 900,
+                    }}
+                  >
+                    <span>ROTATION</span>
+                    <span>
+                      {getMockupPlacement(mockupSurface).rotation}°
+                    </span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="-180"
+                    max="180"
+                    value={
+                      getMockupPlacement(mockupSurface).rotation
+                    }
+                    onChange={(e) =>
+                      updateMockupPlacement(
+                        "rotation",
+                        Number(e.target.value)
+                      )
+                    }
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 15 }}>
+                  <div
+                    style={{
+                      color: "#9999a5",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      marginBottom: 7,
+                    }}
+                  >
+                    LOGO FIT
+                  </div>
+
+                  <select
+                    value={getMockupPlacement(mockupSurface).fit}
+                    onChange={(e) =>
+                      updateMockupPlacement(
+                        "fit",
+                        e.target.value
+                      )
+                    }
+                    style={{
+                      width: "100%",
+                      background: "#101015",
+                      color: "#fff",
+                      border: "1px solid #34343d",
+                      borderRadius: 8,
+                      padding: "10px 11px",
+                    }}
+                  >
+                    <option value="contain">
+                      Contain - keep full logo
+                    </option>
+                    <option value="cover">
+                      Cover - fill area
+                    </option>
+                    <option value="fill">
+                      Stretch
+                    </option>
+                  </select>
+                </div>
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 15,
+                    color: "#b5b5bf",
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
                 >
-                  Reset Placement
-                </button>
+                  <input
+                    type="checkbox"
+                    checked={
+                      !!getMockupPlacement(mockupSurface)
+                        .lockAspect
+                    }
+                    onChange={(e) =>
+                      updateMockupPlacement(
+                        "lockAspect",
+                        e.target.checked
+                      )
+                    }
+                  />
+                  Lock width / height proportions
+                </label>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    marginBottom: 12,
+                  }}
+                >
+                  <button
+                    type="button"
+                    style={smallButtonStyle}
+                    onClick={resetCurrentMockupSurface}
+                  >
+                    Reset This Location
+                  </button>
+
+                  {String(mockupBuilder.asset_name || "")
+                    .toLowerCase()
+                    .includes("full ring") &&
+                  String(mockupSurface).startsWith(
+                    "corner_pad"
+                  ) ? (
+                    <button
+                      type="button"
+                      style={smallButtonStyle}
+                      onClick={
+                        applyCurrentPlacementToAllCornerPads
+                      }
+                    >
+                      Apply to All 4 Corner Pads
+                    </button>
+                  ) : null}
+                </div>
                 <div
                   style={{
                     marginTop: 10,
@@ -2660,11 +3107,15 @@ async function seedSponsorshipInventory() {
                         border:
                           String(mockupBuilder.asset_name || "")
                             .toLowerCase()
-                            .includes("canvas")
+                            .includes("canvas") ||
+                          String(mockupBuilder.asset_name || "")
+                            .toLowerCase()
+                            .includes("full ring")
                             ? "8px solid #e6202d"
                             : "6px solid #55555e",
                         boxShadow:
                           "0 28px 50px rgba(0,0,0,0.55)",
+                        overflow: "hidden",
                       }}
                     >
                       {String(mockupBuilder.asset_name || "")
@@ -2676,31 +3127,45 @@ async function seedSponsorshipInventory() {
                         <div
                           style={{
                             position: "absolute",
-                            left: `${mockupX}%`,
-                            top: `${mockupY}%`,
-                            transform: "translate(-50%, -50%)",
-                            width: `${mockupScale}%`,
-                            textAlign: "center",
+                            left: `${
+                              getMockupPlacement("canvas").x
+                            }%`,
+                            top: `${
+                              getMockupPlacement("canvas").y
+                            }%`,
+                            width: `${
+                              getMockupPlacement("canvas").width
+                            }%`,
+                            height: `${
+                              getMockupPlacement("canvas").height
+                            }%`,
+                            transform: `translate(-50%, -50%) rotate(${mockupPlacementRotation(
+                              "canvas"
+                            )}deg)`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
                           }}
                         >
                           {mockupLogoUrl ? (
                             <img
                               src={mockupLogoUrl}
-                              alt="Sponsor logo preview"
+                              alt="Sponsor canvas logo"
                               style={{
                                 display: "block",
                                 width: "100%",
-                                maxWidth: "100%",
-                                maxHeight: 110,
-                                objectFit: "contain",
+                                height: "100%",
+                                objectFit:
+                                  getMockupPlacement("canvas").fit,
                               }}
                             />
                           ) : (
                             <div
                               style={{
-                                padding: "8px 10px",
                                 color: "#111",
                                 fontWeight: 900,
+                                textAlign: "center",
                                 fontSize: 14,
                               }}
                             >
@@ -2726,16 +3191,16 @@ async function seedSponsorshipInventory() {
                             .includes("skirt") ||
                           String(mockupBuilder.asset_name || "")
                             .toLowerCase()
-                            .includes("ring side")
+                            .includes("ring side") ||
+                          String(mockupBuilder.asset_name || "")
+                            .toLowerCase()
+                            .includes("full ring")
                             ? "linear-gradient(#7d151e,#30080d)"
                             : "linear-gradient(#292930,#101014)",
                         border: "2px solid #4b4b55",
                         transform:
                           "rotateX(-90deg) translateZ(1px)",
                         transformOrigin: "top",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
                         overflow: "hidden",
                       }}
                     >
@@ -2748,34 +3213,66 @@ async function seedSponsorshipInventory() {
                       String(mockupBuilder.asset_name || "")
                         .toLowerCase()
                         .includes("full ring") ? (
-                        mockupLogoUrl ? (
-                          <img
-                            src={mockupLogoUrl}
-                            alt="Sponsor skirt logo"
-                            style={{
-                              maxWidth: `${Math.max(
-                                25,
-                                mockupScale
-                              )}%`,
-                              display: "block",
-                              maxHeight: "75%",
-                              objectFit: "contain",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              color: "#fff",
-                              fontWeight: 900,
-                            }}
-                          >
-                            {mockupBuilder.sponsor_name ||
-                              "SPONSOR"}
-                          </div>
-                        )
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: `${
+                              getMockupPlacement("front_skirt").x
+                            }%`,
+                            top: `${
+                              getMockupPlacement("front_skirt").y
+                            }%`,
+                            width: `${
+                              getMockupPlacement("front_skirt")
+                                .width
+                            }%`,
+                            height: `${
+                              getMockupPlacement("front_skirt")
+                                .height
+                            }%`,
+                            transform: `translate(-50%, -50%) rotate(${mockupPlacementRotation(
+                              "front_skirt"
+                            )}deg)`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {mockupLogoUrl ? (
+                            <img
+                              src={mockupLogoUrl}
+                              alt="Sponsor skirt logo"
+                              style={{
+                                display: "block",
+                                width: "100%",
+                                height: "100%",
+                                objectFit:
+                                  getMockupPlacement(
+                                    "front_skirt"
+                                  ).fit,
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                color: "#fff",
+                                fontWeight: 900,
+                                textAlign: "center",
+                              }}
+                            >
+                              {mockupBuilder.sponsor_name ||
+                                "SPONSOR"}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <div
                           style={{
+                            height: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                             color: "#777783",
                             fontWeight: 900,
                             fontSize: 11,
@@ -2799,13 +3296,15 @@ async function seedSponsorshipInventory() {
                           background:
                             String(mockupBuilder.asset_name || "")
                               .toLowerCase()
-                              .includes("rope")
+                              .includes("rope") ||
+                            String(mockupBuilder.asset_name || "")
+                              .toLowerCase()
+                              .includes("full ring")
                               ? "#ffd43b"
                               : rope < 2
                               ? "#e6202d"
                               : "#23232a",
-                          transform:
-                            "translateZ(70px)",
+                          transform: "translateZ(70px)",
                           boxShadow:
                             "0 2px 4px rgba(0,0,0,0.45)",
                         }}
@@ -2814,26 +3313,35 @@ async function seedSponsorshipInventory() {
 
                     {String(mockupBuilder.asset_name || "")
                       .toLowerCase()
-                      .includes("rope") ? (
+                      .includes("rope") ||
+                    String(mockupBuilder.asset_name || "")
+                      .toLowerCase()
+                      .includes("full ring") ? (
                       <div
                         style={{
                           position: "absolute",
-                          left: "50%",
-                          top: "24%",
-                          transform:
-                            "translate(-50%, -50%) translateZ(82px)",
-                          width: `${Math.max(
-                            28,
-                            Math.min(60, mockupScale)
-                          )}%`,
-                          minHeight: 34,
+                          left: `${
+                            getMockupPlacement("ropes").x
+                          }%`,
+                          top: `${
+                            getMockupPlacement("ropes").y
+                          }%`,
+                          width: `${
+                            getMockupPlacement("ropes").width
+                          }%`,
+                          height: `${
+                            getMockupPlacement("ropes").height
+                          }%`,
+                          transform: `translate(-50%, -50%) translateZ(82px) rotate(${mockupPlacementRotation(
+                            "ropes"
+                          )}deg)`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           background: "rgba(255,255,255,0.94)",
                           border: "2px solid #ffd43b",
                           borderRadius: 5,
-                          padding: "5px 10px",
+                          overflow: "hidden",
                           boxShadow:
                             "0 5px 12px rgba(0,0,0,0.45)",
                           zIndex: 10,
@@ -2846,8 +3354,9 @@ async function seedSponsorshipInventory() {
                             style={{
                               display: "block",
                               width: "100%",
-                              maxHeight: 36,
-                              objectFit: "contain",
+                              height: "100%",
+                              objectFit:
+                                getMockupPlacement("ropes").fit,
                             }}
                           />
                         ) : (
@@ -2856,6 +3365,7 @@ async function seedSponsorshipInventory() {
                               color: "#111",
                               fontSize: 9,
                               fontWeight: 900,
+                              textAlign: "center",
                             }}
                           >
                             {mockupBuilder.sponsor_name ||
@@ -2865,23 +3375,44 @@ async function seedSponsorshipInventory() {
                       </div>
                     ) : null}
 
-                    {/* Corner posts */}
+                    {/* Corner posts / pads */}
                     {[
                       { left: "7%", top: "7%", label: "A" },
                       { left: "93%", top: "7%", label: "B" },
                       { left: "7%", top: "93%", label: "C" },
                       { left: "93%", top: "93%", label: "D" },
                     ].map((post, index) => {
+                      const assetName = String(
+                        mockupBuilder.asset_name || ""
+                      ).toLowerCase();
+
+                      const isCornerPost =
+                        assetName.includes("corner post");
+
+                      const isCornerPad =
+                        assetName.includes("corner pad");
+
+                      const isFullRing =
+                        assetName.includes("full ring");
+
                       const postSelected =
-                        String(mockupBuilder.asset_name || "")
-                          .toLowerCase()
-                          .includes("corner post") ||
-                        String(mockupBuilder.asset_name || "")
-                          .toLowerCase()
-                          .includes("corner pad") ||
-                        String(mockupBuilder.asset_name || "")
-                          .toLowerCase()
-                          .includes("full ring");
+                        isCornerPost ||
+                        isCornerPad ||
+                        isFullRing;
+
+                      const showLogo =
+                        isFullRing ||
+                        ((isCornerPad || isCornerPost) &&
+                          index === 1);
+
+                      const useLargePad =
+                        isCornerPad || isFullRing;
+
+                      const surfaceKey =
+                        `corner_pad_${index + 1}`;
+
+                      const placement =
+                        getMockupPlacement(surfaceKey);
 
                       return (
                         <div
@@ -2890,8 +3421,8 @@ async function seedSponsorshipInventory() {
                             position: "absolute",
                             left: post.left,
                             top: post.top,
-                            width: 22,
-                            height: 100,
+                            width: useLargePad ? 52 : 22,
+                            height: useLargePad ? 122 : 100,
                             transform:
                               "translate(-50%, -72%) rotateX(-58deg)",
                             transformOrigin: "bottom",
@@ -2901,48 +3432,61 @@ async function seedSponsorshipInventory() {
                             border: postSelected
                               ? "2px solid #ff6069"
                               : "2px solid #65656f",
-                            borderRadius: 5,
+                            borderRadius: useLargePad ? 8 : 5,
                             boxShadow:
                               "8px 10px 15px rgba(0,0,0,0.45)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
                             overflow: "hidden",
+                            zIndex: 12,
                           }}
                         >
-                          {postSelected &&
-                          index === 1 ? (
-                            mockupLogoUrl ? (
-                              <img
-                                src={mockupLogoUrl}
-                                alt="Sponsor corner post logo"
-                                style={{
-                                  display: "block",
-                                  width: "85%",
-                                  maxHeight: "80%",
-                                  objectFit: "contain",
-                                  transform: "rotate(90deg)",
-                                }}
-                              />
-                            ) : (
-                              <span
-                                style={{
-                                  color: "#fff",
-                                  fontSize: 7,
-                                  fontWeight: 900,
-                                  writingMode: "vertical-rl",
-                                }}
-                              >
-                                {mockupBuilder.sponsor_name ||
-                                  "SPONSOR"}
-                              </span>
-                            )
+                          {showLogo ? (
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: `${placement.x}%`,
+                                top: `${placement.y}%`,
+                                width: `${placement.width}%`,
+                                height: `${placement.height}%`,
+                                transform: `translate(-50%, -50%) rotate(${mockupPlacementRotation(
+                                  surfaceKey
+                                )}deg)`,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {mockupLogoUrl ? (
+                                <img
+                                  src={mockupLogoUrl}
+                                  alt={`Sponsor corner ${post.label} logo`}
+                                  style={{
+                                    display: "block",
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: placement.fit,
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    color: "#fff",
+                                    fontSize: 8,
+                                    fontWeight: 900,
+                                    textAlign: "center",
+                                    lineHeight: 1.05,
+                                  }}
+                                >
+                                  {mockupBuilder.sponsor_name ||
+                                    "SPONSOR"}
+                                </span>
+                              )}
+                            </div>
                           ) : null}
                         </div>
                       );
                     })}
                   </div>
-
                   {/* Asset indicator */}
                   <div
                     style={{
