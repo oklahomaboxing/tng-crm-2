@@ -108,6 +108,12 @@ class EventRevenueProposalCreate(BaseModel):
     message: str
 
 
+class EventRevenueProposalUpdate(BaseModel):
+    title: Optional[str] = None
+    message: Optional[str] = None
+    clover_payment_url: Optional[str] = None
+
+
 class EventRevenuePaymentCreate(BaseModel):
     organization_id: int
     prospect_id: Optional[int] = None

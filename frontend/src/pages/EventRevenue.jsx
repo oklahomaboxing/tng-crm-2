@@ -158,6 +158,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [customRecipientEmails, setCustomRecipientEmails] = useState({});
   const [contactFindingId, setContactFindingId] = useState(null);
   const [proposalDraft, setProposalDraft] = useState(null);
+  const [proposalActionLoading, setProposalActionLoading] = useState(false);
   const [scoutError, setScoutError] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -570,6 +571,125 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     }
   }
 
+  async function saveProposalDraft() {
+    if (!proposalDraft?.proposal_id) return;
+
+    setProposalActionLoading(true);
+    setScoutError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/proposals/${proposalDraft.proposal_id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: proposalDraft.title,
+            message: proposalDraft.message,
+            clover_payment_url:
+              proposalDraft.clover_payment_url || null,
+          }),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+          `Proposal update failed (${response.status})`
+        );
+      }
+
+      setProposalDraft(body);
+      await loadData();
+      alert("Proposal draft saved.");
+    } catch (err) {
+      console.error(err);
+      setScoutError(
+        err.message || "Unable to save proposal."
+      );
+    } finally {
+      setProposalActionLoading(false);
+    }
+  }
+
+  async function approveProposalDraft() {
+    if (!proposalDraft?.proposal_id) return;
+
+    setProposalActionLoading(true);
+    setScoutError("");
+
+    try {
+      const saveResponse = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/proposals/${proposalDraft.proposal_id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: proposalDraft.title,
+            message: proposalDraft.message,
+            clover_payment_url:
+              proposalDraft.clover_payment_url || null,
+          }),
+        }
+      );
+
+      const saveBody = await saveResponse.json();
+
+      if (!saveResponse.ok) {
+        throw new Error(
+          saveBody?.detail ||
+          `Proposal update failed (${saveResponse.status})`
+        );
+      }
+
+      const response = await fetch(
+        `${API_BASE}/api/events/${eventId}/revenue/proposals/${proposalDraft.proposal_id}/approve`,
+        {
+          method: "POST",
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body?.detail ||
+          `Proposal approval failed (${response.status})`
+        );
+      }
+
+      setProposalDraft(body);
+      await loadData();
+      alert("Proposal approved and ready to send.");
+    } catch (err) {
+      console.error(err);
+      setScoutError(
+        err.message || "Unable to approve proposal."
+      );
+    } finally {
+      setProposalActionLoading(false);
+    }
+  }
+
+  function reviewProposal(prospect) {
+    if (!prospect.proposal_id) return;
+
+    setProposalDraft({
+      proposal_id: prospect.proposal_id,
+      prospect_id: prospect.id,
+      title: prospect.proposal_title || "",
+      message: prospect.proposal_message || "",
+      clover_payment_url:
+        prospect.proposal_clover_payment_url || "",
+      status: prospect.proposal_status || "DRAFT",
+    });
+  }
   async function runSponsorScout() {
     if (tab !== "SPONSOR") {
       alert("Vendor Scout will be connected next.");
@@ -1269,6 +1389,21 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                             : "Proposal"}
                         </button>
 
+                        {prospect.proposal_id ? (
+                          <button
+                            type="button"
+                            style={smallButtonStyle}
+                            onClick={() =>
+                              reviewProposal(prospect)
+                            }
+                          >
+                            {prospect.proposal_status === "APPROVED"
+                              ? "Approved Proposal"
+                              : prospect.proposal_status === "SENT"
+                              ? "View Sent Proposal"
+                              : "Review Proposal"}
+                          </button>
+                        ) : null}
                         <input
                           type="email"
                           placeholder="Send to email"
@@ -1294,6 +1429,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                           style={smallButtonStyle}
                           disabled={
                             emailSendingId === prospect.id ||
+                            prospect.proposal_status !== "APPROVED" ||
                             (!(
                               customRecipientEmails[prospect.id] || ""
                             ).trim() && !prospect.contact_email)
@@ -1304,6 +1440,8 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
                         >
                           {emailSendingId === prospect.id
                             ? "Sending..."
+                            : prospect.proposal_status !== "APPROVED"
+                            ? "Approve First"
                             : ((customRecipientEmails[prospect.id] || "").trim() || prospect.contact_email)
                             ? "Email Proposal"
                             : "Enter Email"}
@@ -1382,44 +1520,234 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
 
             <div
               style={{
-                marginTop: 20,
-                whiteSpace: "pre-wrap",
-                lineHeight: 1.6,
-                color: "#d7d7dc",
+                marginTop: 18,
+                padding: 14,
+                borderRadius: 10,
+                background: "#18181f",
+                border: "1px solid #33333c",
               }}
             >
-              {proposalDraft.message}
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9999a5",
+                  fontWeight: 900,
+                  marginBottom: 6,
+                  textTransform: "uppercase",
+                }}
+              >
+                Proposal Status
+              </div>
+
+              <div
+                style={{
+                  fontWeight: 900,
+                  color:
+                    proposalDraft.status === "APPROVED"
+                      ? "#7ee787"
+                      : proposalDraft.status === "SENT"
+                      ? "#79c0ff"
+                      : "#f2cc60",
+                }}
+              >
+                {proposalDraft.status || "DRAFT"}
+              </div>
             </div>
 
-            {proposalDraft.clover_payment_url ? (
-              <div style={{ marginTop: 20 }}>
+            <div style={{ marginTop: 20 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9999a5",
+                  fontWeight: 900,
+                  marginBottom: 6,
+                  textTransform: "uppercase",
+                }}
+              >
+                Proposal Title
+              </div>
+
+              <input
+                type="text"
+                value={proposalDraft.title || ""}
+                disabled={proposalDraft.status === "SENT"}
+                onChange={(e) =>
+                  setProposalDraft((old) => ({
+                    ...old,
+                    title: e.target.value,
+                    status:
+                      old.status === "APPROVED"
+                        ? "DRAFT"
+                        : old.status,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: 12,
+                  borderRadius: 9,
+                  border: "1px solid #33333c",
+                  background: "#0d0d12",
+                  color: "#fff",
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9999a5",
+                  fontWeight: 900,
+                  marginBottom: 6,
+                  textTransform: "uppercase",
+                }}
+              >
+                Proposal Message
+              </div>
+
+              <textarea
+                rows={14}
+                value={proposalDraft.message || ""}
+                disabled={proposalDraft.status === "SENT"}
+                onChange={(e) =>
+                  setProposalDraft((old) => ({
+                    ...old,
+                    message: e.target.value,
+                    status:
+                      old.status === "APPROVED"
+                        ? "DRAFT"
+                        : old.status,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: 12,
+                  borderRadius: 9,
+                  border: "1px solid #33333c",
+                  background: "#0d0d12",
+                  color: "#fff",
+                  lineHeight: 1.5,
+                  resize: "vertical",
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9999a5",
+                  fontWeight: 900,
+                  marginBottom: 6,
+                  textTransform: "uppercase",
+                }}
+              >
+                Clover Payment Link
+              </div>
+
+              <input
+                type="url"
+                value={proposalDraft.clover_payment_url || ""}
+                disabled={proposalDraft.status === "SENT"}
+                placeholder="https://..."
+                onChange={(e) =>
+                  setProposalDraft((old) => ({
+                    ...old,
+                    clover_payment_url: e.target.value,
+                    status:
+                      old.status === "APPROVED"
+                        ? "DRAFT"
+                        : old.status,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: 12,
+                  borderRadius: 9,
+                  border: "1px solid #33333c",
+                  background: "#0d0d12",
+                  color: "#fff",
+                }}
+              />
+
+              {proposalDraft.clover_payment_url ? (
                 <a
                   href={proposalDraft.clover_payment_url}
                   target="_blank"
                   rel="noreferrer"
                   style={{
                     display: "inline-block",
-                    background: "#e6202d",
-                    color: "white",
-                    padding: "10px 14px",
+                    marginTop: 10,
+                    background: "#18181f",
+                    border: "1px solid #33333c",
+                    color: "#fff",
+                    padding: "9px 12px",
                     borderRadius: 8,
                     textDecoration: "none",
                     fontWeight: 900,
                   }}
                 >
-                  Open Clover Payment Link
+                  Test Clover Payment Link
                 </a>
+              ) : null}
+            </div>
+
+            {proposalDraft.status !== "SENT" ? (
+              <div
+                style={{
+                  marginTop: 22,
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  type="button"
+                  style={smallButtonStyle}
+                  disabled={proposalActionLoading}
+                  onClick={saveProposalDraft}
+                >
+                  {proposalActionLoading
+                    ? "Working..."
+                    : "Save Draft"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={proposalActionLoading}
+                  onClick={approveProposalDraft}
+                  style={{
+                    border: 0,
+                    background: "#e6202d",
+                    color: "white",
+                    borderRadius: 8,
+                    padding: "9px 14px",
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  {proposalActionLoading
+                    ? "Working..."
+                    : "Approve Proposal"}
+                </button>
               </div>
             ) : null}
 
             <div
               style={{
-                marginTop: 22,
+                marginTop: 18,
                 color: "#858590",
                 fontSize: 12,
               }}
             >
-              Draft saved in TNGOS. It has not been emailed yet.
+              {proposalDraft.status === "APPROVED"
+                ? "Approved. This proposal is ready to email."
+                : proposalDraft.status === "SENT"
+                ? "This proposal has already been emailed."
+                : "Review, edit, and approve this proposal before sending."}
             </div>
           </div>
         </div>

@@ -272,6 +272,18 @@ def list_prospects(
             .first()
         )
 
+
+        latest_proposal = (
+            db.query(models.EventRevenueProposal)
+            .filter(
+                models.EventRevenueProposal.event_id == event_id,
+                models.EventRevenueProposal.prospect_id == row.id,
+            )
+            .order_by(
+                models.EventRevenueProposal.created_at.desc()
+            )
+            .first()
+        )
         results.append({
             "id": row.id,
             "event_id": row.event_id,
@@ -373,6 +385,32 @@ def list_prospects(
             "recommended_package_id": row.recommended_package_id,
             "last_contacted_at": row.last_contacted_at,
             "next_follow_up_at": row.next_follow_up_at,
+
+            "proposal_id": (
+                latest_proposal.id
+                if latest_proposal
+                else None
+            ),
+            "proposal_status": (
+                latest_proposal.status
+                if latest_proposal
+                else None
+            ),
+            "proposal_title": (
+                latest_proposal.title
+                if latest_proposal
+                else None
+            ),
+            "proposal_message": (
+                latest_proposal.message
+                if latest_proposal
+                else None
+            ),
+            "proposal_clover_payment_url": (
+                latest_proposal.clover_payment_url
+                if latest_proposal
+                else None
+            ),
 
             "email_status": (
                 latest_outreach.status
@@ -501,6 +539,127 @@ def create_proposal(
     db.refresh(proposal)
 
     return proposal
+
+
+@router.patch("/proposals/{proposal_id}")
+def update_revenue_proposal(
+    event_id: int,
+    proposal_id: int,
+    payload: schemas.EventRevenueProposalUpdate,
+    db: Session = Depends(get_db),
+):
+    proposal = (
+        db.query(models.EventRevenueProposal)
+        .filter(
+            models.EventRevenueProposal.id == proposal_id,
+            models.EventRevenueProposal.event_id == event_id,
+        )
+        .first()
+    )
+
+    if not proposal:
+        raise HTTPException(
+            status_code=404,
+            detail="Proposal not found",
+        )
+
+    if proposal.status == "SENT":
+        raise HTTPException(
+            status_code=400,
+            detail="Sent proposals cannot be edited",
+        )
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "title" in updates:
+        proposal.title = str(updates["title"] or "").strip()
+
+    if "message" in updates:
+        proposal.message = str(updates["message"] or "").strip()
+
+    if "clover_payment_url" in updates:
+        proposal.clover_payment_url = (
+            str(updates["clover_payment_url"] or "").strip()
+            or None
+        )
+
+    if not proposal.title:
+        raise HTTPException(
+            status_code=400,
+            detail="Proposal title is required",
+        )
+
+    if not proposal.message:
+        raise HTTPException(
+            status_code=400,
+            detail="Proposal message is required",
+        )
+
+    proposal.status = "DRAFT"
+    proposal.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(proposal)
+
+    return {
+        "proposal_id": proposal.id,
+        "prospect_id": proposal.prospect_id,
+        "title": proposal.title,
+        "message": proposal.message,
+        "package_id": proposal.package_id,
+        "clover_payment_url": proposal.clover_payment_url,
+        "status": proposal.status,
+    }
+
+
+@router.post("/proposals/{proposal_id}/approve")
+def approve_revenue_proposal(
+    event_id: int,
+    proposal_id: int,
+    db: Session = Depends(get_db),
+):
+    proposal = (
+        db.query(models.EventRevenueProposal)
+        .filter(
+            models.EventRevenueProposal.id == proposal_id,
+            models.EventRevenueProposal.event_id == event_id,
+        )
+        .first()
+    )
+
+    if not proposal:
+        raise HTTPException(
+            status_code=404,
+            detail="Proposal not found",
+        )
+
+    if proposal.status == "SENT":
+        raise HTTPException(
+            status_code=400,
+            detail="Proposal has already been sent",
+        )
+
+    if not proposal.title or not proposal.message:
+        raise HTTPException(
+            status_code=400,
+            detail="Proposal title and message are required",
+        )
+
+    proposal.status = "APPROVED"
+    proposal.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(proposal)
+
+    return {
+        "proposal_id": proposal.id,
+        "prospect_id": proposal.prospect_id,
+        "title": proposal.title,
+        "message": proposal.message,
+        "package_id": proposal.package_id,
+        "clover_payment_url": proposal.clover_payment_url,
+        "status": proposal.status,
+    }
 
 
 @router.post("/proposals/{proposal_id}/mark-sent")
@@ -666,6 +825,12 @@ def send_proposal_email(
         raise HTTPException(
             status_code=404,
             detail="Proposal not found",
+        )
+
+    if proposal.status != "APPROVED":
+        raise HTTPException(
+            status_code=400,
+            detail="Review and approve this proposal before sending",
         )
 
     prospect = (
@@ -1206,8 +1371,6 @@ Return ONLY valid JSON:
     )
 
     db.add(proposal)
-
-    prospect.status = "PROPOSAL_SENT" if False else "INTERESTED"
 
     db.commit()
     db.refresh(proposal)
