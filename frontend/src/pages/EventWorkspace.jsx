@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -1515,8 +1515,58 @@ export default function EventWorkspace({
           </CardContent>
         </Card>
 
+        <Card
+          sx={{
+            mb: 2,
+            border: "1px solid",
+            borderColor: tab === 7 ? "primary.main" : "divider",
+            background:
+              tab === 7
+                ? "linear-gradient(135deg, rgba(25,118,210,0.16), rgba(17,17,22,1))"
+                : "background.paper",
+          }}
+        >
+          <CardContent>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={2}
+              alignItems={{ xs: "stretch", md: "center" }}
+              justifyContent="space-between"
+            >
+              <Box>
+                <Typography variant="h5" fontWeight={950}>
+                  Revenue Engine
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5 }}
+                >
+                  Manage sponsors, vendors, proposals, follow-ups,
+                  Clover payments, and event revenue.
+                </Typography>
+              </Box>
+
+              <Button
+                size="large"
+                variant={tab === 7 ? "contained" : "outlined"}
+                onClick={() => setTab(7)}
+                sx={{
+                  minWidth: 190,
+                  fontWeight: 900,
+                  py: 1.25,
+                }}
+              >
+                {tab === 7
+                  ? "Revenue Open"
+                  : "Open Revenue Engine"}
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
         <Tabs
-            value={tab}
+            value={tab === 7 ? false : tab}
             onChange={(_, value) =>
               setTab(value)
             }
@@ -1530,7 +1580,6 @@ export default function EventWorkspace({
             <Tab label="Matchmaker Checklist" />
             <Tab label="Bloodwork" />
             <Tab label="Fees" />
-            <Tab label="Revenue" />
           </Tabs>
         </Card>
 
