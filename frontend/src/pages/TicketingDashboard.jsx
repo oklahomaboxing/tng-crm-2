@@ -18,9 +18,7 @@ function money(cents) {
   return `$${((Number(cents) || 0) / 100).toFixed(2)}`;
 }
 
-export default function TicketingDashboard() {
-  const [events, setEvents] = useState([]);
-  const [eventId, setEventId] = useState("");
+export default function TicketingDashboard({ eventId, event: selectedEvent }) {
   const [summary, setSummary] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -36,29 +34,6 @@ export default function TicketingDashboard() {
     price: "",
     inventory: "",
   });
-
-  async function loadEvents() {
-    try {
-      const response = await fetch(`${API}/api/boxing/events`, {
-        headers: authHeaders(),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || "Could not load events");
-      }
-
-      const rows = Array.isArray(data) ? data : [];
-      setEvents(rows);
-
-      if (!eventId && rows.length > 0) {
-        setEventId(String(rows[0].id));
-      }
-    } catch (error) {
-      setMessage(error.message);
-    }
-  }
 
   async function loadSummary(selectedEventId = eventId) {
     if (!selectedEventId) return;
@@ -359,10 +334,6 @@ export default function TicketingDashboard() {
   }
 
   useEffect(() => {
-    loadEvents();
-  }, []);
-
-  useEffect(() => {
     if (eventId) {
       loadSummary(eventId);
       loadTicketTypes(eventId);
@@ -371,9 +342,6 @@ export default function TicketingDashboard() {
     }
   }, [eventId]);
 
-  const selectedEvent = events.find(
-    (event) => String(event.id) === String(eventId)
-  );
 
   async function loadSellerQr(seller) {
     try {
@@ -495,24 +463,7 @@ export default function TicketingDashboard() {
           marginBottom: 24,
         }}
       >
-        <select
-          value={eventId}
-          onChange={(event) => setEventId(event.target.value)}
-          style={{
-            minWidth: 280,
-            padding: 12,
-            borderRadius: 8,
-          }}
-        >
-          <option value="">Select Event</option>
-
-          {events.map((event) => (
-            <option key={event.id} value={event.id}>
-              {event.name}
-              {event.event_date ? ` — ${event.event_date}` : ""}
-            </option>
-          ))}
-        </select>
+        <strong>{selectedEvent?.name || "Event"}</strong>
 
         <button
           onClick={() => loadSummary()}
