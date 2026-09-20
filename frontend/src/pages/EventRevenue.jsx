@@ -243,6 +243,128 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     ).length;
   }, [prospects]);
 
+  const revenueAttention = useMemo(() => {
+    const now = new Date();
+
+    return prospects
+      .map((prospect) => {
+        const followUpDue =
+          prospect.next_follow_up_at &&
+          new Date(prospect.next_follow_up_at) <= now;
+
+        if (prospect.proposal_status === "DRAFT") {
+          return {
+            ...prospect,
+            attention_priority: 1,
+            attention_label: "Proposal needs approval",
+            attention_detail:
+              "Review the proposal, package, and Clover payment link before sending.",
+            attention_action: "REVIEW",
+          };
+        }
+
+        if (prospect.proposal_status === "APPROVED") {
+          return {
+            ...prospect,
+            attention_priority: 2,
+            attention_label: "Approved - ready to send",
+            attention_detail:
+              "The proposal is approved and ready to email.",
+            attention_action: "REVIEW",
+          };
+        }
+
+        if (
+          prospect.status === "PAYMENT_PENDING" ||
+          prospect.status === "COMMITTED"
+        ) {
+          return {
+            ...prospect,
+            attention_priority: 3,
+            attention_label: "Payment pending",
+            attention_detail:
+              "This deal is waiting for payment or payment confirmation.",
+            attention_action: prospect.proposal_id
+              ? "REVIEW"
+              : "NONE",
+          };
+        }
+
+        if (
+          prospect.status === "REPLIED" ||
+          prospect.status === "INTERESTED" ||
+          prospect.email_status === "REPLIED"
+        ) {
+          return {
+            ...prospect,
+            attention_priority: 4,
+            attention_label: "Reply needs attention",
+            attention_detail:
+              "This business has replied or shown interest. Move the deal forward.",
+            attention_action: prospect.proposal_id
+              ? "REVIEW"
+              : "NONE",
+          };
+        }
+
+        if (
+          followUpDue &&
+          !["PAID", "DECLINED", "NO_RESPONSE"].includes(
+            prospect.status
+          )
+        ) {
+          return {
+            ...prospect,
+            attention_priority: 5,
+            attention_label: "Follow-up due",
+            attention_detail:
+              "The scheduled follow-up date has arrived.",
+            attention_action: prospect.proposal_id
+              ? "REVIEW"
+              : "NONE",
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          a.attention_priority - b.attention_priority
+      );
+  }, [prospects]);
+
+  const needsApprovalCount = useMemo(() => {
+    return prospects.filter(
+      (prospect) => prospect.proposal_status === "DRAFT"
+    ).length;
+  }, [prospects]);
+
+  const followupsDueCount = useMemo(() => {
+    const now = new Date();
+
+    return prospects.filter((prospect) => {
+      if (!prospect.next_follow_up_at) return false;
+
+      if (
+        ["PAID", "DECLINED", "NO_RESPONSE"].includes(
+          prospect.status
+        )
+      ) {
+        return false;
+      }
+
+      return new Date(prospect.next_follow_up_at) <= now;
+    }).length;
+  }, [prospects]);
+
+  const paymentPendingCount = useMemo(() => {
+    return prospects.filter((prospect) =>
+      ["PAYMENT_PENDING", "COMMITTED"].includes(
+        prospect.status
+      )
+    ).length;
+  }, [prospects]);
   async function addSponsorToPipeline(candidate) {
     const key = candidate.business_name || "";
 
@@ -879,36 +1001,37 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
         }}
       >
         <MetricCard
-          label="Prospects"
-          value={prospects.length}
-          subtext={`${tab === "SPONSOR" ? "Sponsor" : "Vendor"} pipeline`}
-        />
-
-        <MetricCard
-          label="High Intent"
-          value={highIntentCount}
-          subtext="Fit score 80+"
-        />
-
-        <MetricCard
-          label="Pipeline"
+          label="Pipeline Value"
           value={money(tabPipeline)}
-          subtext="Current tab"
+          subtext={`${prospects.length} ${
+            tab === "SPONSOR" ? "sponsor" : "vendor"
+          } prospects`}
         />
 
         <MetricCard
-          label="Committed"
-          value={money(dashboard.committed)}
-          subtext="All event revenue"
+          label="Needs Approval"
+          value={needsApprovalCount}
+          subtext="Proposal drafts to review"
+        />
+
+        <MetricCard
+          label="Follow-Ups Due"
+          value={followupsDueCount}
+          subtext="Needs contact now"
+        />
+
+        <MetricCard
+          label="Payment Pending"
+          value={paymentPendingCount}
+          subtext="Deals waiting to close"
         />
 
         <MetricCard
           label="Collected"
           value={money(dashboard.collected)}
-          subtext="Paid revenue"
+          subtext="Paid event revenue"
         />
       </div>
-
       {scoutError ? (
         <div
           style={{
