@@ -409,7 +409,7 @@ async function submitPasswordReset() {
 
   useEffect(() => {
     if (window.location.pathname === "/member/activate") {
-    return <MemberActivate />;
+    return;
   }
 
   if (!token) {
@@ -427,6 +427,7 @@ async function submitPasswordReset() {
     autoSyncStarted.current = true;
 
     async function runAutomaticSync() {
+      await load();
       await syncTngOS();
     }
 
@@ -434,15 +435,27 @@ async function submitPasswordReset() {
   }, [token, role]);
 
   useEffect(() => {
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      const remaining = Number(payload.exp) * 1000 - Date.now();
+      if (!Number.isFinite(remaining) || remaining <= 0) {
+        logout();
+        return;
+      }
+      const timeout = setTimeout(logout, remaining);
+      return () => clearTimeout(timeout);
+    } catch {
+      logout();
+    }
+  }, [token]);
+
+  useEffect(() => {
     if (isResetPasswordPage) {
       setResetToken(passwordResetToken);
       setAuthView("reset");
     }
   }, [isResetPasswordPage, passwordResetToken]);
-
-  if (window.location.pathname === "/member/activate") {
-    return <MemberActivate />;
-  }
 
   if (window.location.pathname === "/member/activate") {
     return <MemberActivate />;
@@ -725,11 +738,7 @@ if (window.location.pathname === "/register") return <JoinPage />;
   }
 
   if (role === "member") {
-    return <MemberPortal onLogout={() => window.location.reload()} />;
-  }
-
-  if (role === "fighter") {
-    return <FighterPortal onLogout={logout} />;
+    return <MemberPortal onLogout={logout} />;
   }
 
   if (role === "fighter") {

@@ -46,19 +46,19 @@ export default function MemberProfile({ member, onBack }) {
     if (tab === "Payments") loadPayments();
   }, [tab]);
 
+  const qrValue = useMemo(
+    () =>
+      memberData?.barcode ||
+      (memberData?.member_number || "").replaceAll("-", "") ||
+      memberData?.qr_code || "",
+    [memberData]
+  );
+
   if (!memberData) return null;
 
   const fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim();
-  const isActive =
-    memberData.membership_status === "active" || memberData.status === "active";
-
-  const qrValue = useMemo(
-    () =>
-      memberData.barcode ||
-      (memberData.member_number || "").replaceAll("-", "") ||
-      String(memberData.id),
-    [memberData]
-  );
+  const isActive = memberData.membership_status === "active" &&
+    (!memberData.membership_end || new Date(memberData.membership_end) >= new Date());
 
   function photoSrc() {
     if (!memberData.photo_url) return "";

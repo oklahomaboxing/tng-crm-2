@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.core.dependencies import current_user
+from app.core.dependencies import current_user, staff_user
 from .models import EventSeller, EventTicketType, TicketOrder, IssuedTicket
 from .service import generate_public_code, generate_receipt_number, scan_ticket, seller_totals
 from datetime import datetime
@@ -120,7 +120,7 @@ def create_public_ticket_order(
     }
 
 @router.post("/events/{event_id}/sellers")
-def create_seller(event_id: int, body: SellerCreate, db: Session = Depends(get_db), user=Depends(current_user)):
+def create_seller(event_id: int, body: SellerCreate, db: Session = Depends(get_db), user=Depends(staff_user)):
     existing = db.query(EventSeller).filter(
         EventSeller.event_id == event_id,
         EventSeller.seller_type == body.seller_type,
@@ -188,7 +188,7 @@ def public_order_tickets(
 
 
 @router.post("/events/{event_id}/fighters/{fighter_id}/enable-ticket-sales")
-def enable_fighter_sales(event_id: int, fighter_id: int, db: Session = Depends(get_db), user=Depends(current_user)):
+def enable_fighter_sales(event_id: int, fighter_id: int, db: Session = Depends(get_db), user=Depends(staff_user)):
     # Adapt Fighter import/path to current Matchmaker model.
     from app.matchmaker.models import BoxingFighter
     fighter = db.query(BoxingFighter).filter(BoxingFighter.id == fighter_id).first()
@@ -229,7 +229,7 @@ def seller_ticket_qr(
     event_id: int,
     seller_id: int,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(staff_user),
 ):
     seller = db.query(EventSeller).filter(
         EventSeller.id == seller_id,
@@ -258,7 +258,7 @@ def email_seller_ticket_link(
     event_id: int,
     seller_id: int,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(staff_user),
 ):
     from app.matchmaker.models import BoxingEvent
 
@@ -369,15 +369,15 @@ def public_event_tickets(
     }
 
 @router.get("/events/{event_id}/sellers/live")
-def live_seller_sales(event_id: int, db: Session = Depends(get_db), user=Depends(current_user)):
+def live_seller_sales(event_id: int, db: Session = Depends(get_db), user=Depends(staff_user)):
     return {"event_id": event_id, "sellers": seller_totals(db, event_id)}
 
 @router.post("/scan")
-def scan(body: ScanRequest, db: Session = Depends(get_db), user=Depends(current_user)):
+def scan(body: ScanRequest, db: Session = Depends(get_db), user=Depends(staff_user)):
     return scan_ticket(db, body.event_id, body.token, getattr(user, "id", None), body.device_label)
 
 @router.get("/events/{event_id}/report")
-def event_report(event_id: int, db: Session = Depends(get_db), user=Depends(current_user)):
+def event_report(event_id: int, db: Session = Depends(get_db), user=Depends(staff_user)):
     sellers = seller_totals(db, event_id)
     tickets = db.query(IssuedTicket).filter(IssuedTicket.event_id == event_id).all()
     return {
@@ -393,7 +393,7 @@ def event_report(event_id: int, db: Session = Depends(get_db), user=Depends(curr
 def email_seller_reports(
     event_id: int,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(staff_user),
 ):
     from app.matchmaker.models import BoxingEvent
 
@@ -445,7 +445,7 @@ def email_seller_reports(
 def download_event_report_csv(
     event_id: int,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(staff_user),
 ):
     from app.matchmaker.models import BoxingEvent
 
@@ -493,7 +493,7 @@ def download_seller_report_csv(
     event_id: int,
     seller_id: int,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(staff_user),
 ):
     seller = db.query(EventSeller).filter(
         EventSeller.id == seller_id,
@@ -546,7 +546,7 @@ def download_seller_report_pdf(
     event_id: int,
     seller_id: int,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(staff_user),
 ):
     from app.matchmaker.models import BoxingEvent
 
@@ -655,7 +655,7 @@ def download_seller_report_pdf(
 def download_event_report_pdf(
     event_id: int,
     db: Session = Depends(get_db),
-    user=Depends(current_user),
+    user=Depends(staff_user),
 ):
     from app.matchmaker.models import BoxingEvent
 
@@ -794,7 +794,7 @@ def download_event_report_pdf(
 def list_event_ticket_types(
     event_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(staff_user),
 ):
     require_admin_or_staff(user)
 
@@ -830,7 +830,7 @@ def update_event_ticket_type(
     ticket_type_id: int,
     data: dict,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(staff_user),
 ):
     require_admin_or_staff(user)
 
@@ -978,7 +978,7 @@ def create_event_ticket_type(
     event_id: int,
     data: dict,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(staff_user),
 ):
     require_admin_or_staff(user)
 

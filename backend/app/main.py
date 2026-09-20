@@ -12,6 +12,7 @@ from .services.memberships import (
     is_event_product,
     is_membership_product,
     recalculate_member_from_payments,
+    effective_membership_status,
 )
 logger = logging.getLogger(__name__)
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
@@ -74,8 +75,9 @@ from .schemas import (
 )
 
 from .auth import verify_password, hash_password, create_token, decode_token
-from .core.dependencies import current_user
+from .core.dependencies import current_user, staff_user, sales_user
 from .core.permissions import require_admin, require_admin_or_staff
+from .services.clover_webhooks import verify_clover_webhook
 from .commission import commission_rate
 from sqlalchemy import or_
 import sqlite3
@@ -273,6 +275,12 @@ else:
     )
 app = FastAPI(title="TNG CRM 2.0")
 
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "release": "membership-stabilization-1"}
+
+
 app.include_router(operations_router)
 
 app.include_router(ai_router)
@@ -314,10 +322,15 @@ def seed_admin():
         )
 
         if not existing:
+            bootstrap_password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
+            if not bootstrap_password:
+                logger.warning("No admin account exists; configure BOOTSTRAP_ADMIN_PASSWORD to initialize one")
+                return
+            validate_new_password(bootstrap_password)
             admin = User(
                 name="TNG Admin",
                 email="admin@tngboxinggym.com",
-                password_hash=hash_password("admin123"),
+                password_hash=hash_password(bootstrap_password),
                 role="admin",
                 active=True,
             )
@@ -996,7 +1009,9 @@ def is_membership_sale(sale):
 
 @app.post("/api/sales")
 def create_sale(data: SaleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    if user.role == "rep" and user.rep_profile.id != data.sales_rep_id:
+    if user.role not in {"admin", "staff", "rep"}:
+        raise HTTPException(status_code=403, detail="Sales access required")
+    if user.role == "rep" and (not user.rep_profile or user.rep_profile.id != data.sales_rep_id):
         raise HTTPException(status_code=403, detail="Reps can only create their own sales")
 
     product = db.query(MembershipProduct).filter(MembershipProduct.id == data.product_id).first()
@@ -1237,125 +1252,6 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
             for product in products
         ],
     }
-
-@app.get("/api/members")
-def list_members(
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    if user.role == "rep":
-        raise HTTPException(
-            status_code=403,
-            detail="Sales reps may only access their own members",
-        )
-    cutoff_date = datetime(2026, 7, 20, 23, 59, 59)
-
-    paid_membership_member_ids = (
-        db.query(Sale.member_id)
-        .join(
-            MembershipProduct,
-            MembershipProduct.id == Sale.product_id,
-        )
-        .filter(
-            Sale.payment_status == "paid",
-            Sale.member_id != None,
-            or_(
-                Sale.sale_type == "membership",
-                MembershipProduct.is_membership == True,
-                MembershipProduct.category == "membership",
-            ),
-        )
-        .distinct()
-        .subquery()
-    )
-
-    members = (
-        db.query(Member)
-        .filter(
-            Member.id.in_(
-                db.query(
-                    paid_membership_member_ids.c.member_id
-                )
-            ),
-            Member.member_type == "MEMBER",
-        )
-        .order_by(
-            Member.last_name.asc(),
-            Member.first_name.asc(),
-        )
-        .all()
-    )
-
-    results = []
-
-    for member in members:
-        recalculate_member_from_payments(member, db)
-
-        if member.member_type != "MEMBER":
-            continue
-
-        if member.membership_status != "active":
-            continue
-
-        # Exclude memberships expiring July 20, 2026 or earlier.
-        if (
-            member.membership_end
-            and member.membership_end <= cutoff_date
-        ):
-            continue
-
-        results.append({
-            "id": member.id,
-            "first_name": member.first_name,
-            "last_name": member.last_name,
-            "email": member.email,
-            "phone": member.phone,
-            "status": member.status,
-            "member_number": member.member_number,
-            "barcode": member.barcode,
-            "qr_code": member.qr_code,
-            "digital_member_id": member.digital_member_id,
-            "membership_type": member.membership_type,
-            "membership_status": member.membership_status,
-            "membership_start": (
-                member.membership_start.isoformat()
-                if member.membership_start
-                else None
-            ),
-            "membership_end": (
-                member.membership_end.isoformat()
-                if member.membership_end
-                else None
-            ),
-            "last_payment_date": (
-                member.last_payment_date.isoformat()
-                if member.last_payment_date
-                else None
-            ),
-            "next_billing_date": (
-                member.next_billing_date.isoformat()
-                if member.next_billing_date
-                else None
-            ),
-            "billing_status": member.billing_status,
-            "clover_customer_id": member.clover_customer_id,
-            "last_checkin": (
-                member.last_checkin.isoformat()
-                if member.last_checkin
-                else None
-            ),
-            "total_checkins": member.total_checkins or 0,
-            "photo_url": member.photo_url,
-            "created_at": (
-                member.created_at.isoformat()
-                if member.created_at
-                else None
-            ),
-        })
-
-    db.commit()
-
-    return results
 
 @app.post("/api/products")
 def create_product(
@@ -1657,6 +1553,7 @@ def get_merchandise_checkout(
 
 @app.get("/api/sales")
 def list_sales(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    sales_user(user)
     query = db.query(Sale)
 
     if user.role == "rep":
@@ -1806,6 +1703,7 @@ def create_lead(data: LeadCreate, db: Session = Depends(get_db)):
     }
 @app.get("/api/leads")
 def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    sales_user(user)
     query = db.query(Lead)
 
     if user.role == "rep":
@@ -2949,6 +2847,7 @@ def sync_clover_sales(
         )
 
     orders = response.json().get("elements", [])
+    orders.sort(key=lambda order: int(order.get("createdTime") or order.get("clientCreatedTime") or 0))
 
     synced = 0
     skipped = 0
@@ -3134,7 +3033,7 @@ def sync_clover_sales(
 
         if created_time:
             try:
-                sale_date = datetime.fromtimestamp(
+                sale_date = datetime.utcfromtimestamp(
                     int(created_time) / 1000
                 )
             except (TypeError, ValueError, OSError):
@@ -3238,14 +3137,11 @@ def sync_clover_sales(
         db.add(sale)
 
         if membership_purchase:
-            apply_membership(
-                member,
-                product,
-                purchase_date=sale_date,
-            )
+            # Historical imports must not extend an already recorded term again.
+            if not member.last_payment_date or sale_date > member.last_payment_date:
+                apply_membership(member, product, purchase_date=sale_date)
             member.status = "active"
             member.member_type = "MEMBER"
-            member.last_payment_date = sale_date
 
             if not member.member_number:
                 member.member_number = f"TNG-{member.id:06d}"
@@ -3266,31 +3162,6 @@ def sync_clover_sales(
         synced += 1
 
     db.commit()
-
-    affected_member_ids = [
-        row[0]
-        for row in (
-            db.query(Sale.member_id)
-            .filter(
-                Sale.payment_method == "clover",
-                Sale.member_id != None,
-            )
-            .distinct()
-            .all()
-        )
-    ]
-
-    if affected_member_ids:
-        affected_members = (
-            db.query(Member)
-            .filter(Member.id.in_(affected_member_ids))
-            .all()
-        )
-
-        for member in affected_members:
-            recalculate_member_from_payments(member, db)
-
-        db.commit()
 
     return {
         "message": "Clover sales synced",
@@ -3388,7 +3259,7 @@ def reset_imported_clover_sales(db: Session = Depends(get_db), user: User = Depe
     }
 
 @app.get("/api/members/{member_id}/payments")
-def member_payments(member_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def member_payments(member_id: int, db: Session = Depends(get_db), user: User = Depends(staff_user)):
     member = db.query(Member).filter(Member.id == member_id).first()
 
     if not member:
@@ -3424,17 +3295,23 @@ def member_payments(member_id: int, db: Session = Depends(get_db), user: User = 
 
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
-    payload = await request.json()
-
-    print("========== CLOVER WEBHOOK ==========")
-    print(payload)
-    print("====================================")
-
-    event_type = payload.get("type") or payload.get("eventType") or ""
-    payment_id = payload.get("paymentId") or payload.get("id")
+    raw_body = await request.body()
+    verify_clover_webhook(raw_body, request.headers.get("Clover-Signature", ""))
+    try:
+        payload = json.loads(raw_body)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Invalid payment payload")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid payment payload")
+    expected_merchant = os.getenv("CLOVER_MERCHANT_ID", "")
+    actual_merchant = payload.get("MerchantId") or payload.get("merchantId")
+    if expected_merchant and actual_merchant != expected_merchant:
+        raise HTTPException(status_code=401, detail="Payment merchant does not match")
+    event_type = payload.get("Type") or payload.get("type") or payload.get("eventType") or ""
+    payment_id = payload.get("Id") or payload.get("paymentId") or payload.get("id")
     checkout_id = payload.get("checkoutId") or payload.get("checkoutSessionId") or payload.get("orderId")
-    hosted_checkout_id = payload.get("data") or payload.get("Data") or checkout_id
-    webhook_status = str(payload.get("status") or payload.get("Status") or "").upper()
+    hosted_checkout_id = payload.get("Data") or payload.get("data") or checkout_id
+    webhook_status = str(payload.get("Status") or payload.get("status") or "").upper()
     event_type_upper = str(event_type).upper()
 
     if event_type_upper != "PAYMENT":
@@ -3486,9 +3363,6 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
                     "message": "Ticket payment already processed",
                     "order_id": ticket_order.id,
                 }
-
-            import json
-            from datetime import datetime
 
             ticket_order.payment_status = "paid"
             ticket_order.payment_id = str(payment_id or "")
@@ -3570,6 +3444,31 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
             db.commit()
             return {"received": True, "message": "Merchandise payment failed"}
 
+    from app.member_portal.models import MembershipRenewal
+    renewal = db.query(MembershipRenewal).filter(
+        MembershipRenewal.checkout_id == str(hosted_checkout_id or "")
+    ).with_for_update().first()
+    if renewal:
+        if renewal.payment_status == "paid":
+            return {"received": True, "message": "Renewal already processed"}
+        renewal_member = db.query(Member).filter(Member.id == renewal.member_id).with_for_update().first()
+        renewal_product = db.query(MembershipProduct).filter(MembershipProduct.id == renewal.product_id).first()
+        if not renewal_member or not is_membership_product(renewal_product):
+            raise HTTPException(status_code=409, detail="Renewal membership is unavailable")
+        rep = get_or_create_front_desk_rep(db)
+        paid_at = datetime.utcnow()
+        apply_membership(renewal_member, renewal_product, purchase_date=paid_at)
+        db.add(Sale(member_id=renewal.member_id, product_id=renewal.product_id,
+                    sales_rep_id=rep.id, amount=renewal.amount, unit_price=renewal.amount,
+                    payment_status="paid", transaction_status="paid", payment_method="clover",
+                    clover_checkout_id=renewal.checkout_id, clover_payment_id=str(payment_id or ""),
+                    sale_date=paid_at, quantity=1, sale_type="membership"))
+        renewal.payment_status = "paid"
+        renewal.payment_id = str(payment_id or "")
+        renewal.paid_at = paid_at
+        db.commit()
+        return {"received": True, "message": "Membership renewed", "member_id": renewal.member_id}
+
     lead = None
 
     matching_checkout_id = str(hosted_checkout_id or checkout_id or "")
@@ -3578,9 +3477,7 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         lead = db.query(Lead).filter(
             (Lead.clover_checkout_id == matching_checkout_id)
             | (Lead.clover_order_id == matching_checkout_id)
-        ).first()
-
-
+        ).with_for_update().first()
 
     if not lead:
         return {
@@ -3589,7 +3486,13 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
             "checkout_id": matching_checkout_id,
         }
 
+    if lead.status == "converted":
+        return {"received": True, "message": "Membership payment already processed"}
     product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
+    if not is_membership_product(product):
+        raise HTTPException(status_code=409, detail="Checkout membership product is unavailable")
+    if not lead.sales_rep_id:
+        lead.sales_rep_id = get_or_create_front_desk_rep(db).id
 
     # Prevent duplicate members by matching email first, then phone.
     normalized_email = (lead.email or "").strip().lower()
@@ -3640,46 +3543,23 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         member.state = lead.state or member.state
         member.zip_code = lead.zip_code or member.zip_code
 
-        member.status = "active"
-        member.membership_status = "active"
-        member.membership_type = (
-            product.name
-            if product
-            else member.membership_type or "Membership"
-        )
-
-        product_name = (product.name if product else "").lower()
-        start_date = datetime.utcnow()
-
-
-        if product:
-            apply_membership(
-                member=member,
-                product=product,
-                purchase_date=datetime.utcnow(),
-            )
-
+    else:
         member = Member(
-            first_name=lead.first_name,
-            last_name=lead.last_name,
-            email=normalized_email or lead.email,
-            phone=lead.phone,
-
-            address=lead.address,
-            city=lead.city,
-            state=lead.state,
-            zip_code=lead.zip_code,
-
-            status="active",
-            membership_status="active",
-            membership_start=start_date,
-            membership_end=membership_end,
-            membership_type=product.name if product else "Membership",
+            first_name=lead.first_name, last_name=lead.last_name,
+            email=normalized_email or lead.email, phone=lead.phone,
+            address=lead.address, city=lead.city, state=lead.state, zip_code=lead.zip_code,
             waiver_signed=False,
         )
-
         db.add(member)
         db.flush()
+
+    apply_membership(member, product, purchase_date=datetime.utcnow())
+    member.member_type = "MEMBER"
+    waiver = db.query(WaiverSubmission).filter(WaiverSubmission.lead_id == lead.id).first()
+    if waiver:
+        member.waiver_signed = bool(waiver.waiver_accepted)
+        member.emergency_contact = waiver.emergency_contact_name
+        member.emergency_phone = waiver.emergency_contact_phone
 
     # Create missing membership credentials for new or existing members.
     if not member.member_number:
@@ -3694,8 +3574,7 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     if not member.qr_code:
         member.qr_code = generate_qr_code(member.member_number)
 
-    db.commit()
-    db.refresh(member)
+    db.flush()
 
     existing_membership_sale = db.query(Sale).filter(
         Sale.clover_checkout_id == lead.clover_checkout_id,
@@ -3820,7 +3699,7 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
                     )
 
                     db.add(invite)
-                    db.commit()
+                    db.flush()
 
                     frontend_url = os.getenv(
                         "FRONTEND_URL",
@@ -3887,14 +3766,17 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
 
                         portal_invite_sent = True
                         portal_invite_status = "sent"
+                        db.commit()
 
                     else:
+                        db.rollback()
                         portal_invite_status = "email_not_configured"
 
         else:
             portal_invite_status = "member_has_no_email"
 
     except Exception as portal_error:
+        db.rollback()
         portal_invite_status = "email_error"
         print(
             "MEMBER PORTAL INVITE ERROR:",
@@ -3915,8 +3797,10 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
 
 
 @app.post("/api/checkin")
-def checkin(data: dict, db: Session = Depends(get_db)):
-    code = data.get("code", "").replace("-", "").upper()
+def checkin(data: dict, db: Session = Depends(get_db), user: User = Depends(staff_user)):
+    code = str(data.get("code") or "").strip().replace("-", "").upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Member code is required")
 
     member = db.query(Member).filter(
         (Member.barcode == code) |
@@ -3926,6 +3810,9 @@ def checkin(data: dict, db: Session = Depends(get_db)):
 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
+
+    if effective_membership_status(member) != "active":
+        raise HTTPException(status_code=403, detail="Membership is inactive or expired. Please renew at the front desk.")
 
     attendance = Attendance(
         member_id=member.id,
@@ -3954,7 +3841,7 @@ def checkin(data: dict, db: Session = Depends(get_db)):
         }
     }
 @app.get("/api/members/{member_id}/attendance")
-def member_attendance(member_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def member_attendance(member_id: int, db: Session = Depends(get_db), user: User = Depends(staff_user)):
     member = db.query(Member).filter(Member.id == member_id).first()
 
     if not member:
@@ -4915,7 +4802,8 @@ def list_marketing_campaigns(
     ]
 
 @app.post("/api/email/test")
-def send_test_email():
+def send_test_email(user: User = Depends(staff_user)):
+    require_admin(user)
     resend_api_key = os.getenv("RESEND_API_KEY")
     email_from = os.getenv(
         "EMAIL_FROM",
@@ -4966,7 +4854,8 @@ def send_test_email():
             detail=f"Resend failed: {str(exc)}",
         )
 @app.get("/test-sms")
-def test_sms():
+def test_sms(user: User = Depends(staff_user)):
+    require_admin(user)
     result = send_sms(
         to_phone="+16512390916",
         message="ðŸŽ‰ TNG OS is now connected to Twilio!"
@@ -5042,6 +4931,3 @@ app.include_router(member_portal_router)
 # TNG OS Fighter Portal v1
 from .fighter_portal.routes import router as fighter_portal_router
 app.include_router(fighter_portal_router)
-
-
-

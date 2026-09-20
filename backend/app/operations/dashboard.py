@@ -4,15 +4,16 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import extract, func, or_
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import current_user
+from app.core.dependencies import current_user, staff_user
 from app.database import get_db
 from app.models import Attendance, Lead, Member, MembershipProduct, Sale, User
-from app.services.memberships import recalculate_member_from_payments
+from app.services.memberships import effective_membership_status
 
 
 router = APIRouter(
     prefix="/api",
     tags=["Operations - Dashboard"],
+    dependencies=[Depends(staff_user)],
 )
 
 
@@ -33,10 +34,9 @@ def dashboard(
         .filter(
             Sale.payment_status == "paid",
             Sale.member_id.isnot(None),
-            or_(
-                MembershipProduct.is_membership == True,
-                MembershipProduct.category == "membership",
-            ),
+            MembershipProduct.is_membership == True,
+            MembershipProduct.category == "membership",
+            Sale.refunded.isnot(True),
         )
         .distinct()
         .subquery()
@@ -58,11 +58,10 @@ def dashboard(
     active_member_ids = set()
 
     for member in dashboard_members:
-        recalculate_member_from_payments(member, db)
         total_members += 1
 
         if (
-            member.membership_status == "active"
+            effective_membership_status(member, now) == "active"
             and (
                 member.membership_end is None
                 or member.membership_end >= now
@@ -70,8 +69,6 @@ def dashboard(
         ):
             active_members += 1
             active_member_ids.add(member.id)
-
-    db.commit()
 
     total_leads = db.query(Lead).count()
 
@@ -91,8 +88,9 @@ def dashboard(
     )
 
     revenue_this_month = sum(
-        sale.amount or 0
+        max(0, (sale.amount or 0) - (sale.refund_amount or 0))
         for sale in month_sales
+        if sale.payment_status == "paid" and not sale.refunded
     )
 
 

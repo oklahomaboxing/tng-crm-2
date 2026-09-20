@@ -4,6 +4,20 @@ from sqlalchemy.orm import relationship
 from ..database import Base
 
 
+class MembershipRenewal(Base):
+    __tablename__ = "membership_renewals"
+
+    id = Column(Integer, primary_key=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("membership_products.id"), nullable=False)
+    checkout_id = Column(String, nullable=False, unique=True, index=True)
+    amount = Column(Float, nullable=False)
+    payment_status = Column(String, nullable=False, default="pending")
+    payment_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+
+
 class MemberAccount(Base):
     __tablename__ = "member_accounts"
 

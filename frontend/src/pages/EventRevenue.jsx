@@ -5,6 +5,10 @@ const API_BASE =
   import.meta.env.VITE_API_URL ||
   "https://sea-lion-app-2-gxyfr.ondigitalocean.app";
 
+function revenueFetch(url, options = {}) {
+  return fetch(url, { ...options, headers: { ...options.headers, Authorization: `Bearer ${localStorage.getItem("token")}` } });
+}
+
 function money(value) {
   const num = Number(value || 0);
 
@@ -183,7 +187,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   const [error, setError] = useState("");
 
   async function fetchJson(path) {
-    const response = await fetch(`${API_BASE}${path}`);
+    const response = await revenueFetch(`${API_BASE}${path}`);
 
     if (!response.ok) {
       const text = await response.text();
@@ -198,7 +202,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
 
   async function processDueFollowups() {
     try {
-      await fetch(
+      await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/process-followups`,
         {
           method: "POST",
@@ -838,7 +842,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     setScoutError("");
 
     try {
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/packages/${packageEditor.id}`,
         {
           method: "PATCH",
@@ -886,7 +890,7 @@ async function seedSponsorshipInventory() {
     setScoutError("");
 
     try {
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/packages/seed-sponsorship-inventory`,
         {
           method: "POST",
@@ -925,7 +929,7 @@ async function seedSponsorshipInventory() {
     setScoutError("");
 
     try {
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/scout/sponsors/add-to-pipeline`,
         {
           method: "POST",
@@ -998,7 +1002,7 @@ async function seedSponsorshipInventory() {
 
       if (prospectId) {
         try {
-          const autoResponse = await fetch(
+          const autoResponse = await revenueFetch(
             `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospectId}/auto-outreach`,
             {
               method: "POST",
@@ -1078,7 +1082,7 @@ async function seedSponsorshipInventory() {
     setScoutError("");
 
     try {
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospect.id}/find-contact`,
         {
           method: "POST",
@@ -1194,7 +1198,7 @@ async function seedSponsorshipInventory() {
         ? mockupImage.split(",")[1]
         : mockupImage;
 
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospect.id}/send-latest-proposal?recipient_email=${encodeURIComponent(recipientEmail)}`,
         {
           method: "POST",
@@ -1247,7 +1251,7 @@ async function seedSponsorshipInventory() {
         event?.event_name ||
         `TNG Event ${eventId}`;
 
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/proposals/generate-ai`,
         {
           method: "POST",
@@ -1294,7 +1298,7 @@ async function seedSponsorshipInventory() {
     setScoutError("");
 
     try {
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/proposals/${proposalDraft.proposal_id}`,
         {
           method: "PATCH",
@@ -1339,7 +1343,7 @@ async function seedSponsorshipInventory() {
     setScoutError("");
 
     try {
-      const saveResponse = await fetch(
+      const saveResponse = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/proposals/${proposalDraft.proposal_id}`,
         {
           method: "PATCH",
@@ -1364,7 +1368,7 @@ async function seedSponsorshipInventory() {
         );
       }
 
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/proposals/${proposalDraft.proposal_id}/approve`,
         {
           method: "POST",
@@ -1428,7 +1432,7 @@ async function seedSponsorshipInventory() {
       "Oklahoma City, OK";
 
     try {
-      const response = await fetch(
+      const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/scout/sponsors`,
         {
           method: "POST",

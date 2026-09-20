@@ -19,7 +19,16 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 from app.database import Base
+from app.database import DATABASE_URL
 from app import models
+from app.academy import models as academy_models
+from app.matchmaker import models as matchmaker_models
+from app.member_portal import models as member_models
+from app.fighter_portal import models as fighter_models
+from app.ticketing import models as ticketing_models
+from app.revenue import models as revenue_models
+
+config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
 target_metadata = Base.metadata
 # other values from the config, defined by the needs of env.py,

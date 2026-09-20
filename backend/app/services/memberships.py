@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import re
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
@@ -42,6 +43,9 @@ def is_event_product(product):
     if not product:
         return False
 
+    if is_membership_product(product):
+        return False
+
     name = (product.name or "").lower()
 
     event_keywords = [
@@ -57,7 +61,26 @@ def is_event_product(product):
         "fight",
     ]
 
-    return any(keyword in name for keyword in event_keywords)
+    return any(re.search(r"\b" + re.escape(keyword) + r"\b", name) for keyword in event_keywords)
+
+
+def membership_months(product):
+    months = int(getattr(product, "default_membership_months", None) or 1)
+    # Older products were all created with a one-month schema default.
+    if months == 1:
+        name = (product.name or "").lower()
+        if "year" in name or "annual" in name:
+            months = 12
+        elif re.search(r"\b(?:3|three)[ -]*months?\b", name):
+            months = 3
+    return max(1, months)
+
+
+def effective_membership_status(member, now=None):
+    status = member.membership_status or "pending"
+    if status == "active" and member.membership_end and member.membership_end < (now or datetime.utcnow()):
+        return "inactive"
+    return status
 
 
 def apply_membership(member, product, purchase_date=None):
@@ -65,23 +88,17 @@ def apply_membership(member, product, purchase_date=None):
         return member
 
     purchase_date = purchase_date or datetime.utcnow()
-    product_name = (product.name or "").lower()
     product_price = round(float(product.price or 0), 2)
+    months = membership_months(product)
+    start = max(member.membership_end or purchase_date, purchase_date)
 
-    is_three_month_membership = (
-        product_price == 300.00
-        or "3 month" in product_name
-        or "3-month" in product_name
-        or "three month" in product_name
-    )
-
-    if is_three_month_membership:
-        membership_end = purchase_date + relativedelta(months=3)
-        billing_cycle = "3_month_prepaid"
+    if months > 1:
+        membership_end = start + relativedelta(months=months)
+        billing_cycle = f"{months}_month_prepaid"
         monthly_rate = 0
         next_billing_date = None
     else:
-        membership_end = purchase_date + timedelta(days=30)
+        membership_end = start + timedelta(days=30)
         billing_cycle = "30_day"
         monthly_rate = product_price
         next_billing_date = membership_end
@@ -89,13 +106,12 @@ def apply_membership(member, product, purchase_date=None):
     member.status = "active"
     member.membership_status = "active"
     member.membership_type = product.name
-    member.membership_start = purchase_date
+    member.membership_start = member.membership_start or purchase_date
     member.membership_end = membership_end
     member.last_payment_date = purchase_date
     member.billing_cycle = billing_cycle
     member.monthly_rate = monthly_rate
     member.next_billing_date = next_billing_date
-    member.autopay_enabled = False
     member.billing_status = "active"
     member.past_due_amount = 0
 
@@ -109,7 +125,7 @@ def recalculate_member_from_payments(member, db: Session):
             Sale.member_id == member.id,
             Sale.payment_status == "paid",
         )
-        .order_by(Sale.sale_date.desc())
+        .order_by(Sale.sale_date.asc(), Sale.id.asc())
         .all()
     )
 
@@ -118,6 +134,8 @@ def recalculate_member_from_payments(member, db: Session):
         for sale in membership_sales
         if (
             sale.product
+            and not sale.refunded
+            and not sale.refund_amount
             and is_membership_product(sale.product)
             and not is_event_product(sale.product)
         )
@@ -126,14 +144,11 @@ def recalculate_member_from_payments(member, db: Session):
     if not membership_sales:
         return member
 
-    last_sale = membership_sales[0]
-    purchase_date = last_sale.sale_date or datetime.utcnow()
-
-    apply_membership(
-        member,
-        last_sale.product,
-        purchase_date=purchase_date,
-    )
+    # Only explicit repair actions call this rebuild. Reads never rewrite history.
+    member.membership_start = None
+    member.membership_end = None
+    for sale in membership_sales:
+        apply_membership(member, sale.product, purchase_date=sale.sale_date)
 
     if member.membership_end and member.membership_end < datetime.utcnow():
         member.membership_status = "inactive"

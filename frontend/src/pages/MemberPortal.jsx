@@ -310,14 +310,6 @@ export default function MemberPortal({ onLogout }) {
 
   useEffect(() => { load(); }, []);
 
-  if (error) {
-    return (
-      <Container maxWidth="md" sx={{ py: 5 }}>
-        <Alert severity="error">{error}</Alert>
-      </Container>
-    );
-  }
-
   useEffect(() => {
     const photoPath =
       data?.member?.photo_url;
@@ -330,14 +322,8 @@ export default function MemberPortal({ onLogout }) {
   }, [data?.member?.photo_url]);
 
 
-  if (!data) {
-    return <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
-  }
-
-  const m = data.member;
-  const latest = data.inbody?.latest_scan;
   const hasActiveMembership =
-    (m.membership_status || "").toLowerCase() === "active";
+    (data?.member?.membership_status || "").toLowerCase() === "active";
 
 
   useEffect(() => {
@@ -345,6 +331,23 @@ export default function MemberPortal({ onLogout }) {
       setShowTrainer(false);
     }
   }, [hasActiveMembership, showTrainer]);
+
+  if (error) {
+    return (
+      <Container maxWidth="md" sx={{ py: 5 }}>
+        <Alert severity="error">{error}</Alert>
+        <Button onClick={load}>Retry</Button>
+        <Button onClick={onLogout}>Sign out</Button>
+      </Container>
+    );
+  }
+
+  if (!data) {
+    return <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
+  }
+
+  const m = data.member;
+  const latest = data.inbody?.latest_scan;
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f6f7f9", pb: 8 }}>

@@ -9,7 +9,7 @@ client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
     timeout=90.0,
     max_retries=0,
-)
+) if os.getenv("OPENAI_API_KEY") else None
 
 
 def run_sponsor_scout(

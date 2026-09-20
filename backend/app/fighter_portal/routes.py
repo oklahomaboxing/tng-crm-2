@@ -13,6 +13,7 @@ import resend
 from fastapi import Request, APIRouter, Depends, Header, HTTPException, UploadFile, File, Response
 from sqlalchemy.orm import Session
 
+from ..core.dependencies import current_user
 from ..auth import decode_token, hash_password
 from ..database import Base, engine, get_db
 from ..models import User
@@ -213,42 +214,6 @@ def _token_hash(token: str) -> str:
         token.encode("utf-8")
     ).hexdigest()
 
-
-def current_user(
-    authorization: str = Header(default=""),
-    db: Session = Depends(get_db),
-):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Missing token",
-        )
-
-    payload = decode_token(
-        authorization.split(" ", 1)[1]
-    )
-
-    if not payload:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token",
-        )
-
-    user = (
-        db.query(User)
-        .filter(
-            User.id == int(payload["sub"])
-        )
-        .first()
-    )
-
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="User not found",
-        )
-
-    return user
 
 
 def require_admin(user: User):

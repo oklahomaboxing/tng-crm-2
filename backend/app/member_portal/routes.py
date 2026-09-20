@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 
 from ..database import Base, engine, get_db
 from ..models import User, Member, MembershipProduct
+from ..core.dependencies import current_user
 from ..auth import hash_password, decode_token
-from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto
+from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto, MembershipRenewal
+from ..services.memberships import effective_membership_status
 from .schemas import ActivateMemberIn, InviteMemberIn, LinkInBodyIn, ManualInBodyScanIn
 
 # The main project currently creates tables before feature routers are loaded.
@@ -24,20 +26,6 @@ router = APIRouter(prefix="/api/member", tags=["Member Portal"])
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
-
-def current_user(
-    authorization: str = Header(default=""),
-    db: Session = Depends(get_db),
-):
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    payload = decode_token(authorization.split(" ", 1)[1])
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = db.query(User).filter(User.id == int(payload["sub"])).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
 
 
 def require_admin(user: User):
@@ -153,7 +141,7 @@ def create_member_invite(
         expires_at=datetime.utcnow() + timedelta(days=7),
     )
     db.add(invite)
-    db.commit()
+    db.flush()
 
     activation_path = f"/member/activate?token={raw_token}"
     frontend_url = os.getenv(
@@ -229,6 +217,11 @@ def create_member_invite(
     else:
         email_error = "RESEND_API_KEY is not configured"
 
+    if not email_sent:
+        db.rollback()
+        raise HTTPException(status_code=502, detail="Activation email could not be sent. Please retry.")
+    db.commit()
+
     return {
         "member_id": member.id,
         "email": member.email,
@@ -265,6 +258,9 @@ def activate_member(data: ActivateMemberIn, db: Session = Depends(get_db)):
             status_code=409,
             detail="That email is already used by a non-member TNGOS account",
         )
+
+    if user and db.query(MemberAccount).filter(MemberAccount.user_id == user.id).first():
+        raise HTTPException(status_code=409, detail="That email is already linked to a member account")
 
     if not user:
         user = User(
@@ -642,6 +638,12 @@ def create_member_renewal_checkout(
             ),
         )
 
+    db.add(MembershipRenewal(
+        member_id=member.id, product_id=product.id,
+        checkout_id=str(checkout_id), amount=float(product.price or 0),
+    ))
+    db.commit()
+
     return {
         "success": True,
         "checkout_id": str(checkout_id),
@@ -703,7 +705,7 @@ def member_me(
             "next_billing_date": member.next_billing_date,
             "autopay_enabled": member.autopay_enabled,
             "billing_status": member.billing_status,
-            "membership_status": member.membership_status,
+            "membership_status": effective_membership_status(member),
             "membership_type": member.membership_type,
             "membership_level": member.membership_level,
             "waiver_signed": member.waiver_signed,
@@ -1034,7 +1036,6 @@ def add_manual_scan(
     db.commit()
     db.refresh(scan)
     return serialize_scan(scan)
-
 
 
 

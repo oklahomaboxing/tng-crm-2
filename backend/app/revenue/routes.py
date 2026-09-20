@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..core.dependencies import staff_user
 from . import models, schemas
 from .emailing import send_revenue_proposal_email
 from .service import (
@@ -16,6 +17,7 @@ from .service import (
 router = APIRouter(
     prefix="/api/events/{event_id}/revenue",
     tags=["event-revenue"],
+    dependencies=[Depends(staff_user)],
 )
 
 webhook_router = APIRouter(

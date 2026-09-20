@@ -6,15 +6,16 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from ..core.permissions import require_admin
-from ..core.dependencies import current_user
+from ..core.dependencies import current_user, staff_user
 from ..database import get_db
 from ..models import Member, MembershipProduct, Sale, User
 from ..services.memberships import (
     is_membership_product,
     recalculate_member_from_payments,
+    effective_membership_status,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(staff_user)])
 
 
 @router.get("/api/members")
@@ -31,10 +32,9 @@ def list_members(
         .filter(
             Sale.payment_status == "paid",
             Sale.member_id != None,
-            or_(
-                MembershipProduct.is_membership == True,
-                MembershipProduct.category == "membership",
-            ),
+            MembershipProduct.is_membership == True,
+            MembershipProduct.category == "membership",
+            Sale.refunded.isnot(True),
         )
         .distinct()
         .subquery()
@@ -58,8 +58,6 @@ def list_members(
     results = []
 
     for member in members:
-        recalculate_member_from_payments(member, db)
-
         results.append({
             "id": member.id,
             "first_name": member.first_name,
@@ -72,7 +70,11 @@ def list_members(
             "qr_code": member.qr_code,
             "digital_member_id": member.digital_member_id,
             "membership_type": member.membership_type,
-            "membership_status": member.membership_status,
+            "membership_status": effective_membership_status(member),
+            "assigned_coach": member.assigned_coach,
+            "emergency_contact": member.emergency_contact,
+            "emergency_phone": member.emergency_phone,
+            "notes": member.notes,
             "membership_start": (
                 member.membership_start.isoformat()
                 if member.membership_start
@@ -109,8 +111,6 @@ def list_members(
             ),
         })
 
-    db.commit()
-
     return results
 
 @router.get("/api/members/{member_id}")
@@ -131,11 +131,6 @@ def get_member(
             detail="Member not found",
         )
 
-    recalculate_member_from_payments(member, db)
-
-    db.commit()
-    db.refresh(member)
-
     return {
         "id": member.id,
         "first_name": member.first_name,
@@ -148,7 +143,17 @@ def get_member(
         "qr_code": member.qr_code,
         "digital_member_id": member.digital_member_id,
         "membership_type": member.membership_type,
-        "membership_status": member.membership_status,
+        "membership_status": effective_membership_status(member),
+        "assigned_coach": member.assigned_coach,
+        "emergency_contact": member.emergency_contact,
+        "emergency_phone": member.emergency_phone,
+        "notes": member.notes,
+        "address": member.address,
+        "city": member.city,
+        "state": member.state,
+        "zip_code": member.zip_code,
+        "date_of_birth": member.date_of_birth,
+        "waiver_signed": member.waiver_signed,
         "membership_start": (
             member.membership_start.isoformat()
             if member.membership_start
@@ -276,7 +281,11 @@ def update_member(
         "qr_code": member.qr_code,
         "digital_member_id": member.digital_member_id,
         "membership_type": member.membership_type,
-        "membership_status": member.membership_status,
+        "membership_status": effective_membership_status(member),
+        "assigned_coach": member.assigned_coach,
+        "emergency_contact": member.emergency_contact,
+        "emergency_phone": member.emergency_phone,
+        "notes": member.notes,
         "membership_start": (
             member.membership_start.isoformat()
             if member.membership_start
@@ -487,80 +496,7 @@ def recalculate_membership(
             detail="Member not found",
         )
 
-    sales = (
-        db.query(Sale)
-        .filter(Sale.member_id == member_id)
-        .order_by(Sale.sale_date.asc())
-        .all()
-    )
-
-    membership_sales = [
-        sale
-        for sale in sales
-        if sale.product and is_membership_product(sale.product)
-    ]
-
-    if not membership_sales:
-        raise HTTPException(
-            status_code=404,
-            detail="No membership payments found",
-        )
-
-    first_sale = membership_sales[0]
-    last_sale = membership_sales[-1]
-
-    member.membership_start = (
-        first_sale.sale_date or datetime.utcnow()
-    )
-    member.membership_end = member.membership_start
-
-    for sale in membership_sales:
-        product = sale.product
-        sale_date = sale.sale_date or member.membership_end
-
-        if sale_date > member.membership_end:
-            member.membership_end = sale_date
-
-        product_name = (
-            product.name.lower()
-            if product and product.name
-            else ""
-        )
-
-        if product and (
-            "3 month" in product_name
-            or "3 months" in product_name
-            or "3-month" in product_name
-            or product.price == 300
-        ):
-            member.membership_end = (
-                member.membership_end
-                + relativedelta(months=3)
-            )
-            member.billing_cycle = "3_month_prepaid"
-            member.monthly_rate = 0
-            member.next_billing_date = None
-            member.autopay_enabled = False
-        else:
-            member.membership_end = (
-                member.membership_end
-                + relativedelta(months=1)
-            )
-            member.billing_cycle = "monthly"
-            member.monthly_rate = (
-                product.price
-                if product
-                else 0
-            )
-            member.next_billing_date = member.membership_end
-
-        if product:
-            member.membership_type = product.name
-
-    member.membership_status = "active"
-    member.billing_status = "active"
-    member.last_payment_date = last_sale.sale_date
-    member.past_due_amount = 0
+    recalculate_member_from_payments(member, db)
 
     db.commit()
     db.refresh(member)

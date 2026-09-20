@@ -52,3 +52,16 @@ def current_user(
         )
 
     return user
+
+
+def staff_user(user: User = Depends(current_user)) -> User:
+    """Require an active operations account, including on router-level guards."""
+    if user.role not in {"admin", "staff"}:
+        raise HTTPException(status_code=403, detail="Admin or staff access required")
+    return user
+
+
+def sales_user(user: User = Depends(current_user)) -> User:
+    if user.role not in {"admin", "staff", "rep"}:
+        raise HTTPException(status_code=403, detail="Sales access required")
+    return user
