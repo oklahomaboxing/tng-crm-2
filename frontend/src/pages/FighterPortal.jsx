@@ -1223,6 +1223,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
         <section
           style={{
             background: "#fff",
+            color: "#000",
             borderRadius: 14,
             padding: 22,
             marginBottom: 20,
@@ -1245,7 +1246,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
 
               <div
                 style={{
-                  color: "#666",
+                  color: "#000",
                   maxWidth: 650,
                   lineHeight: 1.5,
                 }}
@@ -1336,7 +1337,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
               padding: "10px 12px",
               borderRadius: 8,
               background: "#f7f7f7",
-              color: "#555",
+              color: "#000",
               fontSize: 13,
               marginBottom: 18,
             }}
@@ -1352,7 +1353,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                 borderRadius: 12,
                 padding: 30,
                 textAlign: "center",
-                color: "#666",
+                color: "#000",
               }}
             >
               <div
@@ -1538,6 +1539,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
 
 <section
           style={{
+            color: "#000",
             background: "#fff",
             borderRadius: 14,
             padding: 22,
@@ -1551,7 +1553,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
           {!fightOffers.length ? (
             <div
               style={{
-                color: "#666",
+                color: "#000",
                 padding: "10px 0",
               }}
             >
@@ -1610,7 +1612,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
 
                         <div
                           style={{
-                            color: "#666",
+                            color: "#000",
                             marginTop: 4,
                           }}
                         >
@@ -1693,6 +1695,20 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                         </div>
                       </div>
 
+
+                      <div>
+                        <small>Ticket Commission</small>
+                        <div>
+                          <strong>
+                            {Number(
+                              offer.ticket_commission_percent ||
+                                0
+                            ).toFixed(1)}
+                            %
+                          </strong>
+                        </div>
+                      </div>
+
                       <div>
                         <small>Travel</small>
                         <div>
@@ -1714,6 +1730,87 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                       </div>
                     </div>
 
+
+                    <div
+                      style={{
+                        marginTop: 14,
+                        padding: 12,
+                        border: "1px solid #ddd",
+                        borderRadius: 8,
+                        background: "#fafafa",
+                        color: "#000",
+                      }}
+                    >
+                      <strong>
+                        Travel / Hotel / Per Diem
+                      </strong>
+
+                      <div style={{ marginTop: 6 }}>
+                        Travel type:{" "}
+                        <strong>
+                          {offer.travel_type || "N/A"}
+                        </strong>
+                      </div>
+
+                      <div>
+                        Travel paid by:{" "}
+                        <strong>
+                          {offer.travel_paid_by || "N/A"}
+                        </strong>
+                      </div>
+
+                      <div>
+                        Travel amount:{" "}
+                        <strong>
+                          {new Intl.NumberFormat(
+                            "en-US",
+                            {
+                              style: "currency",
+                              currency: "USD",
+                            }
+                          ).format(
+                            Number(
+                              offer.travel_expense || 0
+                            )
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        Hotel:{" "}
+                        <strong>
+                          {offer.hotel_provided ||
+                            "N/A"}
+                          {offer.hotel_name
+                            ? ` - ${offer.hotel_name}`
+                            : ""}
+                        </strong>
+                      </div>
+
+                      <div>
+                        Hotel nights:{" "}
+                        <strong>
+                          {offer.hotel_nights || 0}
+                        </strong>
+                      </div>
+
+                      <div>
+                        Per diem:{" "}
+                        <strong>
+                          $
+                          {Number(
+                            offer.per_diem_daily || 0
+                          ).toFixed(2)}
+                          /day ?{" "}
+                          {offer.per_diem_days || 0}
+                          {" = $"}
+                          {Number(
+                            offer.per_diem_total || 0
+                          ).toFixed(2)}
+                        </strong>
+                      </div>
+                    </div>
+
                     {offer.additional_terms && (
                       <div
                         style={{
@@ -1729,7 +1826,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                         <div
                           style={{
                             marginTop: 5,
-                            color: "#555",
+                            color: "#000",
                           }}
                         >
                           {offer.additional_terms}
@@ -1964,14 +2061,6 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                     </div>
 
                     <div>
-                      <strong>Ticket Commission:</strong>{" "}
-                      {Number(
-                        contract.ticket_commission_percent || 0
-                      ).toFixed(1)}
-                      %
-                    </div>
-
-                    <div>
                       <strong>Signed PDF:</strong>{" "}
                       {contract.signed_document
                         ? "Uploaded"
@@ -1991,6 +2080,18 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                     <strong>
                       Travel / Hotel / Per Diem
                     </strong>
+
+
+                    <div style={{ marginTop: 6 }}>
+                      Ticket commission:{" "}
+                      <strong>
+                        {Number(
+                          contract.ticket_commission_percent ||
+                            0
+                        ).toFixed(1)}
+                        %
+                      </strong>
+                    </div>
 
                     <div>
                       Travel:{" "}
@@ -2394,7 +2495,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                       <div
                         style={{
                           fontSize: 13,
-                          color: "#555",
+                          color: "#000",
                           marginBottom: 12,
                         }}
                       >
@@ -2774,7 +2875,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
           {!ticketSales?.events?.length ? (
             <div
               style={{
-                color: "#666",
+                color: "#000",
                 padding: "12px 0",
               }}
             >
@@ -2817,7 +2918,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
 
                       <div
                         style={{
-                          color: "#666",
+                          color: "#000",
                           fontSize: 13,
                           marginTop: 3,
                         }}
@@ -2927,7 +3028,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                       <div
                         style={{
                           marginTop: 10,
-                          color: "#666",
+                          color: "#000",
                           fontSize: 12,
                         }}
                       >

@@ -432,10 +432,10 @@ def build_official_contract_pdf(
     doc = SimpleDocTemplate(
         buffer,
         pagesize=letter,
-        rightMargin=0.55 * inch,
-        leftMargin=0.55 * inch,
-        topMargin=0.48 * inch,
-        bottomMargin=0.48 * inch,
+        rightMargin=0.30 * inch,
+        leftMargin=0.30 * inch,
+        topMargin=0.28 * inch,
+        bottomMargin=0.28 * inch,
         title=(
             f"{text_value(fighter, 'legal_name', 'Boxer')} "
             "Professional Boxing Contract"
@@ -449,36 +449,40 @@ def build_official_contract_pdf(
         "TNGContractTitle",
         parent=styles["Heading1"],
         fontName="Times-Bold",
-        fontSize=15,
-        leading=18,
+        fontSize=12,
+        leading=13,
         alignment=TA_CENTER,
-        spaceAfter=5,
+        textColor=colors.black,
+        spaceAfter=2,
     )
 
     subtitle_style = ParagraphStyle(
         "TNGContractSubtitle",
         parent=styles["Heading2"],
         fontName="Times-Bold",
-        fontSize=14,
-        leading=17,
+        fontSize=11,
+        leading=12,
         alignment=TA_CENTER,
-        spaceAfter=14,
+        textColor=colors.black,
+        spaceAfter=4,
     )
 
     body_style = ParagraphStyle(
         "TNGContractBody",
         parent=styles["BodyText"],
         fontName="Times-Roman",
-        fontSize=10.5,
-        leading=14,
-        spaceAfter=8,
+        fontSize=8.3,
+        leading=9.5,
+        textColor=colors.black,
+        spaceAfter=3,
     )
 
     small_style = ParagraphStyle(
         "TNGContractSmall",
         parent=body_style,
-        fontSize=9,
-        leading=11,
+        fontSize=7.6,
+        leading=8.6,
+        textColor=colors.black,
     )
 
     center_bold = ParagraphStyle(
@@ -600,15 +604,15 @@ def build_official_contract_pdf(
             ("BOX", (0, 0), (-1, -1), 0.8, colors.black),
             ("INNERGRID", (0, 0), (-1, -1), 0.8, colors.black),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ])
     )
 
     story.append(info_table)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 3))
 
     story.append(
         Paragraph(
@@ -644,6 +648,8 @@ def build_official_contract_pdf(
                     f"{safe(value(contract, 'travel_paid_by', 'N/A'))}<br/>"
                     "<b>Travel Allowance / Reimbursement:</b> "
                     f"${money(value(contract, 'travel_expense'))}<br/>"
+                    "<b>Ticket Sales Commission:</b> "
+                    f"{value(contract, 'ticket_commission_percent') or 0}%<br/>"
                     "<b>Hotel Provided:</b> "
                     f"{safe(value(contract, 'hotel_provided', 'No'))}<br/>"
                     "<b>Hotel:</b> "
@@ -670,15 +676,15 @@ def build_official_contract_pdf(
             ("BOX", (0, 0), (-1, -1), 0.8, colors.black),
             ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ])
     )
 
     story.append(travel_table)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 3))
 
     story.append(
         Paragraph(
@@ -730,7 +736,7 @@ def build_official_contract_pdf(
     )
 
     story.append(initials_one)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 3))
 
     story.append(
         Paragraph(
@@ -798,12 +804,9 @@ def build_official_contract_pdf(
     money_right = Paragraph(
         (
             "<b>GROSS PURSE:</b> "
-            f"${money(value(contract, 'gross_purse'))}<br/><br/>"
-            "<b>TICKET SALES COMMISSION:</b> "
-            f"{value(contract, 'ticket_commission_percent') or 0}%"
-            "<br/><br/>"
+            f"${money(value(contract, 'gross_purse'))}<br/>"
             "<b>TRAVEL ALLOWANCE:</b> "
-            f"${money(value(contract, 'travel_expense'))}<br/><br/>"
+            f"${money(value(contract, 'travel_expense'))}<br/>"
             "<b>Deductions:</b> "
             f"${money(value(contract, 'deductions'))}"
         ),
@@ -831,7 +834,7 @@ def build_official_contract_pdf(
         ])
     )
 
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 4))
 
     boxer_paid = value(contract, "boxer_paid")
 

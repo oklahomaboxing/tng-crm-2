@@ -2113,8 +2113,80 @@ def fighter_fight_offers(
             "purse": (
                 contract.gross_purse or 0
             ),
+            "ticket_commission_percent": (
+                getattr(
+                    contract,
+                    "ticket_commission_percent",
+                    0,
+                )
+                or 0
+            ),
+            "travel_type": (
+                getattr(
+                    contract,
+                    "travel_type",
+                    "",
+                )
+                or ""
+            ),
+            "travel_paid_by": (
+                getattr(
+                    contract,
+                    "travel_paid_by",
+                    "",
+                )
+                or ""
+            ),
             "travel_expense": (
                 contract.travel_expense or 0
+            ),
+            "hotel_provided": (
+                getattr(
+                    contract,
+                    "hotel_provided",
+                    "",
+                )
+                or ""
+            ),
+            "hotel_name": (
+                getattr(
+                    contract,
+                    "hotel_name",
+                    "",
+                )
+                or ""
+            ),
+            "hotel_nights": (
+                getattr(
+                    contract,
+                    "hotel_nights",
+                    0,
+                )
+                or 0
+            ),
+            "per_diem_daily": (
+                getattr(
+                    contract,
+                    "per_diem_daily",
+                    0,
+                )
+                or 0
+            ),
+            "per_diem_days": (
+                getattr(
+                    contract,
+                    "per_diem_days",
+                    0,
+                )
+                or 0
+            ),
+            "per_diem_total": (
+                getattr(
+                    contract,
+                    "per_diem_total",
+                    0,
+                )
+                or 0
             ),
             "cancellation_pay": (
                 contract.cancellation_pay or 0

@@ -26,44 +26,44 @@ export function buildOfficialContractHtml(contract) {
 <style>
   @page {
     size: letter;
-    margin: 0.55in;
+    margin: 0.30in;
   }
 
   body {
     font-family: "Times New Roman", serif;
-    color: #111;
+    color: #000;
     max-width: 8.5in;
     margin: 0 auto;
-    font-size: 13px;
-    line-height: 1.25;
+    font-size: 9px;
+    line-height: 1.08;
   }
 
   h1 {
     text-align: center;
-    font-size: 17px;
-    margin: 0 0 14px;
+    font-size: 13px;
+    margin: 0 0 4px;
   }
 
   h2 {
     text-align: center;
-    font-size: 16px;
-    margin: 0 0 18px;
+    font-size: 12px;
+    margin: 0 0 5px;
   }
 
   .contract-date {
-    margin-bottom: 24px;
+    margin-bottom: 6px;
   }
 
   .info-box {
     border: 1px solid #111;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    margin-bottom: 14px;
+    margin-bottom: 5px;
   }
 
   .info-col {
-    padding: 8px;
-    min-height: 120px;
+    padding: 4px;
+    min-height: 72px;
   }
 
   .info-col + .info-col {
@@ -75,15 +75,15 @@ export function buildOfficialContractHtml(contract) {
   }
 
   p {
-    margin: 10px 0;
+    margin: 3px 0;
   }
 
   .initials {
     border: 1px solid #111;
     text-align: center;
     font-weight: bold;
-    padding: 7px;
-    margin: 8px 0 12px;
+    padding: 3px;
+    margin: 3px 0 4px;
   }
 
   .signature-row {
@@ -191,13 +191,13 @@ Boxers will be paid after the final bout of the evening.
 
 <div style="
   border:1px solid #111;
-  padding:10px;
-  margin:14px 0;
+  padding:5px;
+  margin:5px 0;
 ">
   <div style="
     font-weight:bold;
     text-align:center;
-    margin-bottom:8px;
+    margin-bottom:3px;
   ">
     TRAVEL / HOTEL / PER DIEM
   </div>
@@ -217,7 +217,12 @@ Boxers will be paid after the final bout of the evening.
     $${money(contract.travel_expense)}
   </div>
 
-  <div style="margin-top:6px;">
+  <div>
+    <b>Ticket Sales Commission:</b>
+    ${safe(contract.ticket_commission_percent || 0)}%
+  </div>
+
+  <div style="margin-top:3px;">
     <b>Hotel Provided:</b>
     ${safe(contract.hotel_provided || "No")}
   </div>
@@ -293,11 +298,6 @@ the contestant
   </div>
 
   <div>
-    TICKET SALES COMMISSION:
-    <b>${safe(contract.ticket_commission_percent || 0)}%</b>
-  </div>
-
-  <div>
     Boxer&rsquo;s Manager:
     <span class="line">
       ${safe(contract.boxer_manager)}
@@ -324,7 +324,7 @@ the contestant
 </div>
 
 <p style="
-  margin-top:30px;
+  margin-top:7px;
   text-align:center;
   font-weight:bold;
 ">

@@ -2343,78 +2343,6 @@ export default function EventWorkspace({
                               }}
                             />
 
-                            <TextField
-                              fullWidth
-                              type="number"
-                              label="Ticket Sales Commission"
-                              value={
-                                contractCommissions[
-                                  `${bout.id}-red`
-                                ] ??
-                                bout.red_contract
-                                  ?.ticket_commission_percent ??
-                                ""
-                              }
-                              inputProps={{
-                                min: 0,
-                                max: 100,
-                                step: 0.1,
-                              }}
-                              onChange={(e) =>
-                                setContractCommissions(
-                                  (old) => ({
-                                    ...old,
-                                    [`${bout.id}-red`]:
-                                      e.target.value,
-                                  })
-                                )
-                              }
-                              InputProps={{
-                                endAdornment: (
-                                  <InputAdornment position="end">
-                                    %
-                                  </InputAdornment>
-                                ),
-                              }}
-                              helperText="Negotiated commission for this fighter on this bout"
-                            />
-
-                            <TextField
-                              fullWidth
-                              type="number"
-                              label="Ticket Sales Commission"
-                              value={
-                                contractCommissions[
-                                  `${bout.id}-blue`
-                                ] ??
-                                bout.blue_contract
-                                  ?.ticket_commission_percent ??
-                                ""
-                              }
-                              inputProps={{
-                                min: 0,
-                                max: 100,
-                                step: 0.1,
-                              }}
-                              onChange={(e) =>
-                                setContractCommissions(
-                                  (old) => ({
-                                    ...old,
-                                    [`${bout.id}-blue`]:
-                                      e.target.value,
-                                  })
-                                )
-                              }
-                              InputProps={{
-                                endAdornment: (
-                                  <InputAdornment position="end">
-                                    %
-                                  </InputAdornment>
-                                ),
-                              }}
-                              helperText="Negotiated commission for this fighter on this bout"
-                            />
-
                             <Divider />
 
                             <Typography
@@ -2425,6 +2353,45 @@ export default function EventWorkspace({
                             </Typography>
 
                             <Grid container spacing={1}>
+
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Ticket Sales Commission"
+                                  value={
+                                    contractCommissions[
+                                      `${bout.id}-red`
+                                    ] ??
+                                    bout.red_contract
+                                      ?.ticket_commission_percent ??
+                                    ""
+                                  }
+                                  inputProps={{
+                                    min: 0,
+                                    max: 100,
+                                    step: 0.1,
+                                  }}
+                                  onChange={(e) =>
+                                    setContractCommissions(
+                                      (old) => ({
+                                        ...old,
+                                        [`${bout.id}-red`]:
+                                          e.target.value,
+                                      })
+                                    )
+                                  }
+                                  InputProps={{
+                                    endAdornment: (
+                                      <InputAdornment position="end">
+                                        %
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                  helperText="Negotiated ticket commission for this fighter"
+                                />
+                              </Grid>
                               <Grid item xs={12} sm={6}>
                                 <TextField
                                   fullWidth
@@ -2933,6 +2900,45 @@ export default function EventWorkspace({
                             </Typography>
 
                             <Grid container spacing={1}>
+
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Ticket Sales Commission"
+                                  value={
+                                    contractCommissions[
+                                      `${bout.id}-blue`
+                                    ] ??
+                                    bout.blue_contract
+                                      ?.ticket_commission_percent ??
+                                    ""
+                                  }
+                                  inputProps={{
+                                    min: 0,
+                                    max: 100,
+                                    step: 0.1,
+                                  }}
+                                  onChange={(e) =>
+                                    setContractCommissions(
+                                      (old) => ({
+                                        ...old,
+                                        [`${bout.id}-blue`]:
+                                          e.target.value,
+                                      })
+                                    )
+                                  }
+                                  InputProps={{
+                                    endAdornment: (
+                                      <InputAdornment position="end">
+                                        %
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                  helperText="Negotiated ticket commission for this fighter"
+                                />
+                              </Grid>
                               <Grid item xs={12} sm={6}>
                                 <TextField
                                   fullWidth
