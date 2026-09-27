@@ -751,6 +751,226 @@ def activate_fighter(
 
 
 
+
+def _require_fighter_portal_admin(user):
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    if role not in {"admin", "staff"}:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin or staff access required",
+        )
+
+
+@router.get("/admin/fighters/{fighter_id}/portal-account")
+def admin_get_fighter_portal_account(
+    fighter_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _require_fighter_portal_admin(user)
+
+    fighter = (
+        db.query(BoxingFighter)
+        .filter(BoxingFighter.id == fighter_id)
+        .first()
+    )
+
+    if not fighter:
+        raise HTTPException(
+            status_code=404,
+            detail="Fighter not found",
+        )
+
+    account = (
+        db.query(FighterAccount)
+        .filter(FighterAccount.fighter_id == fighter_id)
+        .first()
+    )
+
+    linked_user = None
+
+    if account:
+        linked_user = (
+            db.query(User)
+            .filter(User.id == account.user_id)
+            .first()
+        )
+
+    return {
+        "fighter_id": fighter.id,
+        "fighter_name": fighter.legal_name,
+        "fighter_email": fighter.email or "",
+        "portal_account_exists": bool(account and linked_user),
+        "user_id": linked_user.id if linked_user else None,
+        "login_email": linked_user.email if linked_user else "",
+        "active": bool(linked_user.active) if linked_user else False,
+    }
+
+
+@router.patch("/admin/fighters/{fighter_id}/portal-account")
+def admin_save_fighter_portal_account(
+    fighter_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _require_fighter_portal_admin(user)
+
+    fighter = (
+        db.query(BoxingFighter)
+        .filter(BoxingFighter.id == fighter_id)
+        .first()
+    )
+
+    if not fighter:
+        raise HTTPException(
+            status_code=404,
+            detail="Fighter not found",
+        )
+
+    account = (
+        db.query(FighterAccount)
+        .filter(FighterAccount.fighter_id == fighter_id)
+        .first()
+    )
+
+    linked_user = None
+
+    if account:
+        linked_user = (
+            db.query(User)
+            .filter(User.id == account.user_id)
+            .first()
+        )
+
+    login_email = str(
+        data.get("login_email")
+        or (linked_user.email if linked_user else "")
+        or fighter.email
+        or ""
+    ).strip().lower()
+
+    if not login_email or "@" not in login_email:
+        raise HTTPException(
+            status_code=400,
+            detail="A valid portal login email is required",
+        )
+
+    password = str(data.get("password") or "")
+
+    if password and len(password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters",
+        )
+
+    existing_user = (
+        db.query(User)
+        .filter(User.email.ilike(login_email))
+        .first()
+    )
+
+    if existing_user and (
+        linked_user is None
+        or existing_user.id != linked_user.id
+    ):
+        other_account = (
+            db.query(FighterAccount)
+            .filter(FighterAccount.user_id == existing_user.id)
+            .first()
+        )
+
+        if existing_user.role != "fighter" or other_account:
+            raise HTTPException(
+                status_code=409,
+                detail="That login email is already in use",
+            )
+
+    if not linked_user:
+        if not password:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "A password is required when creating "
+                    "fighter portal access"
+                ),
+            )
+
+        if existing_user:
+            linked_user = existing_user
+            linked_user.name = fighter.legal_name
+            linked_user.email = login_email
+            linked_user.password_hash = hash_password(password)
+            linked_user.role = "fighter"
+            linked_user.active = bool(
+                data.get("active", True)
+            )
+            linked_user.failed_login_attempts = 0
+            linked_user.locked_until = None
+        else:
+            linked_user = User(
+                name=fighter.legal_name,
+                email=login_email,
+                password_hash=hash_password(password),
+                role="fighter",
+                active=bool(data.get("active", True)),
+            )
+
+            db.add(linked_user)
+            db.flush()
+
+        if account:
+            account.user_id = linked_user.id
+        else:
+            account = FighterAccount(
+                fighter_id=fighter.id,
+                user_id=linked_user.id,
+            )
+            db.add(account)
+
+    else:
+        duplicate_user = (
+            db.query(User)
+            .filter(
+                User.email.ilike(login_email),
+                User.id != linked_user.id,
+            )
+            .first()
+        )
+
+        if duplicate_user:
+            raise HTTPException(
+                status_code=409,
+                detail="That login email is already in use",
+            )
+
+        linked_user.name = fighter.legal_name
+        linked_user.email = login_email
+        linked_user.role = "fighter"
+
+        if "active" in data:
+            linked_user.active = bool(data.get("active"))
+
+        if password:
+            linked_user.password_hash = hash_password(password)
+            linked_user.failed_login_attempts = 0
+            linked_user.locked_until = None
+
+    db.commit()
+    db.refresh(linked_user)
+
+    return {
+        "ok": True,
+        "fighter_id": fighter.id,
+        "user_id": linked_user.id,
+        "login_email": linked_user.email,
+        "active": bool(linked_user.active),
+        "message": (
+            "Fighter portal account updated successfully."
+        ),
+    }
+
+
 @router.get("/me/contracts")
 def my_contracts(
     db: Session = Depends(get_db),
