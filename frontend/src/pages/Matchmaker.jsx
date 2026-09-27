@@ -132,6 +132,14 @@ export default function Matchmaker() {
   const [editFighterOpen, setEditFighterOpen] = useState(false);
   const [editFighterId, setEditFighterId] = useState("");
   const [editFighterForm, setEditFighterForm] = useState(emptyFighter);
+
+  const [fighterPortalAccount, setFighterPortalAccount] = useState(null);
+  const [fighterPortalForm, setFighterPortalForm] = useState({
+    login_email: "",
+    password: "",
+    active: true,
+  });
+  const [fighterPortalLoading, setFighterPortalLoading] = useState(false);
   const [eventForm, setEventForm] = useState(emptyEvent);
 
   const [fighterInviteStatus, setFighterInviteStatus] = useState({});
@@ -990,7 +998,7 @@ export default function Matchmaker() {
   }
 
 
-  function openEditFighter(fighter) {
+  async function openEditFighter(fighter) {
     setEditFighterId(fighter.id);
 
     setEditFighterForm({
@@ -1018,8 +1026,56 @@ export default function Matchmaker() {
         fighter.available_weight_max ?? "",
     });
 
+    setFighterPortalAccount(null);
+    setFighterPortalForm({
+      login_email: fighter.email || "",
+      password: "",
+      active: true,
+    });
+
     setEditFighterOpen(true);
+    setFighterPortalLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API}/api/fighter/admin/fighters/${fighter.id}/portal-account`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      const data = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not load fighter portal account"
+        );
+      }
+
+      setFighterPortalAccount(data);
+
+      setFighterPortalForm({
+        login_email:
+          data.login_email ||
+          data.fighter_email ||
+          fighter.email ||
+          "",
+        password: "",
+        active: data.portal_account_exists
+          ? Boolean(data.active)
+          : true,
+      });
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not load fighter portal account"
+      );
+    } finally {
+      setFighterPortalLoading(false);
+    }
   }
+
 
   async function saveFighterEdits() {
     if (!editFighterId) return;
@@ -1108,6 +1164,99 @@ export default function Matchmaker() {
       );
     } finally {
       setWorking(false);
+    }
+  }
+
+
+  async function saveFighterPortalAccount() {
+    if (!editFighterId) return;
+
+    const loginEmail =
+      (fighterPortalForm.login_email || "").trim().toLowerCase();
+
+    if (!loginEmail || !loginEmail.includes("@")) {
+      setMsgType("warning");
+      setMsg("Enter a valid fighter portal login email.");
+      return;
+    }
+
+    if (
+      !fighterPortalAccount?.portal_account_exists &&
+      !(fighterPortalForm.password || "").trim()
+    ) {
+      setMsgType("warning");
+      setMsg(
+        "Enter a password to create fighter portal access."
+      );
+      return;
+    }
+
+    if (
+      fighterPortalForm.password &&
+      fighterPortalForm.password.length < 8
+    ) {
+      setMsgType("warning");
+      setMsg("Portal password must be at least 8 characters.");
+      return;
+    }
+
+    setFighterPortalLoading(true);
+
+    try {
+      const payload = {
+        login_email: loginEmail,
+        active: Boolean(fighterPortalForm.active),
+      };
+
+      if (fighterPortalForm.password) {
+        payload.password = fighterPortalForm.password;
+      }
+
+      const response = await fetch(
+        `${API}/api/fighter/admin/fighters/${editFighterId}/portal-account`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not update fighter portal login"
+        );
+      }
+
+      setFighterPortalAccount({
+        ...(fighterPortalAccount || {}),
+        portal_account_exists: true,
+        user_id: data.user_id,
+        login_email: data.login_email,
+        active: Boolean(data.active),
+      });
+
+      setFighterPortalForm({
+        login_email: data.login_email || loginEmail,
+        password: "",
+        active: Boolean(data.active),
+      });
+
+      setMsgType("success");
+      setMsg("Fighter portal login updated.");
+
+      await loadFighterInviteStatus(editFighterId);
+    } catch (error) {
+      setMsgType("error");
+      setMsg(
+        error.message ||
+        "Could not update fighter portal login"
+      );
+    } finally {
+      setFighterPortalLoading(false);
     }
   }
 
@@ -3650,6 +3799,175 @@ export default function Matchmaker() {
                       </MenuItem>
                     </Select>
                   </FormControl>
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Divider />
+
+            <Box>
+              <Stack
+                direction={{
+                  xs: "column",
+                  sm: "row",
+                }}
+                justifyContent="space-between"
+                alignItems={{
+                  xs: "flex-start",
+                  sm: "center",
+                }}
+                spacing={1}
+                sx={{ mb: 1.5 }}
+              >
+                <Box>
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={900}
+                  >
+                    Fighter Portal Login
+                  </Typography>
+
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                  >
+                    Set or reset this fighter's TNGOS login.
+                  </Typography>
+                </Box>
+
+                <Chip
+                  size="small"
+                  color={
+                    fighterPortalAccount?.portal_account_exists &&
+                    fighterPortalForm.active
+                      ? "success"
+                      : "default"
+                  }
+                  label={
+                    fighterPortalLoading
+                      ? "Loading..."
+                      : fighterPortalAccount?.portal_account_exists
+                        ? fighterPortalForm.active
+                          ? "Login Active"
+                          : "Login Disabled"
+                        : "No Portal Account"
+                  }
+                />
+              </Stack>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={5}>
+                  <TextField
+                    fullWidth
+                    type="email"
+                    label="Portal Login Email"
+                    value={fighterPortalForm.login_email}
+                    disabled={fighterPortalLoading}
+                    onChange={(e) =>
+                      setFighterPortalForm({
+                        ...fighterPortalForm,
+                        login_email: e.target.value,
+                      })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label={
+                      fighterPortalAccount?.portal_account_exists
+                        ? "New Password"
+                        : "Create Password"
+                    }
+                    placeholder={
+                      fighterPortalAccount?.portal_account_exists
+                        ? "Leave blank to keep current password"
+                        : "Minimum 8 characters"
+                    }
+                    value={fighterPortalForm.password}
+                    disabled={fighterPortalLoading}
+                    onChange={(e) =>
+                      setFighterPortalForm({
+                        ...fighterPortalForm,
+                        password: e.target.value,
+                      })
+                    }
+                    helperText={
+                      fighterPortalAccount?.portal_account_exists
+                        ? "Only enter a password when resetting it."
+                        : "Required for a new portal account."
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>Portal Access</InputLabel>
+
+                    <Select
+                      label="Portal Access"
+                      value={
+                        fighterPortalForm.active
+                          ? "active"
+                          : "disabled"
+                      }
+                      disabled={fighterPortalLoading}
+                      onChange={(e) =>
+                        setFighterPortalForm({
+                          ...fighterPortalForm,
+                          active: e.target.value === "active",
+                        })
+                      }
+                    >
+                      <MenuItem value="active">
+                        Active
+                      </MenuItem>
+
+                      <MenuItem value="disabled">
+                        Disabled
+                      </MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Stack
+                    direction={{
+                      xs: "column",
+                      sm: "row",
+                    }}
+                    spacing={1}
+                    alignItems={{
+                      xs: "stretch",
+                      sm: "center",
+                    }}
+                  >
+                    <Button
+                      variant="outlined"
+                      disabled={
+                        fighterPortalLoading ||
+                        !fighterPortalForm.login_email?.trim()
+                      }
+                      onClick={saveFighterPortalAccount}
+                      sx={{ fontWeight: 900 }}
+                    >
+                      {fighterPortalLoading
+                        ? "Saving..."
+                        : fighterPortalAccount?.portal_account_exists
+                          ? "Save Portal Login"
+                          : "Create Portal Login"}
+                    </Button>
+
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                    >
+                      Login uses email and password. Existing
+                      passwords cannot be viewed, only reset.
+                    </Typography>
+                  </Stack>
                 </Grid>
               </Grid>
             </Box>
