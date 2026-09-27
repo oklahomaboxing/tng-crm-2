@@ -1129,6 +1129,12 @@ def ensure_contract_travel_schema():
         "adobe_sent_at": "TIMESTAMP",
         "adobe_signed_at": "TIMESTAMP",
         "adobe_last_synced_at": "TIMESTAMP",
+        "docusign_envelope_id": "VARCHAR",
+        "docusign_status": "VARCHAR",
+        "docusign_signing_url": "TEXT",
+        "docusign_sent_at": "TIMESTAMP",
+        "docusign_signed_at": "TIMESTAMP",
+        "docusign_last_synced_at": "TIMESTAMP",
     }
 
     missing = [
