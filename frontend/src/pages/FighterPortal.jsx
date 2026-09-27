@@ -2072,6 +2072,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
         <section
           style={{
             background: "#fff",
+            color: "#111",
             borderRadius: 14,
             padding: 22,
             marginBottom: 20,
@@ -2786,6 +2787,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
         <section
           style={{
             background: "#fff",
+            color: "#111",
             borderRadius: 14,
             padding: 22,
             marginBottom: 20,
@@ -2842,6 +2844,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
         <section
           style={{
             background: "#fff",
+            color: "#111",
             borderRadius: 14,
             padding: 22,
             marginBottom: 20,
@@ -3165,6 +3168,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
         <section
           style={{
             background: "#fff",
+            color: "#111",
             borderRadius: 14,
             padding: 22,
           }}
