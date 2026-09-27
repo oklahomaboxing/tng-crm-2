@@ -2621,6 +2621,8 @@ async def fighter_upload_photo(
     ).strip().lower()
 
     allowed_types = {
+        "profile",
+        "marketing",
         "headshot",
         "fight_pose",
         "action_shot",

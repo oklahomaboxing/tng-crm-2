@@ -55,9 +55,9 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
   const [loading, setLoading] = useState(true);
 
   const [fighterPhotos, setFighterPhotos] = useState([]);
+  const [fighterVideos, setFighterVideos] = useState([]);
   const [fighterPhotoUrls, setFighterPhotoUrls] = useState({});
-  const [photoType, setPhotoType] = useState("headshot");
-  const [photoWorking, setPhotoWorking] = useState(false);
+const [photoWorking, setPhotoWorking] = useState(false);
 
   async function load() {
     try {
@@ -220,7 +220,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
   }
 
 
-  async function uploadFighterPhoto(file) {
+  async function uploadFighterPhoto(file, photoType) {
     if (!file) return;
 
     if (
@@ -397,6 +397,49 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
       window.alert(notice);
     } finally {
       setPhotoWorking(false);
+    }
+  }
+
+
+
+  async function loadFighterVideos() {
+    const token = (
+      previewToken ||
+      sessionStorage.getItem("fighterPreviewToken") ||
+      localStorage.getItem("token")
+    );
+
+    try {
+      const response = await fetch(
+        `${API}/api/fighter/me/videos`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not load TNG Fight Library."
+        );
+      }
+
+      setFighterVideos(
+        Array.isArray(body.videos)
+          ? body.videos
+          : []
+      );
+    } catch (err) {
+      console.error(
+        "Could not load Fighter Portal videos:",
+        err
+      );
+
+      setFighterVideos([]);
     }
   }
 
@@ -921,6 +964,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
     load();
     loadContracts();
     loadFighterPhotos();
+    loadFighterVideos();
 
     return () => {
       Object.values(fighterPhotoUrls).forEach((url) => {
@@ -1251,10 +1295,9 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                   lineHeight: 1.5,
                 }}
               >
-                Upload promotional photos that TNG
-                Promotions can use for your fight flyers
-                and event graphics. Choose your best
-                photo as your Primary Flyer Photo.
+                Upload your profile photo and a separate
+                marketing photo for TNG Promotions,
+                fight flyers and event graphics.
               </div>
             </div>
 
@@ -1266,40 +1309,14 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                 alignItems: "center",
               }}
             >
-              <select
-                value={photoType}
-                onChange={(e) =>
-                  setPhotoType(e.target.value)
-                }
-                disabled={photoWorking}
-                style={{
-                  padding: "10px 12px",
-                  border: "1px solid #ccc",
-                  borderRadius: 8,
-                  background: "#fff",
-                }}
-              >
-                <option value="headshot">
-                  Headshot
-                </option>
-
-                <option value="fight_pose">
-                  Fight Pose
-                </option>
-
-                <option value="action_shot">
-                  Action Shot
-                </option>
-              </select>
-
               <label
                 style={{
                   display: "inline-block",
-                  padding: "10px 15px",
+                  padding: "11px 16px",
                   background: "#d71920",
                   color: "#fff",
                   borderRadius: 8,
-                  fontWeight: 800,
+                  fontWeight: 900,
                   cursor: photoWorking
                     ? "not-allowed"
                     : "pointer",
@@ -1308,7 +1325,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
               >
                 {photoWorking
                   ? "Working..."
-                  : "Upload Photo"}
+                  : "Upload Profile Photo"}
 
                 <input
                   type="file"
@@ -1319,7 +1336,51 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                       e.target.files?.[0];
 
                     if (file) {
-                      uploadFighterPhoto(file);
+                      uploadFighterPhoto(
+                        file,
+                        "profile"
+                      );
+                    }
+
+                    e.target.value = "";
+                  }}
+                  style={{
+                    display: "none",
+                  }}
+                />
+              </label>
+
+              <label
+                style={{
+                  display: "inline-block",
+                  padding: "11px 16px",
+                  background: "#111",
+                  color: "#fff",
+                  borderRadius: 8,
+                  fontWeight: 900,
+                  cursor: photoWorking
+                    ? "not-allowed"
+                    : "pointer",
+                  opacity: photoWorking ? 0.6 : 1,
+                }}
+              >
+                {photoWorking
+                  ? "Working..."
+                  : "Upload Marketing Photo"}
+
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={photoWorking}
+                  onChange={(e) => {
+                    const file =
+                      e.target.files?.[0];
+
+                    if (file) {
+                      uploadFighterPhoto(
+                        file,
+                        "marketing"
+                      );
                     }
 
                     e.target.value = "";
@@ -1366,7 +1427,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
               </div>
 
               <strong>
-                Add your first promotional photo
+                Add your profile or marketing photo
               </strong>
 
               <div
@@ -1375,8 +1436,8 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                   fontSize: 14,
                 }}
               >
-                Your first upload automatically becomes
-                your Primary Flyer Photo.
+                Your profile photo is for your fighter profile.
+                Marketing photos can be used for fight promotion.
               </div>
             </div>
           ) : (
