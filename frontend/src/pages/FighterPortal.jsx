@@ -2357,7 +2357,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                     </div>
                   ) : null}
 
-                  {![
+                  {!contract.docusign_envelope_id && ![
                     "signed",
                     "declined",
                     "cancelled",
