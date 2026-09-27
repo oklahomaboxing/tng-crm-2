@@ -135,7 +135,26 @@ function PaymentMessage({ status }) {
 }
 
 
+
 function RootEntry() {
+  const isFighterPreview =
+    window.location.pathname === "/fighter/preview";
+
+  const fighterPreviewToken =
+    sessionStorage.getItem("fighterPreviewToken");
+
+  if (isFighterPreview && fighterPreviewToken) {
+    return (
+      <FighterPortal
+        previewToken={fighterPreviewToken}
+        onLogout={() => {
+          sessionStorage.removeItem("fighterPreviewToken");
+          window.close();
+        }}
+      />
+    );
+  }
+
   const path = window.location.pathname;
 
   const isPublicTicketPage =

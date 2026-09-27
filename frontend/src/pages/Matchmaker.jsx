@@ -998,6 +998,53 @@ export default function Matchmaker() {
   }
 
 
+
+  async function previewFighterPortal(fighter) {
+    const previewWindow = window.open("about:blank", "_blank");
+
+    if (!previewWindow) {
+      setMsgType("warning");
+      setMsg("Allow pop-ups for TNGOS to preview a fighter portal.");
+      return;
+    }
+
+    try {
+      previewWindow.document.write(
+        "<p style='font-family:Arial;padding:24px'>Opening Fighter Portal...</p>"
+      );
+
+      const response = await fetch(
+        `${API}/api/fighter/admin/fighters/${fighter.id}/preview-token`,
+        {
+          method: "POST",
+          headers: authHeaders(),
+        }
+      );
+
+      const data = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not open Fighter Portal"
+        );
+      }
+
+      previewWindow.sessionStorage.setItem(
+        "fighterPreviewToken",
+        data.token
+      );
+
+      previewWindow.location.href = "/fighter/preview";
+    } catch (error) {
+      previewWindow.close();
+      setMsgType("error");
+      setMsg(
+        error.message || "Could not open Fighter Portal"
+      );
+    }
+  }
+
+
   async function openEditFighter(fighter) {
     setEditFighterId(fighter.id);
 
@@ -2134,12 +2181,21 @@ export default function Matchmaker() {
                               }
                               disabled={
                                 fighterInviteLoading[f.id] ||
-                                !(f.email || "").trim() ||
-                                fighterInviteStatus[f.id]?.activated
+                                (
+                                  !fighterInviteStatus[f.id]?.activated &&
+                                  !(f.email || "").trim()
+                                )
                               }
                               onClick={(e) => {
                                 e.stopPropagation();
-                                inviteFighterLogin(f);
+
+                                if (
+                                  fighterInviteStatus[f.id]?.activated
+                                ) {
+                                  previewFighterPortal(f);
+                                } else {
+                                  inviteFighterLogin(f);
+                                }
                               }}
                             >
                               {fighterInviteLoading[f.id]
@@ -2147,7 +2203,7 @@ export default function Matchmaker() {
                                 : !(f.email || "").trim()
                                   ? "Email Required"
                                   : fighterInviteStatus[f.id]?.activated
-                                    ? "Login Active"
+                                    ? "Login as Fighter"
                                     : fighterInviteStatus[f.id]?.invite_pending
                                       ? "Resend Invite"
                                       : "Activate Login"}

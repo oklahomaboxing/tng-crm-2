@@ -14,7 +14,7 @@ from fastapi import Request, APIRouter, Depends, Header, HTTPException, UploadFi
 from sqlalchemy.orm import Session
 
 from ..core.dependencies import current_user
-from ..auth import decode_token, hash_password
+from ..auth import decode_token, hash_password, create_token
 from ..database import Base, engine, get_db
 from ..models import User
 from ..matchmaker.models import (
@@ -759,6 +759,75 @@ def _require_fighter_portal_admin(user):
             status_code=403,
             detail="Admin or staff access required",
         )
+
+
+
+@router.post("/admin/fighters/{fighter_id}/preview-token")
+def admin_create_fighter_preview_token(
+    fighter_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _require_fighter_portal_admin(user)
+
+    fighter = (
+        db.query(BoxingFighter)
+        .filter(BoxingFighter.id == fighter_id)
+        .first()
+    )
+
+    if not fighter:
+        raise HTTPException(
+            status_code=404,
+            detail="Fighter not found",
+        )
+
+    account = (
+        db.query(FighterAccount)
+        .filter(FighterAccount.fighter_id == fighter.id)
+        .first()
+    )
+
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="This fighter does not have an active portal account",
+        )
+
+    fighter_user = (
+        db.query(User)
+        .filter(User.id == account.user_id)
+        .first()
+    )
+
+    if not fighter_user:
+        raise HTTPException(
+            status_code=404,
+            detail="Fighter portal user not found",
+        )
+
+    if not fighter_user.active:
+        raise HTTPException(
+            status_code=409,
+            detail="Fighter portal access is disabled",
+        )
+
+    token = create_token(
+        {
+            "sub": str(fighter_user.id),
+            "role": "fighter",
+            "preview": True,
+            "admin_sub": str(user.id),
+        },
+        minutes=10,
+    )
+
+    return {
+        "fighter_id": fighter.id,
+        "fighter_name": fighter.legal_name,
+        "token": token,
+        "expires_in_minutes": 10,
+    }
 
 
 @router.get("/admin/fighters/{fighter_id}/portal-account")

@@ -40,7 +40,7 @@ function money(cents) {
   }).format((Number(cents) || 0) / 100);
 }
 
-export default function FighterPortal({ onLogout }) {
+export default function FighterPortal({ onLogout, previewToken = null }) {
   const [data, setData] = useState(null);
   const [ticketSales, setTicketSales] = useState(null);
   const [fightOffers, setFightOffers] = useState([]);
@@ -64,7 +64,11 @@ export default function FighterPortal({ onLogout }) {
       setLoading(true);
       setMessage("");
 
-      const token = localStorage.getItem("token");
+      const token = (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const headers = {
         Authorization: `Bearer ${token}`,
@@ -137,7 +141,11 @@ export default function FighterPortal({ onLogout }) {
 
 
   async function loadFighterPhotos() {
-    const token = localStorage.getItem("token");
+    const token = (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
     try {
       const response = await fetch(
@@ -240,7 +248,11 @@ export default function FighterPortal({ onLogout }) {
 
     try {
       const token =
-        localStorage.getItem("token");
+        (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const formData = new FormData();
       formData.append("file", file);
@@ -291,7 +303,11 @@ export default function FighterPortal({ onLogout }) {
 
     try {
       const token =
-        localStorage.getItem("token");
+        (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const response = await fetch(
         `${API}/api/fighter/me/photos/${photoId}/primary`,
@@ -342,7 +358,11 @@ export default function FighterPortal({ onLogout }) {
 
     try {
       const token =
-        localStorage.getItem("token");
+        (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const response = await fetch(
         `${API}/api/fighter/me/photos/${photoId}`,
@@ -384,7 +404,11 @@ export default function FighterPortal({ onLogout }) {
   async function loadContracts() {
     try {
       const token =
-        localStorage.getItem("token");
+        (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const response = await fetch(
         `${API}/api/fighter/me/contracts`,
@@ -455,7 +479,11 @@ export default function FighterPortal({ onLogout }) {
 
     try {
       const token =
-        localStorage.getItem("token");
+        (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const response = await fetch(
         `${API}/api/fighter/me/contracts/${contractId}/esign`,
@@ -551,7 +579,11 @@ export default function FighterPortal({ onLogout }) {
 
       try {
         const token =
-          localStorage.getItem("token");
+          (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
         const response = await fetch(
           `${API}/api/fighter/me/contracts/${contractId}/signed-upload`,
@@ -667,7 +699,11 @@ export default function FighterPortal({ onLogout }) {
 
     try {
       const token =
-        localStorage.getItem("token");
+        (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const response = await fetch(
         `${API}/api/fighter/me/contracts/${contractId}/adobe-signing-url`,
@@ -745,7 +781,11 @@ export default function FighterPortal({ onLogout }) {
 
     try {
       const token =
-        localStorage.getItem("token");
+        (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const response = await fetch(
         `${API}/api/fighter/me/contracts/${contractId}/signed-file`,
@@ -818,7 +858,11 @@ export default function FighterPortal({ onLogout }) {
 
     try {
       const token =
-        localStorage.getItem("token");
+        (
+          previewToken ||
+          sessionStorage.getItem("fighterPreviewToken") ||
+          localStorage.getItem("token")
+        );
 
       const response = await fetch(
         `${API}/api/fighter/me/fight-offers/${contractId}/respond`,
