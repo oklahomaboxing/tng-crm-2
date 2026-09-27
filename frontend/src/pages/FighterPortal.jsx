@@ -1348,7 +1348,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                 gridColumn: "1 / -1",
                 display: "grid",
                 gridTemplateColumns:
-                  "repeat(auto-fit, minmax(180px, 1fr))",
+                  "repeat(3, minmax(0, 1fr))",
                 gap: 12,
                 marginTop: 18,
                 paddingTop: 18,
