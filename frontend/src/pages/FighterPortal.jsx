@@ -687,11 +687,11 @@ const [photoWorking, setPhotoWorking] = useState(false);
   }
 
 
-  async function openAdobeSigning(contract) {
+  async function openDocuSignSigning(contract) {
     const contractId = contract.contract_id;
 
     // Open the tab immediately so mobile/browser
-    // popup blockers do not block Adobe after fetch.
+    // popup blockers do not block DocuSign after fetch.
     const signingWindow = window.open(
       "",
       "_blank"
@@ -727,7 +727,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
               ">
                 TNG BOXING
               </div>
-              <h2>Opening Adobe Acrobat Sign...</h2>
+              <h2>Opening DocuSign...</h2>
               <p style="color:#aaa;">
                 Secure contract signature
               </p>
@@ -749,7 +749,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
         );
 
       const response = await fetch(
-        `${API}/api/fighter/me/contracts/${contractId}/adobe-signing-url`,
+        `${API}/api/fighter/me/contracts/${contractId}/docusign-signing-url`,
         {
           headers: {
             Authorization:
@@ -763,13 +763,13 @@ const [photoWorking, setPhotoWorking] = useState(false);
       if (!response.ok) {
         throw new Error(
           body.detail ||
-          "Could not open Adobe Acrobat Sign."
+          "Could not open DocuSign."
         );
       }
 
       if (!body.signing_url) {
         throw new Error(
-          "Adobe signing link is not available yet."
+          "DocuSign signing link is not available yet."
         );
       }
 
@@ -784,7 +784,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
 
       const notice =
         err.message ||
-        "Could not open Adobe Acrobat Sign.";
+        "Could not open DocuSign.";
 
       setMessage(notice);
       window.alert(notice);
@@ -2054,8 +2054,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
                   )}
 
                   {String(
-                    contract.adobe_status || ""
-                  ).toUpperCase() === "SIGNED" ? (
+                    contract.docusign_status || ""
+                  ).toLowerCase() === "completed" ? (
                     <div
                       style={{
                         marginTop: 18,
@@ -2107,10 +2107,10 @@ const [photoWorking, setPhotoWorking] = useState(false);
                           fontWeight: 800,
                         }}
                       >
-                        Adobe Acrobat Sign
+                        DocuSign
                       </div>
 
-                      {contract.adobe_signed_at && (
+                      {contract.docusign_signed_at && (
                         <div
                           style={{
                             color:
@@ -2121,7 +2121,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                         >
                           Completed{" "}
                           {new Date(
-                            contract.adobe_signed_at
+                            contract.docusign_signed_at
                           ).toLocaleString()}
                         </div>
                       )}
@@ -2158,7 +2158,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                         </button>
                       )}
                     </div>
-                  ) : contract.adobe_signing_available ? (
+                  ) : contract.docusign_signing_available ? (
                     <div
                       style={{
                         marginTop: 18,
@@ -2181,7 +2181,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                           letterSpacing: 2,
                         }}
                       >
-                        ADOBE SIGN
+                        DOCUSIGN
                       </div>
 
                       <div
@@ -2203,7 +2203,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                         }}
                       >
                         Secure electronic signature
-                        through Adobe Acrobat Sign.
+                        through DocuSign.
                       </div>
 
                       <div
@@ -2290,7 +2290,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                           contract.contract_id
                         }
                         onClick={() =>
-                          openAdobeSigning(contract)
+                          openDocuSignSigning(contract)
                         }
                         style={{
                           marginTop: 18,
@@ -2315,8 +2315,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
                       >
                         {contractWorkingId ===
                         contract.contract_id
-                          ? "OPENING ADOBE..."
-                          : "REVIEW & SIGN WITH ADOBE"}
+                          ? "OPENING DOCUSIGN..."
+                          : "REVIEW & SIGN WITH DOCUSIGN"}
                       </button>
 
                       <button
@@ -2351,7 +2351,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                           fontSize: 11,
                         }}
                       >
-                        After signing in Adobe,
+                        After signing in DocuSign,
                         return here and refresh status.
                       </div>
                     </div>
@@ -2383,7 +2383,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                           marginBottom: 8,
                         }}
                       >
-                        {contract.adobe_agreement_id
+                        {contract.docusign_envelope_id
                           ? "Other Signing Option"
                           : "Electronic Signature"}
                       </div>
@@ -2395,8 +2395,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
                           marginBottom: 12,
                         }}
                       >
-                        {contract.adobe_agreement_id
-                          ? "If you cannot use Adobe, you may use the TNGOS electronic signature below."
+                        {contract.docusign_envelope_id
+                          ? "If you cannot use DocuSign, you may use the TNGOS electronic signature below."
                           : "Review and download the official contract before signing."}
                       </div>
 

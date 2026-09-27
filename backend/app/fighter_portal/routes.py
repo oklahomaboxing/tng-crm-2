@@ -1236,6 +1236,51 @@ def my_contracts(
                 "adobe_signed_at":
                     row.adobe_signed_at,
 
+                # DocuSign
+                "docusign_envelope_id":
+                    getattr(
+                        row,
+                        "docusign_envelope_id",
+                        "",
+                    ) or "",
+
+                "docusign_status":
+                    getattr(
+                        row,
+                        "docusign_status",
+                        "",
+                    ) or "",
+
+                "docusign_signing_available":
+                    bool(
+                        getattr(
+                            row,
+                            "docusign_envelope_id",
+                            "",
+                        )
+                        and str(
+                            getattr(
+                                row,
+                                "docusign_status",
+                                "",
+                            )
+                            or ""
+                        ).lower()
+                        not in {
+                            "completed",
+                            "voided",
+                            "declined",
+                            "deleted",
+                        }
+                    ),
+
+                "docusign_signed_at":
+                    getattr(
+                        row,
+                        "docusign_signed_at",
+                        None,
+                    ),
+
                 "contract_date":
                     row.contract_date,
                 "boxer_name":
@@ -1356,6 +1401,190 @@ def my_contracts(
         ],
     }
 
+
+
+@router.get("/me/contracts/{contract_id}/docusign-signing-url")
+def fighter_docusign_signing_url(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    import requests
+    from datetime import datetime
+
+    account, fighter = _linked_fighter_account(
+        user,
+        db,
+    )
+
+    contract = (
+        db.query(BoxingContract)
+        .filter(
+            BoxingContract.id == contract_id,
+            BoxingContract.fighter_id == fighter.id,
+        )
+        .first()
+    )
+
+    if not contract:
+        raise HTTPException(
+            status_code=404,
+            detail="Contract not found.",
+        )
+
+    envelope_id = str(
+        getattr(
+            contract,
+            "docusign_envelope_id",
+            "",
+        )
+        or ""
+    ).strip()
+
+    if not envelope_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This contract has not been sent "
+                "through DocuSign."
+            ),
+        )
+
+    status = str(
+        getattr(
+            contract,
+            "docusign_status",
+            "",
+        )
+        or ""
+    ).strip().lower()
+
+    if status == "completed":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This DocuSign contract has already "
+                "been signed."
+            ),
+        )
+
+    if status in {
+        "voided",
+        "declined",
+        "deleted",
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This DocuSign envelope is no longer "
+                "available for signing."
+            ),
+        )
+
+    fighter_email = str(
+        getattr(fighter, "email", "")
+        or ""
+    ).strip()
+
+    fighter_name = str(
+        getattr(fighter, "legal_name", "")
+        or getattr(contract, "boxer_name", "")
+        or "Fighter"
+    ).strip()
+
+    if not fighter_email:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Fighter email address is missing."
+            ),
+        )
+
+    # Import helpers from matchmaker route module.
+    from ..matchmaker.routes import (
+        _docusign_access_token,
+        _docusign_api_base,
+        _docusign_headers,
+        _docusign_error,
+    )
+
+    token = _docusign_access_token()
+    api_base = _docusign_api_base()
+
+    return_url = str(
+        os.getenv(
+            "DOCUSIGN_RETURN_URL",
+            "https://tngos.tngboxinggym.com/fighter",
+        )
+        or
+        "https://tngos.tngboxinggym.com/fighter"
+    ).strip()
+
+    payload = {
+        "returnUrl":
+            return_url,
+        "authenticationMethod":
+            "none",
+        "email":
+            fighter_email,
+        "userName":
+            fighter_name,
+        "clientUserId":
+            f"tng-fighter-{fighter.id}",
+    }
+
+    response = requests.post(
+        (
+            f"{api_base}/envelopes/"
+            f"{envelope_id}/views/recipient"
+        ),
+        headers=_docusign_headers(token),
+        json=payload,
+        timeout=30,
+    )
+
+    if not response.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Could not create DocuSign signing session: "
+                + _docusign_error(
+                    response,
+                    "DocuSign recipient view failed.",
+                )
+            ),
+        )
+
+    body = response.json()
+
+    signing_url = str(
+        body.get("url") or ""
+    ).strip()
+
+    if not signing_url:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "DocuSign did not return "
+                "a signing URL."
+            ),
+        )
+
+    contract.docusign_signing_url = signing_url
+    contract.docusign_last_synced_at = (
+        datetime.utcnow()
+    )
+
+    db.commit()
+
+    return {
+        "contract_id":
+            contract.id,
+        "envelope_id":
+            envelope_id,
+        "signing_url":
+            signing_url,
+    }
 
 
 @router.get("/me/contracts/{contract_id}/adobe-signing-url")

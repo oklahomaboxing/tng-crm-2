@@ -276,6 +276,33 @@ class BoxingContract(Base):
         nullable=True,
     )
 
+    # DocuSign eSignature integration
+    docusign_envelope_id = Column(
+        String,
+        default="",
+        index=True,
+    )
+    docusign_status = Column(
+        String,
+        default="",
+    )
+    docusign_signing_url = Column(
+        Text,
+        default="",
+    )
+    docusign_sent_at = Column(
+        DateTime,
+        nullable=True,
+    )
+    docusign_signed_at = Column(
+        DateTime,
+        nullable=True,
+    )
+    docusign_last_synced_at = Column(
+        DateTime,
+        nullable=True,
+    )
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(
         DateTime,

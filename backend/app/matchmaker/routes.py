@@ -63,6 +63,235 @@ ensure_ticket_commission_schema()
 
 
 
+def _docusign_config():
+    integration_key = os.getenv(
+        "DOCUSIGN_INTEGRATION_KEY",
+        "",
+    ).strip()
+
+    user_id = os.getenv(
+        "DOCUSIGN_USER_ID",
+        "",
+    ).strip()
+
+    account_id = os.getenv(
+        "DOCUSIGN_ACCOUNT_ID",
+        "",
+    ).strip()
+
+    auth_server = os.getenv(
+        "DOCUSIGN_AUTH_SERVER",
+        "account-d.docusign.com",
+    ).strip().replace(
+        "https://",
+        "",
+    ).rstrip("/")
+
+    base_uri = os.getenv(
+        "DOCUSIGN_BASE_URI",
+        "https://demo.docusign.net",
+    ).strip().rstrip("/")
+
+    private_key = os.getenv(
+        "DOCUSIGN_PRIVATE_KEY",
+        "",
+    )
+
+    if "\\n" in private_key:
+        private_key = private_key.replace(
+            "\\n",
+            "\n",
+        )
+
+    missing = []
+
+    if not integration_key:
+        missing.append(
+            "DOCUSIGN_INTEGRATION_KEY"
+        )
+
+    if not user_id:
+        missing.append(
+            "DOCUSIGN_USER_ID"
+        )
+
+    if not account_id:
+        missing.append(
+            "DOCUSIGN_ACCOUNT_ID"
+        )
+
+    if not private_key.strip():
+        missing.append(
+            "DOCUSIGN_PRIVATE_KEY"
+        )
+
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "DocuSign is not configured. Missing: "
+                + ", ".join(missing)
+            ),
+        )
+
+    return {
+        "integration_key": integration_key,
+        "user_id": user_id,
+        "account_id": account_id,
+        "auth_server": auth_server,
+        "base_uri": base_uri,
+        "private_key": private_key,
+    }
+
+
+def _docusign_access_token():
+    import time
+    import jwt
+    import requests
+
+    config = _docusign_config()
+
+    now = int(time.time())
+
+    assertion = jwt.encode(
+        {
+            "iss":
+                config["integration_key"],
+            "sub":
+                config["user_id"],
+            "aud":
+                config["auth_server"],
+            "iat":
+                now,
+            "exp":
+                now + 3600,
+            "scope":
+                "signature impersonation",
+        },
+        config["private_key"],
+        algorithm="RS256",
+    )
+
+    response = requests.post(
+        (
+            "https://"
+            f'{config["auth_server"]}'
+            "/oauth/token"
+        ),
+        data={
+            "grant_type":
+                "urn:ietf:params:oauth:"
+                "grant-type:jwt-bearer",
+            "assertion": assertion,
+        },
+        headers={
+            "Content-Type":
+                "application/x-www-form-urlencoded",
+        },
+        timeout=30,
+    )
+
+    if not response.ok:
+        detail = ""
+
+        try:
+            body = response.json()
+
+            detail = str(
+                body.get("error_description")
+                or body.get("error")
+                or ""
+            ).strip()
+        except Exception:
+            detail = str(
+                response.text or ""
+            ).strip()
+
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "DocuSign authentication failed"
+                + (
+                    f": {detail[:500]}"
+                    if detail
+                    else "."
+                )
+            ),
+        )
+
+    body = response.json()
+
+    access_token = str(
+        body.get("access_token") or ""
+    ).strip()
+
+    if not access_token:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "DocuSign did not return "
+                "an access token."
+            ),
+        )
+
+    return access_token
+
+
+def _docusign_headers(token):
+    return {
+        "Authorization":
+            f"Bearer {token}",
+        "Accept":
+            "application/json",
+        "Content-Type":
+            "application/json",
+    }
+
+
+def _docusign_api_base():
+    config = _docusign_config()
+
+    return (
+        f'{config["base_uri"]}'
+        "/restapi/v2.1/accounts/"
+        f'{config["account_id"]}'
+    )
+
+
+def _docusign_error(
+    response,
+    fallback,
+):
+    try:
+        body = response.json()
+
+        message = (
+            body.get("message")
+            or body.get("errorCode")
+            or body.get("error")
+        )
+
+        if message:
+            return str(message)
+
+    except Exception:
+        pass
+
+    value = str(
+        getattr(
+            response,
+            "text",
+            "",
+        )
+        or ""
+    ).strip()
+
+    if value:
+        return value[:500]
+
+    return fallback
+
+
 def _adobe_sign_access_token():
     token = os.getenv(
         "ADOBE_SIGN_ACCESS_TOKEN",
@@ -4350,6 +4579,520 @@ Do not add fake ticket information.
                     "nosniff",
             },
         )
+
+
+    @router.post("/contracts/{contract_id}/docusign/send")
+    def send_contract_with_docusign(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        import base64
+        import requests
+        from datetime import datetime
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(BoxingContract.id == contract_id)
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id == contract.fighter_id
+            )
+            .first()
+        )
+
+        opponent = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id == contract.opponent_id
+            )
+            .first()
+        )
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(
+                BoxingEvent.id == contract.event_id
+            )
+            .first()
+        )
+
+        bout = (
+            db.query(BoxingBout)
+            .filter(
+                BoxingBout.id == contract.bout_id
+            )
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract fighter not found",
+            )
+
+        if not opponent:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract opponent not found",
+            )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract event not found",
+            )
+
+        fighter_email = str(
+            getattr(fighter, "email", "") or ""
+        ).strip()
+
+        if not fighter_email:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Fighter must have an email address "
+                    "before sending with DocuSign."
+                ),
+            )
+
+        if str(
+            getattr(
+                contract,
+                "docusign_envelope_id",
+                "",
+            )
+            or ""
+        ).strip():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This contract already has a "
+                    "DocuSign envelope."
+                ),
+            )
+
+        token = _docusign_access_token()
+        api_base = _docusign_api_base()
+
+        pdf_bytes = build_official_contract_pdf(
+            contract=contract,
+            fighter=fighter,
+            opponent=opponent,
+            event=event,
+            bout=bout,
+        )
+
+        fighter_name = str(
+            fighter.legal_name
+            or contract.boxer_name
+            or "Fighter"
+        ).strip()
+
+        event_name = str(
+            getattr(event, "name", "")
+            or getattr(event, "event_name", "")
+            or contract.event_name
+            or "TNG Boxing"
+        ).strip()
+
+        encoded_pdf = base64.b64encode(
+            pdf_bytes
+        ).decode("ascii")
+
+        payload = {
+            "emailSubject":
+                f"{event_name} - TNG Boxing Bout Contract",
+
+            "documents": [
+                {
+                    "documentBase64":
+                        encoded_pdf,
+                    "name":
+                        f"{fighter_name}-contract-{contract.id}.pdf",
+                    "fileExtension":
+                        "pdf",
+                    "documentId":
+                        "1",
+                }
+            ],
+
+            "recipients": {
+                "signers": [
+                    {
+                        "email":
+                            fighter_email,
+                        "name":
+                            fighter_name,
+                        "recipientId":
+                            "1",
+                        "routingOrder":
+                            "1",
+                        "clientUserId":
+                            f"tng-fighter-{fighter.id}",
+
+                        "tabs": {
+                            "initialHereTabs": [
+                                {
+                                    "anchorString":
+                                        "{{TNGInitials1_es_:signer1:initials}}",
+                                    "anchorIgnoreIfNotPresent":
+                                        "false",
+                                },
+                                {
+                                    "anchorString":
+                                        "{{TNGInitials2_es_:signer1:initials}}",
+                                    "anchorIgnoreIfNotPresent":
+                                        "false",
+                                },
+                            ],
+
+                            "signHereTabs": [
+                                {
+                                    "anchorString":
+                                        "{{TNGSignature_es_:signer1:signature}}",
+                                    "anchorIgnoreIfNotPresent":
+                                        "false",
+                                }
+                            ],
+                        },
+                    }
+                ]
+            },
+
+            "status": "sent",
+        }
+
+        response = requests.post(
+            f"{api_base}/envelopes",
+            headers=_docusign_headers(token),
+            json=payload,
+            timeout=60,
+        )
+
+        if not response.ok:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "DocuSign envelope creation failed: "
+                    + _docusign_error(
+                        response,
+                        "Could not create DocuSign envelope.",
+                    )
+                ),
+            )
+
+        body = response.json()
+
+        envelope_id = str(
+            body.get("envelopeId") or ""
+        ).strip()
+
+        if not envelope_id:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "DocuSign did not return "
+                    "an envelope ID."
+                ),
+            )
+
+        now = datetime.utcnow()
+
+        contract.signature_provider = "docusign"
+        contract.docusign_envelope_id = envelope_id
+        contract.docusign_status = str(
+            body.get("status") or "sent"
+        ).strip()
+        contract.docusign_sent_at = now
+        contract.docusign_last_synced_at = now
+
+        db.commit()
+        db.refresh(contract)
+
+        return {
+            "ok": True,
+            "contract_id": contract.id,
+            "signature_provider": "docusign",
+            "envelope_id":
+                contract.docusign_envelope_id,
+            "status":
+                contract.docusign_status,
+            "message":
+                "Contract sent through DocuSign.",
+        }
+
+
+    @router.post("/contracts/{contract_id}/docusign/sync")
+    def sync_docusign_contract(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        import requests
+        from datetime import datetime
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        envelope_id = str(
+            getattr(
+                contract,
+                "docusign_envelope_id",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not envelope_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This contract has not been sent "
+                    "through DocuSign."
+                ),
+            )
+
+        token = _docusign_access_token()
+        api_base = _docusign_api_base()
+
+        response = requests.get(
+            (
+                f"{api_base}/envelopes/"
+                f"{envelope_id}"
+            ),
+            headers=_docusign_headers(token),
+            timeout=30,
+        )
+
+        if not response.ok:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "DocuSign envelope sync failed: "
+                    + _docusign_error(
+                        response,
+                        "Could not sync DocuSign envelope.",
+                    )
+                ),
+            )
+
+        body = response.json()
+
+        status = str(
+            body.get("status") or ""
+        ).strip().lower()
+
+        now = datetime.utcnow()
+
+        if status:
+            contract.docusign_status = status
+
+        contract.docusign_last_synced_at = now
+
+        imported_pdf = False
+
+        if status == "completed":
+            pdf_response = requests.get(
+                (
+                    f"{api_base}/envelopes/"
+                    f"{envelope_id}/documents/combined"
+                ),
+                headers={
+                    "Authorization":
+                        f"Bearer {token}",
+                    "Accept":
+                        "application/pdf",
+                },
+                timeout=60,
+            )
+
+            if not pdf_response.ok:
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "Could not download completed "
+                        "DocuSign contract: "
+                        + _docusign_error(
+                            pdf_response,
+                            "DocuSign PDF download failed.",
+                        )
+                    ),
+                )
+
+            pdf_bytes = pdf_response.content
+
+            if (
+                not pdf_bytes
+                or not pdf_bytes.startswith(b"%PDF")
+            ):
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "DocuSign did not return "
+                        "a valid signed PDF."
+                    ),
+                )
+
+            document = (
+                db.query(BoxingSignedContractDocument)
+                .filter(
+                    BoxingSignedContractDocument.contract_id
+                    == contract.id
+                )
+                .first()
+            )
+
+            if not document:
+                document = BoxingSignedContractDocument(
+                    contract_id=contract.id,
+                )
+                db.add(document)
+
+            document.file_name = (
+                f"contract-{contract.id}-"
+                "docusign-signed.pdf"
+            )
+
+            document.content_type = (
+                "application/pdf"
+            )
+
+            document.file_size = len(
+                pdf_bytes
+            )
+
+            document.file_data = pdf_bytes
+            document.source = "docusign"
+            document.uploaded_by_user_id = None
+            document.uploaded_by_name = "DocuSign"
+            document.uploaded_at = now
+
+            contract.signature_provider = (
+                "docusign"
+            )
+
+            contract.docusign_signed_at = (
+                contract.docusign_signed_at
+                or now
+            )
+
+            # Keep the existing TNGOS workflow
+            # consistent with signed contracts.
+            contract.status = "signed"
+
+            imported_pdf = True
+
+        elif status in {
+            "voided",
+            "declined",
+            "deleted",
+        }:
+            contract.status = status
+
+        db.commit()
+        db.refresh(contract)
+
+        return {
+            "ok": True,
+            "contract_id":
+                contract.id,
+            "envelope_id":
+                envelope_id,
+            "status":
+                contract.docusign_status,
+            "signed":
+                contract.docusign_status
+                == "completed",
+            "signed_pdf_imported":
+                imported_pdf,
+            "signed_at":
+                contract.docusign_signed_at,
+        }
+
+
+    @router.get("/contracts/{contract_id}/docusign/status")
+    def get_docusign_contract_status(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(
+                BoxingContract.id == contract_id
+            )
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found",
+            )
+
+        return {
+            "contract_id":
+                contract.id,
+            "signature_provider":
+                contract.signature_provider
+                or "tng",
+            "envelope_id":
+                getattr(
+                    contract,
+                    "docusign_envelope_id",
+                    "",
+                )
+                or "",
+            "status":
+                getattr(
+                    contract,
+                    "docusign_status",
+                    "",
+                )
+                or "",
+            "sent":
+                bool(
+                    getattr(
+                        contract,
+                        "docusign_envelope_id",
+                        "",
+                    )
+                ),
+            "signed_at":
+                getattr(
+                    contract,
+                    "docusign_signed_at",
+                    None,
+                ),
+        }
 
 
     @router.post("/contracts/{contract_id}/adobe/send")
