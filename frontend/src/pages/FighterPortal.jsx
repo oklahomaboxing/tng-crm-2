@@ -891,6 +891,22 @@ const [photoWorking, setPhotoWorking] = useState(false);
   }
 
 
+  function goToFighterContract(contractId) {
+    window.setTimeout(() => {
+      const element = document.getElementById(
+        `fighter-contract-${contractId}`
+      );
+
+      if (element) {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }, 150);
+  }
+
+
   async function respondToOffer(
     contractId,
     action,
@@ -948,6 +964,15 @@ const [photoWorking, setPhotoWorking] = useState(false);
       window.alert(
         body.message || "Offer updated."
       );
+
+      if (
+        action === "accept" &&
+        String(body.status || "").toLowerCase() ===
+          "accepted"
+      ) {
+        await loadContracts();
+        goToFighterContract(contractId);
+      }
     } catch (err) {
       const notice =
         err.message ||
@@ -1770,107 +1795,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
                         </div>
                       </div>
 
-                      <div>
-                        <small>Travel</small>
-                        <div>
-                          <strong>
-                            {new Intl.NumberFormat(
-                              "en-US",
-                              {
-                                style: "currency",
-                                currency: "USD",
-                              }
-                            ).format(
-                              Number(
-                                offer.travel_expense ||
-                                  0
-                              )
-                            )}
-                          </strong>
-                        </div>
-                      </div>
                     </div>
 
-
-                    <div
-                      style={{
-                        marginTop: 14,
-                        padding: 12,
-                        border: "1px solid #ddd",
-                        borderRadius: 8,
-                        background: "#fafafa",
-                        color: "#000",
-                      }}
-                    >
-                      <strong>
-                        Travel / Hotel / Per Diem
-                      </strong>
-
-                      <div style={{ marginTop: 6 }}>
-                        Travel type:{" "}
-                        <strong>
-                          {offer.travel_type || "N/A"}
-                        </strong>
-                      </div>
-
-                      <div>
-                        Travel paid by:{" "}
-                        <strong>
-                          {offer.travel_paid_by || "N/A"}
-                        </strong>
-                      </div>
-
-                      <div>
-                        Travel amount:{" "}
-                        <strong>
-                          {new Intl.NumberFormat(
-                            "en-US",
-                            {
-                              style: "currency",
-                              currency: "USD",
-                            }
-                          ).format(
-                            Number(
-                              offer.travel_expense || 0
-                            )
-                          )}
-                        </strong>
-                      </div>
-
-                      <div>
-                        Hotel:{" "}
-                        <strong>
-                          {offer.hotel_provided ||
-                            "N/A"}
-                          {offer.hotel_name
-                            ? ` - ${offer.hotel_name}`
-                            : ""}
-                        </strong>
-                      </div>
-
-                      <div>
-                        Hotel nights:{" "}
-                        <strong>
-                          {offer.hotel_nights || 0}
-                        </strong>
-                      </div>
-
-                      <div>
-                        Per diem:{" "}
-                        <strong>
-                          $
-                          {Number(
-                            offer.per_diem_daily || 0
-                          ).toFixed(2)}
-                          /day ?{" "}
-                          {offer.per_diem_days || 0}
-                          {" = $"}
-                          {Number(
-                            offer.per_diem_total || 0
-                          ).toFixed(2)}
-                        </strong>
-                      </div>
-                    </div>
 
                     {offer.additional_terms && (
                       <div
@@ -2006,6 +1932,47 @@ const [photoWorking, setPhotoWorking] = useState(false);
                         </button>
                       </div>
                     )}
+
+                    {status === "accepted" && (
+                      <div
+                        style={{
+                          marginTop: 18,
+                          paddingTop: 16,
+                          borderTop: "1px solid #ddd",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            color: "#176b2c",
+                            marginBottom: 10,
+                          }}
+                        >
+                          Fight Accepted
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            goToFighterContract(
+                              offer.contract_id
+                            )
+                          }
+                          style={{
+                            border: 0,
+                            borderRadius: 8,
+                            padding: "12px 20px",
+                            background: "#111",
+                            color: "#fff",
+                            fontWeight: 900,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Sign Contract
+                        </button>
+                      </div>
+                    )}
+
                   </div>
                 );
               })}
@@ -2025,9 +1992,19 @@ const [photoWorking, setPhotoWorking] = useState(false);
             My Contracts
           </h2>
 
-          {contracts.length === 0 ? (
+          {contracts.filter((contract) =>
+            [
+              "accepted",
+              "signed",
+              "completed",
+            ].includes(
+              String(
+                contract.status || ""
+              ).toLowerCase()
+            )
+          ).length === 0 ? (
             <p style={{ color: "#666" }}>
-              No contracts are available yet.
+              Accept a fight offer to unlock your contract for signing.
             </p>
           ) : (
             <div
@@ -2036,10 +2013,24 @@ const [photoWorking, setPhotoWorking] = useState(false);
                 gap: 14,
               }}
             >
-              {contracts.map((contract) => (
+              {contracts
+                .filter((contract) =>
+                  [
+                    "accepted",
+                    "signed",
+                    "completed",
+                  ].includes(
+                    String(
+                      contract.status || ""
+                    ).toLowerCase()
+                  )
+                )
+                .map((contract) => (
                 <div
+                  id={`fighter-contract-${contract.contract_id}`}
                   key={contract.contract_id}
                   style={{
+                    scrollMarginTop: 24,
                     border:
                       "1px solid rgba(255,255,255,.12)",
                     borderRadius: 18,
@@ -2126,81 +2117,6 @@ const [photoWorking, setPhotoWorking] = useState(false);
                       {contract.signed_document
                         ? "Uploaded"
                         : "Not uploaded"}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 12,
-                      padding: 12,
-                      background: "#f7f7f7",
-                      borderRadius: 8,
-                      fontSize: 14,
-                    }}
-                  >
-                    <strong>
-                      Travel / Hotel / Per Diem
-                    </strong>
-
-
-                    <div style={{ marginTop: 6 }}>
-                      Ticket commission:{" "}
-                      <strong>
-                        {Number(
-                          contract.ticket_commission_percent ||
-                            0
-                        ).toFixed(1)}
-                        %
-                      </strong>
-                    </div>
-
-                    <div>
-                      Travel:{" "}
-                      {contract.travel_type ||
-                        "N/A"}
-                    </div>
-
-                    <div>
-                      Travel paid by:{" "}
-                      {contract.travel_paid_by ||
-                        "N/A"}
-                    </div>
-
-                    <div>
-                      Travel amount: $
-                      {Number(
-                        contract.travel_expense ||
-                          0
-                      ).toFixed(2)}
-                    </div>
-
-                    <div>
-                      Hotel:{" "}
-                      {contract.hotel_provided ||
-                        "N/A"}
-                      {contract.hotel_name
-                        ? ` - ${contract.hotel_name}`
-                        : ""}
-                    </div>
-
-                    <div>
-                      Hotel nights:{" "}
-                      {contract.hotel_nights || 0}
-                    </div>
-
-                    <div>
-                      Per diem: $
-                      {Number(
-                        contract.per_diem_daily ||
-                          0
-                      ).toFixed(2)}
-                      /day ?{" "}
-                      {contract.per_diem_days || 0}
-                      {" = $"}
-                      {Number(
-                        contract.per_diem_total ||
-                          0
-                      ).toFixed(2)}
                     </div>
                   </div>
 
