@@ -3859,11 +3859,18 @@ Do not add fake ticket information.
             or 4
         )
 
-        contract.maximum_weight = (
+        final_bout_weight = (
             float(data.get("maximum_weight"))
             if data.get("maximum_weight") not in ("", None)
             else bout.weight_agreed
         )
+
+        if final_bout_weight is not None:
+            # The negotiated contract weight becomes the
+            # authoritative weight for this entire bout.
+            bout.weight_agreed = final_bout_weight
+
+        contract.maximum_weight = final_bout_weight
 
         contract.event_name = event.name or ""
         contract.event_date = event.event_date or ""
@@ -3976,6 +3983,7 @@ Do not add fake ticket information.
             "opponent_name": contract.opponent_name,
             "rounds": contract.rounds,
             "maximum_weight": contract.maximum_weight,
+            "weight_agreed": bout.weight_agreed,
             "event_name": contract.event_name,
             "event_date": contract.event_date,
             "venue": contract.venue,

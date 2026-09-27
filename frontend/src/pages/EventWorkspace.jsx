@@ -745,9 +745,7 @@ export default function EventWorkspace({
           }),
           body: JSON.stringify({
             maximum_weight:
-              contractWeights[
-                `${bout.id}-${corner}`
-              ] ??
+              contractWeights[bout.id] ??
               bout.weight_agreed ??
               "",
 
@@ -785,6 +783,28 @@ export default function EventWorkspace({
           contract.detail || "Could not generate contract"
         );
       }
+
+      const savedBoutWeight =
+        contract.weight_agreed ??
+        contract.maximum_weight ??
+        bout.weight_agreed;
+
+      setData((old) => ({
+        ...old,
+        bouts: old.bouts.map((row) =>
+          row.id === bout.id
+            ? {
+                ...row,
+                weight_agreed: savedBoutWeight,
+              }
+            : row
+        ),
+      }));
+
+      setContractWeights((old) => ({
+        ...old,
+        [bout.id]: savedBoutWeight ?? "",
+      }));
 
       const html =
         buildOfficialContractHtml(contract);
@@ -2146,9 +2166,9 @@ export default function EventWorkspace({
                     color="text.secondary"
                     sx={{ mb: 2 }}
                   >
-                    Enter the final contracted maximum
-                    weight before generating each fighter's
-                    agreement.
+                    Enter the official final fight weight.
+                    Saving either fighter's contract updates
+                    the weight for the entire bout.
                   </Typography>
 
                   <Grid container spacing={2}>
@@ -2282,11 +2302,9 @@ export default function EventWorkspace({
                             <TextField
                               fullWidth
                               type="number"
-                              label="Final Contract Weight"
+                              label="Final Fight Weight"
                               value={
-                                contractWeights[
-                                  `${bout.id}-red`
-                                ] ??
+                                contractWeights[bout.id] ??
                                 bout.weight_agreed ??
                                 ""
                               }
@@ -2298,7 +2316,7 @@ export default function EventWorkspace({
                                 setContractWeights(
                                   (old) => ({
                                     ...old,
-                                    [`${bout.id}-red`]:
+                                    [bout.id]:
                                       e.target.value,
                                   })
                                 )
@@ -2792,11 +2810,9 @@ export default function EventWorkspace({
                             <TextField
                               fullWidth
                               type="number"
-                              label="Final Contract Weight"
+                              label="Final Fight Weight"
                               value={
-                                contractWeights[
-                                  `${bout.id}-blue`
-                                ] ??
+                                contractWeights[bout.id] ??
                                 bout.weight_agreed ??
                                 ""
                               }
@@ -2808,7 +2824,7 @@ export default function EventWorkspace({
                                 setContractWeights(
                                   (old) => ({
                                     ...old,
-                                    [`${bout.id}-blue`]:
+                                    [bout.id]:
                                       e.target.value,
                                   })
                                 )
