@@ -1023,6 +1023,22 @@ const [photoWorking, setPhotoWorking] = useState(false);
 
   const fighter = data.fighter || {};
 
+  const profilePhoto =
+    fighterPhotos.find(
+      (photo) =>
+        String(photo.photo_type || "").toLowerCase() ===
+        "profile"
+    ) ||
+    fighterPhotos.find(
+      (photo) => photo.is_primary
+    ) ||
+    null;
+
+  const profilePhotoUrl =
+    profilePhoto
+      ? fighterPhotoUrls[profilePhoto.id]
+      : null;
+
   const cards = [
     {
       title: "Fight Offers",
@@ -1165,44 +1181,158 @@ const [photoWorking, setPhotoWorking] = useState(false);
               flexWrap: "wrap",
             }}
           >
-            <div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 20,
+                flexWrap: "wrap",
+              }}
+            >
               <div
                 style={{
-                  color: "rgba(255,255,255,.68)",
-                  fontSize: 11,
-                  fontWeight: 900,
-                  letterSpacing: "2px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
-                WELCOME
+                <div
+                  style={{
+                    width: 112,
+                    height: 112,
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    background:
+                      "rgba(255,255,255,.12)",
+                    border:
+                      "3px solid rgba(255,255,255,.85)",
+                    display: "grid",
+                    placeItems: "center",
+                    boxShadow:
+                      "0 12px 30px rgba(0,0,0,.28)",
+                  }}
+                >
+                  {profilePhotoUrl ? (
+                    <img
+                      src={profilePhotoUrl}
+                      alt="Profile"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition: "center top",
+                      }}
+                    />
+                  ) : (
+                    <svg
+                      width="66"
+                      height="66"
+                      viewBox="0 0 64 64"
+                      aria-label="Profile placeholder"
+                    >
+                      <circle
+                        cx="32"
+                        cy="22"
+                        r="13"
+                        fill="rgba(255,255,255,.82)"
+                      />
+                      <path
+                        d="M10 58c2-14 10-21 22-21s20 7 22 21"
+                        fill="rgba(255,255,255,.82)"
+                      />
+                    </svg>
+                  )}
+                </div>
+
+                <label
+                  style={{
+                    display: "inline-block",
+                    padding: "7px 12px",
+                    borderRadius: 7,
+                    background: "#fff",
+                    color: "#111",
+                    fontSize: 12,
+                    fontWeight: 900,
+                    cursor: photoWorking
+                      ? "not-allowed"
+                      : "pointer",
+                    opacity: photoWorking ? 0.6 : 1,
+                  }}
+                >
+                  {photoWorking
+                    ? "Uploading..."
+                    : profilePhoto
+                    ? "Change Photo"
+                    : "Upload Photo"}
+
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={photoWorking}
+                    onChange={(e) => {
+                      const file =
+                        e.target.files?.[0];
+
+                      if (file) {
+                        uploadFighterPhoto(
+                          file,
+                          "profile"
+                        );
+                      }
+
+                      e.target.value = "";
+                    }}
+                    style={{
+                      display: "none",
+                    }}
+                  />
+                </label>
               </div>
 
-              <h1
-                style={{
-                  margin: "6px 0 8px",
-                  fontSize: "clamp(30px, 6vw, 52px)",
-                  lineHeight: .95,
-                  letterSpacing: "-1.8px",
-                  textTransform: "uppercase",
-                  fontWeight: 950,
-                  textShadow: "0 8px 26px rgba(0,0,0,.35)",
-                }}
-              >
-                {fighter.legal_name}
-              </h1>
+              <div>
+                <div
+                  style={{
+                    color:
+                      "rgba(255,255,255,.68)",
+                    fontSize: 11,
+                    fontWeight: 900,
+                    letterSpacing: "2px",
+                  }}
+                >
+                  WELCOME
+                </div>
 
-              <div
-                style={{
-                  color: "rgba(255,255,255,.78)",
-                  fontWeight: 700,
-                  fontSize: 15,
-                }}
-              >
-                {fighter.pro_record
-                  ? `Professional Record: ${fighter.pro_record}`
-                  : fighter.amateur_record
-                  ? `Amateur Record: ${fighter.amateur_record}`
-                  : "TNG Fighter"}
+                <h1
+                  style={{
+                    margin: "6px 0 8px",
+                    fontSize:
+                      "clamp(30px, 6vw, 52px)",
+                    lineHeight: .95,
+                    letterSpacing: "-1.8px",
+                    textTransform: "uppercase",
+                    fontWeight: 950,
+                    textShadow:
+                      "0 8px 26px rgba(0,0,0,.35)",
+                  }}
+                >
+                  {fighter.legal_name}
+                </h1>
+
+                <div
+                  style={{
+                    color:
+                      "rgba(255,255,255,.78)",
+                    fontWeight: 700,
+                    fontSize: 15,
+                  }}
+                >
+                  {fighter.pro_record
+                    ? `Professional Record: ${fighter.pro_record}`
+                    : fighter.amateur_record
+                    ? `Amateur Record: ${fighter.amateur_record}`
+                    : "TNG Fighter"}
+                </div>
               </div>
             </div>
 
@@ -1320,9 +1450,9 @@ const [photoWorking, setPhotoWorking] = useState(false);
                   lineHeight: 1.5,
                 }}
               >
-                Upload your profile photo and a separate
-                marketing photo for TNG Promotions,
-                fight flyers and event graphics.
+                Manage marketing photos for TNG Promotions,
+                fight flyers and event graphics. Your profile
+                photo can be changed beside your name above.
               </div>
             </div>
 
@@ -1334,47 +1464,6 @@ const [photoWorking, setPhotoWorking] = useState(false);
                 alignItems: "center",
               }}
             >
-              <label
-                style={{
-                  display: "inline-block",
-                  padding: "11px 16px",
-                  background: "#d71920",
-                  color: "#fff",
-                  borderRadius: 8,
-                  fontWeight: 900,
-                  cursor: photoWorking
-                    ? "not-allowed"
-                    : "pointer",
-                  opacity: photoWorking ? 0.6 : 1,
-                }}
-              >
-                {photoWorking
-                  ? "Working..."
-                  : "Upload Profile Photo"}
-
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  disabled={photoWorking}
-                  onChange={(e) => {
-                    const file =
-                      e.target.files?.[0];
-
-                    if (file) {
-                      uploadFighterPhoto(
-                        file,
-                        "profile"
-                      );
-                    }
-
-                    e.target.value = "";
-                  }}
-                  style={{
-                    display: "none",
-                  }}
-                />
-              </label>
-
               <label
                 style={{
                   display: "inline-block",
