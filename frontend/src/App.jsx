@@ -36,6 +36,7 @@ import Matchmaker from "./pages/Matchmaker.jsx";
 import PublicTicketCheckout from "./pages/PublicTicketCheckout.jsx";
 import FighterActivate from "./pages/FighterActivate.jsx";
 import FighterPortal from "./pages/FighterPortal.jsx";
+import FighterPortalVideos from "./pages/FighterPortalVideos.jsx";
 import EventCalendar from "./pages/EventCalendar.jsx";
 import PublicFightCalendar from "./pages/PublicFightCalendar.jsx";
 import FighterRegistration from "./pages/FighterRegistration.jsx";
@@ -796,6 +797,7 @@ return (
       {page === "TNGTrainer" && role !== "rep" && <TNGAcademy />}
       {page === "Promoter" && role !== "rep" && <Matchmaker />}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
+      {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
       {page === "QR Referrals" && role !== "rep" && <QRReferrals />}

@@ -116,3 +116,69 @@ class FighterPhoto(Base):
         DateTime,
         default=datetime.utcnow,
     )
+
+
+class FighterPortalVideo(Base):
+    __tablename__ = "fighter_portal_videos"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    youtube_video_id = Column(
+        String,
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    youtube_url = Column(
+        String,
+        nullable=False,
+    )
+
+    title = Column(
+        String,
+        nullable=False,
+    )
+
+    thumbnail_url = Column(
+        String,
+        nullable=True,
+    )
+
+    category = Column(
+        String,
+        default="fight",
+        nullable=False,
+    )
+
+    event_name = Column(
+        String,
+        nullable=True,
+    )
+
+    fighter_names = Column(
+        String,
+        nullable=True,
+    )
+
+    approved = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    sort_order = Column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )

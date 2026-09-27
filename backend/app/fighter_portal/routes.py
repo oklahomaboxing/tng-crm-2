@@ -25,11 +25,37 @@ from ..matchmaker.models import (
     BoxingContractSignature,
 )
 from ..ticketing.models import EventSeller, IssuedTicket, SellerPayout
-from .models import FighterAccount, FighterInvite, FighterPhoto
+from .models import FighterAccount, FighterInvite, FighterPhoto, FighterPortalVideo
 from .schemas import ActivateFighterIn, InviteFighterIn
 
 
 Base.metadata.create_all(bind=engine)
+
+
+def _youtube_video_id(value):
+    raw = str(value or "").strip()
+
+    if not raw:
+        return ""
+
+    if "youtu.be/" in raw:
+        return raw.split("youtu.be/", 1)[1].split("?", 1)[0].split("/", 1)[0]
+
+    if "youtube.com/watch" in raw and "v=" in raw:
+        return raw.split("v=", 1)[1].split("&", 1)[0]
+
+    if "youtube.com/shorts/" in raw:
+        return raw.split("youtube.com/shorts/", 1)[1].split("?", 1)[0].split("/", 1)[0]
+
+    if "youtube.com/embed/" in raw:
+        return raw.split("youtube.com/embed/", 1)[1].split("?", 1)[0].split("/", 1)[0]
+
+    # Allow direct 11-character YouTube video IDs.
+    if len(raw) == 11 and "/" not in raw:
+        return raw
+
+    return ""
+
 
 router = APIRouter(
     prefix="/api/fighter",
@@ -2906,3 +2932,262 @@ def fighter_me(
         },
     }
 
+
+
+@router.get("/admin/videos")
+def admin_list_fighter_portal_videos(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _require_fighter_portal_admin(user)
+
+    rows = (
+        db.query(FighterPortalVideo)
+        .order_by(
+            FighterPortalVideo.sort_order.asc(),
+            FighterPortalVideo.id.desc(),
+        )
+        .all()
+    )
+
+    return {
+        "videos": [
+            {
+                "id": row.id,
+                "youtube_video_id": row.youtube_video_id,
+                "youtube_url": row.youtube_url,
+                "title": row.title,
+                "thumbnail_url": row.thumbnail_url,
+                "category": row.category,
+                "event_name": row.event_name,
+                "fighter_names": row.fighter_names,
+                "approved": bool(row.approved),
+                "sort_order": row.sort_order or 0,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.post("/admin/videos")
+def admin_add_fighter_portal_video(
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _require_fighter_portal_admin(user)
+
+    youtube_url = str(
+        data.get("youtube_url") or ""
+    ).strip()
+
+    video_id = _youtube_video_id(
+        data.get("youtube_video_id")
+        or youtube_url
+    )
+
+    if not video_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Enter a valid YouTube video URL or video ID.",
+        )
+
+    title = str(
+        data.get("title") or ""
+    ).strip()
+
+    if not title:
+        title = "TNG Boxing Video"
+
+    existing = (
+        db.query(FighterPortalVideo)
+        .filter(
+            FighterPortalVideo.youtube_video_id
+            == video_id
+        )
+        .first()
+    )
+
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="That YouTube video is already in the library.",
+        )
+
+    canonical_url = (
+        youtube_url
+        or f"https://www.youtube.com/watch?v={video_id}"
+    )
+
+    row = FighterPortalVideo(
+        youtube_video_id=video_id,
+        youtube_url=canonical_url,
+        title=title,
+        thumbnail_url=(
+            data.get("thumbnail_url")
+            or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+        ),
+        category=str(
+            data.get("category") or "fight"
+        ).strip(),
+        event_name=str(
+            data.get("event_name") or ""
+        ).strip(),
+        fighter_names=str(
+            data.get("fighter_names") or ""
+        ).strip(),
+        approved=bool(
+            data.get("approved", False)
+        ),
+        sort_order=int(
+            data.get("sort_order") or 0
+        ),
+    )
+
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+
+    return {
+        "ok": True,
+        "id": row.id,
+        "youtube_video_id": row.youtube_video_id,
+    }
+
+
+@router.patch("/admin/videos/{video_id}")
+def admin_update_fighter_portal_video(
+    video_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _require_fighter_portal_admin(user)
+
+    row = (
+        db.query(FighterPortalVideo)
+        .filter(
+            FighterPortalVideo.id == video_id
+        )
+        .first()
+    )
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found.",
+        )
+
+    if "title" in data:
+        row.title = str(
+            data.get("title") or ""
+        ).strip() or row.title
+
+    if "category" in data:
+        row.category = str(
+            data.get("category") or "fight"
+        ).strip()
+
+    if "event_name" in data:
+        row.event_name = str(
+            data.get("event_name") or ""
+        ).strip()
+
+    if "fighter_names" in data:
+        row.fighter_names = str(
+            data.get("fighter_names") or ""
+        ).strip()
+
+    if "approved" in data:
+        row.approved = bool(
+            data.get("approved")
+        )
+
+    if "sort_order" in data:
+        row.sort_order = int(
+            data.get("sort_order") or 0
+        )
+
+    row.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(row)
+
+    return {
+        "ok": True,
+        "id": row.id,
+        "approved": bool(row.approved),
+    }
+
+
+@router.delete("/admin/videos/{video_id}")
+def admin_delete_fighter_portal_video(
+    video_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _require_fighter_portal_admin(user)
+
+    row = (
+        db.query(FighterPortalVideo)
+        .filter(
+            FighterPortalVideo.id == video_id
+        )
+        .first()
+    )
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found.",
+        )
+
+    db.delete(row)
+    db.commit()
+
+    return {
+        "ok": True,
+        "deleted_id": video_id,
+    }
+
+
+@router.get("/me/videos")
+def fighter_portal_videos(
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+):
+    _linked_fighter_account(
+        user,
+        db,
+    )
+
+    rows = (
+        db.query(FighterPortalVideo)
+        .filter(
+            FighterPortalVideo.approved
+            == True
+        )
+        .order_by(
+            FighterPortalVideo.sort_order.asc(),
+            FighterPortalVideo.id.desc(),
+        )
+        .all()
+    )
+
+    return {
+        "videos": [
+            {
+                "id": row.id,
+                "youtube_video_id": row.youtube_video_id,
+                "youtube_url": row.youtube_url,
+                "title": row.title,
+                "thumbnail_url": row.thumbnail_url,
+                "category": row.category,
+                "event_name": row.event_name,
+                "fighter_names": row.fighter_names,
+            }
+            for row in rows
+        ]
+    }

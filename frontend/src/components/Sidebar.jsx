@@ -24,6 +24,7 @@ import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import EventRoundedIcon from "@mui/icons-material/EventRounded";
+import VideoLibraryRoundedIcon from "@mui/icons-material/VideoLibraryRounded";
 export const ROLE_MENUS = {
   admin: [
     "Dashboard",
@@ -41,6 +42,7 @@ export const ROLE_MENUS = {
     "Duplicate Review",
     "Security Center",
     "Reports",
+    "Fighter Portal Videos",
     "User Management",
   ],
   staff: [
@@ -72,6 +74,7 @@ const ICONS = {
   Clover: <SyncAltRoundedIcon />,
   "Duplicate Review": <ContentCopyRoundedIcon />,
   Reports: <AssessmentRoundedIcon />,
+  "Fighter Portal Videos": <VideoLibraryRoundedIcon />,
   "User Management": <ManageAccountsRoundedIcon />,
 };
 
