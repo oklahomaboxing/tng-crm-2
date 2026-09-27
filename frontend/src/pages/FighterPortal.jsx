@@ -1416,8 +1416,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
           ))}
         </section>
 
-        {fighterVideos.length > 0 && (
-          <section
+        <section
             style={{
               background: "#fff",
               color: "#111",
@@ -1442,15 +1441,28 @@ const [photoWorking, setPhotoWorking] = useState(false);
               </div>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: 16,
-              }}
-            >
-              {fighterVideos.map((video) => (
+            {!fighterVideos.length ? (
+              <div
+                style={{
+                  border: "2px dashed #ddd",
+                  borderRadius: 12,
+                  padding: 28,
+                  textAlign: "center",
+                  color: "#555",
+                }}
+              >
+                No approved videos available yet.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 16,
+                }}
+              >
+                {fighterVideos.map((video) => (
                 <div
                   key={video.id}
                   style={{
@@ -1524,10 +1536,10 @@ const [photoWorking, setPhotoWorking] = useState(false);
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
-        )}
 
         <section
           style={{
