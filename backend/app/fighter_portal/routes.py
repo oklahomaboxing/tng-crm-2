@@ -1069,6 +1069,86 @@ def my_contracts(
         .all()
     )
 
+    # Fighter Portal should show only the current agreement,
+    # not historical/declined/replaced contracts.
+    #
+    # We preserve every contract in the database for admin
+    # history and audit purposes, but hide stale records here.
+    visible_contracts = []
+    seen_bouts = set()
+
+    hidden_statuses = {
+        "declined",
+        "cancelled",
+        "canceled",
+        "completed",
+        "replaced",
+        "expired",
+        "void",
+        "deleted",
+    }
+
+    hidden_bout_statuses = {
+        "cancelled",
+        "canceled",
+        "completed",
+        "void",
+        "deleted",
+    }
+
+    for contract in contracts:
+        contract_status = str(
+            contract.status or ""
+        ).strip().lower()
+
+        if contract_status in hidden_statuses:
+            continue
+
+        bout = None
+
+        if contract.bout_id:
+            bout = (
+                db.query(BoxingBout)
+                .filter(
+                    BoxingBout.id == contract.bout_id
+                )
+                .first()
+            )
+
+            # If the bout was removed, the fighter should
+            # no longer see its contract.
+            if not bout:
+                continue
+
+            bout_status = str(
+                getattr(bout, "status", "") or ""
+            ).strip().lower()
+
+            if bout_status in hidden_bout_statuses:
+                continue
+
+        # Query is newest-first, so keeping the first contract
+        # for a bout automatically hides superseded duplicates.
+        #
+        # Fallback key handles older records without a bout_id.
+        contract_key = (
+            ("bout", contract.bout_id)
+            if contract.bout_id
+            else (
+                "legacy",
+                contract.event_id,
+                contract.opponent_id,
+            )
+        )
+
+        if contract_key in seen_bouts:
+            continue
+
+        seen_bouts.add(contract_key)
+        visible_contracts.append(contract)
+
+    contracts = visible_contracts
+
     contract_ids = [
         row.id
         for row in contracts
