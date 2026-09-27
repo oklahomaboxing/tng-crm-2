@@ -4086,6 +4086,172 @@ Do not add fake ticket information.
         }
 
 
+
+    @router.patch("/contracts/{contract_id}/terms")
+    def save_contract_terms(
+        contract_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        contract = (
+            db.query(BoxingContract)
+            .filter(BoxingContract.id == contract_id)
+            .first()
+        )
+
+        if not contract:
+            raise HTTPException(
+                status_code=404,
+                detail="Contract not found.",
+            )
+
+        commission_raw = data.get(
+            "ticket_commission_percent",
+            contract.ticket_commission_percent or 0,
+        )
+
+        try:
+            commission = float(
+                commission_raw
+                if commission_raw not in ("", None)
+                else 0
+            )
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Ticket commission must be a number.",
+            )
+
+        if commission < 0 or commission > 100:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Ticket sales commission must be "
+                    "between 0% and 100%."
+                ),
+            )
+
+        contract.ticket_commission_percent = commission
+
+        contract.travel_type = str(
+            data.get(
+                "travel_type",
+                contract.travel_type or "",
+            )
+            or ""
+        ).strip()
+
+        contract.travel_paid_by = str(
+            data.get(
+                "travel_paid_by",
+                contract.travel_paid_by or "",
+            )
+            or ""
+        ).strip()
+
+        try:
+            contract.travel_expense = float(
+                data.get(
+                    "travel_expense",
+                    contract.travel_expense or 0,
+                )
+                or 0
+            )
+
+            contract.hotel_nights = int(
+                float(
+                    data.get(
+                        "hotel_nights",
+                        contract.hotel_nights or 0,
+                    )
+                    or 0
+                )
+            )
+
+            contract.per_diem_daily = float(
+                data.get(
+                    "per_diem_daily",
+                    contract.per_diem_daily or 0,
+                )
+                or 0
+            )
+
+            contract.per_diem_days = int(
+                float(
+                    data.get(
+                        "per_diem_days",
+                        contract.per_diem_days or 0,
+                    )
+                    or 0
+                )
+            )
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Travel, hotel nights, and per diem "
+                    "values must be valid numbers."
+                ),
+            )
+
+        contract.hotel_provided = str(
+            data.get(
+                "hotel_provided",
+                contract.hotel_provided or "",
+            )
+            or ""
+        ).strip()
+
+        contract.hotel_name = str(
+            data.get(
+                "hotel_name",
+                contract.hotel_name or "",
+            )
+            or ""
+        ).strip()
+
+        contract.per_diem_total = (
+            float(contract.per_diem_daily or 0)
+            * int(contract.per_diem_days or 0)
+        )
+
+        db.commit()
+        db.refresh(contract)
+
+        return {
+            "ok": True,
+            "message": "Contract terms saved.",
+            "contract": {
+                "id": contract.id,
+                "ticket_commission_percent":
+                    contract.ticket_commission_percent or 0,
+                "travel_type":
+                    contract.travel_type or "",
+                "travel_paid_by":
+                    contract.travel_paid_by or "",
+                "travel_expense":
+                    contract.travel_expense or 0,
+                "hotel_provided":
+                    contract.hotel_provided or "",
+                "hotel_name":
+                    contract.hotel_name or "",
+                "hotel_nights":
+                    contract.hotel_nights or 0,
+                "per_diem_daily":
+                    contract.per_diem_daily or 0,
+                "per_diem_days":
+                    contract.per_diem_days or 0,
+                "per_diem_total":
+                    contract.per_diem_total or 0,
+                "adobe_status":
+                    contract.adobe_status or "",
+            },
+        }
+
+
     @router.get("/contracts/{contract_id}/official-pdf")
     def download_official_contract_pdf(
         contract_id: int,

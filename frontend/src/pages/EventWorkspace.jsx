@@ -85,6 +85,8 @@ export default function EventWorkspace({
   const [contractCommissions, setContractCommissions] =
     useState({});
   const [contractTravel, setContractTravel] = useState({});
+  const [contractTermsSaving, setContractTermsSaving] =
+    useState({});
   const [promoImage, setPromoImage] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [venueName, setVenueName] = useState("");
@@ -300,8 +302,24 @@ export default function EventWorkspace({
   ) {
     const key = `${boutId}-${corner}`;
 
+    if (
+      contractTravel[key] &&
+      contractTravel[key][field] !== undefined
+    ) {
+      return contractTravel[key][field];
+    }
+
+    const bout = (data?.bouts || []).find(
+      (row) => Number(row.id) === Number(boutId)
+    );
+
+    const savedContract =
+      corner === "red"
+        ? bout?.red_contract
+        : bout?.blue_contract;
+
     return (
-      contractTravel[key]?.[field] ??
+      savedContract?.[field] ??
       fallback
     );
   }
@@ -322,6 +340,204 @@ export default function EventWorkspace({
       },
     }));
   }
+
+
+  async function saveContractTerms(
+    bout,
+    corner
+  ) {
+    const contract =
+      corner === "red"
+        ? bout.red_contract
+        : bout.blue_contract;
+
+    if (!contract?.id) {
+      window.alert(
+        "Generate this fighter's contract first, then save the terms."
+      );
+      return;
+    }
+
+    const key = `${bout.id}-${corner}`;
+
+    setContractTermsSaving((old) => ({
+      ...old,
+      [key]: true,
+    }));
+
+    try {
+      const payload = {
+        ticket_commission_percent:
+          contractCommissions[key] ??
+          contract.ticket_commission_percent ??
+          0,
+
+        travel_type:
+          contractTravelValue(
+            bout.id,
+            corner,
+            "travel_type",
+            ""
+          ),
+
+        travel_paid_by:
+          contractTravelValue(
+            bout.id,
+            corner,
+            "travel_paid_by",
+            ""
+          ),
+
+        travel_expense:
+          contractTravelValue(
+            bout.id,
+            corner,
+            "travel_expense",
+            0
+          ),
+
+        hotel_provided:
+          contractTravelValue(
+            bout.id,
+            corner,
+            "hotel_provided",
+            ""
+          ),
+
+        hotel_name:
+          contractTravelValue(
+            bout.id,
+            corner,
+            "hotel_name",
+            ""
+          ),
+
+        hotel_nights:
+          contractTravelValue(
+            bout.id,
+            corner,
+            "hotel_nights",
+            0
+          ),
+
+        per_diem_daily:
+          contractTravelValue(
+            bout.id,
+            corner,
+            "per_diem_daily",
+            0
+          ),
+
+        per_diem_days:
+          contractTravelValue(
+            bout.id,
+            corner,
+            "per_diem_days",
+            0
+          ),
+      };
+
+      const response = await fetch(
+        `${API}/api/boxing/contracts/${contract.id}/terms`,
+        {
+          method: "PATCH",
+          headers: authHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not save contract terms."
+        );
+      }
+
+      const saved = body.contract || {};
+
+      setContractCommissions((old) => ({
+        ...old,
+        [key]:
+          saved.ticket_commission_percent ?? 0,
+      }));
+
+      setContractTravel((old) => ({
+        ...old,
+        [key]: {
+          ...(old[key] || {}),
+          travel_type:
+            saved.travel_type ?? "",
+          travel_paid_by:
+            saved.travel_paid_by ?? "",
+          travel_expense:
+            saved.travel_expense ?? 0,
+          hotel_provided:
+            saved.hotel_provided ?? "",
+          hotel_name:
+            saved.hotel_name ?? "",
+          hotel_nights:
+            saved.hotel_nights ?? 0,
+          per_diem_daily:
+            saved.per_diem_daily ?? 0,
+          per_diem_days:
+            saved.per_diem_days ?? 0,
+          per_diem_total:
+            saved.per_diem_total ?? 0,
+        },
+      }));
+
+      setData((old) => ({
+        ...old,
+        bouts: (old?.bouts || []).map((row) => {
+          if (
+            Number(row.id) !== Number(bout.id)
+          ) {
+            return row;
+          }
+
+          const contractKey =
+            corner === "red"
+              ? "red_contract"
+              : "blue_contract";
+
+          return {
+            ...row,
+            [contractKey]: {
+              ...(row[contractKey] || {}),
+              ...saved,
+            },
+          };
+        }),
+      }));
+
+      setMessage(
+        `${
+          corner === "red"
+            ? "Red"
+            : "Blue"
+        } corner contract terms saved.`
+      );
+
+      window.alert(
+        "Contract terms saved successfully."
+      );
+    } catch (error) {
+      window.alert(
+        error.message ||
+        "Could not save contract terms."
+      );
+    } finally {
+      setContractTermsSaving((old) => ({
+        ...old,
+        [key]: false,
+      }));
+    }
+  }
+
 
   async function uploadSignedContract(
     contractId,
@@ -2589,30 +2805,66 @@ export default function EventWorkspace({
                             {/* SEND WITH ADOBE - RED */}
 
                             {bout.red_contract?.id && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  fontWeight: 900,
-                                  color:
-                                    String(
-                                      bout.red_contract
-                                        ?.adobe_status || ""
-                                    ).toUpperCase() ===
-                                    "SIGNED"
-                                      ? "success.main"
-                                      : "text.secondary",
-                                }}
-                              >
-                                Adobe Status:{" "}
-                                {bout.red_contract
-                                  ?.adobe_agreement_id
-                                  ? String(
-                                      bout.red_contract
-                                        ?.adobe_status ||
-                                        "IN PROCESS"
-                                    ).replaceAll("_", " ")
-                                  : "Not Sent"}
-                              </Typography>
+                              <>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 900,
+                                    color:
+                                      String(
+                                        bout.red_contract
+                                          ?.adobe_status || ""
+                                      ).toUpperCase() ===
+                                      "SIGNED"
+                                        ? "success.main"
+                                        : "text.secondary",
+                                  }}
+                                >
+                                  Adobe Status:{" "}
+                                  {bout.red_contract
+                                    ?.adobe_agreement_id
+                                    ? String(
+                                        bout.red_contract
+                                          ?.adobe_status ||
+                                          "IN PROCESS"
+                                      ).replaceAll("_", " ")
+                                    : "Not Sent"}
+                                </Typography>
+
+                                <Button
+                                  variant="contained"
+                                  disabled={
+                                    Boolean(
+                                      contractTermsSaving[
+                                        `${bout.id}-red`
+                                      ]
+                                    )
+                                  }
+                                  onClick={() =>
+                                    saveContractTerms(
+                                      bout,
+                                      "red"
+                                    )
+                                  }
+                                  sx={{
+                                    alignSelf: "flex-start",
+                                    bgcolor: "#111",
+                                    color: "#fff",
+                                    fontWeight: 900,
+                                    "&:hover": {
+                                      bgcolor: "#2b2b2b",
+                                    },
+                                  }}
+                                >
+                                  {
+                                    contractTermsSaving[
+                                      `${bout.id}-red`
+                                    ]
+                                      ? "Saving..."
+                                      : "Save Contract Terms"
+                                  }
+                                </Button>
+                              </>
                             )}
 
                             {!bout.red_contract
@@ -3136,30 +3388,66 @@ export default function EventWorkspace({
                             {/* SEND WITH ADOBE - BLUE */}
 
                             {bout.blue_contract?.id && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  fontWeight: 900,
-                                  color:
-                                    String(
-                                      bout.blue_contract
-                                        ?.adobe_status || ""
-                                    ).toUpperCase() ===
-                                    "SIGNED"
-                                      ? "success.main"
-                                      : "text.secondary",
-                                }}
-                              >
-                                Adobe Status:{" "}
-                                {bout.blue_contract
-                                  ?.adobe_agreement_id
-                                  ? String(
-                                      bout.blue_contract
-                                        ?.adobe_status ||
-                                        "IN PROCESS"
-                                    ).replaceAll("_", " ")
-                                  : "Not Sent"}
-                              </Typography>
+                              <>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 900,
+                                    color:
+                                      String(
+                                        bout.blue_contract
+                                          ?.adobe_status || ""
+                                      ).toUpperCase() ===
+                                      "SIGNED"
+                                        ? "success.main"
+                                        : "text.secondary",
+                                  }}
+                                >
+                                  Adobe Status:{" "}
+                                  {bout.blue_contract
+                                    ?.adobe_agreement_id
+                                    ? String(
+                                        bout.blue_contract
+                                          ?.adobe_status ||
+                                          "IN PROCESS"
+                                      ).replaceAll("_", " ")
+                                    : "Not Sent"}
+                                </Typography>
+
+                                <Button
+                                  variant="contained"
+                                  disabled={
+                                    Boolean(
+                                      contractTermsSaving[
+                                        `${bout.id}-blue`
+                                      ]
+                                    )
+                                  }
+                                  onClick={() =>
+                                    saveContractTerms(
+                                      bout,
+                                      "blue"
+                                    )
+                                  }
+                                  sx={{
+                                    alignSelf: "flex-start",
+                                    bgcolor: "#111",
+                                    color: "#fff",
+                                    fontWeight: 900,
+                                    "&:hover": {
+                                      bgcolor: "#2b2b2b",
+                                    },
+                                  }}
+                                >
+                                  {
+                                    contractTermsSaving[
+                                      `${bout.id}-blue`
+                                    ]
+                                      ? "Saving..."
+                                      : "Save Contract Terms"
+                                  }
+                                </Button>
+                              </>
                             )}
 
                             {!bout.blue_contract
