@@ -1416,130 +1416,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
           ))}
         </section>
 
-        <section
-            style={{
-              background: "#fff",
-              color: "#111",
-              borderRadius: 14,
-              padding: 22,
-              marginBottom: 20,
-            }}
-          >
-            <div style={{ marginBottom: 18 }}>
-              <h2 style={{ margin: "0 0 5px" }}>
-                TNG Fight Library
-              </h2>
 
-              <div
-                style={{
-                  color: "#555",
-                  fontSize: 14,
-                  lineHeight: 1.5,
-                }}
-              >
-                Approved fight footage, event videos and promotional content.
-              </div>
-            </div>
-
-            {!fighterVideos.length ? (
-              <div
-                style={{
-                  border: "2px dashed #ddd",
-                  borderRadius: 12,
-                  padding: 28,
-                  textAlign: "center",
-                  color: "#555",
-                }}
-              >
-                No approved videos available yet.
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: 16,
-                }}
-              >
-                {fighterVideos.map((video) => (
-                <div
-                  key={video.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    background: "#fafafa",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "relative",
-                      paddingTop: "56.25%",
-                      background: "#000",
-                    }}
-                  >
-                    <iframe
-                      src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
-                      title={video.title || "TNG Fight Video"}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        height: "100%",
-                        border: 0,
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ padding: 14 }}>
-                    <div
-                      style={{
-                        fontSize: 16,
-                        fontWeight: 900,
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {video.title || "TNG Fight Video"}
-                    </div>
-
-                    {(video.event_name ||
-                      video.category) && (
-                      <div
-                        style={{
-                          marginTop: 8,
-                          color: "#666",
-                          fontSize: 12,
-                        }}
-                      >
-                        {video.event_name || ""}
-                        {video.event_name &&
-                        video.category
-                          ? " ? "
-                          : ""}
-                        {video.category || ""}
-                      </div>
-                    )}
-
-                    {video.fighter_names && (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          color: "#444",
-                          fontSize: 12,
-                        }}
-                      >
-                        {video.fighter_names}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                ))}
-              </div>
-            )}
-          </section>
 
         <section
           style={{
@@ -3071,6 +2948,131 @@ const [photoWorking, setPhotoWorking] = useState(false);
             </div>
           </div>
         </section>
+
+        <section
+            style={{
+              background: "#fff",
+              color: "#111",
+              borderRadius: 14,
+              padding: 22,
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ marginBottom: 18 }}>
+              <h2 style={{ margin: "0 0 5px" }}>
+                TNG Fight Library
+              </h2>
+
+              <div
+                style={{
+                  color: "#555",
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                }}
+              >
+                Approved fight footage, event videos and promotional content.
+              </div>
+            </div>
+
+            {!fighterVideos.length ? (
+              <div
+                style={{
+                  border: "2px dashed #ddd",
+                  borderRadius: 12,
+                  padding: 28,
+                  textAlign: "center",
+                  color: "#555",
+                }}
+              >
+                No approved videos available yet.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 16,
+                }}
+              >
+                {fighterVideos.map((video) => (
+                <div
+                  key={video.id}
+                  style={{
+                    border: "1px solid #ddd",
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    background: "#fafafa",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "relative",
+                      paddingTop: "56.25%",
+                      background: "#000",
+                    }}
+                  >
+                    <iframe
+                      src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
+                      title={video.title || "TNG Fight Video"}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        border: 0,
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ padding: 14 }}>
+                    <div
+                      style={{
+                        fontSize: 16,
+                        fontWeight: 900,
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {video.title || "TNG Fight Video"}
+                    </div>
+
+                    {(video.event_name ||
+                      video.category) && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          color: "#666",
+                          fontSize: 12,
+                        }}
+                      >
+                        {video.event_name || ""}
+                        {video.event_name &&
+                        video.category
+                          ? " ? "
+                          : ""}
+                        {video.category || ""}
+                      </div>
+                    )}
+
+                    {video.fighter_names && (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          color: "#444",
+                          fontSize: 12,
+                        }}
+                      >
+                        {video.fighter_names}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                ))}
+              </div>
+            )}
+          </section>
 
         <div
           style={{
