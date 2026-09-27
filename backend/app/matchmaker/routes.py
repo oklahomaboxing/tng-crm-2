@@ -126,6 +126,11 @@ def _docusign_config():
         )
 
     if missing:
+        print(
+            "DOCUSIGN CONFIG ERROR: missing "
+            + ", ".join(missing),
+            flush=True,
+        )
         raise HTTPException(
             status_code=503,
             detail=(
@@ -161,6 +166,11 @@ def _docusign_access_token():
             password=None,
         )
     except Exception as exc:
+        print(
+            "DOCUSIGN PRIVATE KEY ERROR: "
+            f"{exc.__class__.__name__}: {str(exc)[:300]}",
+            flush=True,
+        )
         raise HTTPException(
             status_code=503,
             detail=(
