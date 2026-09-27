@@ -45,6 +45,7 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
   const [ticketSales, setTicketSales] = useState(null);
   const [fightOffers, setFightOffers] = useState([]);
   const [contracts, setContracts] = useState([]);
+  const [selectedContractId, setSelectedContractId] = useState(null);
   const [contractWorkingId, setContractWorkingId] =
     useState(null);
   const [signatureNames, setSignatureNames] = useState({});
@@ -892,18 +893,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
 
 
   function goToFighterContract(contractId) {
-    window.setTimeout(() => {
-      const element = document.getElementById(
-        `fighter-contract-${contractId}`
-      );
-
-      if (element) {
-        element.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }
-    }, 150);
+    setSelectedContractId(contractId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
 
@@ -1842,17 +1833,61 @@ const [photoWorking, setPhotoWorking] = useState(false);
           )}
         </section>
 
+        {selectedContractId && (
         <section
           style={{
-            background: "#fff",
-            color: "#111",
-            borderRadius: 14,
-            padding: 22,
-            marginBottom: 20,
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            overflowY: "auto",
+            background:
+              "radial-gradient(circle at top right, rgba(215,25,32,.22), transparent 30%), linear-gradient(180deg, #080808 0%, #111114 55%, #080808 100%)",
+            color: "#fff",
+            borderRadius: 0,
+            padding:
+              "24px max(18px, calc((100vw - 960px) / 2)) 60px",
+            marginBottom: 0,
           }}
         >
-          <h2 style={{ marginTop: 0 }}>
-            My Contracts
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedContractId(null);
+              window.scrollTo({ top: 0 });
+            }}
+            style={{
+              border: "1px solid rgba(255,255,255,.16)",
+              borderRadius: 10,
+              padding: "11px 16px",
+              background: "rgba(255,255,255,.06)",
+              color: "#fff",
+              fontWeight: 900,
+              cursor: "pointer",
+              marginBottom: 22,
+            }}
+          >
+            ? BACK TO FIGHTER PORTAL
+          </button>
+
+          <div
+            style={{
+              color: "#ef233c",
+              fontSize: 11,
+              fontWeight: 950,
+              letterSpacing: "2px",
+              marginBottom: 5,
+            }}
+          >
+            TNG BOXING
+          </div>
+
+          <h2
+            style={{
+              margin: "0 0 22px",
+              fontSize: "clamp(28px, 5vw, 42px)",
+            }}
+          >
+            Fight Contract
           </h2>
 
           {contracts.filter((contract) =>
@@ -1887,6 +1922,11 @@ const [photoWorking, setPhotoWorking] = useState(false);
                       contract.status || ""
                     ).toLowerCase()
                   )
+                )
+                .filter(
+                  (contract) =>
+                    String(contract.contract_id) ===
+                    String(selectedContractId)
                 )
                 .map((contract) => (
                 <div
@@ -2555,6 +2595,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
             </div>
           )}
         </section>
+        )}
 
 
         <section
