@@ -1609,6 +1609,10 @@ def fighter_fight_offers(
     results = []
 
     for contract in contracts:
+        contract_status = str(contract.status or "draft").strip().lower()
+        if contract_status in {"declined", "cancelled", "completed"}:
+            continue
+
         opponent = (
             db.query(BoxingFighter)
             .filter(
@@ -1635,6 +1639,13 @@ def fighter_fight_offers(
             )
             .first()
         )
+
+        if not bout:
+            continue
+
+        bout_status = str(bout.status or "draft").strip().lower()
+        if bout_status in {"cancelled", "void"}:
+            continue
 
         results.append({
             "contract_id": contract.id,
