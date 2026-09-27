@@ -1357,109 +1357,66 @@ const [photoWorking, setPhotoWorking] = useState(false);
                 gridColumn: "1 / -1",
                 display: "grid",
                 gridTemplateColumns:
-                  "repeat(auto-fit, minmax(150px, 1fr))",
-                gap: 14,
-                marginTop: 8,
-                paddingTop: 16,
+                  "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: 12,
+                marginTop: 18,
+                paddingTop: 18,
                 borderTop:
                   "1px solid rgba(255,255,255,.14)",
               }}
             >
-              <div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "rgba(255,255,255,.60)",
-                    fontWeight: 900,
-                    letterSpacing: "1px",
-                    marginBottom: 4,
-                  }}
-                >
-                  EMAIL
-                </div>
-                <strong>{fighter.email || "-"}</strong>
-              </div>
-
-              <div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "rgba(255,255,255,.60)",
-                    fontWeight: 900,
-                    letterSpacing: "1px",
-                    marginBottom: 4,
-                  }}
-                >
-                  PHONE
-                </div>
-                <strong>{fighter.phone || "-"}</strong>
-              </div>
-
-              <div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "rgba(255,255,255,.60)",
-                    fontWeight: 900,
-                    letterSpacing: "1px",
-                    marginBottom: 4,
-                  }}
-                >
-                  GYM
-                </div>
-                <strong>{fighter.gym || "-"}</strong>
-              </div>
-
-              <div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "rgba(255,255,255,.60)",
-                    fontWeight: 900,
-                    letterSpacing: "1px",
-                    marginBottom: 4,
-                  }}
-                >
-                  COACH
-                </div>
-                <strong>{fighter.coach || "-"}</strong>
-              </div>
-
-              <div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "rgba(255,255,255,.60)",
-                    fontWeight: 900,
-                    letterSpacing: "1px",
-                    marginBottom: 4,
-                  }}
-                >
-                  MANAGER
-                </div>
-                <strong>
-                  {fighter.manager_name || "-"}
-                </strong>
-              </div>
-
-              <div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "rgba(255,255,255,.60)",
-                    fontWeight: 900,
-                    letterSpacing: "1px",
-                    marginBottom: 4,
-                  }}
-                >
-                  FIGHT WEIGHT
-                </div>
-                <strong>
-                  {fighter.fight_weight
+              {[
+                ["EMAIL", fighter.email || "-"],
+                ["PHONE", fighter.phone || "-"],
+                ["GYM", fighter.gym || "-"],
+                ["COACH", fighter.coach || "-"],
+                ["MANAGER", fighter.manager_name || "-"],
+                [
+                  "FIGHT WEIGHT",
+                  fighter.fight_weight
                     ? `${fighter.fight_weight} lbs`
-                    : "-"}
-                </strong>
-              </div>
+                    : "-",
+                ],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  style={{
+                    minHeight: 74,
+                    padding: "14px 16px",
+                    borderRadius: 12,
+                    background:
+                      "linear-gradient(145deg, rgba(255,255,255,.08), rgba(255,255,255,.035))",
+                    border:
+                      "1px solid rgba(255,255,255,.10)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255,255,255,.04)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: "rgba(255,255,255,.52)",
+                      fontWeight: 950,
+                      letterSpacing: "1.25px",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {label}
+                  </div>
+
+                  <div
+                    style={{
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 850,
+                      lineHeight: 1.35,
+                      overflowWrap: "anywhere",
+                    }}
+                  >
+                    {value}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
