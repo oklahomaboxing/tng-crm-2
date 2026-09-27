@@ -3311,6 +3311,34 @@ Rules:
                     "adobe_signed_at":
                         contract.adobe_signed_at,
 
+                    "docusign_envelope_id":
+                        getattr(
+                            contract,
+                            "docusign_envelope_id",
+                            "",
+                        ) or "",
+
+                    "docusign_status":
+                        getattr(
+                            contract,
+                            "docusign_status",
+                            "",
+                        ) or "",
+
+                    "docusign_sent_at":
+                        getattr(
+                            contract,
+                            "docusign_sent_at",
+                            None,
+                        ),
+
+                    "docusign_signed_at":
+                        getattr(
+                            contract,
+                            "docusign_signed_at",
+                            None,
+                        ),
+
                     "electronic_signature": (
                         {
                             "signed": True,

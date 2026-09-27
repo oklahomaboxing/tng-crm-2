@@ -746,7 +746,7 @@ export default function EventWorkspace({
     }
   }
 
-  async function sendContractWithAdobe(
+  async function sendContractWithDocuSign(
     contractId,
     fighterName
   ) {
@@ -758,14 +758,14 @@ export default function EventWorkspace({
     }
 
     const confirmed = window.confirm(
-      `Send ${fighterName}'s contract through Adobe Acrobat Sign?`
+      `Send ${fighterName}'s contract through DocuSign?`
     );
 
     if (!confirmed) return;
 
     try {
       const response = await fetch(
-        `${API}/api/boxing/contracts/${contractId}/adobe/send`,
+        `${API}/api/boxing/contracts/${contractId}/docusign/send`,
         {
           method: "POST",
           headers: authHeaders({
@@ -779,13 +779,13 @@ export default function EventWorkspace({
       if (!response.ok) {
         throw new Error(
           body.detail ||
-            "Could not send contract with Adobe."
+            "Could not send contract with DocuSign."
         );
       }
 
       const notice =
         body.message ||
-        `${fighterName}'s contract was sent with Adobe Acrobat Sign.`;
+        `${fighterName}'s contract was sent with DocuSign.`;
 
       setMessage(notice);
       window.alert(notice);
@@ -795,7 +795,7 @@ export default function EventWorkspace({
     } catch (error) {
       const notice =
         error.message ||
-        "Could not send contract with Adobe.";
+        "Could not send contract with DocuSign.";
 
       setMessage(notice);
       window.alert(notice);
@@ -803,7 +803,7 @@ export default function EventWorkspace({
   }
 
 
-  async function syncAdobeContract(
+  async function syncDocuSignContract(
     contractId,
     fighterName
   ) {
@@ -811,7 +811,7 @@ export default function EventWorkspace({
 
     try {
       const response = await fetch(
-        `${API}/api/boxing/contracts/${contractId}/adobe/sync`,
+        `${API}/api/boxing/contracts/${contractId}/docusign/sync`,
         {
           method: "POST",
           headers: authHeaders({
@@ -825,17 +825,17 @@ export default function EventWorkspace({
       if (!response.ok) {
         throw new Error(
           body.detail ||
-            "Could not sync Adobe contract."
+            "Could not sync DocuSign contract."
         );
       }
 
       const status =
-        body.adobe_status ||
+        body.status ||
         body.status ||
         "Updated";
 
       const notice =
-        `${fighterName} Adobe status: ${status}`;
+        `${fighterName} DocuSign status: ${status}`;
 
       setMessage(notice);
       window.alert(notice);
@@ -845,7 +845,7 @@ export default function EventWorkspace({
     } catch (error) {
       const notice =
         error.message ||
-        "Could not sync Adobe contract.";
+        "Could not sync DocuSign contract.";
 
       setMessage(notice);
       window.alert(notice);
@@ -2802,7 +2802,7 @@ export default function EventWorkspace({
                               </Grid>
                             </Grid>
 
-                            {/* SEND WITH ADOBE - RED */}
+                            {/* SEND WITH DOCUSIGN - RED */}
 
                             {bout.red_contract?.id && (
                               <>
@@ -2813,20 +2813,20 @@ export default function EventWorkspace({
                                     color:
                                       String(
                                         bout.red_contract
-                                          ?.adobe_status || ""
+                                          ?.docusign_status || ""
                                       ).toUpperCase() ===
                                       "SIGNED"
                                         ? "success.main"
                                         : "text.secondary",
                                   }}
                                 >
-                                  Adobe Status:{" "}
+                                  DocuSign Status:{" "}
                                   {bout.red_contract
-                                    ?.adobe_agreement_id
+                                    ?.docusign_envelope_id
                                     ? String(
                                         bout.red_contract
-                                          ?.adobe_status ||
-                                          "IN PROCESS"
+                                          ?.docusign_status ||
+                                          "SENT"
                                       ).replaceAll("_", " ")
                                     : "Not Sent"}
                                 </Typography>
@@ -2868,7 +2868,7 @@ export default function EventWorkspace({
                             )}
 
                             {!bout.red_contract
-                              ?.adobe_agreement_id ? (
+                              ?.docusign_envelope_id ? (
                               <Button
                                 variant="contained"
                                 color="error"
@@ -2876,14 +2876,14 @@ export default function EventWorkspace({
                                   !bout.red_contract?.id
                                 }
                                 onClick={() =>
-                                  sendContractWithAdobe(
+                                  sendContractWithDocuSign(
                                     bout.red_contract?.id,
                                     bout.red?.legal_name ||
                                       "Red Corner"
                                   )
                                 }
                               >
-                                Send With Adobe
+                                Send With DocuSign
                               </Button>
                             ) : (
                               <Button
@@ -2891,14 +2891,14 @@ export default function EventWorkspace({
                                 color={
                                   String(
                                     bout.red_contract
-                                      ?.adobe_status || ""
-                                  ).toUpperCase() ===
-                                  "SIGNED"
+                                      ?.docusign_status || ""
+                                  ).toLowerCase() ===
+                                  "completed"
                                     ? "success"
                                     : "warning"
                                 }
                                 onClick={() =>
-                                  syncAdobeContract(
+                                  syncDocuSignContract(
                                     bout.red_contract?.id,
                                     bout.red?.legal_name ||
                                       "Red Corner"
@@ -3385,7 +3385,7 @@ export default function EventWorkspace({
                               </Grid>
                             </Grid>
 
-                            {/* SEND WITH ADOBE - BLUE */}
+                            {/* SEND WITH DOCUSIGN - BLUE */}
 
                             {bout.blue_contract?.id && (
                               <>
@@ -3396,20 +3396,20 @@ export default function EventWorkspace({
                                     color:
                                       String(
                                         bout.blue_contract
-                                          ?.adobe_status || ""
+                                          ?.docusign_status || ""
                                       ).toUpperCase() ===
                                       "SIGNED"
                                         ? "success.main"
                                         : "text.secondary",
                                   }}
                                 >
-                                  Adobe Status:{" "}
+                                  DocuSign Status:{" "}
                                   {bout.blue_contract
-                                    ?.adobe_agreement_id
+                                    ?.docusign_envelope_id
                                     ? String(
                                         bout.blue_contract
-                                          ?.adobe_status ||
-                                          "IN PROCESS"
+                                          ?.docusign_status ||
+                                          "SENT"
                                       ).replaceAll("_", " ")
                                     : "Not Sent"}
                                 </Typography>
@@ -3451,7 +3451,7 @@ export default function EventWorkspace({
                             )}
 
                             {!bout.blue_contract
-                              ?.adobe_agreement_id ? (
+                              ?.docusign_envelope_id ? (
                               <Button
                                 variant="contained"
                                 color="error"
@@ -3459,14 +3459,14 @@ export default function EventWorkspace({
                                   !bout.blue_contract?.id
                                 }
                                 onClick={() =>
-                                  sendContractWithAdobe(
+                                  sendContractWithDocuSign(
                                     bout.blue_contract?.id,
                                     bout.blue?.legal_name ||
                                       "Blue Corner"
                                   )
                                 }
                               >
-                                Send With Adobe
+                                Send With DocuSign
                               </Button>
                             ) : (
                               <Button
@@ -3474,14 +3474,14 @@ export default function EventWorkspace({
                                 color={
                                   String(
                                     bout.blue_contract
-                                      ?.adobe_status || ""
-                                  ).toUpperCase() ===
-                                  "SIGNED"
+                                      ?.docusign_status || ""
+                                  ).toLowerCase() ===
+                                  "completed"
                                     ? "success"
                                     : "warning"
                                 }
                                 onClick={() =>
-                                  syncAdobeContract(
+                                  syncDocuSignContract(
                                     bout.blue_contract?.id,
                                     bout.blue?.legal_name ||
                                       "Blue Corner"
