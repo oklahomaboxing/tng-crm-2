@@ -153,6 +153,22 @@ def _docusign_access_token():
 
     now = int(time.time())
 
+    from cryptography.hazmat.primitives import serialization
+
+    try:
+        private_key = serialization.load_pem_private_key(
+            config["private_key"].encode("utf-8"),
+            password=None,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "DocuSign private key could not be loaded: "
+                f"{exc.__class__.__name__}"
+            ),
+        )
+
     assertion = jwt.encode(
         {
             "iss":
@@ -168,7 +184,7 @@ def _docusign_access_token():
             "scope":
                 "signature impersonation",
         },
-        config["private_key"],
+        private_key,
         algorithm="RS256",
     )
 
