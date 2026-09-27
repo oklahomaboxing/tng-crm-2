@@ -69,6 +69,90 @@ function numberOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+
+const WEIGHT_DIVISIONS = [
+  { value: "105", label: "105 lb", min: 0, max: 105 },
+  { value: "108", label: "108 lb", min: 105, max: 108 },
+  { value: "112", label: "112 lb", min: 108, max: 112 },
+  { value: "115", label: "115 lb", min: 112, max: 115 },
+  { value: "118", label: "118 lb", min: 115, max: 118 },
+  { value: "122", label: "122 lb", min: 118, max: 122 },
+  { value: "126", label: "126 lb", min: 122, max: 126 },
+  { value: "130", label: "130 lb", min: 126, max: 130 },
+  { value: "135", label: "135 lb", min: 130, max: 135 },
+  { value: "140", label: "140 lb", min: 135, max: 140 },
+  { value: "147", label: "147 lb", min: 140, max: 147 },
+  { value: "154", label: "154 lb", min: 147, max: 154 },
+  { value: "160", label: "160 lb", min: 154, max: 160 },
+  { value: "168", label: "168 lb", min: 160, max: 168 },
+  { value: "175", label: "175 lb", min: 168, max: 175 },
+  { value: "200", label: "200 lb", min: 175, max: 200 },
+  { value: "heavy", label: "Heavyweight", min: 200, max: Infinity },
+];
+
+function fighterMatchesDivision(fighter, divisionValue) {
+  if (!divisionValue) return true;
+
+  const division = WEIGHT_DIVISIONS.find(
+    (item) => item.value === divisionValue
+  );
+
+  if (!division) return true;
+
+  const fightWeight = Number(fighter.fight_weight);
+  const minWeight = Number(fighter.available_weight_min);
+  const maxWeight = Number(fighter.available_weight_max);
+
+  const hasFight =
+    Number.isFinite(fightWeight) && fightWeight > 0;
+
+  const hasMin =
+    Number.isFinite(minWeight) && minWeight > 0;
+
+  const hasMax =
+    Number.isFinite(maxWeight) && maxWeight > 0;
+
+  const inDivision = (weight) => {
+    if (division.max === Infinity) {
+      return weight > 200;
+    }
+
+    return (
+      weight > division.min &&
+      weight <= division.max
+    );
+  };
+
+  if (hasFight && inDivision(fightWeight)) {
+    return true;
+  }
+
+  if (hasMin || hasMax) {
+    const low = hasMin
+      ? minWeight
+      : hasFight
+        ? fightWeight
+        : 0;
+
+    const high = hasMax
+      ? maxWeight
+      : hasFight
+        ? fightWeight
+        : 999;
+
+    if (division.max === Infinity) {
+      return high > 200;
+    }
+
+    return (
+      high > division.min &&
+      low <= division.max
+    );
+  }
+
+  return false;
+}
+
 function slugify(value) {
   return (value || "")
     .toLowerCase()
@@ -83,6 +167,7 @@ export default function Matchmaker() {
   const [fighterId, setFighterId] = useState("");
   const [eventId, setEventId] = useState("");
   const [eventWorkspaceId, setEventWorkspaceId] = useState("");
+  const [weightDivision, setWeightDivision] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -871,6 +956,14 @@ export default function Matchmaker() {
     }
   }
 
+
+
+  const filteredFighters = fighters.filter((fighter) =>
+    fighterMatchesDivision(
+      fighter,
+      weightDivision
+    )
+  );
 
   async function createFighter(findAfterSave = false) {
     if (existingFighterId) {
@@ -2120,6 +2213,60 @@ export default function Matchmaker() {
               </Typography>
 
 
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={2}
+                alignItems={{ sm: "center" }}
+                sx={{ mt: 2 }}
+              >
+                <FormControl
+                  size="small"
+                  sx={{ minWidth: 260 }}
+                >
+                  <InputLabel>
+                    Weight Division
+                  </InputLabel>
+
+                  <Select
+                    value={weightDivision}
+                    label="Weight Division"
+                    onChange={(e) => {
+                      setWeightDivision(
+                        e.target.value
+                      );
+                      setResult(null);
+                    }}
+                  >
+                    <MenuItem value="">
+                      All Divisions
+                    </MenuItem>
+
+                    {WEIGHT_DIVISIONS.map(
+                      (division) => (
+                        <MenuItem
+                          key={division.value}
+                          value={division.value}
+                        >
+                          {division.label}
+                        </MenuItem>
+                      )
+                    )}
+                  </Select>
+                </FormControl>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Showing{" "}
+                  <b>{filteredFighters.length}</b>
+                  {" "}of{" "}
+                  <b>{fighters.length}</b>
+                  {" "}fighters
+                </Typography>
+              </Stack>
+
+
               <TicketSellerControls
                 eventId={eventId}
                 fighterId={fighterId}
@@ -2138,7 +2285,7 @@ export default function Matchmaker() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {fighters.map((f) => (
+                    {filteredFighters.map((f) => (
                       <TableRow
                         hover
                         key={f.id}
