@@ -1262,9 +1262,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                 >
                   {photoWorking
                     ? "Uploading..."
-                    : profilePhoto
-                    ? "Change Photo"
-                    : "Upload Photo"}
+                    : "Upload Marketing Photo"}
 
                   <input
                     type="file"
@@ -1277,7 +1275,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                       if (file) {
                         uploadFighterPhoto(
                           file,
-                          "profile"
+                          "marketing"
                         );
                       }
 
@@ -1418,298 +1416,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
           ))}
         </section>
 
-        
-        <section
-          style={{
-            background: "#fff",
-            color: "#000",
-            borderRadius: 14,
-            padding: 22,
-            marginBottom: 20,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: 16,
-              flexWrap: "wrap",
-              marginBottom: 18,
-            }}
-          >
-            <div>
-              <h2 style={{ margin: "0 0 5px" }}>
-                My Photos
-              </h2>
 
-              <div
-                style={{
-                  color: "#000",
-                  maxWidth: 650,
-                  lineHeight: 1.5,
-                }}
-              >
-                Manage marketing photos for TNG Promotions,
-                fight flyers and event graphics. Your profile
-                photo can be changed beside your name above.
-              </div>
-            </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-                alignItems: "center",
-              }}
-            >
-              <label
-                style={{
-                  display: "inline-block",
-                  padding: "11px 16px",
-                  background: "#111",
-                  color: "#fff",
-                  borderRadius: 8,
-                  fontWeight: 900,
-                  cursor: photoWorking
-                    ? "not-allowed"
-                    : "pointer",
-                  opacity: photoWorking ? 0.6 : 1,
-                }}
-              >
-                {photoWorking
-                  ? "Working..."
-                  : "Upload Marketing Photo"}
-
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  disabled={photoWorking}
-                  onChange={(e) => {
-                    const file =
-                      e.target.files?.[0];
-
-                    if (file) {
-                      uploadFighterPhoto(
-                        file,
-                        "marketing"
-                      );
-                    }
-
-                    e.target.value = "";
-                  }}
-                  style={{
-                    display: "none",
-                  }}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding: "10px 12px",
-              borderRadius: 8,
-              background: "#f7f7f7",
-              color: "#000",
-              fontSize: 13,
-              marginBottom: 18,
-            }}
-          >
-            JPG, PNG or WEBP ? Maximum 5 MB ?
-            Up to 5 photos
-          </div>
-
-          {!fighterPhotos.length ? (
-            <div
-              style={{
-                border: "2px dashed #ddd",
-                borderRadius: 12,
-                padding: 30,
-                textAlign: "center",
-                color: "#000",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 36,
-                  marginBottom: 8,
-                }}
-              >
-                ??
-              </div>
-
-              <strong>
-                Add your profile or marketing photo
-              </strong>
-
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 14,
-                }}
-              >
-                Your profile photo is for your fighter profile.
-                Marketing photos can be used for fight promotion.
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(190px, 1fr))",
-                gap: 16,
-              }}
-            >
-              {fighterPhotos.map((photo) => (
-                <div
-                  key={photo.id}
-                  style={{
-                    border: photo.is_primary
-                      ? "2px solid #d71920"
-                      : "1px solid #ddd",
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    background: "#fff",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "relative",
-                      height: 230,
-                      background: "#eee",
-                    }}
-                  >
-                    {fighterPhotoUrls[photo.id] ? (
-                      <img
-                        src={
-                          fighterPhotoUrls[photo.id]
-                        }
-                        alt={
-                          photo.file_name ||
-                          "Fighter photo"
-                        }
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          objectPosition: "center top",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          height: "100%",
-                          display: "grid",
-                          placeItems: "center",
-                          color: "#777",
-                        }}
-                      >
-                        Loading photo...
-                      </div>
-                    )}
-
-                    {photo.is_primary && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: 10,
-                          left: 10,
-                          background: "#d71920",
-                          color: "#fff",
-                          padding: "6px 9px",
-                          borderRadius: 20,
-                          fontSize: 11,
-                          fontWeight: 900,
-                        }}
-                      >
-                        PRIMARY FLYER PHOTO
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ padding: 13 }}>
-                    <div
-                      style={{
-                        textTransform: "capitalize",
-                        fontWeight: 800,
-                        marginBottom: 3,
-                      }}
-                    >
-                      {String(
-                        photo.photo_type ||
-                          "headshot"
-                      ).replaceAll("_", " ")}
-                    </div>
-
-                    <div
-                      style={{
-                        color: "#777",
-                        fontSize: 12,
-                        marginBottom: 12,
-                      }}
-                    >
-                      {photo.file_name}
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gap: 8,
-                      }}
-                    >
-                      {!photo.is_primary && (
-                        <button
-                          type="button"
-                          disabled={photoWorking}
-                          onClick={() =>
-                            setPrimaryFighterPhoto(
-                              photo.id
-                            )
-                          }
-                          style={{
-                            padding: "9px 10px",
-                            border: 0,
-                            borderRadius: 7,
-                            background: "#111",
-                            color: "#fff",
-                            fontWeight: 800,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Set as Primary Flyer Photo
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        disabled={photoWorking}
-                        onClick={() =>
-                          deleteFighterPhoto(
-                            photo.id
-                          )
-                        }
-                        style={{
-                          padding: "9px 10px",
-                          border: "1px solid #ddd",
-                          borderRadius: 7,
-                          background: "#fff",
-                          color: "#a00",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Delete Photo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
 
 
 <section
@@ -2720,7 +2428,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                       Download Contract PDF
                     </button>
 
-                    
+
 
                     <button
                       type="button"
