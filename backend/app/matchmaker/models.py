@@ -220,6 +220,10 @@ class BoxingContract(Base):
 
     gross_purse = Column(Float, default=0)
 
+    # Negotiated ticket-sale percentage for THIS fighter
+    # on THIS bout.
+    ticket_commission_percent = Column(Float, default=0)
+
     # Travel / lodging package
     travel_type = Column(String, default="")
     travel_paid_by = Column(String, default="")

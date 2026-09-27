@@ -93,6 +93,13 @@ def _contract_signature_snapshot(contract):
             contract.promoter_matchmaker,
         "gross_purse":
             contract.gross_purse,
+        "ticket_commission_percent":
+            getattr(
+                contract,
+                "ticket_commission_percent",
+                0,
+            )
+            or 0,
         "travel_type":
             getattr(
                 contract,
@@ -1159,6 +1166,13 @@ def my_contracts(
                     row.maximum_weight,
                 "gross_purse":
                     row.gross_purse,
+                "ticket_commission_percent":
+                    getattr(
+                        row,
+                        "ticket_commission_percent",
+                        0,
+                    )
+                    or 0,
                 "deductions":
                     row.deductions,
                 "cancellation_pay":

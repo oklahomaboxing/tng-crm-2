@@ -29,6 +29,38 @@ from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegist
 from .service import fighter_dict, ranked_matches
 
 
+def ensure_ticket_commission_schema():
+    """
+    Ensure existing PostgreSQL/SQLite installations have
+    the per-fighter/per-bout ticket commission column.
+    """
+    table_name = BoxingContract.__tablename__
+
+    inspector = inspect(engine)
+
+    if table_name not in inspector.get_table_names():
+        return
+
+    existing = {
+        column["name"]
+        for column in inspector.get_columns(table_name)
+    }
+
+    if "ticket_commission_percent" in existing:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                f"ALTER TABLE {table_name} "
+                "ADD COLUMN ticket_commission_percent FLOAT"
+            )
+        )
+
+
+ensure_ticket_commission_schema()
+
+
 
 
 def _adobe_sign_access_token():
@@ -767,6 +799,9 @@ def build_official_contract_pdf(
         (
             "<b>GROSS PURSE:</b> "
             f"${money(value(contract, 'gross_purse'))}<br/><br/>"
+            "<b>TICKET SALES COMMISSION:</b> "
+            f"{value(contract, 'ticket_commission_percent') or 0}%"
+            "<br/><br/>"
             "<b>TRAVEL ALLOWANCE:</b> "
             f"${money(value(contract, 'travel_expense'))}<br/><br/>"
             "<b>Deductions:</b> "
@@ -3061,6 +3096,13 @@ Rules:
                         contract.maximum_weight,
                     "gross_purse":
                         contract.gross_purse or 0,
+                    "ticket_commission_percent":
+                        getattr(
+                            contract,
+                            "ticket_commission_percent",
+                            0,
+                        )
+                        or 0,
                     "travel_expense":
                         contract.travel_expense or 0,
                     "change_request":
@@ -3903,6 +3945,35 @@ Do not add fake ticket information.
             else purse
         )
 
+        ticket_commission = data.get(
+            "ticket_commission_percent"
+        )
+
+        if ticket_commission in ("", None):
+            ticket_commission = (
+                getattr(
+                    contract,
+                    "ticket_commission_percent",
+                    0,
+                )
+                or 0
+            )
+
+        ticket_commission = float(ticket_commission)
+
+        if ticket_commission < 0 or ticket_commission > 100:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Ticket sales commission must be "
+                    "between 0% and 100%"
+                ),
+            )
+
+        contract.ticket_commission_percent = (
+            ticket_commission
+        )
+
         contract.travel_type = str(
             data.get("travel_type") or ""
         ).strip()
@@ -3993,6 +4064,8 @@ Do not add fake ticket information.
             "promoter_phone": contract.promoter_phone,
             "promoter_matchmaker": contract.promoter_matchmaker,
             "gross_purse": contract.gross_purse,
+            "ticket_commission_percent":
+                contract.ticket_commission_percent or 0,
             "travel_type": contract.travel_type,
             "travel_paid_by": contract.travel_paid_by,
             "travel_expense": contract.travel_expense,
@@ -5546,6 +5619,13 @@ Do not add fake ticket information.
             "id": contract.id,
             "status": contract.status,
             "gross_purse": contract.gross_purse,
+            "ticket_commission_percent":
+                getattr(
+                    contract,
+                    "ticket_commission_percent",
+                    0,
+                )
+                or 0,
             "travel_expense": contract.travel_expense,
             "deductions": contract.deductions,
             "boxer_paid": contract.boxer_paid,

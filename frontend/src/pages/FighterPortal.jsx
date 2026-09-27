@@ -1964,6 +1964,14 @@ export default function FighterPortal({ onLogout, previewToken = null }) {
                     </div>
 
                     <div>
+                      <strong>Ticket Commission:</strong>{" "}
+                      {Number(
+                        contract.ticket_commission_percent || 0
+                      ).toFixed(1)}
+                      %
+                    </div>
+
+                    <div>
                       <strong>Signed PDF:</strong>{" "}
                       {contract.signed_document
                         ? "Uploaded"

@@ -293,6 +293,11 @@ the contestant
   </div>
 
   <div>
+    TICKET SALES COMMISSION:
+    <b>${safe(contract.ticket_commission_percent || 0)}%</b>
+  </div>
+
+  <div>
     Boxer&rsquo;s Manager:
     <span class="line">
       ${safe(contract.boxer_manager)}

@@ -82,6 +82,8 @@ export default function EventWorkspace({
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [contractWeights, setContractWeights] = useState({});
+  const [contractCommissions, setContractCommissions] =
+    useState({});
   const [contractTravel, setContractTravel] = useState({});
   const [promoImage, setPromoImage] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
@@ -748,6 +750,15 @@ export default function EventWorkspace({
               contractWeights[bout.id] ??
               bout.weight_agreed ??
               "",
+
+            ticket_commission_percent:
+              contractCommissions[
+                `${bout.id}-${corner}`
+              ] ??
+              bout[
+                `${corner}_contract`
+              ]?.ticket_commission_percent ??
+              0,
 
             travel_type:
               travel.travel_type || "",
@@ -2330,6 +2341,78 @@ export default function EventWorkspace({
                                   </InputAdornment>
                                 ),
                               }}
+                            />
+
+                            <TextField
+                              fullWidth
+                              type="number"
+                              label="Ticket Sales Commission"
+                              value={
+                                contractCommissions[
+                                  `${bout.id}-red`
+                                ] ??
+                                bout.red_contract
+                                  ?.ticket_commission_percent ??
+                                ""
+                              }
+                              inputProps={{
+                                min: 0,
+                                max: 100,
+                                step: 0.1,
+                              }}
+                              onChange={(e) =>
+                                setContractCommissions(
+                                  (old) => ({
+                                    ...old,
+                                    [`${bout.id}-red`]:
+                                      e.target.value,
+                                  })
+                                )
+                              }
+                              InputProps={{
+                                endAdornment: (
+                                  <InputAdornment position="end">
+                                    %
+                                  </InputAdornment>
+                                ),
+                              }}
+                              helperText="Negotiated commission for this fighter on this bout"
+                            />
+
+                            <TextField
+                              fullWidth
+                              type="number"
+                              label="Ticket Sales Commission"
+                              value={
+                                contractCommissions[
+                                  `${bout.id}-blue`
+                                ] ??
+                                bout.blue_contract
+                                  ?.ticket_commission_percent ??
+                                ""
+                              }
+                              inputProps={{
+                                min: 0,
+                                max: 100,
+                                step: 0.1,
+                              }}
+                              onChange={(e) =>
+                                setContractCommissions(
+                                  (old) => ({
+                                    ...old,
+                                    [`${bout.id}-blue`]:
+                                      e.target.value,
+                                  })
+                                )
+                              }
+                              InputProps={{
+                                endAdornment: (
+                                  <InputAdornment position="end">
+                                    %
+                                  </InputAdornment>
+                                ),
+                              }}
+                              helperText="Negotiated commission for this fighter on this bout"
                             />
 
                             <Divider />
