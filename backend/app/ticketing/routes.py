@@ -213,6 +213,138 @@ def enable_fighter_sales(event_id: int, fighter_id: int, db: Session = Depends(g
     db.commit()
     db.refresh(seller)
     return seller
+@router.post(
+    "/events/{event_id}/enable-all-fighter-ticket-sales"
+)
+def enable_all_fighter_ticket_sales(
+    event_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(staff_user),
+):
+    from app.matchmaker.models import (
+        BoxingBout,
+        BoxingFighter,
+    )
+
+    bouts = (
+        db.query(BoxingBout)
+        .filter(
+            BoxingBout.event_id == event_id,
+            BoxingBout.status.notin_(["cancelled", "void"]),
+        )
+        .all()
+    )
+
+    fighter_ids = set()
+
+    for bout in bouts:
+        if bout.red_fighter_id:
+            fighter_ids.add(int(bout.red_fighter_id))
+
+        if bout.blue_fighter_id:
+            fighter_ids.add(int(bout.blue_fighter_id))
+
+    if not fighter_ids:
+        return {
+            "ok": True,
+            "event_id": event_id,
+            "fighters_on_card": 0,
+            "activated": 0,
+            "reactivated": 0,
+            "already_active": 0,
+            "message": "No active fighters are assigned to this event.",
+        }
+
+    fighters = (
+        db.query(BoxingFighter)
+        .filter(BoxingFighter.id.in_(fighter_ids))
+        .all()
+    )
+
+    fighters_by_id = {
+        int(fighter.id): fighter
+        for fighter in fighters
+    }
+
+    activated = 0
+    reactivated = 0
+    already_active = 0
+
+    for fighter_id in sorted(fighter_ids):
+        fighter = fighters_by_id.get(fighter_id)
+
+        if not fighter:
+            continue
+
+        existing = (
+            db.query(EventSeller)
+            .filter(
+                EventSeller.event_id == event_id,
+                EventSeller.seller_type == "fighter",
+                EventSeller.seller_ref_id == fighter_id,
+            )
+            .first()
+        )
+
+        if existing:
+            if existing.active:
+                already_active += 1
+            else:
+                existing.active = True
+                reactivated += 1
+
+            # Keep existing code, history and commission settings.
+            if not existing.display_name:
+                existing.display_name = (
+                    getattr(fighter, "legal_name", None)
+                    or f"Fighter {fighter_id}"
+                )
+
+            if not existing.email:
+                existing.email = getattr(
+                    fighter,
+                    "email",
+                    None,
+                )
+
+            continue
+
+        seller = EventSeller(
+            event_id=event_id,
+            seller_type="fighter",
+            seller_ref_id=fighter_id,
+            display_name=(
+                getattr(fighter, "legal_name", None)
+                or f"Fighter {fighter_id}"
+            ),
+            email=getattr(fighter, "email", None),
+            public_code=generate_public_code(
+                event_id,
+                "fighter",
+            ),
+            active=True,
+        )
+
+        db.add(seller)
+        activated += 1
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "event_id": event_id,
+        "fighters_on_card": len(fighter_ids),
+        "activated": activated,
+        "reactivated": reactivated,
+        "already_active": already_active,
+        "message": (
+            f"{activated} activated, "
+            f"{reactivated} reactivated, "
+            f"{already_active} already active."
+        ),
+    }
+
+
 def generate_ticket_qr_base64(encrypted_token: str) -> str:
     raw_token = decrypt_token(encrypted_token)
 

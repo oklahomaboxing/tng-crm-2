@@ -25,7 +25,10 @@ export default function TicketingDashboard({ eventId, event: selectedEvent }) {
   const [sellerQr, setSellerQr] = useState(null);
   const [sellerQrOpen, setSellerQrOpen] = useState(false);
   const [sellerActionMessage, setSellerActionMessage] = useState("");
-  const [ticketTypes, setTicketTypes] = useState([]);
+
+  const [activatingAllFighters, setActivatingAllFighters] =
+    useState(false);
+const [ticketTypes, setTicketTypes] = useState([]);
   const [ticketPriceMessage, setTicketPriceMessage] = useState("");
   const [savingTicketTypeId, setSavingTicketTypeId] = useState(null);
   const [creatingTicketType, setCreatingTicketType] = useState(false);
@@ -424,6 +427,52 @@ export default function TicketingDashboard({ eventId, event: selectedEvent }) {
     }
   }
 
+  async function activateAllFighterTickets() {
+    if (!eventId || activatingAllFighters) return;
+
+    const confirmed = window.confirm(
+      "Activate ticket sales for every fighter currently on this fight card?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setActivatingAllFighters(true);
+      setSellerActionMessage("");
+
+      const response = await fetch(
+        `${API}/api/ticketing/events/${eventId}/enable-all-fighter-ticket-sales`,
+        {
+          method: "POST",
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+            "Could not activate fighter ticket sales."
+        );
+      }
+
+      setSellerActionMessage(
+        body.message || "Fighter ticket sales activated."
+      );
+
+      await loadSummary(eventId);
+    } catch (error) {
+      setSellerActionMessage(
+        error.message ||
+          "Could not activate fighter ticket sales."
+      );
+    } finally {
+      setActivatingAllFighters(false);
+    }
+  }
+
+
   return (
     <div
       style={{
@@ -439,6 +488,66 @@ export default function TicketingDashboard({ eventId, event: selectedEvent }) {
           Live sales, fighter commissions, ticket scanning and post-event
           reports.
         </div>
+
+        {eventId && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 16,
+              border: "1px solid #ddd",
+              borderRadius: 12,
+              background: "#fafafa",
+              display: "flex",
+              gap: 14,
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontWeight: 900,
+                  marginBottom: 4,
+                }}
+              >
+                Fighter Ticket Sales
+              </div>
+
+              <div
+                style={{
+                  color: "#666",
+                  fontSize: 14,
+                }}
+              >
+                Enable personal ticket links for every fighter
+                on the current fight card.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={activateAllFighterTickets}
+              disabled={activatingAllFighters}
+              style={{
+                background: "#d71920",
+                color: "#fff",
+                border: 0,
+                borderRadius: 9,
+                padding: "11px 18px",
+                fontWeight: 900,
+                cursor: activatingAllFighters
+                  ? "not-allowed"
+                  : "pointer",
+                opacity: activatingAllFighters ? 0.65 : 1,
+              }}
+            >
+              {activatingAllFighters
+                ? "Activating..."
+                : "Activate Tickets for All Fighters"}
+            </button>
+          </div>
+        )}
       </div>
 
       {message && (
