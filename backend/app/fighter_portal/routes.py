@@ -2307,6 +2307,16 @@ def fighter_fight_offers(
                     if opponent
                     else ""
                 ),
+                "boxrec_id": (
+                    opponent.boxrec_id
+                    if opponent
+                    else ""
+                ),
+                "boxrec_url": (
+                    opponent.boxrec_url
+                    if opponent
+                    else ""
+                ),
                 "gym": (
                     opponent.gym
                     if opponent

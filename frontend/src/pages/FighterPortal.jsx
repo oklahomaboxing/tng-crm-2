@@ -1559,6 +1559,49 @@ const [photoWorking, setPhotoWorking] = useState(false);
                             ? `Record: ${offer.opponent.record}`
                             : ""}
                         </div>
+
+                        {offer.opponent?.boxrec_id && (
+                          <div
+                            style={{
+                              marginTop: 10,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 800,
+                                color: "#555",
+                              }}
+                            >
+                              BoxRec ID: {offer.opponent.boxrec_id}
+                            </span>
+
+                            <a
+                              href={
+                                offer.opponent.boxrec_url ||
+                                `https://boxrec.com/en/box-pro/${offer.opponent.boxrec_id}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: "inline-block",
+                                padding: "8px 12px",
+                                borderRadius: 8,
+                                background: "#c1121f",
+                                color: "#fff",
+                                fontSize: 12,
+                                fontWeight: 900,
+                                textDecoration: "none",
+                              }}
+                            >
+                              VIEW BOXREC
+                            </a>
+                          </div>
+                        )}
                       </div>
 
                       <div>
