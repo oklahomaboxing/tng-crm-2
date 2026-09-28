@@ -966,17 +966,18 @@ def build_official_contract_pdf(
         )
     )
 
-    # Adobe converts these hidden text tags into signing fields.
-    story.append(
-        Paragraph(
-            "{{TNGInitials1_es_:signer1:initials}}",
-            tag_style,
-        )
-    )
-
+    # Hidden e-signature anchors are embedded directly on
+    # the printed signing lines so DocuSign fields align
+    # with the visible contract lines.
     initials_one = Table(
         [[Paragraph(
-            "<b>Boxer's Initials:</b> __________________",
+            (
+                "<b>Boxer's Initials:</b> "
+                '<font color="#FFFFFF" size="1">'
+                "{{TNGInitials1_es_:signer1:initials}}"
+                "</font>"
+                "__________________"
+            ),
             center_bold,
         )]],
         colWidths=[7.3 * inch],
@@ -1019,14 +1020,13 @@ def build_official_contract_pdf(
 
     story.append(
         Paragraph(
-            "{{TNGInitials2_es_:signer1:initials}}",
-            tag_style,
-        )
-    )
-
-    story.append(
-        Paragraph(
-            "<b>Boxer's Initials:</b> __________________",
+            (
+                "<b>Boxer's Initials:</b> "
+                '<font color="#FFFFFF" size="1">'
+                "{{TNGInitials2_es_:signer1:initials}}"
+                "</font>"
+                "__________________"
+            ),
             body_style,
         )
     )
@@ -1046,6 +1046,9 @@ def build_official_contract_pdf(
     signature_left = Paragraph(
         (
             "<b>Boxer's Signature:</b><br/><br/>"
+            '<font color="#FFFFFF" size="1">'
+            "{{TNGSignature_es_:signer1:signature}}"
+            "</font>"
             "____________________________________<br/><br/>"
             "<b>Boxer's Manager:</b><br/>"
             f"{safe(manager_name)}"
@@ -1081,10 +1084,6 @@ def build_official_contract_pdf(
 
     story.append(
         KeepTogether([
-            Paragraph(
-                "{{TNGSignature_es_:signer1:signature}}",
-                tag_style,
-            ),
             signature_table,
         ])
     )
