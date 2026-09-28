@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -85,6 +86,7 @@ export default function EventWorkspace({
   const [contractCommissions, setContractCommissions] =
     useState({});
   const [contractTravel, setContractTravel] = useState({});
+  const [expandedBouts, setExpandedBouts] = useState({});
   const [contractTermsSaving, setContractTermsSaving] =
     useState({});
   const [promoImage, setPromoImage] = useState("");
@@ -1945,8 +1947,25 @@ export default function EventWorkspace({
         {tab === 1 && (
           <Stack spacing={2}>
             {activeBouts.map((bout, index) => (
-              <Card key={bout.id}>
-                <CardContent>
+              <Card
+                key={bout.id}
+                sx={{
+                  borderRadius: 4,
+                  overflow: "hidden",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  boxShadow: "0 14px 38px rgba(15,23,42,.10)",
+                  mb: 3,
+                }}
+              >
+                <CardContent
+                  sx={{
+                    p: { xs: 2, md: 3 },
+                    "&:last-child": {
+                      pb: { xs: 2, md: 3 },
+                    },
+                  }}
+                >
                   <Grid
                     container
                     spacing={2}
@@ -2222,12 +2241,39 @@ export default function EventWorkspace({
                     alignItems={{ xs: "flex-start", sm: "center" }}
                     justifyContent="space-between"
                   >
-                    <Typography
-                      variant="h5"
-                      fontWeight={950}
-                    >
-                      Bout Contract {bout.bout_order || index + 1}
-                    </Typography>
+                    <Box>
+                      <Typography
+                        variant="overline"
+                        sx={{
+                          fontWeight: 950,
+                          letterSpacing: 1.8,
+                          color: "text.secondary",
+                        }}
+                      >
+                        BOUT {bout.bout_order || index + 1}
+                      </Typography>
+
+                      <Typography
+                        variant="h5"
+                        fontWeight={950}
+                        sx={{
+                          mt: -0.25,
+                          lineHeight: 1.15,
+                        }}
+                      >
+                        {bout.red?.legal_name || "Red Corner"}
+                        {"  vs  "}
+                        {bout.blue?.legal_name || "Blue Corner"}
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.5 }}
+                      >
+                        Contract, purse and fighter logistics
+                      </Typography>
+                    </Box>
 
 
                     {(bout.red_series ||
@@ -2268,15 +2314,126 @@ export default function EventWorkspace({
 
                   </Stack>
 
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1}
+                    alignItems={{ xs: "stretch", md: "center" }}
+                    justifyContent="space-between"
+                    sx={{
+                      mt: 2,
+                      p: 1.5,
+                      borderRadius: 2.5,
+                      bgcolor: "action.hover",
+                      border: "1px solid",
+                      borderColor: "divider",
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      flexWrap="wrap"
+                      useFlexGap
+                    >
+                      <Chip
+                        size="small"
+                        label={`${
+                          bout.weight_agreed
+                            ? `${bout.weight_agreed} LB`
+                            : "WEIGHT TBD"
+                        }`}
+                        sx={{ fontWeight: 900 }}
+                      />
+
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`${bout.rounds || "-"} ROUNDS`}
+                        sx={{ fontWeight: 800 }}
+                      />
+
+                      <Chip
+                        size="small"
+                        label={`TOTAL PURSE $${(
+                          Number(bout.red_purse || 0) +
+                          Number(bout.blue_purse || 0)
+                        ).toLocaleString()}`}
+                        sx={{ fontWeight: 900 }}
+                      />
+
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`RED: ${
+                          bout.red_contract?.status
+                            ? String(bout.red_contract.status)
+                                .replaceAll("_", " ")
+                                .toUpperCase()
+                            : "NOT SENT"
+                        }`}
+                      />
+
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`BLUE: ${
+                          bout.blue_contract?.status
+                            ? String(bout.blue_contract.status)
+                                .replaceAll("_", " ")
+                                .toUpperCase()
+                            : "NOT SENT"
+                        }`}
+                      />
+                    </Stack>
+
+                    <Button
+                      size="small"
+                      variant={
+                        expandedBouts[bout.id] ?? (index === 0)
+                          ? "contained"
+                          : "outlined"
+                      }
+                      onClick={() =>
+                        setExpandedBouts((old) => ({
+                          ...old,
+                          [bout.id]: !(
+                            old[bout.id] ?? (index === 0)
+                          ),
+                        }))
+                      }
+                      sx={{
+                        minWidth: 140,
+                        fontWeight: 900,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {expandedBouts[bout.id] ?? (index === 0)
+                        ? "Hide Details"
+                        : "Show Details"}
+                    </Button>
+                  </Stack>
+
+                  <Collapse
+                    in={expandedBouts[bout.id] ?? (index === 0)}
+                    timeout="auto"
+                    unmountOnExit
+                  >
                   <Divider sx={{ my: 2 }} />
 
-                  <Typography
-                    variant="subtitle1"
-                    fontWeight={950}
-                    sx={{ mb: 1 }}
-                  >
-                    Fight Offer / Purse
-                  </Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography
+                      variant="subtitle1"
+                      fontWeight={950}
+                    >
+                      Bout Financials
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                    >
+                      Set each fighter's purse and review the total bout cost.
+                    </Typography>
+                  </Box>
 
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={4}>
@@ -2380,36 +2537,68 @@ export default function EventWorkspace({
 
                   <Divider sx={{ my: 2 }} />
 
-                  <Typography
-                    variant="subtitle1"
-                    fontWeight={950}
-                    sx={{ mb: 1 }}
-                  >
-                    Fighter Contracts
-                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography
+                      variant="subtitle1"
+                      fontWeight={950}
+                    >
+                      Fighter Contract Details
+                    </Typography>
 
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mb: 2 }}
-                  >
-                    Enter the official final fight weight.
-                    Saving either fighter's contract updates
-                    the weight for the entire bout.
-                  </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 0.35 }}
+                    >
+                      Manage final fight weight, ticket commission,
+                      travel, hotel, per diem and DocuSign status.
+                      Saving either fighter's final weight updates
+                      the entire bout.
+                    </Typography>
+                  </Box>
 
                   <Grid container spacing={2}>
 
                     <Grid item xs={12} md={6}>
-                      <Card variant="outlined">
-                        <CardContent>
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          height: "100%",
+                          borderRadius: 3,
+                          borderTop: "5px solid #c62828",
+                          background:
+                            "linear-gradient(180deg, rgba(198,40,40,.045), rgba(255,255,255,0) 120px)",
+                        }}
+                      >
+                        <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
                           <Stack spacing={1.5}>
 
-                            <Typography
-                              fontWeight={950}
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="center"
+                              spacing={1}
                             >
-                              Red Corner Contract
-                            </Typography>
+                              <Typography
+                                fontWeight={950}
+                                sx={{
+                                  color: "#c62828",
+                                  letterSpacing: .6,
+                                }}
+                              >
+                                RED CORNER
+                              </Typography>
+
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label="CONTRACT"
+                                sx={{
+                                  fontWeight: 900,
+                                  fontSize: 10,
+                                }}
+                              />
+                            </Stack>
 
                             <Typography
                               variant="body2"
@@ -2563,9 +2752,13 @@ export default function EventWorkspace({
 
                             <Typography
                               variant="body2"
-                              fontWeight={900}
+                              fontWeight={950}
+                              sx={{
+                                pt: 0.5,
+                                letterSpacing: .2,
+                              }}
                             >
-                              Travel / Hotel / Per Diem
+                              Travel & Fighter Expenses
                             </Typography>
 
                             <Grid container spacing={1}>
@@ -2984,15 +3177,45 @@ export default function EventWorkspace({
 
 
                     <Grid item xs={12} md={6}>
-                      <Card variant="outlined">
-                        <CardContent>
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          height: "100%",
+                          borderRadius: 3,
+                          borderTop: "5px solid #1565c0",
+                          background:
+                            "linear-gradient(180deg, rgba(21,101,192,.045), rgba(255,255,255,0) 120px)",
+                        }}
+                      >
+                        <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
                           <Stack spacing={1.5}>
 
-                            <Typography
-                              fontWeight={950}
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="center"
+                              spacing={1}
                             >
-                              Blue Corner Contract
-                            </Typography>
+                              <Typography
+                                fontWeight={950}
+                                sx={{
+                                  color: "#1565c0",
+                                  letterSpacing: .6,
+                                }}
+                              >
+                                BLUE CORNER
+                              </Typography>
+
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label="CONTRACT"
+                                sx={{
+                                  fontWeight: 900,
+                                  fontSize: 10,
+                                }}
+                              />
+                            </Stack>
 
                             <Typography
                               variant="body2"
@@ -3146,9 +3369,13 @@ export default function EventWorkspace({
 
                             <Typography
                               variant="body2"
-                              fontWeight={900}
+                              fontWeight={950}
+                              sx={{
+                                pt: 0.5,
+                                letterSpacing: .2,
+                              }}
                             >
-                              Travel / Hotel / Per Diem
+                              Travel & Fighter Expenses
                             </Typography>
 
                             <Grid container spacing={1}>
@@ -3740,6 +3967,7 @@ export default function EventWorkspace({
                       </Typography>
                     </>
                   )}
+                                  </Collapse>
                 </CardContent>
               </Card>
             ))}
