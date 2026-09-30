@@ -234,10 +234,13 @@ def create_member_invite(
 
     if resend_api_key:
         try:
-            resend.api_key = resend_api_key
-
-            resend.Emails.send(
-                {
+            email_response = httpx.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {resend_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
                     "from": sender_email,
                     "to": [member.email],
                     "subject": "Activate Your TNG Boxing Member Account",
@@ -276,11 +279,19 @@ def create_member_invite(
                         using your email and new password.
                       </p>
 
-                      <p><strong>TNG Boxing — Earned Not Given</strong></p>
+                      <p><strong>TNG Boxing ? Earned Not Given</strong></p>
                     </div>
                     """,
-                }
+                },
+                timeout=10.0,
             )
+
+            if email_response.status_code >= 400:
+                raise RuntimeError(
+                    "Resend returned "
+                    f"{email_response.status_code}: "
+                    f"{email_response.text[:500]}"
+                )
 
             email_sent = True
 
