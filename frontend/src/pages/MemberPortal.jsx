@@ -45,6 +45,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [photoWorking, setPhotoWorking] = useState(false);
   const [renewalWorking, setRenewalWorking] = useState(false);
+  const [renewalOptions, setRenewalOptions] = useState([]);
   const [scans, setScans] = useState([]);
   const [error, setError] = useState("");
   const [showTrainer, setShowTrainer] = useState(false);
@@ -76,7 +77,12 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
   }
 
 
-  async function renewMembership() {
+  async function renewMembership(productId) {
+    if (!productId) {
+      window.alert("Select a membership plan.");
+      return;
+    }
+
     setRenewalWorking(true);
 
     try {
@@ -84,7 +90,13 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
         `${API}/api/member/me/renew-checkout`,
         {
           method: "POST",
-          headers: authHeaders(memberToken()),
+          headers: {
+            ...authHeaders(memberToken()),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            product_id: productId,
+          }),
         }
       );
 
@@ -115,12 +127,45 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
   }
 
 
+  async function loadRenewalOptions() {
+    try {
+      const response = await fetch(
+        `${API}/api/member/me/renewal-options`,
+        {
+          headers: authHeaders(memberToken()),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not load membership options."
+        );
+      }
+
+      setRenewalOptions(
+        Array.isArray(body.options)
+          ? body.options
+          : []
+      );
+    } catch (err) {
+      console.error(
+        "Could not load renewal options:",
+        err
+      );
+      setRenewalOptions([]);
+    }
+  }
+
+
   async function load() {
     setError("");
     try {
       const [profileRes, scansRes] = await Promise.all([
-        fetch(`${API}/api/member/me`, { headers: authHeaders() }),
-        fetch(`${API}/api/member/inbody/scans`, { headers: authHeaders() }),
+        fetch(`${API}/api/member/me`, { headers: authHeaders(memberToken()) }),
+        fetch(`${API}/api/member/inbody/scans`, { headers: authHeaders(memberToken()) }),
       ]);
       const profile = await profileRes.json();
       const scanData = await scansRes.json();
@@ -352,6 +397,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
   useEffect(() => {
     load();
     loadFightVideos();
+    loadRenewalOptions();
   }, []);
 
   useEffect(() => {
@@ -591,21 +637,67 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
 
                 <Divider sx={{ my: 3 }} />
 
-                <Button
-                  variant="contained"
-                  size="large"
-                  fullWidth
-                  disabled={renewalWorking}
-                  onClick={renewMembership}
-                  sx={{
-                    py: 1.4,
-                    fontWeight: 900,
-                  }}
+                <Typography
+                  variant="h6"
+                  fontWeight={900}
+                  sx={{ mb: 1.5 }}
                 >
-                  {renewalWorking
-                    ? "Opening Clover..."
-                    : "Renew Membership"}
-                </Button>
+                  Choose Membership
+                </Typography>
+
+                {renewalOptions.length ? (
+                  <Stack spacing={1.25}>
+                    {renewalOptions.map((option) => (
+                      <Button
+                        key={option.id}
+                        variant="contained"
+                        size="large"
+                        fullWidth
+                        disabled={renewalWorking}
+                        onClick={() =>
+                          renewMembership(option.id)
+                        }
+                        sx={{
+                          py: 1.4,
+                          fontWeight: 900,
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span>
+                          {option.price === 150
+                            ? "Month to Month"
+                            : option.price === 300
+                              ? "3 Months"
+                              : option.price === 999
+                                ? "Annual Membership"
+                                : option.name}
+                        </span>
+
+                        <span>
+                          ${Number(option.price).toFixed(0)}
+                        </span>
+                      </Button>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Alert severity="info">
+                    No online membership plans are currently
+                    available.
+                  </Alert>
+                )}
+
+                {renewalWorking ? (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      textAlign: "center",
+                      mt: 1.25,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Opening Clover...
+                  </Typography>
+                ) : null}
 
                 <Typography
                   variant="caption"
@@ -691,18 +783,15 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                     </Stack>
 
                     <Button
-                      variant="contained"
+                      variant="outlined"
                       color="error"
-                      disabled={renewalWorking}
-                      onClick={renewMembership}
+                      disabled
                       sx={{
                         fontWeight: 900,
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {renewalWorking
-                        ? "Opening Clover..."
-                        : "Renew Membership"}
+                      Choose a Plan Above
                     </Button>
                   </Stack>
                 </CardContent>

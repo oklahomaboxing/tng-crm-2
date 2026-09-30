@@ -14,7 +14,7 @@ from ..core.dependencies import current_user
 from ..auth import hash_password, decode_token, create_token
 from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto, MembershipRenewal
 from ..fighter_portal.models import FighterPortalVideo
-from ..services.memberships import effective_membership_status
+from ..services.memberships import effective_membership_status, membership_months
 from .schemas import ActivateMemberIn, InviteMemberIn, LinkInBodyIn, ManualInBodyScanIn
 
 # The main project currently creates tables before feature routers are loaded.
@@ -616,8 +616,55 @@ def delete_member_profile_photo(
 
 
 
+
+@router.get("/me/renewal-options")
+def member_renewal_options(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    member_account_for_user(db, user)
+
+    products = (
+        db.query(MembershipProduct)
+        .filter(
+            MembershipProduct.active == True,
+            MembershipProduct.is_membership == True,
+            MembershipProduct.price.in_([150, 300, 999]),
+        )
+        .order_by(
+            MembershipProduct.price.asc(),
+            MembershipProduct.id.asc(),
+        )
+        .all()
+    )
+
+    # Production currently contains duplicate products at some prices.
+    # Only expose one renewal option per standard TNG price.
+    by_price = {}
+
+    for product in products:
+        price = round(float(product.price or 0), 2)
+
+        if price not in by_price:
+            by_price[price] = {
+                "id": product.id,
+                "name": product.name,
+                "price": price,
+                "months": membership_months(product),
+            }
+
+    return {
+        "options": [
+            by_price[price]
+            for price in (150.0, 300.0, 999.0)
+            if price in by_price
+        ]
+    }
+
+
 @router.post("/me/renew-checkout")
 def create_member_renewal_checkout(
+    data: dict = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -635,50 +682,78 @@ def create_member_renewal_checkout(
             detail="Member profile not found.",
         )
 
-    current_plan = (
-        member.membership_type
-        or member.membership_level
-        or ""
-    ).strip().lower()
-
-    if not current_plan:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "No membership plan is assigned "
-                "to this account."
-            ),
-        )
-
-    products = (
-        db.query(MembershipProduct)
-        .filter(
-            MembershipProduct.active == True,
-            MembershipProduct.is_membership == True,
-        )
-        .all()
-    )
+    data = data or {}
+    selected_product_id = data.get("product_id")
 
     product = None
 
-    for candidate in products:
-        candidate_name = (
-            candidate.name or ""
+    if selected_product_id:
+        try:
+            selected_product_id = int(selected_product_id)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid membership selection.",
+            )
+
+        product = (
+            db.query(MembershipProduct)
+            .filter(
+                MembershipProduct.id == selected_product_id,
+                MembershipProduct.active == True,
+                MembershipProduct.is_membership == True,
+            )
+            .first()
+        )
+
+        if (
+            not product
+            or round(float(product.price or 0), 2)
+            not in (150.0, 300.0, 999.0)
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "That membership plan is not available "
+                    "for online renewal."
+                ),
+            )
+
+    else:
+        # Backward-compatible fallback for older frontend builds:
+        # renew the member's currently assigned plan.
+        current_plan = (
+            member.membership_type
+            or member.membership_level
+            or ""
         ).strip().lower()
 
-        if candidate_name == current_plan:
-            product = candidate
-            break
-
-    if not product:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Your current membership plan "
-                "is not available for online renewal. "
-                "Please contact TNG Boxing."
-            ),
+        products = (
+            db.query(MembershipProduct)
+            .filter(
+                MembershipProduct.active == True,
+                MembershipProduct.is_membership == True,
+            )
+            .all()
         )
+
+        for candidate in products:
+            candidate_name = (
+                candidate.name or ""
+            ).strip().lower()
+
+            if candidate_name == current_plan:
+                product = candidate
+                break
+
+        if not product:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Select an available membership plan "
+                    "to continue."
+                ),
+            )
 
     merchant_id = os.getenv(
         "CLOVER_MERCHANT_ID",

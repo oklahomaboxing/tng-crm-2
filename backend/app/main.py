@@ -1174,7 +1174,7 @@ def front_desk_join_page_data(
         .filter(
             MembershipProduct.active == True,
             MembershipProduct.is_membership == True,
-            MembershipProduct.price.in_([150, 300]),
+            MembershipProduct.price.in_([150, 300, 999]),
         )
         .order_by(MembershipProduct.price.asc())
         .all()
@@ -1227,7 +1227,7 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
         .filter(
             MembershipProduct.active == True,
             MembershipProduct.is_membership == True,
-            MembershipProduct.price.in_([150, 300]),
+            MembershipProduct.price.in_([150, 300, 999]),
         )
         .order_by(MembershipProduct.price.asc())
         .all()
@@ -2857,6 +2857,8 @@ def sync_clover_sales(
     invalid_order = 0
     membership_sales = 0
     non_membership_sales = 0
+    repaired_membership_sales = 0
+    registration_sales_created = 0
 
     default_rep = get_or_create_front_desk_rep(db)
 
@@ -2916,6 +2918,173 @@ def sync_clover_sales(
         if existing_sale:
             if is_manual_transaction:
                 existing_sale.sale_type = "nexgen_nutrition"
+                db.commit()
+
+                skipped += 1
+                already_imported += 1
+                continue
+
+            existing_line_items = (
+                order.get("lineItems", {})
+                .get("elements", [])
+            )
+
+            membership_product = None
+            registration_line_present = False
+
+            for line_item in existing_line_items:
+                item_name = (
+                    line_item.get("name") or ""
+                ).strip()
+
+                if not item_name:
+                    continue
+
+                if item_name.lower() == "registration fee":
+                    registration_line_present = True
+
+                candidate = (
+                    db.query(MembershipProduct)
+                    .filter(
+                        func.lower(MembershipProduct.name)
+                        == item_name.lower()
+                    )
+                    .order_by(MembershipProduct.id.asc())
+                    .first()
+                )
+
+                if candidate and is_membership_product(candidate):
+                    membership_product = candidate
+                    break
+
+            repaired = False
+
+            if membership_product:
+                member = (
+                    db.query(Member)
+                    .filter(Member.id == existing_sale.member_id)
+                    .first()
+                )
+
+                if not is_membership_sale(existing_sale):
+                    membership_amount = round(
+                        float(membership_product.price or 0),
+                        2,
+                    )
+
+                    existing_sale.product_id = membership_product.id
+                    existing_sale.amount = membership_amount
+                    existing_sale.unit_price = membership_amount
+                    existing_sale.quantity = 1
+                    existing_sale.payment_status = "paid"
+                    existing_sale.transaction_status = "paid"
+                    existing_sale.payment_method = "clover"
+                    existing_sale.sale_type = "membership"
+
+                    repaired = True
+                    repaired_membership_sales += 1
+
+                if member:
+                    sale_date = (
+                        existing_sale.sale_date
+                        or datetime.utcnow()
+                    )
+
+                    if (
+                        not member.last_payment_date
+                        or sale_date > member.last_payment_date
+                    ):
+                        apply_membership(
+                            member,
+                            membership_product,
+                            purchase_date=sale_date,
+                        )
+
+                    member.status = "active"
+                    member.member_type = "MEMBER"
+
+                    if not member.member_number:
+                        member.member_number = (
+                            f"TNG-{member.id:06d}"
+                        )
+
+                    if not member.digital_member_id:
+                        member.digital_member_id = (
+                            generate_digital_member_id()
+                        )
+
+                    if not member.barcode:
+                        member.barcode = generate_barcode(
+                            member.member_number
+                        )
+
+                    if not member.qr_code:
+                        member.qr_code = generate_qr_code(
+                            member.member_number
+                        )
+
+                if registration_line_present:
+                    registration_product = (
+                        db.query(MembershipProduct)
+                        .filter(
+                            func.lower(MembershipProduct.name)
+                            == "registration fee"
+                        )
+                        .order_by(MembershipProduct.id.asc())
+                        .first()
+                    )
+
+                    if registration_product:
+                        existing_registration = (
+                            db.query(Sale)
+                            .filter(
+                                Sale.clover_order_id == order_id,
+                                Sale.product_id
+                                == registration_product.id,
+                            )
+                            .first()
+                        )
+
+                        if not existing_registration:
+                            registration_amount = round(
+                                float(
+                                    registration_product.price
+                                    or 0
+                                ),
+                                2,
+                            )
+
+                            db.add(
+                                Sale(
+                                    member_id=existing_sale.member_id,
+                                    sales_rep_id=(
+                                        existing_sale.sales_rep_id
+                                        or default_rep.id
+                                    ),
+                                    product_id=registration_product.id,
+                                    amount=registration_amount,
+                                    payment_status="paid",
+                                    transaction_status="paid",
+                                    clover_order_id=order_id,
+                                    clover_payment_id=payment_id,
+                                    payment_method="clover",
+                                    sale_date=(
+                                        existing_sale.sale_date
+                                        or datetime.utcnow()
+                                    ),
+                                    quantity=1,
+                                    unit_price=registration_amount,
+                                    sale_type=(
+                                        registration_product.category
+                                        or "registration"
+                                    ),
+                                )
+                            )
+
+                            registration_sales_created += 1
+                            repaired = True
+
+            if repaired:
                 db.commit()
 
             skipped += 1
@@ -3046,39 +3215,126 @@ def sync_clover_sales(
             .get("elements", [])
         )
 
-        if line_items:
+        # Clover membership checkouts can contain multiple line items.
+        # TNG checkout puts Registration Fee first and the membership
+        # product second, so inspect every item and prefer an explicitly
+        # configured TNG membership product.
+        matched_membership_product = None
+        matched_other_product = None
+        first_clover_item_name = ""
+
+        for line_item in line_items:
             clover_item_name = (
-                line_items[0].get("name") or ""
+                line_item.get("name") or ""
             ).strip()
 
-            if clover_item_name:
-                matched_product = (
-                    db.query(MembershipProduct)
-                    .filter(
-                        func.lower(MembershipProduct.name)
-                        == clover_item_name.lower()
+            if not clover_item_name:
+                continue
+
+            if not first_clover_item_name:
+                first_clover_item_name = clover_item_name
+
+            matched_product = (
+                db.query(MembershipProduct)
+                .filter(
+                    func.lower(MembershipProduct.name)
+                    == clover_item_name.lower()
+                )
+                .order_by(MembershipProduct.id.asc())
+                .first()
+            )
+
+            if not matched_product:
+                continue
+
+            if is_membership_product(matched_product):
+                matched_membership_product = matched_product
+                break
+
+            if not matched_other_product:
+                matched_other_product = matched_product
+
+        if matched_membership_product:
+            product = matched_membership_product
+
+        elif matched_other_product:
+            product = matched_other_product
+
+        else:
+            order_amount = round(
+                float(total_cents or 0) / 100,
+                2,
+            )
+
+            safe_price_membership = None
+
+            # Recovery path for real Clover membership charges whose
+            # Clover item name does not exactly match TNGOS.
+            # Only use an already-configured active membership product.
+            if (
+                not is_manual_transaction
+                and order_amount in (150.0, 300.0)
+            ):
+                blocked_line_item = False
+
+                for line_item in line_items:
+                    item_name = (
+                        line_item.get("name") or ""
+                    ).strip().lower()
+
+                    if any(
+                        word in item_name
+                        for word in (
+                            "ticket",
+                            "general admission",
+                            "ringside",
+                            "fight night",
+                            "event",
+                            "test",
+                            "testing",
+                            "manual",
+                            "custom",
+                            "uncategorized",
+                            "clover sale",
+                        )
+                    ):
+                        blocked_line_item = True
+                        break
+
+                if not blocked_line_item:
+                    safe_price_membership = (
+                        db.query(MembershipProduct)
+                        .filter(
+                            MembershipProduct.active == True,
+                            MembershipProduct.is_membership == True,
+                            func.lower(MembershipProduct.category)
+                            == "membership",
+                            MembershipProduct.price
+                            == order_amount,
+                        )
+                        .order_by(
+                            MembershipProduct.id.asc()
+                        )
+                        .first()
                     )
-                    .first()
+
+            if safe_price_membership:
+                product = safe_price_membership
+
+            elif first_clover_item_name:
+                category = categorize_clover_product(
+                    first_clover_item_name
                 )
 
-                if matched_product:
-                    product = matched_product
-                else:
-                    category = categorize_clover_product(
-                        clover_item_name
-                    )
-
-                    product = MembershipProduct(
-                        name=clover_item_name,
-                        price=total_cents / 100,
-                        active=True,
-                        category=category,
-                        is_membership=(
-                            category == "membership"
-                        ),
-                    )
-                    db.add(product)
-                    db.flush()
+                product = MembershipProduct(
+                    name=first_clover_item_name,
+                    price=order_amount,
+                    active=True,
+                    category=category,
+                    is_membership=False,
+                )
+                db.add(product)
+                db.flush()
 
         product_name = (
             product.name or ""
@@ -3180,6 +3436,8 @@ def sync_clover_sales(
         "invalid_order": invalid_order,
         "membership_sales": membership_sales,
         "non_membership_sales": non_membership_sales,
+        "repaired_membership_sales": repaired_membership_sales,
+        "registration_sales_created": registration_sales_created,
     }
 @app.post("/api/clover/sync-all")
 def sync_all_clover(
