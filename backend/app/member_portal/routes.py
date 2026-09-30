@@ -385,6 +385,10 @@ def create_member_invite(
         email_error = "RESEND_API_KEY is not configured"
 
     if not email_sent:
+        print(
+            f"MEMBER ACTIVATION EMAIL ERROR: {email_error}",
+            flush=True,
+        )
         db.rollback()
         raise HTTPException(
             status_code=502,
