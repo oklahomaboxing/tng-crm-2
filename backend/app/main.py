@@ -1000,11 +1000,6 @@ def is_membership_sale(sale):
     if not is_membership_product(sale.product):
         return False
 
-    amount = round(float(sale.amount or 0), 2)
-
-    if amount in EVENT_TICKET_AMOUNTS:
-        return False
-
     return sale.payment_status == "paid"
 
 @app.post("/api/sales")
