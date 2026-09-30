@@ -386,7 +386,10 @@ def create_member_invite(
 
     if not email_sent:
         db.rollback()
-        raise HTTPException(status_code=502, detail="Activation email could not be sent. Please retry.")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Activation email could not be sent: {email_error}",
+        )
     db.commit()
 
     return {
