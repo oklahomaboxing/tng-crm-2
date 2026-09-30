@@ -13,6 +13,7 @@ from ..models import User, Member, MembershipProduct
 from ..core.dependencies import current_user
 from ..auth import hash_password, decode_token, create_token
 from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto, MembershipRenewal
+from ..fighter_portal.models import FighterPortalVideo
 from ..services.memberships import effective_membership_status
 from .schemas import ActivateMemberIn, InviteMemberIn, LinkInBodyIn, ManualInBodyScanIn
 
@@ -825,6 +826,44 @@ def create_member_renewal_checkout(
             "name": product.name,
             "price": float(product.price or 0),
         },
+    }
+
+
+
+@router.get("/me/videos")
+def member_portal_videos(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    # Require a real linked member account.
+    member_account_for_user(db, user)
+
+    rows = (
+        db.query(FighterPortalVideo)
+        .filter(
+            FighterPortalVideo.approved == True
+        )
+        .order_by(
+            FighterPortalVideo.sort_order.asc(),
+            FighterPortalVideo.id.desc(),
+        )
+        .all()
+    )
+
+    return {
+        "videos": [
+            {
+                "id": row.id,
+                "youtube_video_id": row.youtube_video_id,
+                "youtube_url": row.youtube_url,
+                "title": row.title,
+                "thumbnail_url": row.thumbnail_url,
+                "category": row.category,
+                "event_name": row.event_name,
+                "fighter_names": row.fighter_names,
+            }
+            for row in rows
+        ]
     }
 
 

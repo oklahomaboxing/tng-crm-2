@@ -48,6 +48,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
   const [scans, setScans] = useState([]);
   const [error, setError] = useState("");
   const [showTrainer, setShowTrainer] = useState(false);
+  const [fightVideos, setFightVideos] = useState([]);
 
   function memberToken() {
     return (
@@ -129,6 +130,39 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
       setScans(Array.isArray(scanData) ? scanData : []);
     } catch (e) {
       setError(e.message || "Unable to load member portal");
+    }
+  }
+
+
+  async function loadFightVideos() {
+    try {
+      const response = await fetch(
+        `${API}/api/member/me/videos`,
+        {
+          headers: authHeaders(memberToken()),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+          "Could not load TNG Fight Library."
+        );
+      }
+
+      setFightVideos(
+        Array.isArray(body.videos)
+          ? body.videos
+          : []
+      );
+    } catch (err) {
+      console.error(
+        "Could not load member fight library:",
+        err
+      );
+      setFightVideos([]);
     }
   }
 
@@ -315,7 +349,10 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
   }
 
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    loadFightVideos();
+  }, []);
 
   useEffect(() => {
     const photoPath =
