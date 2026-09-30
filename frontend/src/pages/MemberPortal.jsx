@@ -22,8 +22,8 @@ import MemberHomeTrainer from "./MemberHomeTrainer.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem("token")}`,
+const authHeaders = (token = null) => ({
+  Authorization: `Bearer ${token || localStorage.getItem("token")}`,
 });
 
 function Metric({ label, value, suffix = "" }) {
@@ -39,7 +39,7 @@ function Metric({ label, value, suffix = "" }) {
   );
 }
 
-export default function MemberPortal({ onLogout }) {
+export default function MemberPortal({ onLogout, previewToken = null }) {
   const [data, setData] = useState(null);
 
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
@@ -48,6 +48,14 @@ export default function MemberPortal({ onLogout }) {
   const [scans, setScans] = useState([]);
   const [error, setError] = useState("");
   const [showTrainer, setShowTrainer] = useState(false);
+
+  function memberToken() {
+    return (
+      previewToken ||
+      sessionStorage.getItem("memberPreviewToken") ||
+      localStorage.getItem("token")
+    );
+  }
 
 
   function memberDate(value) {
@@ -75,7 +83,7 @@ export default function MemberPortal({ onLogout }) {
         `${API}/api/member/me/renew-checkout`,
         {
           method: "POST",
-          headers: authHeaders(),
+          headers: authHeaders(memberToken()),
         }
       );
 
@@ -131,8 +139,7 @@ export default function MemberPortal({ onLogout }) {
       return;
     }
 
-    const token =
-      localStorage.getItem("token");
+    const token = memberToken();
 
     try {
       const response = await fetch(

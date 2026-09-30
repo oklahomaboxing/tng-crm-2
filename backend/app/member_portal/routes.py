@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..database import Base, engine, get_db
 from ..models import User, Member, MembershipProduct
 from ..core.dependencies import current_user
-from ..auth import hash_password, decode_token
+from ..auth import hash_password, decode_token, create_token
 from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto, MembershipRenewal
 from ..services.memberships import effective_membership_status
 from .schemas import ActivateMemberIn, InviteMemberIn, LinkInBodyIn, ManualInBodyScanIn
@@ -38,6 +38,78 @@ def member_account_for_user(db: Session, user: User) -> MemberAccount:
     if not account:
         raise HTTPException(status_code=403, detail="Member account not linked")
     return account
+
+
+
+@router.post("/admin/{member_id}/preview-token")
+def admin_create_member_preview_token(
+    member_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    member = (
+        db.query(Member)
+        .filter(Member.id == member_id)
+        .first()
+    )
+
+    if not member:
+        raise HTTPException(
+            status_code=404,
+            detail="Member not found",
+        )
+
+    account = (
+        db.query(MemberAccount)
+        .filter(MemberAccount.member_id == member.id)
+        .first()
+    )
+
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="This member does not have an active portal account",
+        )
+
+    member_user = (
+        db.query(User)
+        .filter(User.id == account.user_id)
+        .first()
+    )
+
+    if not member_user:
+        raise HTTPException(
+            status_code=404,
+            detail="Member portal user not found",
+        )
+
+    if not member_user.active:
+        raise HTTPException(
+            status_code=409,
+            detail="Member portal access is disabled",
+        )
+
+    token = create_token(
+        {
+            "sub": str(member_user.id),
+            "role": "member",
+            "preview": True,
+            "admin_sub": str(user.id),
+        },
+        minutes=10,
+    )
+
+    return {
+        "member_id": member.id,
+        "member_name": (
+            f"{member.first_name or ''} "
+            f"{member.last_name or ''}"
+        ).strip(),
+        "token": token,
+        "expires_in_minutes": 10,
+    }
 
 
 @router.get("/admin/{member_id}/invite-status")
@@ -232,6 +304,106 @@ def create_member_invite(
         "email_sent": email_sent,
         "email_error": email_error,
     }
+
+
+
+@router.post("/admin/invite-all")
+def invite_all_members(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    members = (
+        db.query(Member)
+        .order_by(Member.id.asc())
+        .all()
+    )
+
+    results = {
+        "total_members": len(members),
+        "sent": 0,
+        "already_active": 0,
+        "already_invited": 0,
+        "missing_email": 0,
+        "failed": 0,
+    }
+
+    failures = []
+
+    for member in members:
+        email = (member.email or "").strip()
+
+        if not email:
+            results["missing_email"] += 1
+            continue
+
+        existing_account = (
+            db.query(MemberAccount)
+            .filter(MemberAccount.member_id == member.id)
+            .first()
+        )
+
+        if existing_account:
+            results["already_active"] += 1
+            continue
+
+        active_invite = (
+            db.query(MemberInvite)
+            .filter(
+                MemberInvite.member_id == member.id,
+                MemberInvite.used_at == None,
+                MemberInvite.expires_at > datetime.utcnow(),
+            )
+            .order_by(MemberInvite.created_at.desc())
+            .first()
+        )
+
+        if active_invite:
+            results["already_invited"] += 1
+            continue
+
+        try:
+            response = create_member_invite(
+                InviteMemberIn(member_id=member.id),
+                db=db,
+                user=user,
+            )
+
+            if response.get("email_sent"):
+                results["sent"] += 1
+            elif response.get("already_sent"):
+                results["already_invited"] += 1
+            else:
+                results["failed"] += 1
+
+        except HTTPException as exc:
+            results["failed"] += 1
+            failures.append({
+                "member_id": member.id,
+                "email": email,
+                "error": str(exc.detail),
+            })
+
+        except Exception as exc:
+            results["failed"] += 1
+            failures.append({
+                "member_id": member.id,
+                "email": email,
+                "error": str(exc),
+            })
+
+    results["message"] = (
+        f'Portal access sent to {results["sent"]} members. '
+        f'{results["already_active"]} already active, '
+        f'{results["already_invited"]} already invited, '
+        f'{results["missing_email"]} missing email, '
+        f'{results["failed"]} failed.'
+    )
+
+    results["failures"] = failures[:50]
+
+    return results
 
 
 @router.post("/activate")

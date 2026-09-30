@@ -156,6 +156,24 @@ function RootEntry() {
     );
   }
 
+  const isMemberPreview =
+    window.location.pathname === "/member/preview";
+
+  const memberPreviewToken =
+    sessionStorage.getItem("memberPreviewToken");
+
+  if (isMemberPreview && memberPreviewToken) {
+    return (
+      <MemberPortal
+        previewToken={memberPreviewToken}
+        onLogout={() => {
+          sessionStorage.removeItem("memberPreviewToken");
+          window.close();
+        }}
+      />
+    );
+  }
+
   const path = window.location.pathname;
 
   const isPublicTicketPage =

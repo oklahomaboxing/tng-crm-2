@@ -245,6 +245,53 @@ export default function MemberProfile({ member, onBack }) {
     }
   }
 
+  async function openMemberPortal() {
+    const previewWindow = window.open("", "_blank");
+
+    if (!previewWindow) {
+      alert("Please allow pop-ups so TNGOS can open the Member Portal.");
+      return;
+    }
+
+    previewWindow.document.write(
+      "<p style='font-family:Arial;padding:24px'>Opening Member Portal...</p>"
+    );
+
+    try {
+      const response = await fetch(
+        `${API}/api/member/admin/${memberData.id}/preview-token`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not open Member Portal."
+        );
+      }
+
+      previewWindow.sessionStorage.setItem(
+        "memberPreviewToken",
+        data.token
+      );
+
+      previewWindow.location.href = "/member/preview";
+    } catch (err) {
+      previewWindow.close();
+
+      alert(
+        err.message || "Could not open Member Portal."
+      );
+    }
+  }
+
+
   function downloadQrCode() {
     const canvas = document.getElementById("tng-member-qr");
     if (!canvas) return;
@@ -316,11 +363,14 @@ export default function MemberProfile({ member, onBack }) {
                 <Button
                   variant="contained"
                   color="primary"
-                  onClick={activateMemberLogin}
+                  onClick={
+                    inviteStatus?.status === "active"
+                      ? openMemberPortal
+                      : activateMemberLogin
+                  }
                   disabled={
                     loginInviteLoading ||
                     inviteStatus?.status === "invite_sent" ||
-                    inviteStatus?.status === "active" ||
                     !memberData.email ||
                     !memberData.email.trim()
                   }
@@ -328,7 +378,7 @@ export default function MemberProfile({ member, onBack }) {
                   {loginInviteLoading
                     ? "Creating Login..."
                     : inviteStatus?.status === "active"
-                    ? "Login Active"
+                    ? "Login as Member"
                     : inviteStatus?.status === "invite_sent"
                     ? "Invite Already Sent"
                     : memberData.email && memberData.email.trim()

@@ -3,6 +3,7 @@ import {
   Alert,
   Avatar,
   Box,
+  Button,
   Card,
   CardActionArea,
   CardContent,
@@ -68,6 +69,48 @@ export default function Members() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
+  const [bulkAccessLoading, setBulkAccessLoading] = useState(false);
+
+  async function sendAccessToAllMembers() {
+    const confirmed = window.confirm(
+      "Send TNGOS portal access to every member who has an email and does not already have an active account or pending invitation?\n\nThis includes expired and inactive members."
+    );
+
+    if (!confirmed || bulkAccessLoading) return;
+
+    try {
+      setBulkAccessLoading(true);
+
+      const response = await fetch(
+        `${API}/api/member/admin/invite-all`,
+        {
+          method: "POST",
+          headers: authHeaders(),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not send member portal access."
+        );
+      }
+
+      window.alert(
+        data.message ||
+        "Member portal access process completed."
+      );
+    } catch (err) {
+      window.alert(
+        err.message ||
+        "Could not send member portal access."
+      );
+    } finally {
+      setBulkAccessLoading(false);
+    }
+  }
+
 
   async function loadMembers() {
     try {
@@ -148,7 +191,17 @@ export default function Members() {
           <Typography variant="h4" fontWeight={900}>Members</Typography>
           <Typography color="text.secondary">Membership, billing, attendance, and renewals</Typography>
         </Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
+        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+          <Button
+            variant="contained"
+            color="error"
+            onClick={sendAccessToAllMembers}
+            disabled={bulkAccessLoading}
+          >
+            {bulkAccessLoading
+              ? "Sending Access..."
+              : "Send Portal Access to All Members"}
+          </Button>
           <Chip label={`${totals.active} Active`} color="success" />
           <Chip label={`${totals.expiring} Expiring`} color="warning" />
           <Chip label={`${totals.inactive} Inactive`} color="error" />
