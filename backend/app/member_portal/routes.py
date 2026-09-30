@@ -132,11 +132,26 @@ def member_invite_status(
     )
 
     if account:
+        member_user = (
+            db.query(User)
+            .filter(User.id == account.user_id)
+            .first()
+        )
+
+        portal_enabled = bool(
+            member_user and member_user.active
+        )
+
         return {
-            "status": "active",
+            "status": "active" if portal_enabled else "disabled",
             "activated": True,
+            "portal_enabled": portal_enabled,
             "invite_pending": False,
-            "message": "Member login is active.",
+            "message": (
+                "Member login is active."
+                if portal_enabled
+                else "Member portal access is disabled."
+            ),
         }
 
     active_invite = (
@@ -168,6 +183,74 @@ def member_invite_status(
         "email": member.email,
         "message": "Member login has not been activated.",
     }
+
+@router.post("/admin/{member_id}/portal-access")
+def set_member_portal_access(
+    member_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_admin(user)
+
+    member = (
+        db.query(Member)
+        .filter(Member.id == member_id)
+        .first()
+    )
+    if not member:
+        raise HTTPException(
+            status_code=404,
+            detail="Member not found",
+        )
+
+    account = (
+        db.query(MemberAccount)
+        .filter(MemberAccount.member_id == member_id)
+        .first()
+    )
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "This member has not activated a portal account yet. "
+                "Send an activation invitation first."
+            ),
+        )
+
+    member_user = (
+        db.query(User)
+        .filter(User.id == account.user_id)
+        .first()
+    )
+    if not member_user:
+        raise HTTPException(
+            status_code=404,
+            detail="Member portal user not found",
+        )
+
+    enabled = data.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(
+            status_code=400,
+            detail="enabled must be true or false",
+        )
+
+    member_user.active = enabled
+    db.commit()
+
+    return {
+        "ok": True,
+        "member_id": member.id,
+        "portal_enabled": enabled,
+        "status": "active" if enabled else "disabled",
+        "message": (
+            "Member portal account activated."
+            if enabled
+            else "Member portal account deactivated."
+        ),
+    }
+
 
 @router.post("/admin/invite")
 def create_member_invite(

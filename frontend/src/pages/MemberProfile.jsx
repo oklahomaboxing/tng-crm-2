@@ -136,6 +136,9 @@ export default function MemberProfile({ member, onBack }) {
       phone: memberData.phone || "",
       membership_type: memberData.membership_type || "",
       membership_status: memberData.membership_status || "active",
+      membership_end: memberData.membership_end
+        ? memberData.membership_end.slice(0, 10)
+        : "",
       assigned_coach: memberData.assigned_coach || "",
       emergency_contact: memberData.emergency_contact || "",
       emergency_phone: memberData.emergency_phone || "",
@@ -145,13 +148,27 @@ export default function MemberProfile({ member, onBack }) {
   }
 
   async function saveEdit() {
+    const payload = { ...editForm };
+
+    if (payload.membership_end) {
+      const today = new Date();
+      const localToday = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, "0"),
+        String(today.getDate()).padStart(2, "0"),
+      ].join("-");
+
+      payload.membership_status =
+        payload.membership_end >= localToday ? "active" : "expired";
+    }
+
     const response = await fetch(`${API}/api/members/${memberData.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem("token")}`,
       },
-      body: JSON.stringify(editForm),
+      body: JSON.stringify(payload),
     });
     const data = await response.json();
     if (!response.ok) return alert(data.detail || "Could not update member");
@@ -244,6 +261,53 @@ export default function MemberProfile({ member, onBack }) {
       setLoginInviteLoading(false);
     }
   }
+
+  async function setMemberPortalAccess(enabled) {
+    const action = enabled ? "reactivate" : "deactivate";
+
+    if (
+      !window.confirm(
+        `Are you sure you want to ${action} this member's portal account?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setLoginInviteLoading(true);
+
+      const response = await fetch(
+        `${API}/api/member/admin/${memberData.id}/portal-access`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ enabled }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not update member portal access."
+        );
+      }
+
+      await loadInviteStatus();
+
+      alert(data.message || "Member portal access updated.");
+    } catch (err) {
+      alert(
+        err.message || "Could not update member portal access."
+      );
+    } finally {
+      setLoginInviteLoading(false);
+    }
+  }
+
 
   async function openMemberPortal() {
     const previewWindow = window.open("", "_blank");
@@ -360,31 +424,58 @@ export default function MemberProfile({ member, onBack }) {
                   Edit Member
                 </Button>
 
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={
-                    inviteStatus?.status === "active"
-                      ? openMemberPortal
-                      : activateMemberLogin
-                  }
-                  disabled={
-                    loginInviteLoading ||
-                    inviteStatus?.status === "invite_sent" ||
-                    !memberData.email ||
-                    !memberData.email.trim()
-                  }
-                >
-                  {loginInviteLoading
-                    ? "Creating Login..."
-                    : inviteStatus?.status === "active"
-                    ? "Login as Member"
-                    : inviteStatus?.status === "invite_sent"
-                    ? "Invite Already Sent"
-                    : memberData.email && memberData.email.trim()
-                    ? "Activate Login"
-                    : "Email Required"}
-                </Button>
+                {inviteStatus?.status === "active" ? (
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={openMemberPortal}
+                      disabled={loginInviteLoading}
+                    >
+                      Login as Member
+                    </Button>
+
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={() => setMemberPortalAccess(false)}
+                      disabled={loginInviteLoading}
+                    >
+                      Deactivate Account
+                    </Button>
+                  </>
+                ) : inviteStatus?.status === "disabled" ? (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => setMemberPortalAccess(true)}
+                    disabled={loginInviteLoading}
+                  >
+                    {loginInviteLoading
+                      ? "Updating Account..."
+                      : "Reactivate Account"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={activateMemberLogin}
+                    disabled={
+                      loginInviteLoading ||
+                      inviteStatus?.status === "invite_sent" ||
+                      !memberData.email ||
+                      !memberData.email.trim()
+                    }
+                  >
+                    {loginInviteLoading
+                      ? "Creating Login..."
+                      : inviteStatus?.status === "invite_sent"
+                      ? "Invite Already Sent"
+                      : memberData.email && memberData.email.trim()
+                      ? "Activate Login"
+                      : "Email Required"}
+                  </Button>
+                )}
               </Stack>
             </Grid>
           </Grid>
@@ -421,10 +512,35 @@ export default function MemberProfile({ member, onBack }) {
                 ["emergency_phone", "Emergency Phone"], ["notes", "Notes"],
               ].map(([field, label]) => (
                 <Grid item xs={12} md={6} key={field}>
-                  <TextField fullWidth label={label} value={editForm[field] || ""}
-                    onChange={(e) => setEditForm({ ...editForm, [field]: e.target.value })} />
+                  <TextField
+                    fullWidth
+                    label={label}
+                    value={editForm[field] || ""}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        [field]: e.target.value,
+                      })
+                    }
+                  />
                 </Grid>
               ))}
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Membership Expiration Date"
+                  value={editForm.membership_end || ""}
+                  InputLabelProps={{ shrink: true }}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      membership_end: e.target.value,
+                    })
+                  }
+                />
+              </Grid>
             </Grid>
             <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
               <Button variant="contained" color="error" onClick={saveEdit}>Save</Button>
