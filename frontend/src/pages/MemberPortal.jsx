@@ -43,6 +43,7 @@ function Metric({ label, value, suffix = "" }) {
 
 export default function MemberPortal({ onLogout, previewToken = null }) {
   const [data, setData] = useState(null);
+  const [memberVideos, setMemberVideos] = useState([]);
   const [showMembershipCard, setShowMembershipCard] = useState(false);
 
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
@@ -414,6 +415,40 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
     }
   }, [data?.member?.photo_url]);
 
+
+
+  async function loadMemberVideos() {
+    try {
+      const response = await fetch(
+        `${API}/api/member/me/videos`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail || "Could not load TNG Video Library."
+        );
+      }
+
+      setMemberVideos(
+        Array.isArray(body.videos) ? body.videos : []
+      );
+    } catch (err) {
+      console.error(
+        "Could not load Member Portal videos:",
+        err
+      );
+      setMemberVideos([]);
+    }
+  }
+
+  useEffect(() => {
+    loadMemberVideos();
+  }, []);
 
   const hasActiveMembership =
     (data?.member?.membership_status || "").toLowerCase() === "active";
