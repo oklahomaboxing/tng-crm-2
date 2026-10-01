@@ -45,3 +45,5 @@ backups/
 *_backup.*
 *.before-*.bak
 App_broken_backup.jsx
+
+backend/.env
