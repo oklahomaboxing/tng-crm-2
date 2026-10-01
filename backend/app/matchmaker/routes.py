@@ -1,4 +1,4 @@
-﻿import resend
+import resend
 from datetime import datetime
 import os
 import json
@@ -214,7 +214,7 @@ def _docusign_access_token():
             "Content-Type":
                 "application/x-www-form-urlencoded",
         },
-        timeout=30,
+        timeout=10,
     )
 
     if not response.ok:
@@ -394,7 +394,7 @@ def _adobe_sign_api_base(token):
             "/api/rest/v6/baseUris"
         ),
         headers=_adobe_sign_headers(token),
-        timeout=30,
+        timeout=10,
     )
 
     if not response.ok:
@@ -492,7 +492,7 @@ def _adobe_download_completed_pdf(
             f"{agreement_id}/combinedDocument"
         ),
         headers=_adobe_sign_headers(token),
-        timeout=60,
+        timeout=15,
     )
 
     if not response.ok:
@@ -586,7 +586,7 @@ def _adobe_get_signing_url(
             f"{agreement_id}/signingUrls"
         ),
         headers=_adobe_sign_headers(token),
-        timeout=30,
+        timeout=10,
     )
 
     # Agreement creation is asynchronous.
@@ -3745,7 +3745,7 @@ Rules:
 
             bout_lines.append(
                 f"BOUT {order}: "
-                f"{red_name} VS {blue_name} â€” "
+                f"{red_name} VS {blue_name} — "
                 f"{weight} {rounds}".strip()
             )
 
@@ -4838,7 +4838,7 @@ Do not add fake ticket information.
             f"{api_base}/envelopes",
             headers=_docusign_headers(token),
             json=payload,
-            timeout=60,
+            timeout=15,
         )
 
         if not response.ok:
@@ -4946,7 +4946,7 @@ Do not add fake ticket information.
                 f"{envelope_id}"
             ),
             headers=_docusign_headers(token),
-            timeout=30,
+            timeout=10,
         )
 
         if not response.ok:
@@ -4999,7 +4999,7 @@ Do not add fake ticket information.
                     "Accept":
                         "application/pdf",
                 },
-                timeout=60,
+                timeout=15,
             )
 
             if not pdf_response.ok:
@@ -5324,7 +5324,7 @@ Do not add fake ticket information.
                     "application/pdf",
                 )
             },
-            timeout=60,
+            timeout=15,
         )
 
         if not transient_response.ok:
@@ -5421,7 +5421,7 @@ Do not add fake ticket information.
                     "application/json",
             },
             json=agreement_payload,
-            timeout=60,
+            timeout=15,
         )
 
         if not agreement_response.ok:
@@ -5559,7 +5559,7 @@ Do not add fake ticket information.
                 f"{agreement_id}"
             ),
             headers=_adobe_sign_headers(token),
-            timeout=30,
+            timeout=10,
         )
 
         if not response.ok:
@@ -5664,7 +5664,7 @@ Do not add fake ticket information.
                 f"{agreement_id}"
             ),
             headers=_adobe_sign_headers(token),
-            timeout=30,
+            timeout=10,
         )
 
         if not response.ok:
@@ -6804,6 +6804,7 @@ Do not add fake ticket information.
         return {"id": row.id, "status": row.status}
 
     return router
+
 
 
 
