@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFi
 from sqlalchemy.orm import Session
 
 from ..database import Base, engine, get_db
-from ..models import User, Member, MembershipProduct
+from ..models import User, Member, MembershipProduct, Sale
 from ..core.dependencies import current_user
 from ..auth import hash_password, decode_token, create_token
 from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto, MembershipRenewal
@@ -1004,6 +1004,52 @@ def create_member_renewal_checkout(
         },
     }
 
+
+
+
+@router.get("/me/transactions")
+def member_transactions(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    account = member_account_for_user(db, user)
+
+    sales = (
+        db.query(Sale)
+        .filter(Sale.member_id == account.member_id)
+        .order_by(
+            Sale.sale_date.desc(),
+            Sale.id.desc(),
+        )
+        .all()
+    )
+
+    return {
+        "transactions": [
+            {
+                "id": sale.id,
+                "amount": float(sale.amount or 0),
+                "sale_date": (
+                    sale.sale_date.isoformat()
+                    if sale.sale_date
+                    else None
+                ),
+                "payment_status": sale.payment_status,
+                "transaction_status": sale.transaction_status,
+                "payment_method": sale.payment_method,
+                "product": (
+                    sale.product.name
+                    if sale.product
+                    else "TNG Payment"
+                ),
+                "clover_payment_id":
+                    sale.clover_payment_id,
+                "clover_order_id":
+                    sale.clover_order_id,
+            }
+            for sale in sales
+        ]
+    }
 
 
 @router.get("/me/videos")

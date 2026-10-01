@@ -44,6 +44,7 @@ function Metric({ label, value, suffix = "" }) {
 export default function MemberPortal({ onLogout, previewToken = null }) {
   const [data, setData] = useState(null);
   const [memberVideos, setMemberVideos] = useState([]);
+  const [memberTransactions, setMemberTransactions] = useState([]);
   const [showMembershipCard, setShowMembershipCard] = useState(false);
 
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
@@ -416,6 +417,43 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
   }, [data?.member?.photo_url]);
 
 
+
+
+  async function loadMemberTransactions() {
+    try {
+      const response = await fetch(
+        `${API}/api/member/me/transactions`,
+        {
+          headers: authHeaders(),
+        }
+      );
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          body.detail ||
+            "Could not load transaction history."
+        );
+      }
+
+      setMemberTransactions(
+        Array.isArray(body.transactions)
+          ? body.transactions
+          : []
+      );
+    } catch (err) {
+      console.error(
+        "Could not load Member transactions:",
+        err
+      );
+      setMemberTransactions([]);
+    }
+  }
+
+  useEffect(() => {
+    loadMemberTransactions();
+  }, []);
 
   async function loadMemberVideos() {
     try {
@@ -957,6 +995,152 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                 >
                   OPEN FULL SCREEN SCAN
                 </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+
+
+          <Grid item xs={12}>
+            <Card sx={{ borderRadius: 4 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography
+                  variant="h5"
+                  fontWeight={900}
+                >
+                  Recent Transactions
+                </Typography>
+
+                <Typography
+                  color="text.secondary"
+                  sx={{ mt: 0.5, mb: 2.5 }}
+                >
+                  Payments connected to your TNG Boxing account.
+                </Typography>
+
+                {!memberTransactions.length ? (
+                  <Box
+                    sx={{
+                      p: 3,
+                      textAlign: "center",
+                      border: "2px dashed #ddd",
+                      borderRadius: 3,
+                      color: "text.secondary",
+                    }}
+                  >
+                    No transactions found.
+                  </Box>
+                ) : (
+                  <Stack spacing={1.5}>
+                    {memberTransactions
+                      .slice(0, 10)
+                      .map((transaction) => {
+                        const status = String(
+                          transaction.payment_status ||
+                          transaction.transaction_status ||
+                          "unknown"
+                        ).toUpperCase();
+
+                        const paid =
+                          status === "PAID" ||
+                          status === "APPROVED" ||
+                          status === "COMPLETED" ||
+                          status === "SUCCESS";
+
+                        return (
+                          <Box
+                            key={transaction.id}
+                            sx={{
+                              border: "1px solid #e5e7eb",
+                              borderRadius: 3,
+                              p: 2,
+                              bgcolor: "#fafafa",
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="flex-start"
+                              spacing={2}
+                            >
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography
+                                  fontWeight={900}
+                                >
+                                  {transaction.product ||
+                                    "TNG Payment"}
+                                </Typography>
+
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mt: 0.5 }}
+                                >
+                                  {transaction.sale_date
+                                    ? new Date(
+                                        transaction.sale_date
+                                      ).toLocaleString()
+                                    : "Date unavailable"}
+                                </Typography>
+
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ display: "block", mt: 0.5 }}
+                                >
+                                  {String(
+                                    transaction.payment_method ||
+                                    "Payment"
+                                  ).toUpperCase()}
+                                </Typography>
+
+                                {transaction.clover_payment_id && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: "block" }}
+                                  >
+                                    Ref:{" "}
+                                    {String(
+                                      transaction.clover_payment_id
+                                    ).slice(-8)}
+                                  </Typography>
+                                )}
+                              </Box>
+
+                              <Box
+                                sx={{
+                                  textAlign: "right",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Typography
+                                  fontWeight={900}
+                                  fontSize={18}
+                                >
+                                  $
+                                  {Number(
+                                    transaction.amount || 0
+                                  ).toFixed(2)}
+                                </Typography>
+
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 900,
+                                    color: paid
+                                      ? "success.main"
+                                      : "warning.main",
+                                  }}
+                                >
+                                  {status}
+                                </Typography>
+                              </Box>
+                            </Stack>
+                          </Box>
+                        );
+                      })}
+                  </Stack>
+                )}
               </CardContent>
             </Card>
           </Grid>
