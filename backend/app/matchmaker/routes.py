@@ -212,7 +212,6 @@ def _docusign_access_token():
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=10,
-        timeout=10,
     )
 
     if not response.ok:
