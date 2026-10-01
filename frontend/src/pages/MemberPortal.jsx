@@ -1145,6 +1145,143 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
             </Card>
           </Grid>
 
+
+          <Grid item xs={12}>
+            <Card sx={{ borderRadius: 4 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography
+                  variant="h5"
+                  fontWeight={900}
+                >
+                  TNG Video Library
+                </Typography>
+
+                <Typography
+                  color="text.secondary"
+                  sx={{ mt: 0.5, mb: 2.5 }}
+                >
+                  Training, fights, events and approved
+                  TNG Boxing videos.
+                </Typography>
+
+                {!memberVideos.length ? (
+                  <Box
+                    sx={{
+                      p: 4,
+                      textAlign: "center",
+                      border: "2px dashed #ddd",
+                      borderRadius: 3,
+                      color: "text.secondary",
+                    }}
+                  >
+                    No approved videos available yet.
+                  </Box>
+                ) : (
+                  <Grid container spacing={2}>
+                    {memberVideos.map((video) => (
+                      <Grid
+                        item
+                        xs={12}
+                        sm={6}
+                        lg={4}
+                        key={video.id}
+                      >
+                        <Card
+                          variant="outlined"
+                          sx={{
+                            borderRadius: 3,
+                            overflow: "hidden",
+                            height: "100%",
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              position: "relative",
+                              paddingTop: "56.25%",
+                              bgcolor: "#000",
+                            }}
+                          >
+                            <iframe
+                              src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
+                              title={
+                                video.title ||
+                                "TNG Boxing Video"
+                              }
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              style={{
+                                position: "absolute",
+                                inset: 0,
+                                width: "100%",
+                                height: "100%",
+                                border: 0,
+                              }}
+                            />
+                          </Box>
+
+                          <CardContent>
+                            <Typography
+                              fontWeight={900}
+                            >
+                              {video.title ||
+                                "TNG Boxing Video"}
+                            </Typography>
+
+                            {(video.event_name ||
+                              video.category) && (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ mt: 1 }}
+                              >
+                                {video.event_name || ""}
+                                {video.event_name &&
+                                video.category
+                                  ? " - "
+                                  : ""}
+                                {video.category || ""}
+                              </Typography>
+                            )}
+
+                            {video.fighter_names && (
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  mt: 1,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {video.fighter_names}
+                              </Typography>
+                            )}
+
+                            {video.youtube_url && (
+                              <Button
+                                component="a"
+                                href={video.youtube_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                color="error"
+                                variant="outlined"
+                                size="small"
+                                sx={{
+                                  mt: 2,
+                                  fontWeight: 900,
+                                }}
+                              >
+                                Watch on YouTube
+                              </Button>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
           <Grid item xs={12}>
             {!hasActiveMembership ? (
               <Card
