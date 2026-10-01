@@ -1,4 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+
+import { QRCodeCanvas } from "qrcode.react";
 import {
   Alert,
   Avatar,
@@ -41,6 +43,7 @@ function Metric({ label, value, suffix = "" }) {
 
 export default function MemberPortal({ onLogout, previewToken = null }) {
   const [data, setData] = useState(null);
+  const [showMembershipCard, setShowMembershipCard] = useState(false);
 
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [photoWorking, setPhotoWorking] = useState(false);
@@ -439,6 +442,23 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
   const m = data.member;
   const latest = data.inbody?.latest_scan;
 
+  const memberCardCode =
+    m.barcode ||
+    (m.member_number || "").replaceAll("-", "") ||
+    m.qr_code ||
+    m.digital_member_id ||
+    "";
+
+  const memberCardName =
+    `${m.first_name || ""} ${m.last_name || ""}`.trim() ||
+    "TNG Member";
+
+  const memberCardNumber =
+    m.member_number ||
+    m.digital_member_id ||
+    m.barcode ||
+    "Not assigned";
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f6f7f9", pb: 8 }}>
       <Box sx={{ bgcolor: "#09090b", color: "white", py: 2 }}>
@@ -716,17 +736,192 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={5}>
-            <Card sx={{ borderRadius: 4, height: "100%" }}>
-              <CardContent sx={{ p: 3, textAlign: "center" }}>
-                <QrCode2RoundedIcon sx={{ fontSize: 56 }} />
-                <Typography variant="h6" fontWeight={900}>Digital Membership Card</Typography>
-                <Typography color="text.secondary" sx={{ mb: 2 }}>
-                  Use your TNG member ID at check-in.
+                    <Grid item xs={12} md={5}>
+            <Card
+              sx={{
+                borderRadius: 4,
+                height: "100%",
+                overflow: "hidden",
+                color: "white",
+                background:
+                  "linear-gradient(135deg, #070707 0%, #171717 58%, #b71c1c 100%)",
+                boxShadow: "0 18px 45px rgba(0,0,0,.22)",
+                border: "1px solid rgba(255,255,255,.09)",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 2.5 }}
+                >
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontWeight: 1000,
+                        fontSize: 21,
+                        letterSpacing: 1.2,
+                        lineHeight: 1,
+                      }}
+                    >
+                      TNG BOXING
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.45,
+                        fontSize: 10,
+                        fontWeight: 900,
+                        letterSpacing: 2,
+                        color: "rgba(255,255,255,.60)",
+                      }}
+                    >
+                      DIGITAL MEMBERSHIP
+                    </Typography>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      px: 1.25,
+                      py: 0.55,
+                      borderRadius: 99,
+                      fontSize: 11,
+                      fontWeight: 1000,
+                      letterSpacing: 1,
+                      bgcolor: hasActiveMembership
+                        ? "rgba(46,180,80,.22)"
+                        : "rgba(239,35,60,.25)",
+                      border: hasActiveMembership
+                        ? "1px solid rgba(82,220,115,.55)"
+                        : "1px solid rgba(255,85,100,.55)",
+                    }}
+                  >
+                    {(m.membership_status || "UNKNOWN").toUpperCase()}
+                  </Box>
+                </Stack>
+
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  alignItems="center"
+                >
+                  <Avatar
+                    src={profilePhotoUrl || undefined}
+                    sx={{
+                      width: { xs: 66, sm: 78 },
+                      height: { xs: 66, sm: 78 },
+                      border: "3px solid rgba(255,255,255,.90)",
+                      bgcolor: "#b71c1c",
+                      fontWeight: 1000,
+                      fontSize: 23,
+                    }}
+                  >
+                    {m.first_name?.[0]}
+                    {m.last_name?.[0]}
+                  </Avatar>
+
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography
+                      sx={{
+                        fontSize: { xs: 19, sm: 22 },
+                        fontWeight: 1000,
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {memberCardName}
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.75,
+                        color: "rgba(255,255,255,.70)",
+                        fontWeight: 700,
+                        fontSize: 13,
+                      }}
+                    >
+                      {m.membership_type ||
+                        m.membership_level ||
+                        "TNG Member"}
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.55,
+                        color: "rgba(255,255,255,.52)",
+                        fontSize: 11,
+                        fontWeight: 800,
+                      }}
+                    >
+                      MEMBER #{memberCardNumber}
+                    </Typography>
+                  </Box>
+                </Stack>
+
+                <Box
+                  sx={{
+                    mt: 2.5,
+                    p: 1.5,
+                    bgcolor: "white",
+                    borderRadius: 2.5,
+                    display: "flex",
+                    justifyContent: "center",
+                  }}
+                >
+                  {memberCardCode ? (
+                    <QRCodeCanvas
+                      value={memberCardCode}
+                      size={155}
+                      level="H"
+                      includeMargin
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        height: 155,
+                        display: "grid",
+                        placeItems: "center",
+                        color: "#111",
+                        fontWeight: 900,
+                      }}
+                    >
+                      Check-in code not assigned
+                    </Box>
+                  )}
+                </Box>
+
+                <Typography
+                  sx={{
+                    mt: 1,
+                    textAlign: "center",
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    fontWeight: 900,
+                    color: "rgba(255,255,255,.58)",
+                  }}
+                >
+                  PRESENT AT FRONT DESK FOR CHECK-IN
                 </Typography>
-                <Typography variant="h5" fontWeight={900}>
-                  {m.digital_member_id || m.barcode || m.member_number || "Not assigned"}
-                </Typography>
+
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disabled={!memberCardCode}
+                  onClick={() => setShowMembershipCard(true)}
+                  sx={{
+                    mt: 2,
+                    py: 1.25,
+                    bgcolor: "#fff",
+                    color: "#080808",
+                    fontWeight: 1000,
+                    borderRadius: 2,
+                    "&:hover": {
+                      bgcolor: "#eee",
+                    },
+                  }}
+                >
+                  OPEN FULL SCREEN SCAN
+                </Button>
               </CardContent>
             </Card>
           </Grid>
@@ -920,6 +1115,164 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
           </Grid>
         </Grid>
       </Container>
+
+      {showMembershipCard && (
+        <Box
+          onClick={() => setShowMembershipCard(false)}
+          sx={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 99999,
+            bgcolor: "#050505",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            p: { xs: 1.5, sm: 3 },
+          }}
+        >
+          <Box
+            onClick={(e) => e.stopPropagation()}
+            sx={{
+              width: "100%",
+              maxWidth: 520,
+              textAlign: "center",
+            }}
+          >
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 1.5 }}
+            >
+              <Box sx={{ textAlign: "left" }}>
+                <Typography
+                  sx={{
+                    color: "white",
+                    fontWeight: 1000,
+                    fontSize: 20,
+                  }}
+                >
+                  TNG BOXING
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color: "rgba(255,255,255,.55)",
+                    fontSize: 11,
+                    fontWeight: 900,
+                    letterSpacing: 1.5,
+                  }}
+                >
+                  CHECK-IN CARD
+                </Typography>
+              </Box>
+
+              <Button
+                onClick={() => setShowMembershipCard(false)}
+                sx={{
+                  color: "white",
+                  fontWeight: 900,
+                }}
+              >
+                CLOSE
+              </Button>
+            </Stack>
+
+            <Box
+              sx={{
+                bgcolor: "white",
+                borderRadius: 4,
+                px: { xs: 2, sm: 4 },
+                py: { xs: 2.5, sm: 4 },
+                boxShadow: "0 24px 80px rgba(0,0,0,.55)",
+              }}
+            >
+              <Avatar
+                src={profilePhotoUrl || undefined}
+                sx={{
+                  width: 72,
+                  height: 72,
+                  mx: "auto",
+                  mb: 1.5,
+                  bgcolor: "#b71c1c",
+                  fontWeight: 1000,
+                  fontSize: 23,
+                }}
+              >
+                {m.first_name?.[0]}
+                {m.last_name?.[0]}
+              </Avatar>
+
+              <Typography
+                sx={{
+                  fontSize: 24,
+                  fontWeight: 1000,
+                  color: "#090909",
+                  lineHeight: 1.1,
+                }}
+              >
+                {memberCardName}
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.6,
+                  mb: 1.4,
+                  color: hasActiveMembership
+                    ? "#197a35"
+                    : "#b71c1c",
+                  fontWeight: 1000,
+                  letterSpacing: 1,
+                }}
+              >
+                {(m.membership_status || "UNKNOWN").toUpperCase()}
+              </Typography>
+
+              <Box
+                sx={{
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                  bgcolor: "#fff",
+                }}
+              >
+                <QRCodeCanvas
+                  value={memberCardCode}
+                  size={340}
+                  level="H"
+                  includeMargin
+                  style={{
+                    width: "min(78vw, 340px)",
+                    height: "auto",
+                  }}
+                />
+              </Box>
+
+              <Typography
+                sx={{
+                  mt: 1,
+                  color: "#111",
+                  fontWeight: 1000,
+                  fontSize: 16,
+                }}
+              >
+                MEMBER #{memberCardNumber}
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.6,
+                  color: "#666",
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                Hold this screen in front of the check-in scanner
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }
