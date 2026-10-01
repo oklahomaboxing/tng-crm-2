@@ -688,7 +688,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
   }
 
 
-  async function openDocuSignSigning(contract) {
+  async function downloadMyFullContract(contract) {
     const contractId = contract.contract_id;
 
     // Open the tab immediately so mobile/browser
@@ -2317,7 +2317,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                           contract.contract_id
                         }
                         onClick={() =>
-                          openDocuSignSigning(contract)
+                          downloadMyFullContract(contract)
                         }
                         style={{
                           marginTop: 18,
@@ -2342,8 +2342,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
                       >
                         {contractWorkingId ===
                         contract.contract_id
-                          ? "OPENING DOCUSIGN..."
-                          : "REVIEW & SIGN WITH DOCUSIGN"}
+                          ? "OPENING CONTRACT..."
+                          : "DOWNLOAD, PRINT & SIGN CONTRACT"}
                       </button>
 
                       <button
@@ -2378,8 +2378,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
                           fontSize: 11,
                         }}
                       >
-                        After signing in DocuSign,
-                        return here and refresh status.
+                        After printing and signing,
+                        upload the signed PDF below.
                       </div>
                     </div>
                   ) : null}
@@ -3164,3 +3164,4 @@ const [photoWorking, setPhotoWorking] = useState(false);
     </div>
   );
 }
+
