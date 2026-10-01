@@ -4950,14 +4950,25 @@ Do not add fake ticket information.
         )
 
         if not response.ok:
+            docusign_error = _docusign_error(
+                response,
+                "Could not sync DocuSign envelope.",
+            )
+
+            print(
+                "DOCUSIGN SYNC ERROR "
+                f"contract={contract.id} "
+                f"envelope={envelope_id} "
+                f"status={response.status_code}: "
+                f"{docusign_error}",
+                flush=True,
+            )
+
             raise HTTPException(
                 status_code=502,
                 detail=(
                     "DocuSign envelope sync failed: "
-                    + _docusign_error(
-                        response,
-                        "Could not sync DocuSign envelope.",
-                    )
+                    + docusign_error
                 ),
             )
 
