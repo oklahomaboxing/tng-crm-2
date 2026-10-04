@@ -570,3 +570,295 @@ class BoxingContractSignature(Base):
         default=datetime.utcnow,
     )
 
+
+# ============================================================
+# 2027 MATCHMAKING / MANAGER PLATFORM
+# ============================================================
+
+class BoxingManagerAccount(Base):
+    """
+    Portal/profile record for a user whose User.role == "manager".
+    One manager account may represent multiple fighters.
+    """
+    __tablename__ = "boxing_manager_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    display_name = Column(String, default="")
+    company_name = Column(String, default="")
+    phone = Column(String, default="")
+    email = Column(String, default="")
+
+    license_number = Column(String, default="")
+    license_state = Column(String, default="")
+
+    active = Column(Boolean, default=True)
+    notes = Column(Text, default="")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
+class BoxingManagerFighter(Base):
+    """
+    Links managers to fighters.
+
+    Historical rows may remain after a fighter changes managers.
+    Use active=True for the current assignment.
+    """
+    __tablename__ = "boxing_manager_fighters"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    manager_account_id = Column(
+        Integer,
+        ForeignKey("boxing_manager_accounts.id"),
+        nullable=False,
+        index=True,
+    )
+
+    fighter_id = Column(
+        Integer,
+        ForeignKey("boxing_fighters.id"),
+        nullable=False,
+        index=True,
+    )
+
+    active = Column(Boolean, default=True)
+
+    assigned_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    released_at = Column(
+        DateTime,
+        nullable=True,
+    )
+
+    notes = Column(Text, default="")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    manager = relationship("BoxingManagerAccount")
+    fighter = relationship("BoxingFighter")
+
+
+class BoxingFighterAvailability(Base):
+    """
+    Date/event-specific fighter availability.
+
+    This supplements BoxingFighter.available and the fighter's
+    general min/max available weight.
+    """
+    __tablename__ = "boxing_fighter_availability"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    fighter_id = Column(
+        Integer,
+        ForeignKey("boxing_fighters.id"),
+        nullable=False,
+        index=True,
+    )
+
+    event_id = Column(
+        Integer,
+        ForeignKey("boxing_events.id"),
+        nullable=True,
+        index=True,
+    )
+
+    available = Column(Boolean, default=True)
+
+    start_date = Column(String, default="")
+    end_date = Column(String, default="")
+
+    weight_min = Column(Float, nullable=True)
+    weight_max = Column(Float, nullable=True)
+
+    preferred_weight = Column(Float, nullable=True)
+
+    location = Column(String, default="")
+    travel_available = Column(Boolean, default=True)
+
+    notes = Column(Text, default="")
+
+    created_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    fighter = relationship("BoxingFighter")
+    event = relationship("BoxingEvent")
+
+
+class BoxingFightOffer(Base):
+    """
+    Negotiation record before an official bout/contract exists.
+
+    Counteroffers create a NEW row with parent_offer_id pointing
+    to the previous offer. This preserves the entire negotiation
+    history instead of overwriting terms.
+    """
+    __tablename__ = "boxing_fight_offers"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    event_id = Column(
+        Integer,
+        ForeignKey("boxing_events.id"),
+        nullable=True,
+        index=True,
+    )
+
+    fighter_id = Column(
+        Integer,
+        ForeignKey("boxing_fighters.id"),
+        nullable=False,
+        index=True,
+    )
+
+    opponent_id = Column(
+        Integer,
+        ForeignKey("boxing_fighters.id"),
+        nullable=True,
+        index=True,
+    )
+
+    manager_account_id = Column(
+        Integer,
+        ForeignKey("boxing_manager_accounts.id"),
+        nullable=True,
+        index=True,
+    )
+
+    parent_offer_id = Column(
+        Integer,
+        ForeignKey("boxing_fight_offers.id"),
+        nullable=True,
+        index=True,
+    )
+
+    version = Column(Integer, default=1)
+
+    created_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    recipient_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    recipient_type = Column(
+        String,
+        default="fighter",
+    )
+
+    status = Column(
+        String,
+        default="draft",
+        index=True,
+    )
+
+    # Proposed bout terms
+    proposed_weight = Column(Float, nullable=True)
+    rounds = Column(Integer, default=4)
+    bout_type = Column(String, default="pro")
+
+    proposed_purse = Column(Float, default=0)
+    ticket_commission_percent = Column(Float, default=0)
+
+    # Travel / lodging offer
+    travel_type = Column(String, default="")
+    travel_paid_by = Column(String, default="")
+    travel_expense = Column(Float, default=0)
+
+    hotel_provided = Column(Boolean, default=False)
+    hotel_name = Column(String, default="")
+    hotel_nights = Column(Integer, default=0)
+
+    per_diem_daily = Column(Float, default=0)
+    per_diem_days = Column(Integer, default=0)
+    per_diem_total = Column(Float, default=0)
+
+    additional_terms = Column(Text, default="")
+    message = Column(Text, default="")
+
+    match_score = Column(Integer, nullable=True)
+
+    # Filled after an accepted offer becomes official.
+    bout_id = Column(
+        Integer,
+        ForeignKey("boxing_bouts.id"),
+        nullable=True,
+        index=True,
+    )
+
+    contract_id = Column(
+        Integer,
+        ForeignKey("boxing_contracts.id"),
+        nullable=True,
+        index=True,
+    )
+
+    sent_at = Column(DateTime, nullable=True)
+    viewed_at = Column(DateTime, nullable=True)
+    responded_at = Column(DateTime, nullable=True)
+    accepted_at = Column(DateTime, nullable=True)
+    declined_at = Column(DateTime, nullable=True)
+    withdrawn_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    event = relationship("BoxingEvent")
+    fighter = relationship(
+        "BoxingFighter",
+        foreign_keys=[fighter_id],
+    )
+    opponent = relationship(
+        "BoxingFighter",
+        foreign_keys=[opponent_id],
+    )
+    manager = relationship("BoxingManagerAccount")
+    bout = relationship("BoxingBout")
+    contract = relationship("BoxingContract")
+
