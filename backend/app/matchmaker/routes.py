@@ -24,8 +24,11 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Respons
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, inspect, text
 from ..database import get_db, engine
-from ..core.permissions import require_matchmaker_access
-from .models import BoxingContract, BoxingSignedContractDocument, BoxingContractSignature, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
+from ..core.permissions import (
+    require_matchmaker_access,
+    require_manager_access,
+)
+from .models import BoxingContract, BoxingSignedContractDocument, BoxingContractSignature, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication, BoxingManagerAccount, BoxingManagerFighter, BoxingFighterAvailability, BoxingFightOffer
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -6799,6 +6802,815 @@ Do not add fake ticket information.
         db.commit()
         db.refresh(row)
         return {"id": row.id, "status": row.status}
+
+
+    # ============================================================
+    # MANAGER PORTAL
+    # ============================================================
+
+    def manager_account_for_user(
+        db: Session,
+        user,
+        create_if_missing: bool = False,
+    ):
+        require_manager_access(user)
+
+        # These /manager/me routes are intentionally self-scoped.
+        if getattr(user, "role", None) != "manager":
+            raise HTTPException(
+                status_code=403,
+                detail="Manager account required",
+            )
+
+        account = (
+            db.query(BoxingManagerAccount)
+            .filter(BoxingManagerAccount.user_id == user.id)
+            .first()
+        )
+
+        if not account and create_if_missing:
+            account = BoxingManagerAccount(
+                user_id=user.id,
+                display_name=user.name or "",
+                email=user.email or "",
+                active=True,
+            )
+            db.add(account)
+            db.commit()
+            db.refresh(account)
+
+        if not account:
+            raise HTTPException(
+                status_code=404,
+                detail="Manager profile not found",
+            )
+
+        if not account.active:
+            raise HTTPException(
+                status_code=403,
+                detail="Manager profile is inactive",
+            )
+
+        return account
+
+
+    def manager_owns_fighter(
+        db: Session,
+        manager_account_id: int,
+        fighter_id: int,
+    ):
+        assignment = (
+            db.query(BoxingManagerFighter)
+            .filter(
+                BoxingManagerFighter.manager_account_id
+                == manager_account_id,
+                BoxingManagerFighter.fighter_id == fighter_id,
+                BoxingManagerFighter.active.is_(True),
+            )
+            .first()
+        )
+
+        if not assignment:
+            raise HTTPException(
+                status_code=403,
+                detail="Fighter is not assigned to this manager",
+            )
+
+        return assignment
+
+
+    @router.get("/manager/me")
+    def manager_portal_profile(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        return {
+            "id": manager.id,
+            "user_id": manager.user_id,
+            "display_name": manager.display_name or "",
+            "company_name": manager.company_name or "",
+            "phone": manager.phone or "",
+            "email": manager.email or "",
+            "license_number": manager.license_number or "",
+            "license_state": manager.license_state or "",
+            "active": bool(manager.active),
+        }
+
+
+    @router.get("/manager/me/fighters")
+    def manager_portal_fighters(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        assignments = (
+            db.query(BoxingManagerFighter)
+            .filter(
+                BoxingManagerFighter.manager_account_id == manager.id,
+                BoxingManagerFighter.active.is_(True),
+            )
+            .order_by(BoxingManagerFighter.id.asc())
+            .all()
+        )
+
+        results = []
+
+        for assignment in assignments:
+            fighter = assignment.fighter
+
+            if not fighter:
+                continue
+
+            results.append({
+                "assignment_id": assignment.id,
+                "fighter": fighter_dict(fighter),
+                "assigned_at": (
+                    assignment.assigned_at.isoformat()
+                    if assignment.assigned_at
+                    else None
+                ),
+            })
+
+        return results
+
+
+    @router.get("/manager/me/availability")
+    def manager_portal_availability(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        fighter_ids = [
+            row[0]
+            for row in (
+                db.query(BoxingManagerFighter.fighter_id)
+                .filter(
+                    BoxingManagerFighter.manager_account_id
+                    == manager.id,
+                    BoxingManagerFighter.active.is_(True),
+                )
+                .all()
+            )
+        ]
+
+        if not fighter_ids:
+            return []
+
+        rows = (
+            db.query(BoxingFighterAvailability)
+            .filter(
+                BoxingFighterAvailability.fighter_id.in_(
+                    fighter_ids
+                )
+            )
+            .order_by(
+                BoxingFighterAvailability.id.desc()
+            )
+            .all()
+        )
+
+        return [
+            {
+                "id": row.id,
+                "fighter_id": row.fighter_id,
+                "event_id": row.event_id,
+                "available": bool(row.available),
+                "start_date": row.start_date or "",
+                "end_date": row.end_date or "",
+                "weight_min": row.weight_min,
+                "weight_max": row.weight_max,
+                "preferred_weight": row.preferred_weight,
+                "location": row.location or "",
+                "travel_available": bool(
+                    row.travel_available
+                ),
+                "notes": row.notes or "",
+                "created_at": (
+                    row.created_at.isoformat()
+                    if row.created_at
+                    else None
+                ),
+            }
+            for row in rows
+        ]
+
+
+    @router.post(
+        "/manager/me/fighters/{fighter_id}/availability"
+    )
+    def manager_set_fighter_availability(
+        fighter_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        manager_owns_fighter(
+            db,
+            manager.id,
+            fighter_id,
+        )
+
+        event_id = data.get("event_id")
+
+        if event_id not in (None, ""):
+            try:
+                event_id = int(event_id)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid event_id",
+                )
+
+            event = (
+                db.query(BoxingEvent)
+                .filter(BoxingEvent.id == event_id)
+                .first()
+            )
+
+            if not event:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Event not found",
+                )
+        else:
+            event_id = None
+
+        def optional_float(name):
+            value = data.get(name)
+
+            if value in (None, ""):
+                return None
+
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid {name}",
+                )
+
+        row = BoxingFighterAvailability(
+            fighter_id=fighter_id,
+            event_id=event_id,
+            available=bool(
+                data.get("available", True)
+            ),
+            start_date=str(
+                data.get("start_date") or ""
+            ).strip(),
+            end_date=str(
+                data.get("end_date") or ""
+            ).strip(),
+            weight_min=optional_float("weight_min"),
+            weight_max=optional_float("weight_max"),
+            preferred_weight=optional_float(
+                "preferred_weight"
+            ),
+            location=str(
+                data.get("location") or ""
+            ).strip(),
+            travel_available=bool(
+                data.get("travel_available", True)
+            ),
+            notes=str(
+                data.get("notes") or ""
+            ).strip(),
+            created_by_user_id=user.id,
+        )
+
+        if (
+            row.weight_min is not None
+            and row.weight_max is not None
+            and row.weight_min > row.weight_max
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Minimum weight cannot exceed "
+                    "maximum weight"
+                ),
+            )
+
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "id": row.id,
+            "fighter_id": row.fighter_id,
+            "event_id": row.event_id,
+            "available": bool(row.available),
+            "message": "Availability saved",
+        }
+
+
+    @router.get("/manager/me/offers")
+    def manager_portal_offers(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        rows = (
+            db.query(BoxingFightOffer)
+            .filter(
+                or_(
+                    BoxingFightOffer.manager_account_id
+                    == manager.id,
+                    BoxingFightOffer.recipient_user_id
+                    == user.id,
+                )
+            )
+            .order_by(
+                BoxingFightOffer.created_at.desc(),
+                BoxingFightOffer.id.desc(),
+            )
+            .all()
+        )
+
+        results = []
+
+        for offer in rows:
+            results.append({
+                "id": offer.id,
+                "parent_offer_id": offer.parent_offer_id,
+                "version": offer.version or 1,
+                "event_id": offer.event_id,
+                "fighter_id": offer.fighter_id,
+                "opponent_id": offer.opponent_id,
+                "recipient_type": offer.recipient_type or "",
+                "status": offer.status or "draft",
+                "proposed_weight": offer.proposed_weight,
+                "rounds": offer.rounds,
+                "bout_type": offer.bout_type or "",
+                "proposed_purse": offer.proposed_purse or 0,
+                "ticket_commission_percent": (
+                    offer.ticket_commission_percent or 0
+                ),
+                "travel_type": offer.travel_type or "",
+                "travel_paid_by": offer.travel_paid_by or "",
+                "travel_expense": offer.travel_expense or 0,
+                "hotel_provided": bool(
+                    offer.hotel_provided
+                ),
+                "hotel_name": offer.hotel_name or "",
+                "hotel_nights": offer.hotel_nights or 0,
+                "per_diem_daily": offer.per_diem_daily or 0,
+                "per_diem_days": offer.per_diem_days or 0,
+                "per_diem_total": offer.per_diem_total or 0,
+                "additional_terms": (
+                    offer.additional_terms or ""
+                ),
+                "message": offer.message or "",
+                "match_score": offer.match_score,
+                "bout_id": offer.bout_id,
+                "contract_id": offer.contract_id,
+                "sent_at": (
+                    offer.sent_at.isoformat()
+                    if offer.sent_at
+                    else None
+                ),
+                "viewed_at": (
+                    offer.viewed_at.isoformat()
+                    if offer.viewed_at
+                    else None
+                ),
+                "responded_at": (
+                    offer.responded_at.isoformat()
+                    if offer.responded_at
+                    else None
+                ),
+                "created_at": (
+                    offer.created_at.isoformat()
+                    if offer.created_at
+                    else None
+                ),
+            })
+
+        return results
+
+
+
+    def manager_offer_for_user(
+        db: Session,
+        manager,
+        user,
+        offer_id: int,
+    ):
+        offer = (
+            db.query(BoxingFightOffer)
+            .filter(BoxingFightOffer.id == offer_id)
+            .first()
+        )
+
+        if not offer:
+            raise HTTPException(
+                status_code=404,
+                detail="Fight offer not found",
+            )
+
+        allowed = (
+            offer.manager_account_id == manager.id
+            or offer.recipient_user_id == user.id
+        )
+
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail="Fight offer is not assigned to this manager",
+            )
+
+        manager_owns_fighter(
+            db,
+            manager.id,
+            offer.fighter_id,
+        )
+
+        return offer
+
+
+    @router.post("/manager/me/offers/{offer_id}/view")
+    def manager_view_offer(
+        offer_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        offer = manager_offer_for_user(
+            db,
+            manager,
+            user,
+            offer_id,
+        )
+
+        if not offer.viewed_at:
+            offer.viewed_at = datetime.utcnow()
+
+        if offer.status == "sent":
+            offer.status = "viewed"
+
+        db.commit()
+        db.refresh(offer)
+
+        return {
+            "id": offer.id,
+            "status": offer.status,
+            "viewed_at": (
+                offer.viewed_at.isoformat()
+                if offer.viewed_at
+                else None
+            ),
+        }
+
+
+    @router.post("/manager/me/offers/{offer_id}/accept")
+    def manager_accept_offer(
+        offer_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        offer = manager_offer_for_user(
+            db,
+            manager,
+            user,
+            offer_id,
+        )
+
+        if offer.status not in {
+            "sent",
+            "viewed",
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Offer cannot be accepted while "
+                    f"status is {offer.status}"
+                ),
+            )
+
+        now = datetime.utcnow()
+
+        if not offer.viewed_at:
+            offer.viewed_at = now
+
+        offer.status = "accepted"
+        offer.responded_at = now
+        offer.accepted_at = now
+        offer.declined_at = None
+
+        db.commit()
+        db.refresh(offer)
+
+        return {
+            "id": offer.id,
+            "status": offer.status,
+            "accepted_at": (
+                offer.accepted_at.isoformat()
+                if offer.accepted_at
+                else None
+            ),
+            "message": "Fight offer accepted",
+        }
+
+
+    @router.post("/manager/me/offers/{offer_id}/decline")
+    def manager_decline_offer(
+        offer_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        offer = manager_offer_for_user(
+            db,
+            manager,
+            user,
+            offer_id,
+        )
+
+        if offer.status not in {
+            "sent",
+            "viewed",
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Offer cannot be declined while "
+                    f"status is {offer.status}"
+                ),
+            )
+
+        now = datetime.utcnow()
+
+        if not offer.viewed_at:
+            offer.viewed_at = now
+
+        offer.status = "declined"
+        offer.responded_at = now
+        offer.declined_at = now
+        offer.accepted_at = None
+
+        reason = str(
+            data.get("reason")
+            or data.get("message")
+            or ""
+        ).strip()
+
+        if reason:
+            offer.message = reason
+
+        db.commit()
+        db.refresh(offer)
+
+        return {
+            "id": offer.id,
+            "status": offer.status,
+            "declined_at": (
+                offer.declined_at.isoformat()
+                if offer.declined_at
+                else None
+            ),
+            "message": "Fight offer declined",
+        }
+
+
+    @router.post("/manager/me/offers/{offer_id}/counter")
+    def manager_counter_offer(
+        offer_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        manager = manager_account_for_user(
+            db,
+            user,
+            create_if_missing=True,
+        )
+
+        offer = manager_offer_for_user(
+            db,
+            manager,
+            user,
+            offer_id,
+        )
+
+        if offer.status not in {
+            "sent",
+            "viewed",
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Offer cannot be countered while "
+                    f"status is {offer.status}"
+                ),
+            )
+
+        def counter_float(name, fallback):
+            value = data.get(name)
+
+            if value in (None, ""):
+                return fallback
+
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid {name}",
+                )
+
+            if parsed < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{name} cannot be negative",
+                )
+
+            return parsed
+
+        def counter_int(name, fallback):
+            value = data.get(name)
+
+            if value in (None, ""):
+                return fallback
+
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid {name}",
+                )
+
+            if parsed < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{name} cannot be negative",
+                )
+
+            return parsed
+
+        proposed_weight = counter_float(
+            "proposed_weight",
+            offer.proposed_weight,
+        )
+
+        rounds = counter_int(
+            "rounds",
+            offer.rounds or 4,
+        )
+
+        if rounds < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Rounds must be at least 1",
+            )
+
+        now = datetime.utcnow()
+
+        if not offer.viewed_at:
+            offer.viewed_at = now
+
+        offer.status = "countered"
+        offer.responded_at = now
+
+        counter = BoxingFightOffer(
+            event_id=offer.event_id,
+            fighter_id=offer.fighter_id,
+            opponent_id=offer.opponent_id,
+            manager_account_id=manager.id,
+            parent_offer_id=offer.id,
+            version=(offer.version or 1) + 1,
+            created_by_user_id=user.id,
+            recipient_user_id=offer.created_by_user_id,
+            recipient_type="matchmaker",
+            status="sent",
+            proposed_weight=proposed_weight,
+            rounds=rounds,
+            bout_type=str(
+                data.get("bout_type")
+                or offer.bout_type
+                or "pro"
+            ).strip(),
+            proposed_purse=counter_float(
+                "proposed_purse",
+                offer.proposed_purse or 0,
+            ),
+            ticket_commission_percent=counter_float(
+                "ticket_commission_percent",
+                offer.ticket_commission_percent or 0,
+            ),
+            travel_type=str(
+                data.get("travel_type")
+                if data.get("travel_type") is not None
+                else offer.travel_type or ""
+            ).strip(),
+            travel_paid_by=str(
+                data.get("travel_paid_by")
+                if data.get("travel_paid_by") is not None
+                else offer.travel_paid_by or ""
+            ).strip(),
+            travel_expense=counter_float(
+                "travel_expense",
+                offer.travel_expense or 0,
+            ),
+            hotel_provided=bool(
+                data.get(
+                    "hotel_provided",
+                    offer.hotel_provided,
+                )
+            ),
+            hotel_name=str(
+                data.get("hotel_name")
+                if data.get("hotel_name") is not None
+                else offer.hotel_name or ""
+            ).strip(),
+            hotel_nights=counter_int(
+                "hotel_nights",
+                offer.hotel_nights or 0,
+            ),
+            per_diem_daily=counter_float(
+                "per_diem_daily",
+                offer.per_diem_daily or 0,
+            ),
+            per_diem_days=counter_int(
+                "per_diem_days",
+                offer.per_diem_days or 0,
+            ),
+            additional_terms=str(
+                data.get("additional_terms")
+                if data.get("additional_terms") is not None
+                else offer.additional_terms or ""
+            ).strip(),
+            message=str(
+                data.get("message") or ""
+            ).strip(),
+            match_score=offer.match_score,
+            sent_at=now,
+            viewed_at=None,
+            responded_at=None,
+        )
+
+        counter.per_diem_total = (
+            (counter.per_diem_daily or 0)
+            * (counter.per_diem_days or 0)
+        )
+
+        db.add(counter)
+        db.commit()
+        db.refresh(counter)
+
+        return {
+            "original_offer_id": offer.id,
+            "original_status": offer.status,
+            "counter_offer_id": counter.id,
+            "counter_version": counter.version,
+            "status": counter.status,
+            "message": "Counteroffer sent",
+        }
+
 
     return router
 
