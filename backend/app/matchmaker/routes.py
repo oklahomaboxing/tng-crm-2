@@ -6898,6 +6898,11 @@ Do not add fake ticket information.
             )
         )
 
+        has_explicit_range = (
+            minimum is not None
+            or maximum is not None
+        )
+
         preferred = auto_match_float(
             availability.preferred_weight
             if availability
@@ -6923,6 +6928,7 @@ Do not add fake ticket information.
             "preferred": preferred,
             "min": minimum,
             "max": maximum,
+            "has_explicit_range": has_explicit_range,
         }
 
 
@@ -7191,14 +7197,38 @@ Do not add fake ticket information.
                 if gap > max_gap:
                     continue
 
-                overlaps = not (
-                    wa["max"] < wb["min"]
-                    or
-                    wb["max"] < wa["min"]
-                )
+                # If both fighters only have a normal fight weight,
+                # the Max Weight Gap controls compatibility.
+                #
+                # Explicit manager/fighter min-max ranges are still
+                # respected when they have actually been entered.
+                if (
+                    wa.get("has_explicit_range")
+                    and wb.get("has_explicit_range")
+                ):
+                    overlaps = not (
+                        wa["max"] < wb["min"]
+                        or
+                        wb["max"] < wa["min"]
+                    )
+                    if not overlaps:
+                        continue
 
-                if not overlaps:
-                    continue
+                elif wa.get("has_explicit_range"):
+                    if not (
+                        wa["min"]
+                        <= wb["preferred"]
+                        <= wa["max"]
+                    ):
+                        continue
+
+                elif wb.get("has_explicit_range"):
+                    if not (
+                        wb["min"]
+                        <= wa["preferred"]
+                        <= wb["max"]
+                    ):
+                        continue
 
                 rematch = auto_match_previous_pair(
                     db,
