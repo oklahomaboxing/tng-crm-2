@@ -7095,6 +7095,7 @@ Do not add fake ticket information.
                 )
 
         pool = []
+        exclusions = []
 
         fighters = (
             db.query(BoxingFighter)
@@ -7104,6 +7105,11 @@ Do not add fake ticket information.
 
         for fighter in fighters:
             if fighter.id in booked:
+                exclusions.append({
+                    "fighter_id": fighter.id,
+                    "fighter_name": fighter.legal_name,
+                    "reason": "Already booked on this event",
+                })
                 continue
 
             fighter_sex = str(
@@ -7118,12 +7124,27 @@ Do not add fake ticket information.
             # Auto-Match requires a known sex classification.
             # Never automatically pair male and female fighters.
             if fighter_sex not in {"male", "female"}:
+                exclusions.append({
+                    "fighter_id": fighter.id,
+                    "fighter_name": fighter.legal_name,
+                    "reason": "Missing Male/Female selection",
+                })
                 continue
 
             if fighter_sex == "male" and not include_male:
+                exclusions.append({
+                    "fighter_id": fighter.id,
+                    "fighter_name": fighter.legal_name,
+                    "reason": "Male pool turned off",
+                })
                 continue
 
             if fighter_sex == "female" and not include_female:
+                exclusions.append({
+                    "fighter_id": fighter.id,
+                    "fighter_name": fighter.legal_name,
+                    "reason": "Female pool turned off",
+                })
                 continue
 
             if not bool(
@@ -7133,6 +7154,11 @@ Do not add fake ticket information.
                     True,
                 )
             ):
+                exclusions.append({
+                    "fighter_id": fighter.id,
+                    "fighter_name": fighter.legal_name,
+                    "reason": "Fighter marked unavailable",
+                })
                 continue
 
             availability = auto_match_availability(
@@ -7147,6 +7173,11 @@ Do not add fake ticket information.
                     availability.available
                 )
             ):
+                exclusions.append({
+                    "fighter_id": fighter.id,
+                    "fighter_name": fighter.legal_name,
+                    "reason": "Manager/event availability says unavailable",
+                })
                 continue
 
             weight = auto_match_weight(
@@ -7155,6 +7186,11 @@ Do not add fake ticket information.
             )
 
             if not weight:
+                exclusions.append({
+                    "fighter_id": fighter.id,
+                    "fighter_name": fighter.legal_name,
+                    "reason": "Missing fight weight",
+                })
                 continue
 
             pool.append({
@@ -7370,6 +7406,14 @@ Do not add fake ticket information.
             "eligible_fighters": len(pool),
             "candidate_pairs": len(candidates),
             "proposals": proposals,
+            "exclusions": exclusions,
+            "diagnostics": {
+                "total_fighters": len(fighters),
+                "eligible_fighters": len(pool),
+                "candidate_pairs": len(candidates),
+                "proposed_bouts": len(proposals),
+                "excluded_fighters": len(exclusions),
+            },
         }
 
 

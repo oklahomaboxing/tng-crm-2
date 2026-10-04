@@ -390,6 +390,33 @@ export default function AutoMatchPlanner({
               />
             </Stack>
 
+            {result.proposals?.length === 0 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography fontWeight={900} sx={{ mb: 1 }}>
+                  Auto-Match found no usable bout combinations.
+                </Typography>
+
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Total Fighters: {result.diagnostics?.total_fighters ?? "-"} ?
+                  {" "}Eligible: {result.diagnostics?.eligible_fighters ?? 0} ?
+                  {" "}Candidate Pairs: {result.diagnostics?.candidate_pairs ?? 0}
+                </Typography>
+
+                {result.exclusions?.length > 0 && (
+                  <Stack spacing={0.5}>
+                    {result.exclusions.map((row) => (
+                      <Typography
+                        key={`${row.fighter_id}-${row.reason}`}
+                        variant="body2"
+                      >
+                        ? {row.fighter_name || `Fighter #${row.fighter_id}`}: {row.reason}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
+              </Alert>
+            )}
+
             <Stack spacing={2}>
               {result.proposals?.map(
                 (proposal) => {
