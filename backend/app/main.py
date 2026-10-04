@@ -92,6 +92,29 @@ if OPENAI_API_KEY:
 resend.api_key = os.getenv("RESEND_API_KEY")
 
 Base.metadata.create_all(bind=engine)
+# Ensure boxing fighter sex column exists
+try:
+    from sqlalchemy import inspect as _tng_inspect, text as _tng_text
+    _tng_inspector = _tng_inspect(engine)
+    if "boxing_fighters" in _tng_inspector.get_table_names():
+        _tng_columns = {
+            col["name"]
+            for col in _tng_inspector.get_columns("boxing_fighters")
+        }
+        if "sex" not in _tng_columns:
+            with engine.begin() as _tng_conn:
+                _tng_conn.execute(
+                    _tng_text(
+                        "ALTER TABLE boxing_fighters "
+                        "ADD COLUMN sex VARCHAR DEFAULT ''"
+                    )
+                )
+except Exception as _tng_sex_schema_error:
+    print(
+        "Fighter sex schema check failed:",
+        _tng_sex_schema_error,
+    )
+
 
 def add_column_if_missing(table, column, column_type):
     with engine.connect() as conn:

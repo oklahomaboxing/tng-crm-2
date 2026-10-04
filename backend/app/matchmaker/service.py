@@ -50,6 +50,7 @@ def fighter_dict(f):
         "city": f.city,
         "state": f.state,
         "country": f.country,
+        "sex": getattr(f, "sex", "") or "",
         "stance": f.stance,
         "gym": f.gym,
         "coach": f.coach,

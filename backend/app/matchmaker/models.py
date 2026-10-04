@@ -16,6 +16,7 @@ class BoxingFighter(Base):
     city = Column(String, default="")
     state = Column(String, default="")
     country = Column(String, default="")
+    sex = Column(String, default="")
     stance = Column(String, default="")
     gym = Column(String, default="")
     coach = Column(String, default="")

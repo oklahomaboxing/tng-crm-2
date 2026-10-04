@@ -9,6 +9,7 @@ class FighterCreate(BaseModel):
     city: str = ""
     state: str = ""
     country: str = ""
+    sex: str = ""
     stance: str = ""
     gym: str = ""
     coach: str = ""
@@ -77,6 +78,7 @@ class PublicFighterRegistration(BaseModel):
     city: str = ""
     state: str = ""
     country: str = "USA"
+    sex: str = ""
 
     phone: str = ""
     email: str = ""

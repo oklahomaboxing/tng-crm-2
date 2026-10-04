@@ -7048,6 +7048,26 @@ Do not add fake ticket information.
             )
         )
 
+        include_male = bool(
+            data.get(
+                "include_male",
+                True,
+            )
+        )
+
+        include_female = bool(
+            data.get(
+                "include_female",
+                True,
+            )
+        )
+
+        if not include_male and not include_female:
+            raise HTTPException(
+                status_code=400,
+                detail="Select Male, Female, or both for Auto-Match",
+            )
+
         existing_bouts = (
             db.query(BoxingBout)
             .filter(
@@ -7078,6 +7098,26 @@ Do not add fake ticket information.
 
         for fighter in fighters:
             if fighter.id in booked:
+                continue
+
+            fighter_sex = str(
+                getattr(
+                    fighter,
+                    "sex",
+                    "",
+                )
+                or ""
+            ).strip().lower()
+
+            # Auto-Match requires a known sex classification.
+            # Never automatically pair male and female fighters.
+            if fighter_sex not in {"male", "female"}:
+                continue
+
+            if fighter_sex == "male" and not include_male:
+                continue
+
+            if fighter_sex == "female" and not include_female:
                 continue
 
             if not bool(
@@ -7122,6 +7162,23 @@ Do not add fake ticket information.
             for right in pool[i + 1:]:
                 fighter_a = left["fighter"]
                 fighter_b = right["fighter"]
+
+                sex_a = str(
+                    getattr(fighter_a, "sex", "") or ""
+                ).strip().lower()
+
+                sex_b = str(
+                    getattr(fighter_b, "sex", "") or ""
+                ).strip().lower()
+
+                # Hard safety rule: Auto-Match never creates
+                # a mixed-sex proposed boxing bout.
+                if (
+                    sex_a not in {"male", "female"}
+                    or sex_b not in {"male", "female"}
+                    or sex_a != sex_b
+                ):
+                    continue
 
                 wa = left["weight"]
                 wb = right["weight"]

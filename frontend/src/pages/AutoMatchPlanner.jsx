@@ -41,6 +41,8 @@ export default function AutoMatchPlanner({
   const [desiredBouts, setDesiredBouts] = useState(6);
   const [maxGap, setMaxGap] = useState(8);
   const [allowRematches, setAllowRematches] = useState(false);
+  const [includeMale, setIncludeMale] = useState(true);
+  const [includeFemale, setIncludeFemale] = useState(true);
   const [result, setResult] = useState(null);
   const [working, setWorking] = useState(false);
   const [sent, setSent] = useState({});
@@ -100,6 +102,10 @@ export default function AutoMatchPlanner({
               Number(maxGap),
             allow_rematches:
               allowRematches,
+            include_male:
+              includeMale,
+            include_female:
+              includeFemale,
           }),
         }
       );
@@ -281,7 +287,41 @@ export default function AutoMatchPlanner({
             xs={12}
             md={3}
           >
-            <FormControlLabel
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              flexWrap="wrap"
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeMale}
+                    onChange={(event) =>
+                      setIncludeMale(
+                        event.target.checked
+                      )
+                    }
+                  />
+                }
+                label="Male"
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeFemale}
+                    onChange={(event) =>
+                      setIncludeFemale(
+                        event.target.checked
+                      )
+                    }
+                  />
+                }
+                label="Female"
+              />
+
+              <FormControlLabel
               control={
                 <Switch
                   checked={
@@ -295,7 +335,8 @@ export default function AutoMatchPlanner({
                 />
               }
               label="Allow Rematches"
-            />
+              />
+            </Stack>
           </Grid>
         </Grid>
 
@@ -309,7 +350,8 @@ export default function AutoMatchPlanner({
           onClick={generate}
           disabled={
             working ||
-            !eventId
+            !eventId ||
+            (!includeMale && !includeFemale)
           }
           sx={{
             mt: 2,
@@ -417,6 +459,16 @@ export default function AutoMatchPlanner({
                             <Typography
                               color="text.secondary"
                             >
+                              Record: {proposal.red_fighter?.pro_record || "0-0"}
+                              {" vs "}
+                              {proposal.blue_fighter?.pro_record || "0-0"}
+                            </Typography>
+
+                            <Typography
+                              color="text.secondary"
+                            >
+                              {proposal.red_fighter?.sex === "female" ? "Female" : "Male"}
+                              {" ? "}
                               {proposal.red_weight?.preferred} lb
                               {" vs "}
                               {proposal.blue_weight?.preferred} lb

@@ -32,6 +32,7 @@ const emptyFighter = {
   city: "",
   state: "OK",
   country: "USA",
+  sex: "",
   stance: "",
   gym: "",
   coach: "",
@@ -3439,6 +3440,26 @@ export default function Matchmaker() {
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Sex</InputLabel>
+                    <Select
+                      value={fighterForm.sex || ""}
+                      label="Sex"
+                      onChange={(e) =>
+                        setFighterForm({
+                          ...fighterForm,
+                          sex: e.target.value,
+                        })
+                      }
+                    >
+                      <MenuItem value="">Select</MenuItem>
+                      <MenuItem value="male">Male</MenuItem>
+                      <MenuItem value="female">Female</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
                   <FormControl fullWidth>
                     <InputLabel>Stance</InputLabel>
                     <Select
@@ -3710,6 +3731,26 @@ export default function Matchmaker() {
                       })
                     }
                   />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Sex</InputLabel>
+                    <Select
+                      label="Sex"
+                      value={editFighterForm.sex || ""}
+                      onChange={(e) =>
+                        setEditFighterForm({
+                          ...editFighterForm,
+                          sex: e.target.value,
+                        })
+                      }
+                    >
+                      <MenuItem value="">Select</MenuItem>
+                      <MenuItem value="male">Male</MenuItem>
+                      <MenuItem value="female">Female</MenuItem>
+                    </Select>
+                  </FormControl>
                 </Grid>
 
                 <Grid item xs={12} md={4}>
