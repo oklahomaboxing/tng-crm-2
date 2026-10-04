@@ -4327,7 +4327,11 @@ Do not add fake ticket information.
             or "generated"
         )
 
-        db.commit()
+        if db.info.get("defer_contract_commit"):
+            db.flush()
+        else:
+            db.commit()
+
         db.refresh(contract)
 
         return {
@@ -7609,6 +7613,925 @@ Do not add fake ticket information.
             "counter_version": counter.version,
             "status": counter.status,
             "message": "Counteroffer sent",
+        }
+
+
+
+    # ============================================================
+    # MATCHMAKER / PROMOTER FIGHT OFFERS
+    # ============================================================
+
+    def staff_offer_dict(offer):
+        return {
+            "id": offer.id,
+            "parent_offer_id": offer.parent_offer_id,
+            "version": offer.version or 1,
+            "event_id": offer.event_id,
+            "fighter_id": offer.fighter_id,
+            "opponent_id": offer.opponent_id,
+            "manager_account_id": offer.manager_account_id,
+            "created_by_user_id": offer.created_by_user_id,
+            "recipient_user_id": offer.recipient_user_id,
+            "recipient_type": offer.recipient_type or "",
+            "status": offer.status or "draft",
+            "proposed_weight": offer.proposed_weight,
+            "rounds": offer.rounds or 4,
+            "bout_type": offer.bout_type or "pro",
+            "proposed_purse": offer.proposed_purse or 0,
+            "ticket_commission_percent": (
+                offer.ticket_commission_percent or 0
+            ),
+            "travel_type": offer.travel_type or "",
+            "travel_paid_by": offer.travel_paid_by or "",
+            "travel_expense": offer.travel_expense or 0,
+            "hotel_provided": bool(offer.hotel_provided),
+            "hotel_name": offer.hotel_name or "",
+            "hotel_nights": offer.hotel_nights or 0,
+            "per_diem_daily": offer.per_diem_daily or 0,
+            "per_diem_days": offer.per_diem_days or 0,
+            "per_diem_total": offer.per_diem_total or 0,
+            "additional_terms": offer.additional_terms or "",
+            "message": offer.message or "",
+            "match_score": offer.match_score,
+            "bout_id": offer.bout_id,
+            "contract_id": offer.contract_id,
+            "sent_at": (
+                offer.sent_at.isoformat()
+                if offer.sent_at
+                else None
+            ),
+            "viewed_at": (
+                offer.viewed_at.isoformat()
+                if offer.viewed_at
+                else None
+            ),
+            "responded_at": (
+                offer.responded_at.isoformat()
+                if offer.responded_at
+                else None
+            ),
+            "accepted_at": (
+                offer.accepted_at.isoformat()
+                if offer.accepted_at
+                else None
+            ),
+            "declined_at": (
+                offer.declined_at.isoformat()
+                if offer.declined_at
+                else None
+            ),
+            "withdrawn_at": (
+                offer.withdrawn_at.isoformat()
+                if offer.withdrawn_at
+                else None
+            ),
+            "expires_at": (
+                offer.expires_at.isoformat()
+                if offer.expires_at
+                else None
+            ),
+            "created_at": (
+                offer.created_at.isoformat()
+                if offer.created_at
+                else None
+            ),
+        }
+
+
+    def offer_float(
+        data,
+        name,
+        default=0,
+        *,
+        allow_none=False,
+    ):
+        value = data.get(name)
+
+        if value in ("", None):
+            if allow_none:
+                return None
+            return default
+
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid {name}",
+            )
+
+        if parsed < 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} cannot be negative",
+            )
+
+        return parsed
+
+
+    def offer_int(data, name, default=0):
+        value = data.get(name)
+
+        if value in ("", None):
+            return default
+
+        try:
+            parsed = int(float(value))
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid {name}",
+            )
+
+        if parsed < 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} cannot be negative",
+            )
+
+        return parsed
+
+
+    @router.get("/offers")
+    def list_fight_offers(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        rows = (
+            db.query(BoxingFightOffer)
+            .order_by(
+                BoxingFightOffer.created_at.desc(),
+                BoxingFightOffer.id.desc(),
+            )
+            .all()
+        )
+
+        return [staff_offer_dict(row) for row in rows]
+
+
+    @router.get("/offers/counters")
+    def list_fight_counteroffers(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        rows = (
+            db.query(BoxingFightOffer)
+            .filter(
+                BoxingFightOffer.parent_offer_id.isnot(None)
+            )
+            .order_by(
+                BoxingFightOffer.created_at.desc(),
+                BoxingFightOffer.id.desc(),
+            )
+            .all()
+        )
+
+        return [staff_offer_dict(row) for row in rows]
+
+
+    @router.post("/offers")
+    def create_fight_offer(
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        try:
+            fighter_id = int(data.get("fighter_id"))
+            opponent_id = int(data.get("opponent_id"))
+            event_id = int(data.get("event_id"))
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "fighter_id, opponent_id, and event_id "
+                    "are required"
+                ),
+            )
+
+        if fighter_id == opponent_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Pick two different fighters",
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        opponent = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == opponent_id)
+            .first()
+        )
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(BoxingEvent.id == event_id)
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        if not opponent:
+            raise HTTPException(
+                status_code=404,
+                detail="Opponent not found",
+            )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found",
+            )
+
+        manager_account_id = data.get(
+            "manager_account_id"
+        )
+
+        assignment = None
+        manager = None
+
+        if manager_account_id not in (None, ""):
+            try:
+                manager_account_id = int(
+                    manager_account_id
+                )
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid manager_account_id",
+                )
+
+            manager = (
+                db.query(BoxingManagerAccount)
+                .filter(
+                    BoxingManagerAccount.id
+                    == manager_account_id
+                )
+                .first()
+            )
+
+            if not manager or not manager.active:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Active manager account not found",
+                )
+
+            assignment = (
+                db.query(BoxingManagerFighter)
+                .filter(
+                    BoxingManagerFighter.manager_account_id
+                    == manager.id,
+                    BoxingManagerFighter.fighter_id
+                    == fighter_id,
+                    BoxingManagerFighter.active.is_(True),
+                )
+                .first()
+            )
+
+            if not assignment:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Selected manager is not assigned "
+                        "to this fighter"
+                    ),
+                )
+        else:
+            assignment = (
+                db.query(BoxingManagerFighter)
+                .filter(
+                    BoxingManagerFighter.fighter_id
+                    == fighter_id,
+                    BoxingManagerFighter.active.is_(True),
+                )
+                .order_by(
+                    BoxingManagerFighter.id.desc()
+                )
+                .first()
+            )
+
+            if assignment:
+                manager = (
+                    db.query(BoxingManagerAccount)
+                    .filter(
+                        BoxingManagerAccount.id
+                        == assignment.manager_account_id,
+                        BoxingManagerAccount.active.is_(True),
+                    )
+                    .first()
+                )
+
+        recipient_user_id = data.get(
+            "recipient_user_id"
+        )
+
+        if recipient_user_id not in (None, ""):
+            try:
+                recipient_user_id = int(
+                    recipient_user_id
+                )
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid recipient_user_id",
+                )
+        elif manager:
+            recipient_user_id = manager.user_id
+        else:
+            recipient_user_id = None
+
+        recipient_type = (
+            "manager"
+            if manager
+            else str(
+                data.get("recipient_type")
+                or "fighter"
+            ).strip().lower()
+        )
+
+        proposed_weight = offer_float(
+            data,
+            "proposed_weight",
+            allow_none=True,
+        )
+
+        rounds = offer_int(
+            data,
+            "rounds",
+            4,
+        )
+
+        if rounds < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Rounds must be at least 1",
+            )
+
+        commission = offer_float(
+            data,
+            "ticket_commission_percent",
+            0,
+        )
+
+        if commission > 100:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Ticket sales commission must be "
+                    "between 0% and 100%"
+                ),
+            )
+
+        send_now = data.get("send", True)
+
+        if isinstance(send_now, str):
+            send_now = (
+                send_now.strip().lower()
+                not in {"0", "false", "no", "off"}
+            )
+        else:
+            send_now = bool(send_now)
+
+        now = datetime.utcnow()
+
+        offer = BoxingFightOffer(
+            event_id=event.id,
+            fighter_id=fighter.id,
+            opponent_id=opponent.id,
+            manager_account_id=(
+                manager.id
+                if manager
+                else None
+            ),
+            parent_offer_id=None,
+            version=1,
+            created_by_user_id=user.id,
+            recipient_user_id=recipient_user_id,
+            recipient_type=recipient_type,
+            status="sent" if send_now else "draft",
+            proposed_weight=proposed_weight,
+            rounds=rounds,
+            bout_type=str(
+                data.get("bout_type") or "pro"
+            ).strip(),
+            proposed_purse=offer_float(
+                data,
+                "proposed_purse",
+                0,
+            ),
+            ticket_commission_percent=commission,
+            travel_type=str(
+                data.get("travel_type") or ""
+            ).strip(),
+            travel_paid_by=str(
+                data.get("travel_paid_by") or ""
+            ).strip(),
+            travel_expense=offer_float(
+                data,
+                "travel_expense",
+                0,
+            ),
+            hotel_provided=bool(
+                data.get("hotel_provided", False)
+            ),
+            hotel_name=str(
+                data.get("hotel_name") or ""
+            ).strip(),
+            hotel_nights=offer_int(
+                data,
+                "hotel_nights",
+                0,
+            ),
+            per_diem_daily=offer_float(
+                data,
+                "per_diem_daily",
+                0,
+            ),
+            per_diem_days=offer_int(
+                data,
+                "per_diem_days",
+                0,
+            ),
+            additional_terms=str(
+                data.get("additional_terms") or ""
+            ).strip(),
+            message=str(
+                data.get("message") or ""
+            ).strip(),
+            match_score=(
+                offer_int(data, "match_score", 0)
+                if data.get("match_score")
+                not in (None, "")
+                else None
+            ),
+            sent_at=now if send_now else None,
+        )
+
+        offer.per_diem_total = (
+            (offer.per_diem_daily or 0)
+            * (offer.per_diem_days or 0)
+        )
+
+        db.add(offer)
+        db.commit()
+        db.refresh(offer)
+
+        return staff_offer_dict(offer)
+
+
+    @router.post("/offers/{offer_id}/send")
+    def send_existing_fight_offer(
+        offer_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        offer = (
+            db.query(BoxingFightOffer)
+            .filter(BoxingFightOffer.id == offer_id)
+            .first()
+        )
+
+        if not offer:
+            raise HTTPException(
+                status_code=404,
+                detail="Fight offer not found",
+            )
+
+        if offer.status != "draft":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Only draft offers can be sent"
+                ),
+            )
+
+        if (
+            offer.recipient_type == "manager"
+            and not offer.manager_account_id
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Manager recipient is missing",
+            )
+
+        now = datetime.utcnow()
+        offer.status = "sent"
+        offer.sent_at = now
+
+        db.commit()
+        db.refresh(offer)
+
+        return staff_offer_dict(offer)
+
+
+    @router.post("/offers/{offer_id}/view")
+    def staff_view_fight_offer(
+        offer_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        offer = (
+            db.query(BoxingFightOffer)
+            .filter(BoxingFightOffer.id == offer_id)
+            .first()
+        )
+
+        if not offer:
+            raise HTTPException(
+                status_code=404,
+                detail="Fight offer not found",
+            )
+
+        if not offer.viewed_at:
+            offer.viewed_at = datetime.utcnow()
+
+        if (
+            offer.status == "sent"
+            and offer.recipient_type == "matchmaker"
+        ):
+            offer.status = "viewed"
+
+        db.commit()
+        db.refresh(offer)
+
+        return staff_offer_dict(offer)
+
+
+    @router.post("/offers/{offer_id}/accept-counter")
+    def accept_manager_counteroffer(
+        offer_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        offer = (
+            db.query(BoxingFightOffer)
+            .filter(BoxingFightOffer.id == offer_id)
+            .first()
+        )
+
+        if not offer:
+            raise HTTPException(
+                status_code=404,
+                detail="Fight offer not found",
+            )
+
+        if offer.parent_offer_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="This offer is not a counteroffer",
+            )
+
+        if offer.recipient_type != "matchmaker":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Counteroffer is not addressed "
+                    "to the matchmaker"
+                ),
+            )
+
+        if (
+            offer.recipient_user_id
+            and user.role == "matchmaker"
+            and offer.recipient_user_id != user.id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Counteroffer belongs to another "
+                    "matchmaker"
+                ),
+            )
+
+        if offer.status not in {
+            "sent",
+            "viewed",
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Counteroffer cannot be accepted "
+                    f"while status is {offer.status}"
+                ),
+            )
+
+        now = datetime.utcnow()
+
+        if not offer.viewed_at:
+            offer.viewed_at = now
+
+        offer.status = "accepted"
+        offer.responded_at = now
+        offer.accepted_at = now
+
+        db.commit()
+        db.refresh(offer)
+
+        return staff_offer_dict(offer)
+
+
+    @router.post("/offers/{offer_id}/withdraw")
+    def withdraw_fight_offer(
+        offer_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        offer = (
+            db.query(BoxingFightOffer)
+            .filter(BoxingFightOffer.id == offer_id)
+            .first()
+        )
+
+        if not offer:
+            raise HTTPException(
+                status_code=404,
+                detail="Fight offer not found",
+            )
+
+        if offer.status not in {
+            "draft",
+            "sent",
+            "viewed",
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Offer cannot be withdrawn while "
+                    f"status is {offer.status}"
+                ),
+            )
+
+        now = datetime.utcnow()
+
+        offer.status = "withdrawn"
+        offer.withdrawn_at = now
+        offer.responded_at = now
+
+        db.commit()
+        db.refresh(offer)
+
+        return staff_offer_dict(offer)
+
+
+    @router.post("/offers/{offer_id}/convert")
+    def convert_accepted_offer(
+        offer_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_staff(user)
+
+        offer = (
+            db.query(BoxingFightOffer)
+            .filter(BoxingFightOffer.id == offer_id)
+            .first()
+        )
+
+        if not offer:
+            raise HTTPException(
+                status_code=404,
+                detail="Fight offer not found",
+            )
+
+        if offer.status != "accepted":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Only an accepted offer can be "
+                    "converted to a bout"
+                ),
+            )
+
+        if offer.bout_id or offer.contract_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This offer has already been converted"
+                ),
+            )
+
+        if not offer.event_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Offer must have an event",
+            )
+
+        if not offer.opponent_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Offer must have an opponent",
+            )
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(BoxingEvent.id == offer.event_id)
+            .first()
+        )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id == offer.fighter_id
+            )
+            .first()
+        )
+
+        opponent = (
+            db.query(BoxingFighter)
+            .filter(
+                BoxingFighter.id == offer.opponent_id
+            )
+            .first()
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found",
+            )
+
+        if not fighter or not opponent:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter information missing",
+            )
+
+        conflict = (
+            db.query(BoxingBout)
+            .filter(
+                BoxingBout.event_id == event.id,
+                BoxingBout.status.notin_(
+                    ["void", "cancelled"]
+                ),
+                or_(
+                    BoxingBout.red_fighter_id.in_(
+                        [fighter.id, opponent.id]
+                    ),
+                    BoxingBout.blue_fighter_id.in_(
+                        [fighter.id, opponent.id]
+                    ),
+                ),
+            )
+            .first()
+        )
+
+        if conflict:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "One fighter is already booked "
+                    "on this event"
+                ),
+            )
+
+        corner = str(
+            data.get("corner") or "red"
+        ).strip().lower()
+
+        if corner not in {"red", "blue"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Corner must be red or blue",
+            )
+
+        purse = float(
+            offer.proposed_purse or 0
+        )
+
+        if corner == "red":
+            red_fighter_id = fighter.id
+            blue_fighter_id = opponent.id
+            red_purse = purse
+            blue_purse = 0
+        else:
+            red_fighter_id = opponent.id
+            blue_fighter_id = fighter.id
+            red_purse = 0
+            blue_purse = purse
+
+        bout = BoxingBout(
+            event_id=event.id,
+            red_fighter_id=red_fighter_id,
+            blue_fighter_id=blue_fighter_id,
+            weight_agreed=offer.proposed_weight,
+            rounds=offer.rounds or 4,
+            bout_type=offer.bout_type or "pro",
+            status="draft",
+            red_purse=red_purse,
+            blue_purse=blue_purse,
+            match_score=offer.match_score,
+        )
+
+        db.add(bout)
+
+        try:
+            db.flush()
+
+            offer.bout_id = bout.id
+
+            contract_data = {
+                "rounds": offer.rounds or 4,
+                "maximum_weight":
+                    offer.proposed_weight,
+                "gross_purse":
+                    offer.proposed_purse or 0,
+                "ticket_commission_percent":
+                    offer.ticket_commission_percent or 0,
+                "travel_type":
+                    offer.travel_type or "",
+                "travel_paid_by":
+                    offer.travel_paid_by or "",
+                "travel_expense":
+                    offer.travel_expense or 0,
+                "hotel_provided": (
+                    "Yes"
+                    if offer.hotel_provided
+                    else "No"
+                ),
+                "hotel_name":
+                    offer.hotel_name or "",
+                "hotel_nights":
+                    offer.hotel_nights or 0,
+                "per_diem_daily":
+                    offer.per_diem_daily or 0,
+                "per_diem_days":
+                    offer.per_diem_days or 0,
+                "additional_terms":
+                    offer.additional_terms or "",
+                "status": "generated",
+            }
+
+            db.info["defer_contract_commit"] = True
+
+            try:
+                contract_result = generate_bout_contract(
+                    bout.id,
+                    corner,
+                    contract_data,
+                    db,
+                    user,
+                )
+            finally:
+                db.info.pop("defer_contract_commit", None)
+
+            contract_id = contract_result.get("id")
+
+            if not contract_id:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Contract was not created "
+                        "for accepted offer"
+                    ),
+                )
+
+            offer.contract_id = int(contract_id)
+
+            db.commit()
+            db.refresh(offer)
+            db.refresh(bout)
+
+        except Exception:
+            db.rollback()
+            raise
+
+        return {
+            "offer": staff_offer_dict(offer),
+            "bout": {
+                "id": bout.id,
+                "event_id": bout.event_id,
+                "red_fighter_id": bout.red_fighter_id,
+                "blue_fighter_id": bout.blue_fighter_id,
+                "weight_agreed": bout.weight_agreed,
+                "rounds": bout.rounds,
+                "bout_type": bout.bout_type,
+                "status": bout.status,
+                "red_purse": bout.red_purse or 0,
+                "blue_purse": bout.blue_purse or 0,
+            },
+            "contract": contract_result,
         }
 
 
