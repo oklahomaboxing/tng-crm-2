@@ -6811,6 +6811,481 @@ Do not add fake ticket information.
 
 
 
+
+    # ============================================================
+    # 2027 AUTO-MATCH ENGINE
+    # ============================================================
+
+    def auto_match_record(record_value):
+        import re
+        raw = str(record_value or "").strip()
+
+        match = re.search(
+            r"(\d+)\s*-\s*(\d+)(?:\s*-\s*(\d+))?",
+            raw,
+        )
+
+        if not match:
+            return 0, 0, 0
+
+        return (
+            int(match.group(1) or 0),
+            int(match.group(2) or 0),
+            int(match.group(3) or 0),
+        )
+
+
+    def auto_match_availability(
+        db,
+        fighter_id,
+        event_id,
+    ):
+        row = (
+            db.query(BoxingFighterAvailability)
+            .filter(
+                BoxingFighterAvailability.fighter_id == fighter_id,
+                BoxingFighterAvailability.event_id == event_id,
+            )
+            .order_by(BoxingFighterAvailability.id.desc())
+            .first()
+        )
+
+        if row:
+            return row
+
+        return (
+            db.query(BoxingFighterAvailability)
+            .filter(
+                BoxingFighterAvailability.fighter_id == fighter_id,
+                BoxingFighterAvailability.event_id.is_(None),
+            )
+            .order_by(BoxingFighterAvailability.id.desc())
+            .first()
+        )
+
+
+    def auto_match_float(value):
+        try:
+            if value in (None, ""):
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+
+    def auto_match_weight(fighter, availability):
+        fight_weight = auto_match_float(
+            getattr(fighter, "fight_weight", None)
+        )
+
+        minimum = auto_match_float(
+            availability.weight_min
+            if availability
+            else getattr(
+                fighter,
+                "available_weight_min",
+                None,
+            )
+        )
+
+        maximum = auto_match_float(
+            availability.weight_max
+            if availability
+            else getattr(
+                fighter,
+                "available_weight_max",
+                None,
+            )
+        )
+
+        preferred = auto_match_float(
+            availability.preferred_weight
+            if availability
+            else None
+        )
+
+        if preferred is None:
+            preferred = fight_weight
+
+        if preferred is None and minimum is not None and maximum is not None:
+            preferred = (minimum + maximum) / 2
+
+        if preferred is None:
+            return None
+
+        if minimum is None:
+            minimum = preferred
+
+        if maximum is None:
+            maximum = preferred
+
+        return {
+            "preferred": preferred,
+            "min": minimum,
+            "max": maximum,
+        }
+
+
+    def auto_match_previous_pair(
+        db,
+        first_id,
+        second_id,
+    ):
+        return (
+            db.query(BoxingBout)
+            .filter(
+                or_(
+                    (
+                        (BoxingBout.red_fighter_id == first_id)
+                        &
+                        (BoxingBout.blue_fighter_id == second_id)
+                    ),
+                    (
+                        (BoxingBout.red_fighter_id == second_id)
+                        &
+                        (BoxingBout.blue_fighter_id == first_id)
+                    ),
+                )
+            )
+            .first()
+            is not None
+        )
+
+
+    def auto_match_score(
+        fighter_a,
+        fighter_b,
+        weight_a,
+        weight_b,
+        same_city,
+        same_state,
+        rematch,
+    ):
+        weight_diff = abs(
+            weight_a["preferred"] -
+            weight_b["preferred"]
+        )
+
+        aw, al, ad = auto_match_record(
+            getattr(fighter_a, "pro_record", "")
+        )
+
+        bw, bl, bd = auto_match_record(
+            getattr(fighter_b, "pro_record", "")
+        )
+
+        a_total = aw + al + ad
+        b_total = bw + bl + bd
+
+        score = 100.0
+
+        score -= min(weight_diff * 5, 40)
+        score -= min(abs(a_total - b_total) * 3, 24)
+        score -= min(abs(aw - bw) * 1.5, 12)
+        score -= min(abs(al - bl), 8)
+
+        if same_city:
+            score += 5
+        elif same_state:
+            score += 2
+
+        if rematch:
+            score -= 20
+
+        return max(
+            0,
+            min(100, round(score, 1)),
+        )
+
+
+    @router.post("/events/{event_id}/auto-match-proposals")
+    def auto_match_proposals(
+        event_id: int,
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_matchmaker_access(user)
+
+        event = (
+            db.query(BoxingEvent)
+            .filter(BoxingEvent.id == event_id)
+            .first()
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found",
+            )
+
+        try:
+            desired_bouts = int(
+                data.get("desired_bouts") or 6
+            )
+        except (TypeError, ValueError):
+            desired_bouts = 6
+
+        desired_bouts = max(
+            1,
+            min(desired_bouts, 20),
+        )
+
+        try:
+            max_gap = float(
+                data.get(
+                    "max_weight_difference",
+                    8,
+                )
+            )
+        except (TypeError, ValueError):
+            max_gap = 8
+
+        allow_rematches = bool(
+            data.get(
+                "allow_rematches",
+                False,
+            )
+        )
+
+        existing_bouts = (
+            db.query(BoxingBout)
+            .filter(
+                BoxingBout.event_id == event.id
+            )
+            .all()
+        )
+
+        booked = set()
+
+        for bout in existing_bouts:
+            if bout.red_fighter_id:
+                booked.add(
+                    bout.red_fighter_id
+                )
+            if bout.blue_fighter_id:
+                booked.add(
+                    bout.blue_fighter_id
+                )
+
+        pool = []
+
+        fighters = (
+            db.query(BoxingFighter)
+            .order_by(BoxingFighter.id.asc())
+            .all()
+        )
+
+        for fighter in fighters:
+            if fighter.id in booked:
+                continue
+
+            if not bool(
+                getattr(
+                    fighter,
+                    "available",
+                    True,
+                )
+            ):
+                continue
+
+            availability = auto_match_availability(
+                db,
+                fighter.id,
+                event.id,
+            )
+
+            if (
+                availability
+                and not bool(
+                    availability.available
+                )
+            ):
+                continue
+
+            weight = auto_match_weight(
+                fighter,
+                availability,
+            )
+
+            if not weight:
+                continue
+
+            pool.append({
+                "fighter": fighter,
+                "weight": weight,
+            })
+
+        candidates = []
+
+        for i, left in enumerate(pool):
+            for right in pool[i + 1:]:
+                fighter_a = left["fighter"]
+                fighter_b = right["fighter"]
+
+                wa = left["weight"]
+                wb = right["weight"]
+
+                gap = abs(
+                    wa["preferred"] -
+                    wb["preferred"]
+                )
+
+                if gap > max_gap:
+                    continue
+
+                overlaps = not (
+                    wa["max"] < wb["min"]
+                    or
+                    wb["max"] < wa["min"]
+                )
+
+                if not overlaps:
+                    continue
+
+                rematch = auto_match_previous_pair(
+                    db,
+                    fighter_a.id,
+                    fighter_b.id,
+                )
+
+                if (
+                    rematch
+                    and not allow_rematches
+                ):
+                    continue
+
+                city_a = str(
+                    getattr(
+                        fighter_a,
+                        "city",
+                        "",
+                    )
+                    or ""
+                ).lower()
+
+                city_b = str(
+                    getattr(
+                        fighter_b,
+                        "city",
+                        "",
+                    )
+                    or ""
+                ).lower()
+
+                state_a = str(
+                    getattr(
+                        fighter_a,
+                        "state",
+                        "",
+                    )
+                    or ""
+                ).lower()
+
+                state_b = str(
+                    getattr(
+                        fighter_b,
+                        "state",
+                        "",
+                    )
+                    or ""
+                ).lower()
+
+                same_city = bool(
+                    city_a
+                    and city_b
+                    and city_a == city_b
+                )
+
+                same_state = bool(
+                    state_a
+                    and state_b
+                    and state_a == state_b
+                )
+
+                score = auto_match_score(
+                    fighter_a,
+                    fighter_b,
+                    wa,
+                    wb,
+                    same_city,
+                    same_state,
+                    rematch,
+                )
+
+                candidates.append({
+                    "fighter_a": fighter_a,
+                    "fighter_b": fighter_b,
+                    "weight_a": wa,
+                    "weight_b": wb,
+                    "gap": round(gap, 1),
+                    "score": score,
+                    "rematch": rematch,
+                    "same_city": same_city,
+                    "proposed_weight": round(
+                        (
+                            wa["preferred"]
+                            + wb["preferred"]
+                        ) / 2,
+                        1,
+                    ),
+                })
+
+        candidates.sort(
+            key=lambda row: (
+                -row["score"],
+                row["gap"],
+            )
+        )
+
+        used = set()
+        proposals = []
+
+        for candidate in candidates:
+            if len(proposals) >= desired_bouts:
+                break
+
+            a = candidate["fighter_a"]
+            b = candidate["fighter_b"]
+
+            if (
+                a.id in used
+                or b.id in used
+            ):
+                continue
+
+            used.add(a.id)
+            used.add(b.id)
+
+            proposals.append({
+                "proposal_number": len(proposals) + 1,
+                "red_fighter_id": a.id,
+                "blue_fighter_id": b.id,
+                "red_fighter": fighter_dict(a),
+                "blue_fighter": fighter_dict(b),
+                "red_weight": candidate["weight_a"],
+                "blue_weight": candidate["weight_b"],
+                "proposed_weight": candidate["proposed_weight"],
+                "weight_difference": candidate["gap"],
+                "match_score": candidate["score"],
+                "previous_opponents": candidate["rematch"],
+                "same_city": candidate["same_city"],
+                "recommended_rounds": 4,
+                "bout_type": "pro",
+            })
+
+        return {
+            "event": {
+                "id": event.id,
+                "name": event.name,
+                "event_date": event.event_date,
+            },
+            "eligible_fighters": len(pool),
+            "candidate_pairs": len(candidates),
+            "proposals": proposals,
+        }
+
+
     # ============================================================
     # MANAGER ADMINISTRATION
     # ============================================================
