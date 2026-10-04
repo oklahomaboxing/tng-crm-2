@@ -33,6 +33,7 @@ import Products from "./pages/Products.jsx";
 import DuplicateReview from "./pages/DuplicateReview.jsx";
 import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
 import Matchmaker from "./pages/Matchmaker.jsx";
+import ManagerPortal from "./pages/ManagerPortal.jsx";
 import PublicTicketCheckout from "./pages/PublicTicketCheckout.jsx";
 import FighterActivate from "./pages/FighterActivate.jsx";
 import FighterPortal from "./pages/FighterPortal.jsx";
@@ -84,6 +85,8 @@ const theme = createTheme({
 function landingPageForRole(role) {
   if (role === "rep") return "My Sales";
   if (role === "staff") return "Front Desk";
+  if (role === "matchmaker") return "Promoter";
+  if (role === "manager") return "Manager Portal";
   return "Dashboard";
 }
 
@@ -813,7 +816,14 @@ return (
       {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
       {page === "Leads" && role !== "rep" && <Leads />}
       {page === "TNGTrainer" && role !== "rep" && <TNGAcademy />}
-      {page === "Promoter" && role !== "rep" && <Matchmaker />}
+      {page === "Promoter" &&
+        ["admin", "staff", "matchmaker"].includes(role) && (
+          <Matchmaker />
+        )}
+
+      {page === "Manager Portal" && role === "manager" && (
+        <ManagerPortal />
+      )}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
       {page === "User Management" && role === "admin" && <UserManagement />}

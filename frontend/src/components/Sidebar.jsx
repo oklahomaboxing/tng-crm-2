@@ -54,6 +54,13 @@ export const ROLE_MENUS = {
     "QR Referrals",
     "TNGTrainer",
   ],
+  matchmaker: [
+    "Promoter",
+    "Fight Calendar",
+  ],
+  manager: [
+    "Manager Portal",
+  ],
   rep: ["My Sales"],
 };
 
@@ -62,6 +69,7 @@ const ICONS = {
   Members: <PeopleAltRoundedIcon />,
   "TNGTrainer": <SportsMmaRoundedIcon />,
   Promoter: <SportsMmaRoundedIcon />,
+  "Manager Portal": <GroupsRoundedIcon />,
   "Fight Calendar": <EventRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
   "Front Desk": <QrCodeScannerRoundedIcon />,
