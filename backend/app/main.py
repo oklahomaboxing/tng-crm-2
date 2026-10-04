@@ -109,6 +109,18 @@ try:
                         "ADD COLUMN sex VARCHAR DEFAULT ''"
                     )
                 )
+
+        # Backfill legacy fighters as Male so they can participate
+        # in Auto-Match immediately. Any fighter later changed to
+        # Female will remain Female.
+        with engine.begin() as _tng_conn:
+            _tng_conn.execute(
+                _tng_text(
+                    "UPDATE boxing_fighters "
+                    "SET sex = 'male' "
+                    "WHERE sex IS NULL OR TRIM(sex) = ''"
+                )
+            )
 except Exception as _tng_sex_schema_error:
     print(
         "Fighter sex schema check failed:",
