@@ -10,6 +10,7 @@ import EventRoundedIcon from "@mui/icons-material/EventRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
+import MatchmakerOfferCenter from "./MatchmakerOfferCenter.jsx";
 import TicketSellerControls from "../components/tickets/TicketSellerControls.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -1752,6 +1753,11 @@ export default function Matchmaker() {
         </Stack>
 
         {msg && <Alert severity={msgType}>{msg}</Alert>}
+
+        <MatchmakerOfferCenter
+          fighters={fighters}
+          events={events}
+        />
 
                 <Box sx={{ mb: 3 }}>
           <Typography
