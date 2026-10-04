@@ -24,7 +24,9 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Respons
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, inspect, text
 from ..database import get_db, engine
+from ..models import User
 from ..core.permissions import (
+    require_admin,
     require_matchmaker_access,
     require_manager_access,
 )
@@ -6806,6 +6808,544 @@ Do not add fake ticket information.
         db.commit()
         db.refresh(row)
         return {"id": row.id, "status": row.status}
+
+
+
+    # ============================================================
+    # MANAGER ADMINISTRATION
+    # ============================================================
+
+    def manager_admin_dict(db: Session, manager):
+        account = (
+            db.query(User)
+            .filter(User.id == manager.user_id)
+            .first()
+        )
+
+        assignments = (
+            db.query(BoxingManagerFighter)
+            .filter(
+                BoxingManagerFighter.manager_account_id
+                == manager.id
+            )
+            .order_by(
+                BoxingManagerFighter.active.desc(),
+                BoxingManagerFighter.id.desc(),
+            )
+            .all()
+        )
+
+        active_fighters = []
+        history = []
+
+        for assignment in assignments:
+            fighter = assignment.fighter
+
+            item = {
+                "assignment_id": assignment.id,
+                "fighter_id": assignment.fighter_id,
+                "fighter": (
+                    fighter_dict(fighter)
+                    if fighter
+                    else None
+                ),
+                "active": bool(assignment.active),
+                "assigned_at": (
+                    assignment.assigned_at.isoformat()
+                    if assignment.assigned_at
+                    else None
+                ),
+                "released_at": (
+                    assignment.released_at.isoformat()
+                    if assignment.released_at
+                    else None
+                ),
+                "notes": assignment.notes or "",
+            }
+
+            history.append(item)
+
+            if assignment.active:
+                active_fighters.append(item)
+
+        return {
+            "id": manager.id,
+            "user_id": manager.user_id,
+            "user_name": (
+                account.name
+                if account
+                else ""
+            ),
+            "user_email": (
+                account.email
+                if account
+                else ""
+            ),
+            "user_active": (
+                bool(account.active)
+                if account
+                else False
+            ),
+            "user_role": (
+                account.role
+                if account
+                else ""
+            ),
+            "display_name": manager.display_name or "",
+            "company_name": manager.company_name or "",
+            "phone": manager.phone or "",
+            "email": manager.email or "",
+            "license_number": manager.license_number or "",
+            "license_state": manager.license_state or "",
+            "active": bool(manager.active),
+            "notes": manager.notes or "",
+            "active_fighters": active_fighters,
+            "assignment_history": history,
+            "created_at": (
+                manager.created_at.isoformat()
+                if manager.created_at
+                else None
+            ),
+            "updated_at": (
+                manager.updated_at.isoformat()
+                if manager.updated_at
+                else None
+            ),
+        }
+
+
+    @router.get("/manager-admin")
+    def list_manager_accounts_admin(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        rows = (
+            db.query(BoxingManagerAccount)
+            .order_by(
+                BoxingManagerAccount.display_name.asc(),
+                BoxingManagerAccount.id.asc(),
+            )
+            .all()
+        )
+
+        return [
+            manager_admin_dict(db, row)
+            for row in rows
+        ]
+
+
+    @router.get("/manager-admin/eligible-users")
+    def list_manager_users_admin(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        users = (
+            db.query(User)
+            .filter(User.role == "manager")
+            .order_by(User.name.asc(), User.id.asc())
+            .all()
+        )
+
+        results = []
+
+        for account in users:
+            manager = (
+                db.query(BoxingManagerAccount)
+                .filter(
+                    BoxingManagerAccount.user_id
+                    == account.id
+                )
+                .first()
+            )
+
+            results.append({
+                "id": account.id,
+                "name": account.name or "",
+                "email": account.email or "",
+                "active": bool(account.active),
+                "manager_account_id": (
+                    manager.id
+                    if manager
+                    else None
+                ),
+                "manager_profile_exists": bool(manager),
+            })
+
+        return results
+
+
+    @router.post("/manager-admin")
+    def create_or_update_manager_account_admin(
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        try:
+            user_id = int(data.get("user_id"))
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="user_id is required",
+            )
+
+        account = (
+            db.query(User)
+            .filter(User.id == user_id)
+            .first()
+        )
+
+        if not account:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found",
+            )
+
+        if account.role != "manager":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "User role must be manager before "
+                    "creating a manager profile"
+                ),
+            )
+
+        manager = (
+            db.query(BoxingManagerAccount)
+            .filter(
+                BoxingManagerAccount.user_id
+                == account.id
+            )
+            .first()
+        )
+
+        created = False
+
+        if not manager:
+            manager = BoxingManagerAccount(
+                user_id=account.id,
+                display_name=account.name or "",
+                email=account.email or "",
+                active=True,
+            )
+            db.add(manager)
+            db.flush()
+            created = True
+
+        if "display_name" in data:
+            manager.display_name = str(
+                data.get("display_name") or ""
+            ).strip()
+
+        if "company_name" in data:
+            manager.company_name = str(
+                data.get("company_name") or ""
+            ).strip()
+
+        if "phone" in data:
+            manager.phone = str(
+                data.get("phone") or ""
+            ).strip()
+
+        if "email" in data:
+            manager.email = str(
+                data.get("email") or ""
+            ).strip()
+
+        if "license_number" in data:
+            manager.license_number = str(
+                data.get("license_number") or ""
+            ).strip()
+
+        if "license_state" in data:
+            manager.license_state = str(
+                data.get("license_state") or ""
+            ).strip()
+
+        if "notes" in data:
+            manager.notes = str(
+                data.get("notes") or ""
+            ).strip()
+
+        if "active" in data:
+            manager.active = bool(data.get("active"))
+
+        if not manager.display_name:
+            manager.display_name = account.name or ""
+
+        if not manager.email:
+            manager.email = account.email or ""
+
+        db.commit()
+        db.refresh(manager)
+
+        result = manager_admin_dict(db, manager)
+        result["created"] = created
+        result["message"] = (
+            "Manager profile created"
+            if created
+            else "Manager profile updated"
+        )
+
+        return result
+
+
+    @router.post(
+        "/manager-admin/{manager_id}/fighters/{fighter_id}"
+    )
+    def assign_manager_fighter_admin(
+        manager_id: int,
+        fighter_id: int,
+        data: dict = None,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        data = data or {}
+
+        manager = (
+            db.query(BoxingManagerAccount)
+            .filter(
+                BoxingManagerAccount.id == manager_id
+            )
+            .first()
+        )
+
+        if not manager:
+            raise HTTPException(
+                status_code=404,
+                detail="Manager profile not found",
+            )
+
+        if not manager.active:
+            raise HTTPException(
+                status_code=400,
+                detail="Manager profile is inactive",
+            )
+
+        account = (
+            db.query(User)
+            .filter(User.id == manager.user_id)
+            .first()
+        )
+
+        if not account or account.role != "manager":
+            raise HTTPException(
+                status_code=400,
+                detail="Linked user is not a manager",
+            )
+
+        if not account.active:
+            raise HTTPException(
+                status_code=400,
+                detail="Manager user account is inactive",
+            )
+
+        fighter = (
+            db.query(BoxingFighter)
+            .filter(BoxingFighter.id == fighter_id)
+            .first()
+        )
+
+        if not fighter:
+            raise HTTPException(
+                status_code=404,
+                detail="Fighter not found",
+            )
+
+        current = (
+            db.query(BoxingManagerFighter)
+            .filter(
+                BoxingManagerFighter.fighter_id
+                == fighter.id,
+                BoxingManagerFighter.active.is_(True),
+            )
+            .all()
+        )
+
+        for assignment in current:
+            if (
+                assignment.manager_account_id
+                == manager.id
+            ):
+                return {
+                    "assignment_id": assignment.id,
+                    "manager_account_id": manager.id,
+                    "fighter_id": fighter.id,
+                    "active": True,
+                    "message": (
+                        "Fighter is already assigned "
+                        "to this manager"
+                    ),
+                }
+
+        now = datetime.utcnow()
+
+        # A fighter has one active manager at a time.
+        # Preserve older records as assignment history.
+        for assignment in current:
+            assignment.active = False
+            assignment.released_at = now
+
+        assignment = BoxingManagerFighter(
+            manager_account_id=manager.id,
+            fighter_id=fighter.id,
+            active=True,
+            assigned_at=now,
+            released_at=None,
+            notes=str(
+                data.get("notes") or ""
+            ).strip(),
+        )
+
+        db.add(assignment)
+        db.commit()
+        db.refresh(assignment)
+
+        return {
+            "assignment_id": assignment.id,
+            "manager_account_id": manager.id,
+            "fighter_id": fighter.id,
+            "active": True,
+            "assigned_at": (
+                assignment.assigned_at.isoformat()
+                if assignment.assigned_at
+                else None
+            ),
+            "message": "Fighter assigned to manager",
+        }
+
+
+    @router.delete(
+        "/manager-admin/{manager_id}/fighters/{fighter_id}"
+    )
+    def release_manager_fighter_admin(
+        manager_id: int,
+        fighter_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        manager = (
+            db.query(BoxingManagerAccount)
+            .filter(
+                BoxingManagerAccount.id == manager_id
+            )
+            .first()
+        )
+
+        if not manager:
+            raise HTTPException(
+                status_code=404,
+                detail="Manager profile not found",
+            )
+
+        assignment = (
+            db.query(BoxingManagerFighter)
+            .filter(
+                BoxingManagerFighter.manager_account_id
+                == manager.id,
+                BoxingManagerFighter.fighter_id
+                == fighter_id,
+                BoxingManagerFighter.active.is_(True),
+            )
+            .first()
+        )
+
+        if not assignment:
+            raise HTTPException(
+                status_code=404,
+                detail="Active manager assignment not found",
+            )
+
+        assignment.active = False
+        assignment.released_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(assignment)
+
+        return {
+            "assignment_id": assignment.id,
+            "manager_account_id": manager.id,
+            "fighter_id": fighter_id,
+            "active": False,
+            "released_at": (
+                assignment.released_at.isoformat()
+                if assignment.released_at
+                else None
+            ),
+            "message": "Fighter released from manager",
+        }
+
+
+    @router.get(
+        "/manager-admin/{manager_id}/assignments"
+    )
+    def manager_assignment_history_admin(
+        manager_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        manager = (
+            db.query(BoxingManagerAccount)
+            .filter(
+                BoxingManagerAccount.id == manager_id
+            )
+            .first()
+        )
+
+        if not manager:
+            raise HTTPException(
+                status_code=404,
+                detail="Manager profile not found",
+            )
+
+        assignments = (
+            db.query(BoxingManagerFighter)
+            .filter(
+                BoxingManagerFighter.manager_account_id
+                == manager.id
+            )
+            .order_by(
+                BoxingManagerFighter.id.desc()
+            )
+            .all()
+        )
+
+        return [
+            {
+                "assignment_id": assignment.id,
+                "manager_account_id": manager.id,
+                "fighter_id": assignment.fighter_id,
+                "fighter": (
+                    fighter_dict(assignment.fighter)
+                    if assignment.fighter
+                    else None
+                ),
+                "active": bool(assignment.active),
+                "assigned_at": (
+                    assignment.assigned_at.isoformat()
+                    if assignment.assigned_at
+                    else None
+                ),
+                "released_at": (
+                    assignment.released_at.isoformat()
+                    if assignment.released_at
+                    else None
+                ),
+                "notes": assignment.notes or "",
+            }
+            for assignment in assignments
+        ]
 
 
     # ============================================================
