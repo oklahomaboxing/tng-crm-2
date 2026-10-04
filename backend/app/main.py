@@ -2470,10 +2470,13 @@ def create_user_account(
             detail="Name, email, and password are required",
         )
 
-    if role not in ["admin", "staff", "rep"]:
+    if role not in ["admin", "staff", "rep", "manager", "matchmaker"]:
         raise HTTPException(
             status_code=400,
-            detail="Role must be admin, staff, or rep",
+            detail=(
+                "Role must be admin, staff, rep, manager, "
+                "or matchmaker"
+            ),
         )
 
     existing_user = db.query(User).filter(
@@ -2573,10 +2576,13 @@ def update_user_account(
             detail="Name and email are required",
         )
 
-    if role not in ["admin", "staff", "rep"]:
+    if role not in ["admin", "staff", "rep", "manager", "matchmaker"]:
         raise HTTPException(
             status_code=400,
-            detail="Role must be admin, staff, or rep",
+            detail=(
+                "Role must be admin, staff, rep, manager, "
+                "or matchmaker"
+            ),
         )
 
     # Protect the currently logged-in admin from locking

@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Respons
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, inspect, text
 from ..database import get_db, engine
+from ..core.permissions import require_matchmaker_access
 from .models import BoxingContract, BoxingSignedContractDocument, BoxingContractSignature, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
@@ -1446,8 +1447,7 @@ def build_matchmaker_router(current_user_dependency):
     router = APIRouter(prefix="/api/boxing", tags=["boxing-matchmaker"])
 
     def require_staff(user):
-        if getattr(user, "role", None) not in ("admin", "staff"):
-            raise HTTPException(status_code=403, detail="Admin or staff access required")
+        require_matchmaker_access(user)
 
     @router.post("/register-fighter")
     def public_register_fighter(
