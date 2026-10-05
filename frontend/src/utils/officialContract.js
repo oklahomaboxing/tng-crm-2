@@ -1,4 +1,28 @@
 export function buildOfficialContractHtml(contract) {
+  let templateSections = {};
+
+  try {
+    templateSections =
+      typeof contract.template_snapshot === "string" &&
+      contract.template_snapshot
+        ? JSON.parse(contract.template_snapshot)
+        : {};
+  } catch {
+    templateSections = {};
+  }
+
+  const renderClause = (text, values) => {
+    let result = String(text || "");
+
+    Object.entries(values).forEach(([key, value]) => {
+      result = result.replaceAll(
+        `{{${key}}}`,
+        String(value ?? "")
+      );
+    });
+
+    return result;
+  };
   const money = (value) =>
     Number(value || 0).toLocaleString(
       "en-US",

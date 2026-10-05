@@ -30,7 +30,7 @@ from ..core.permissions import (
     require_matchmaker_access,
     require_manager_access,
 )
-from .models import BoxingContract, BoxingSignedContractDocument, BoxingContractSignature, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication, BoxingManagerAccount, BoxingManagerFighter, BoxingFighterAvailability, BoxingFightOffer
+from .models import BoxingContract, BoxingSignedContractDocument, BoxingContractSignature, BoxingFighter, BoxingEvent, BoxingBout, BoxingEventChecklist, BoxingEventFee, BoxingSeries, BoxingSeriesFighter, BoxingSignedFighter, BoxingEventPublication, BoxingManagerAccount, BoxingManagerFighter, BoxingFighterAvailability, BoxingFightOffer, BoxingContractTemplateVersion
 from .schemas import FighterCreate, EventCreate, BoutCreate, PublicFighterRegistration
 from .service import fighter_dict, ranked_matches
 
@@ -685,6 +685,87 @@ def build_official_contract_pdf(
         )
 
 
+    def contract_template_sections():
+        import json
+
+        defaults = {
+            "bout_terms": (
+                "Boxer agrees to participate in a {{rounds}} round bout "
+                "against {{opponent_name}} at the maximum weight of "
+                "{{maximum_weight}} pounds. The event will be held on "
+                "{{event_date}} at {{venue}}, located at {{venue_address}}. "
+                "Boxers will be paid after the final bout of the evening."
+            ),
+            "release": (
+                "Boxer hereby releases the Promoter, sponsors, and the "
+                "State of Oklahoma, or any agent, representative or employee "
+                "thereof, from any and all claims for liability, known or "
+                "unknown at this time, arising from injuries, mental and "
+                "physical, which may be sustained by Boxer during "
+                "participation in this event."
+            ),
+            "failure_to_appear": (
+                "Failure to appear: If a boxer signs a contract and fails "
+                "to appear at an event, Boxer will be suspended for a period "
+                "of 90 days unless documentation of extenuating circumstances "
+                "is provided and approved by the Commission."
+            ),
+            "other_event_restriction": (
+                "Boxer agrees not to participate in another event within "
+                "30 days of this event unless approved by the "
+                "promoter/matchmaker."
+            ),
+            "cancellation": (
+                "In the event the opponent fails to appear or the event is "
+                "canceled due to no fault of the contestant named herein, "
+                "promoter will pay the contestant ${{cancellation_pay}}."
+            ),
+        }
+
+        raw = str(
+            getattr(
+                contract,
+                "template_snapshot",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not raw:
+            return defaults
+
+        try:
+            stored = json.loads(raw)
+        except Exception:
+            return defaults
+
+        if not isinstance(stored, dict):
+            return defaults
+
+        for key in list(defaults):
+            if key in stored:
+                defaults[key] = str(
+                    stored.get(key) or ""
+                )
+
+        return defaults
+
+
+    def render_contract_clause(
+        template_text,
+        mapping,
+    ):
+        result = str(template_text or "")
+
+        for key, replacement in mapping.items():
+            result = result.replace(
+                "{{" + key + "}}",
+                str(replacement or ""),
+            )
+
+        return safe(result)
+
+
     buffer = BytesIO()
 
     doc = SimpleDocTemplate(
@@ -804,6 +885,45 @@ def build_official_contract_pdf(
         or text_value(contract, "rounds")
     )
 
+    template_sections = contract_template_sections()
+
+    template_context = {
+        "fighter_name": boxer_name,
+        "opponent_name": opponent_name,
+        "event_name":
+            text_value(event, "name")
+            or text_value(contract, "event_name"),
+        "event_date": event_date,
+        "venue": venue,
+        "venue_address": venue_address,
+        "rounds": rounds,
+        "maximum_weight":
+            value(contract, "maximum_weight"),
+        "gross_purse":
+            money(value(contract, "gross_purse")),
+        "ticket_commission":
+            value(
+                contract,
+                "ticket_commission_percent",
+                0,
+            ),
+        "cancellation_pay":
+            money(
+                value(
+                    contract,
+                    "cancellation_pay",
+                    0,
+                )
+            ),
+        "promoter_name":
+            value(contract, "promoter_name"),
+        "promoter_matchmaker":
+            value(
+                contract,
+                "promoter_matchmaker",
+            ),
+    }
+
     story.append(
         Paragraph(
             "OKLAHOMA STATE ATHLETIC COMMISSION",
@@ -874,17 +994,9 @@ def build_official_contract_pdf(
 
     story.append(
         Paragraph(
-            (
-                "Boxer agrees to participate in a "
-                f"<b>{safe(rounds)}</b> round bout against "
-                f"<b>{safe(opponent_name)}</b> at the maximum "
-                f"weight of <b>{safe(value(contract, 'maximum_weight'))}</b> "
-                "pounds. The event will be held on "
-                f"<b>{safe(event_date)}</b> at "
-                f"<b>{safe(venue)}</b>, located at "
-                f"<b>{safe(venue_address)}</b>. "
-                "Boxers will be paid after the final bout "
-                "of the evening."
+            render_contract_clause(
+                template_sections["bout_terms"],
+                template_context,
             ),
             body_style,
         )
@@ -956,14 +1068,9 @@ def build_official_contract_pdf(
 
     story.append(
         Paragraph(
-            (
-                "Boxer hereby releases the Promoter, sponsors, "
-                "and the State of Oklahoma, or any agent, "
-                "representative or employee thereof, from any "
-                "and all claims for liability, known or unknown "
-                "at this time, arising from injuries, mental and "
-                "physical, which may be sustained by Boxer during "
-                "participation in this event."
+            render_contract_clause(
+                template_sections["release"],
+                template_context,
             ),
             body_style,
         )
@@ -999,12 +1106,9 @@ def build_official_contract_pdf(
 
     story.append(
         Paragraph(
-            (
-                "<b>Failure to appear:</b> If a boxer signs "
-                "a contract and fails to appear at an event, "
-                "Boxer will be suspended for a period of 90 days "
-                "unless documentation of extenuating circumstances "
-                "is provided and approved by the Commission."
+            render_contract_clause(
+                template_sections["failure_to_appear"],
+                template_context,
             ),
             body_style,
         )
@@ -1012,10 +1116,11 @@ def build_official_contract_pdf(
 
     story.append(
         Paragraph(
-            (
-                "Boxer agrees not to participate in another event "
-                "within 30 days of this event unless approved by "
-                "the promoter/matchmaker."
+            render_contract_clause(
+                template_sections[
+                    "other_event_restriction"
+                ],
+                template_context,
             ),
             body_style,
         )
@@ -1163,6 +1268,8 @@ def ensure_contract_travel_schema():
         "docusign_sent_at": "TIMESTAMP",
         "docusign_signed_at": "TIMESTAMP",
         "docusign_last_synced_at": "TIMESTAMP",
+        "template_version": "VARCHAR",
+        "template_snapshot": "TEXT",
     }
 
     missing = [
@@ -4060,6 +4167,573 @@ Do not add fake ticket information.
         ]
 
 
+
+    # ============================================================
+    # CONTRACT TEMPLATE MANAGER
+    # ============================================================
+
+    DEFAULT_BOUT_CONTRACT_SECTIONS = {
+        "bout_terms": (
+            "Boxer agrees to participate in a {{rounds}} round bout "
+            "against {{opponent_name}} at the maximum weight of "
+            "{{maximum_weight}} pounds. The event will be held on "
+            "{{event_date}} at {{venue}}, located at {{venue_address}}. "
+            "Boxers will be paid after the final bout of the evening."
+        ),
+        "release": (
+            "Boxer hereby releases the Promoter, sponsors, and the "
+            "State of Oklahoma, or any agent, representative or employee "
+            "thereof, from any and all claims for liability, known or "
+            "unknown at this time, arising from injuries, mental and "
+            "physical, which may be sustained by Boxer during "
+            "participation in this event."
+        ),
+        "failure_to_appear": (
+            "Failure to appear: If a boxer signs a contract and fails "
+            "to appear at an event, Boxer will be suspended for a period "
+            "of 90 days unless documentation of extenuating circumstances "
+            "is provided and approved by the Commission."
+        ),
+        "other_event_restriction": (
+            "Boxer agrees not to participate in another event within "
+            "30 days of this event unless approved by the "
+            "promoter/matchmaker."
+        ),
+        "cancellation": (
+            "In the event the opponent fails to appear or the event is "
+            "canceled due to no fault of the contestant named herein, "
+            "promoter will pay the contestant ${{cancellation_pay}}."
+        ),
+    }
+
+
+    def _template_sections(row):
+        import json
+
+        if not row:
+            return dict(DEFAULT_BOUT_CONTRACT_SECTIONS)
+
+        try:
+            body = json.loads(
+                row.sections_json or "{}"
+            )
+        except Exception:
+            body = {}
+
+        result = dict(
+            DEFAULT_BOUT_CONTRACT_SECTIONS
+        )
+
+        if isinstance(body, dict):
+            for key in result:
+                if key in body:
+                    result[key] = str(
+                        body.get(key) or ""
+                    )
+
+        return result
+
+
+    def _template_snapshot_json(sections):
+        import json
+
+        clean = {}
+
+        for key, default in (
+            DEFAULT_BOUT_CONTRACT_SECTIONS.items()
+        ):
+            clean[key] = str(
+                sections.get(key, default)
+                if isinstance(sections, dict)
+                else default
+            )
+
+        return json.dumps(
+            clean,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
+
+    def _active_bout_contract_template(db):
+        return (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement",
+                BoxingContractTemplateVersion.status
+                == "published",
+                BoxingContractTemplateVersion.is_active
+                == True,
+            )
+            .order_by(
+                BoxingContractTemplateVersion.version.desc()
+            )
+            .first()
+        )
+
+
+    def _ensure_bout_contract_template(
+        db,
+        user_id=None,
+    ):
+        current = _active_bout_contract_template(
+            db
+        )
+
+        if current:
+            return current
+
+        row = BoxingContractTemplateVersion(
+            template_key="bout-agreement",
+            template_name=(
+                "Professional Boxing Bout Agreement"
+            ),
+            version=1,
+            status="published",
+            is_active=True,
+            sections_json=_template_snapshot_json(
+                DEFAULT_BOUT_CONTRACT_SECTIONS
+            ),
+            created_by_user_id=user_id,
+            published_at=datetime.utcnow(),
+        )
+
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+
+        return row
+
+
+    def _contract_is_signed(db, contract):
+        if not contract:
+            return False
+
+        signature = (
+            db.query(BoxingContractSignature)
+            .filter(
+                BoxingContractSignature.contract_id
+                == contract.id
+            )
+            .first()
+        )
+
+        if signature:
+            return True
+
+        if getattr(
+            contract,
+            "docusign_signed_at",
+            None,
+        ):
+            return True
+
+        if str(
+            getattr(
+                contract,
+                "docusign_status",
+                "",
+            )
+            or ""
+        ).lower() == "completed":
+            return True
+
+        if getattr(
+            contract,
+            "adobe_signed_at",
+            None,
+        ):
+            return True
+
+        if str(
+            getattr(
+                contract,
+                "adobe_status",
+                "",
+            )
+            or ""
+        ).upper() == "SIGNED":
+            return True
+
+        return (
+            str(contract.status or "").lower()
+            == "signed"
+        )
+
+
+    def _template_row_dict(row):
+        sections = _template_sections(row)
+
+        return {
+            "id": row.id,
+            "template_key": row.template_key,
+            "template_name": row.template_name,
+            "version": row.version,
+            "status": row.status,
+            "is_active": bool(row.is_active),
+            "sections": sections,
+            "created_at": row.created_at,
+            "published_at": row.published_at,
+        }
+
+
+    @router.get("/contract-templates/bout-agreement")
+    def get_bout_contract_template(
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        active = _ensure_bout_contract_template(
+            db,
+            getattr(user, "id", None),
+        )
+
+        draft = (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement",
+                BoxingContractTemplateVersion.status
+                == "draft",
+            )
+            .order_by(
+                BoxingContractTemplateVersion.version.desc(),
+                BoxingContractTemplateVersion.id.desc(),
+            )
+            .first()
+        )
+
+        versions = (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement"
+            )
+            .order_by(
+                BoxingContractTemplateVersion.version.desc(),
+                BoxingContractTemplateVersion.id.desc(),
+            )
+            .all()
+        )
+
+        return {
+            "active": _template_row_dict(active),
+            "draft": (
+                _template_row_dict(draft)
+                if draft
+                else None
+            ),
+            "versions": [
+                _template_row_dict(row)
+                for row in versions
+            ],
+            "merge_fields": [
+                "{{fighter_name}}",
+                "{{opponent_name}}",
+                "{{event_name}}",
+                "{{event_date}}",
+                "{{venue}}",
+                "{{venue_address}}",
+                "{{rounds}}",
+                "{{maximum_weight}}",
+                "{{gross_purse}}",
+                "{{ticket_commission}}",
+                "{{cancellation_pay}}",
+                "{{promoter_name}}",
+                "{{promoter_matchmaker}}",
+            ],
+        }
+
+
+    @router.post("/contract-templates/bout-agreement/draft")
+    def save_bout_contract_template_draft(
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        active = _ensure_bout_contract_template(
+            db,
+            getattr(user, "id", None),
+        )
+
+        sections = data.get("sections") or {}
+
+        draft = (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement",
+                BoxingContractTemplateVersion.status
+                == "draft",
+            )
+            .order_by(
+                BoxingContractTemplateVersion.id.desc()
+            )
+            .first()
+        )
+
+        if not draft:
+            draft = BoxingContractTemplateVersion(
+                template_key="bout-agreement",
+                template_name=(
+                    "Professional Boxing Bout Agreement"
+                ),
+                version=int(active.version or 1) + 1,
+                status="draft",
+                is_active=False,
+                created_by_user_id=getattr(
+                    user,
+                    "id",
+                    None,
+                ),
+            )
+            db.add(draft)
+
+        draft.sections_json = (
+            _template_snapshot_json(sections)
+        )
+
+        db.commit()
+        db.refresh(draft)
+
+        return {
+            "ok": True,
+            "draft": _template_row_dict(draft),
+        }
+
+
+    @router.post("/contract-templates/bout-agreement/publish")
+    def publish_bout_contract_template(
+        data: dict,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        current = _ensure_bout_contract_template(
+            db,
+            getattr(user, "id", None),
+        )
+
+        sections = data.get("sections") or {}
+        apply_to = str(
+            data.get("apply_to")
+            or "future"
+        ).strip().lower()
+
+        if apply_to not in {
+            "future",
+            "unsigned",
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "apply_to must be future or unsigned"
+                ),
+            )
+
+        highest = (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement"
+            )
+            .order_by(
+                BoxingContractTemplateVersion.version.desc()
+            )
+            .first()
+        )
+
+        next_version = (
+            int(highest.version or 0) + 1
+            if highest
+            else 1
+        )
+
+        (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement",
+                BoxingContractTemplateVersion.is_active
+                == True,
+            )
+            .update(
+                {
+                    BoxingContractTemplateVersion.is_active:
+                        False
+                },
+                synchronize_session=False,
+            )
+        )
+
+        snapshot = _template_snapshot_json(
+            sections
+        )
+
+        row = BoxingContractTemplateVersion(
+            template_key="bout-agreement",
+            template_name=(
+                "Professional Boxing Bout Agreement"
+            ),
+            version=next_version,
+            status="published",
+            is_active=True,
+            sections_json=snapshot,
+            created_by_user_id=getattr(
+                user,
+                "id",
+                None,
+            ),
+            published_at=datetime.utcnow(),
+        )
+
+        db.add(row)
+
+        # Remove obsolete draft after publishing.
+        (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement",
+                BoxingContractTemplateVersion.status
+                == "draft",
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        updated = 0
+        preserved = 0
+
+        if apply_to == "unsigned":
+            contracts = (
+                db.query(BoxingContract)
+                .all()
+            )
+
+            for contract in contracts:
+                if _contract_is_signed(
+                    db,
+                    contract,
+                ):
+                    preserved += 1
+                    continue
+
+                contract.template_version = (
+                    f"bout-agreement-v{next_version}"
+                )
+
+                contract.template_snapshot = (
+                    snapshot
+                )
+
+                updated += 1
+
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "ok": True,
+            "published": _template_row_dict(row),
+            "contracts_updated": updated,
+            "signed_contracts_preserved": preserved,
+            "apply_to": apply_to,
+        }
+
+
+    @router.post(
+        "/contract-templates/bout-agreement/restore/{version_id}"
+    )
+    def restore_bout_contract_template(
+        version_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(current_user_dependency),
+    ):
+        require_admin(user)
+
+        source = (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.id
+                == version_id,
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement",
+            )
+            .first()
+        )
+
+        if not source:
+            raise HTTPException(
+                status_code=404,
+                detail="Template version not found",
+            )
+
+        highest = (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement"
+            )
+            .order_by(
+                BoxingContractTemplateVersion.version.desc()
+            )
+            .first()
+        )
+
+        next_version = (
+            int(highest.version or 0) + 1
+            if highest
+            else 1
+        )
+
+        (
+            db.query(BoxingContractTemplateVersion)
+            .filter(
+                BoxingContractTemplateVersion.template_key
+                == "bout-agreement",
+                BoxingContractTemplateVersion.is_active
+                == True,
+            )
+            .update(
+                {
+                    BoxingContractTemplateVersion.is_active:
+                        False
+                },
+                synchronize_session=False,
+            )
+        )
+
+        row = BoxingContractTemplateVersion(
+            template_key="bout-agreement",
+            template_name=source.template_name,
+            version=next_version,
+            status="published",
+            is_active=True,
+            sections_json=source.sections_json,
+            created_by_user_id=getattr(
+                user,
+                "id",
+                None,
+            ),
+            published_at=datetime.utcnow(),
+        )
+
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "ok": True,
+            "published": _template_row_dict(row),
+        }
+
+
     @router.post("/bouts/{bout_id}/contracts/{corner}")
     def generate_bout_contract(
         bout_id: int,
@@ -4320,6 +4994,21 @@ Do not add fake ticket information.
             or ""
         ).strip()
 
+        active_template = (
+            _ensure_bout_contract_template(
+                db,
+                getattr(user, "id", None),
+            )
+        )
+
+        contract.template_version = (
+            f"bout-agreement-v{active_template.version}"
+        )
+
+        contract.template_snapshot = (
+            active_template.sections_json or ""
+        )
+
         contract.cancellation_pay = float(
             data.get("cancellation_pay") or 0
         )
@@ -4376,6 +5065,10 @@ Do not add fake ticket information.
             "boxer_paid": contract.boxer_paid,
             "additional_terms": contract.additional_terms,
             "cancellation_pay": contract.cancellation_pay,
+            "template_version":
+                contract.template_version or "",
+            "template_snapshot":
+                contract.template_snapshot or "",
             "status": contract.status,
         }
 

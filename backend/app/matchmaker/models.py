@@ -244,6 +244,9 @@ class BoxingContract(Base):
     additional_terms = Column(Text, default="")
     cancellation_pay = Column(Float, default=0)
 
+    template_version = Column(String, default="")
+    template_snapshot = Column(Text, default="")
+
     status = Column(String, default="draft")
 
     # Acrobat Sign integration
@@ -309,6 +312,72 @@ class BoxingContract(Base):
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
+    )
+
+
+
+class BoxingContractTemplateVersion(Base):
+    """
+    Versioned, no-code contract wording.
+
+    Published versions are immutable history. A contract stores its own
+    template snapshot so later template changes cannot silently rewrite
+    an agreement that was already generated/sent/signed.
+    """
+    __tablename__ = "boxing_contract_template_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    template_key = Column(
+        String,
+        nullable=False,
+        default="bout-agreement",
+        index=True,
+    )
+
+    template_name = Column(
+        String,
+        nullable=False,
+        default="Professional Boxing Bout Agreement",
+    )
+
+    version = Column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
+    status = Column(
+        String,
+        nullable=False,
+        default="draft",
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    sections_json = Column(
+        Text,
+        nullable=False,
+        default="{}",
+    )
+
+    created_by_user_id = Column(
+        Integer,
+        nullable=True,
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    published_at = Column(
+        DateTime,
+        nullable=True,
     )
 
 

@@ -12,6 +12,7 @@ import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
 import MatchmakerOfferCenter from "./MatchmakerOfferCenter.jsx";
 import AutoMatchPlanner from "./AutoMatchPlanner.jsx";
+import ContractTemplateManager from "./ContractTemplateManager.jsx";
 import TicketSellerControls from "../components/tickets/TicketSellerControls.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -1755,6 +1756,8 @@ export default function Matchmaker() {
         </Stack>
 
         {msg && <Alert severity={msgType}>{msg}</Alert>}
+
+        <ContractTemplateManager />
 
         <AutoMatchPlanner
           events={events}
