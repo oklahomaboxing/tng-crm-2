@@ -38,6 +38,7 @@ import EventFightCardPage from "./EventFightCardPage.jsx";
 import EventContractsPage from "./EventContractsPage.jsx";
 import EventMedicalsPage from "./EventMedicalsPage.jsx";
 import EventExpensesPage from "./EventExpensesPage.jsx";
+import EventCompliancePage from "./EventCompliancePage.jsx";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -1295,159 +1296,6 @@ export default function EventWorkspace({
   const totalChecklist =
     data.checklist?.length || 0;
 
-  function ChecklistSection({ items }) {
-    return (
-      <Stack spacing={1.5}>
-        {items.map((item) => (
-          <Card key={item.id}>
-            <CardContent>
-              <Stack spacing={1.5}>
-                <Stack
-                  direction={{
-                    xs: "column",
-                    md: "row",
-                  }}
-                  spacing={1}
-                  justifyContent="space-between"
-                >
-                  <Typography fontWeight={850}>
-                    {item.label}
-                  </Typography>
-
-                  <Chip
-                    size="small"
-                    label={
-                      statusLabels[item.status] ||
-                      item.status
-                    }
-                    color={statusColor(item.status)}
-                  />
-                </Stack>
-
-                <Grid container spacing={1.5}>
-                  <Grid item xs={12} md={3}>
-                    <Select
-                      fullWidth
-                      size="small"
-                      value={item.status}
-                      onChange={(e) =>
-                        updateChecklist(item, {
-                          status: e.target.value,
-                        })
-                      }
-                    >
-                      <MenuItem value="not_started">
-                        Not Started
-                      </MenuItem>
-
-                      <MenuItem value="in_progress">
-                        In Progress
-                      </MenuItem>
-
-                      <MenuItem value="submitted">
-                        Submitted
-                      </MenuItem>
-
-                      <MenuItem value="complete">
-                        Complete
-                      </MenuItem>
-
-                      <MenuItem value="needs_attention">
-                        Needs Attention
-                      </MenuItem>
-                    </Select>
-                  </Grid>
-
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      fullWidth
-                      type="date"
-                      label="Due Date"
-                      InputLabelProps={{
-                        shrink: true,
-                      }}
-                      value={item.due_date || ""}
-                      onChange={(e) =>
-                        updateChecklist(item, {
-                          due_date: e.target.value,
-                        })
-                      }
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      fullWidth
-                      label="Assigned To"
-                      value={item.assigned_to || ""}
-                      onBlur={(e) =>
-                        updateChecklist(item, {
-                          assigned_to:
-                            e.target.value,
-                        })
-                      }
-                      onChange={(e) => {
-                        const value =
-                          e.target.value;
-
-                        setData((old) => ({
-                          ...old,
-                          checklist:
-                            old.checklist.map(
-                              (row) =>
-                                row.id === item.id
-                                  ? {
-                                      ...row,
-                                      assigned_to:
-                                        value,
-                                    }
-                                  : row
-                            ),
-                        }));
-                      }}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} md={3}>
-                    <TextField
-                      fullWidth
-                      label="Notes"
-                      value={item.notes || ""}
-                      onBlur={(e) =>
-                        updateChecklist(item, {
-                          notes: e.target.value,
-                        })
-                      }
-                      onChange={(e) => {
-                        const value =
-                          e.target.value;
-
-                        setData((old) => ({
-                          ...old,
-                          checklist:
-                            old.checklist.map(
-                              (row) =>
-                                row.id === item.id
-                                  ? {
-                                      ...row,
-                                      notes: value,
-                                    }
-                                  : row
-                            ),
-                        }));
-                      }}
-                    />
-                  </Grid>
-                </Grid>
-              </Stack>
-            </CardContent>
-          </Card>
-        ))}
-      </Stack>
-    );
-  }
-
-
   async function submitBoutCancellation() {
     if (!cancelBout) return;
 
@@ -1877,52 +1725,26 @@ export default function EventWorkspace({
 
         {/* PROMOTER */}
         {tab === 3 && (
-          <Box>
-            <Typography
-              variant="h5"
-              fontWeight={950}
-              sx={{ mb: 0.5 }}
-            >
-              Promoter Responsibilities
-            </Typography>
-
-            <Typography
-              color="text.secondary"
-              sx={{ mb: 2 }}
-            >
-              Track every Commission and event
-              operations requirement.
-            </Typography>
-
-            <ChecklistSection
-              items={promoterItems}
-            />
-          </Box>
+          <EventCompliancePage
+            mode="promoter"
+            items={promoterItems}
+            updateChecklist={updateChecklist}
+            setData={setData}
+            statusLabels={statusLabels}
+            statusColor={statusColor}
+          />
         )}
 
         {/* MATCHMAKER */}
         {tab === 4 && (
-          <Box>
-            <Typography
-              variant="h5"
-              fontWeight={950}
-              sx={{ mb: 0.5 }}
-            >
-              Matchmaker Responsibilities
-            </Typography>
-
-            <Typography
-              color="text.secondary"
-              sx={{ mb: 2 }}
-            >
-              Bout submission, contracts, bloodwork
-              and special fighter requirements.
-            </Typography>
-
-            <ChecklistSection
-              items={matchmakerItems}
-            />
-          </Box>
+          <EventCompliancePage
+            mode="matchmaker"
+            items={matchmakerItems}
+            updateChecklist={updateChecklist}
+            setData={setData}
+            statusLabels={statusLabels}
+            statusColor={statusColor}
+          />
         )}
 
         {/* BLOODWORK */}
