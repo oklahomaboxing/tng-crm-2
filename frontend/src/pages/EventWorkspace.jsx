@@ -40,6 +40,8 @@ import EventCompliancePage from "./EventCompliancePage.jsx";
 import EventTicketsPage from "./EventTicketsPage.jsx";
 import EventSettingsPage from "./EventSettingsPage.jsx";
 import EventRevenuePage from "./EventRevenuePage.jsx";
+import EventFightersPage from "./EventFightersPage.jsx";
+import EventFightNightPage from "./EventFightNightPage.jsx";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -81,6 +83,8 @@ const eventPageTitles = {
   8: "Event Settings",
   9: "Tickets",
   10: "Matchmaking",
+  11: "Fighters",
+  12: "Fight Night",
 };
 
 function fighterLocation(fighter) {
@@ -1709,6 +1713,20 @@ export default function EventWorkspace({
           <EventExpensesPage
             fees={data.fees || []}
             updateFee={updateFee}
+          />
+        )}
+
+        {tab === 11 && (
+          <EventFightersPage
+            fighters={fighters}
+          />
+        )}
+
+        {tab === 12 && (
+          <EventFightNightPage
+            activeBouts={activeBouts}
+            fighters={fighters}
+            checklist={data.checklist || []}
           />
         )}
 
