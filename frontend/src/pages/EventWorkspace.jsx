@@ -32,6 +32,7 @@ import { buildOfficialContractHtml } from "../utils/officialContract";
 import EventRevenue from "./EventRevenue";
 import TicketingDashboard from "./TicketingDashboard.jsx";
 import EventCommandCenter from "./EventCommandCenter.jsx";
+import EventFightCardBuilder from "./EventFightCardBuilder.jsx";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -1950,7 +1951,16 @@ export default function EventWorkspace({
         )}
 
         {/* FIGHT CARD */}
-        {tab === 1 && (
+                {tab === 1 && (
+          <EventFightCardBuilder
+            eventId={eventId}
+            event={event}
+            bouts={bouts}
+            onRefresh={load}
+          />
+        )}
+
+{tab === 1 && (
           <Stack spacing={2}>
             {activeBouts.map((bout, index) => (
               <Card
