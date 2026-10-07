@@ -31,6 +31,7 @@ import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import { buildOfficialContractHtml } from "../utils/officialContract";
 import EventRevenue from "./EventRevenue";
 import TicketingDashboard from "./TicketingDashboard.jsx";
+import EventCommandCenter from "./EventCommandCenter.jsx";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -1549,6 +1550,11 @@ export default function EventWorkspace({
             {message}
           </Alert>
         )}
+
+        <EventCommandCenter
+          data={data}
+          setTab={setTab}
+        />
 
 
 
