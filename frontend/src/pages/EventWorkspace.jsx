@@ -30,7 +30,6 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import { buildOfficialContractHtml } from "../utils/officialContract";
 import EventRevenue from "./EventRevenue";
-import TicketingDashboard from "./TicketingDashboard.jsx";
 import EventCommandCenter from "./EventCommandCenter.jsx";
 import EventFightCardBuilder from "./EventFightCardBuilder.jsx";
 import EventHomeNavigation from "./EventHomeNavigation.jsx";
@@ -39,6 +38,7 @@ import EventContractsPage from "./EventContractsPage.jsx";
 import EventMedicalsPage from "./EventMedicalsPage.jsx";
 import EventExpensesPage from "./EventExpensesPage.jsx";
 import EventCompliancePage from "./EventCompliancePage.jsx";
+import EventTicketsPage from "./EventTicketsPage.jsx";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -1541,9 +1541,11 @@ export default function EventWorkspace({
         )}
 
         {tab === 9 && (
-          <Card>
-            <TicketingDashboard key={eventId} eventId={eventId} event={event} />
-          </Card>
+          <EventTicketsPage
+            key={eventId}
+            eventId={eventId}
+            event={event}
+          />
         )}
 
         {/* OVERVIEW */}
