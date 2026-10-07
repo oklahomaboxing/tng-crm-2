@@ -33,6 +33,7 @@ import EventRevenue from "./EventRevenue";
 import TicketingDashboard from "./TicketingDashboard.jsx";
 import EventCommandCenter from "./EventCommandCenter.jsx";
 import EventFightCardBuilder from "./EventFightCardBuilder.jsx";
+import EventHomeNavigation from "./EventHomeNavigation.jsx";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -61,6 +62,20 @@ function statusColor(status) {
   if (status === "in_progress") return "warning";
   return "default";
 }
+
+const eventPageTitles = {
+  0: "Event Home",
+  1: "Fight Card",
+  2: "Contracts",
+  3: "Compliance",
+  4: "Matchmaker Checklist",
+  5: "Medicals",
+  6: "Expenses",
+  7: "Sponsors & Vendors",
+  8: "Event Settings",
+  9: "Tickets",
+  10: "Matchmaking",
+};
 
 function fighterLocation(fighter) {
   return [
@@ -1552,203 +1567,61 @@ export default function EventWorkspace({
           </Alert>
         )}
 
-        <EventCommandCenter
-          data={data}
-          setTab={setTab}
-        />
+        {tab === 0 ? (
+          <Stack spacing={3}>
+            <EventCommandCenter
+              data={data}
+              setTab={setTab}
+            />
 
-
-
-        <Grid container spacing={2}>
-          <Grid item xs={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">
-                  Bouts
-                </Typography>
-
-                <Typography
-                  variant="h4"
-                  fontWeight={950}
-                >
-                  {activeBouts.length}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">
-                  Fighters
-                </Typography>
-
-                <Typography
-                  variant="h4"
-                  fontWeight={950}
-                >
-                  {fighters.length}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">
-                  Bloodwork
-                </Typography>
-
-                <Typography
-                  variant="h4"
-                  fontWeight={950}
-                >
-                  {bloodworkVerified}/{fighters.length}
-                </Typography>
-
-                <Typography variant="caption">
-                  verified
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">
-                  Checklist
-                </Typography>
-
-                <Typography
-                  variant="h4"
-                  fontWeight={950}
-                >
-                  {completed}/{totalChecklist}
-                </Typography>
-
-                <Typography variant="caption">
-                  complete
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-          {[
-            { label: "Venue", value: 8 },
-            { label: "Ticket Sales", value: 9 },
-            { label: "Sponsors and Vendors", value: 7 },
-          ].map((section) => (
-            <Button
-              key={section.value}
-              size="large"
-              variant={tab === section.value ? "contained" : "outlined"}
-              aria-pressed={tab === section.value}
-              onClick={() => setTab(section.value)}
-              sx={{ flex: 1, fontWeight: 900, py: 1.5 }}
-            >
-              {section.label}
-            </Button>
-          ))}
-        </Stack>
-
-        <Card>
+            <EventHomeNavigation
+              setTab={setTab}
+            />
+          </Stack>
+        ) : (
           <Card
-          sx={{
-            mb: 2,
-            border: "1px solid",
-            borderColor: "divider",
-          }}
-        >
-          <CardContent>
-            <Stack spacing={2}>
+            sx={{
+              borderRadius: 4,
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "0 10px 30px rgba(15,23,42,.05)",
+            }}
+          >
+            <CardContent>
               <Stack
-                direction={{
-                  xs: "column",
-                  md: "row",
-                }}
+                direction={{ xs: "column", md: "row" }}
                 justifyContent="space-between"
-                alignItems={{
-                  xs: "stretch",
-                  md: "center",
-                }}
+                alignItems={{ xs: "stretch", md: "center" }}
                 spacing={2}
               >
                 <Box>
                   <Typography
-                    variant="h6"
-                    fontWeight={950}
+                    variant="caption"
+                    color="text.secondary"
+                    fontWeight={900}
                   >
-                    AI Event Promo
+                    EVENT OPERATIONS
                   </Typography>
 
                   <Typography
-                    variant="body2"
-                    color="text.secondary"
+                    variant="h4"
+                    fontWeight={950}
                   >
-                    Generate artwork from this event
-                    and the saved bout order.
+                    {eventPageTitles[tab] || "Event Operations"}
                   </Typography>
                 </Box>
 
                 <Button
-                  variant="contained"
-                  onClick={generateEventPromo}
-                  disabled={promoLoading}
+                  variant="outlined"
+                  onClick={() => setTab(0)}
+                  sx={{ fontWeight: 900 }}
                 >
-                  {promoLoading
-                    ? "Generating..."
-                    : promoImage
-                    ? "Regenerate Promo"
-                    : "Generate AI Event Promo"}
+                  ? Event Home
                 </Button>
               </Stack>
-
-              {promoImage && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Box
-                    component="img"
-                    src={promoImage}
-                    alt="Generated event promo"
-                    sx={{
-                      width: "100%",
-                      maxWidth: 600,
-                      borderRadius: 2,
-                      boxShadow: 3,
-                    }}
-                  />
-                </Box>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
-
-        <Tabs
-            value={tab >= 7 ? false : tab}
-            onChange={(_, value) =>
-              setTab(value)
-            }
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            <Tab label="Overview" />
-            <Tab label="Bout Sheet" />
-            <Tab label="Contracts" />
-            <Tab label="Promoter Checklist" />
-            <Tab label="Matchmaker Checklist" />
-            <Tab label="Bloodwork" />
-            <Tab label="Fees" />
-          </Tabs>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {tab === 8 && (
           <Stack spacing={2}>
@@ -1822,7 +1695,7 @@ export default function EventWorkspace({
         )}
 
         {/* OVERVIEW */}
-        {tab === 0 && (
+        {false && (
           <Grid container spacing={2}>
             <Grid item xs={12} md={7}>
               <Card>
@@ -1951,7 +1824,7 @@ export default function EventWorkspace({
         )}
 
         {/* FIGHT CARD */}
-                {tab === 1 && (
+                {tab === 10 && (
           <EventFightCardBuilder
             eventId={eventId}
             event={event}
