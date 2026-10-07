@@ -96,13 +96,20 @@ def seller_totals(db: Session, event_id: int):
             EventSeller.display_name,
             EventSeller.seller_type,
             EventSeller.public_code,
+            EventSeller.email,
             func.count(IssuedTicket.id).label("tickets_sold"),
             func.coalesce(func.sum(IssuedTicket.price_cents), 0).label("gross_sales_cents"),
             func.coalesce(func.sum(IssuedTicket.commission_cents), 0).label("commission_cents"),
         )
         .outerjoin(IssuedTicket, (IssuedTicket.seller_id == EventSeller.id) & (IssuedTicket.status != "refunded"))
         .filter(EventSeller.event_id == event_id)
-        .group_by(EventSeller.id, EventSeller.display_name, EventSeller.seller_type, EventSeller.public_code)
+        .group_by(
+            EventSeller.id,
+            EventSeller.display_name,
+            EventSeller.seller_type,
+            EventSeller.public_code,
+            EventSeller.email,
+        )
         .order_by(func.coalesce(func.sum(IssuedTicket.price_cents), 0).desc())
         .all()
     )

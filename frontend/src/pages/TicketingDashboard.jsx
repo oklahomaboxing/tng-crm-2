@@ -2,7 +2,11 @@ import React, { useEffect, useState } from "react";
 import EventTicketSales from "./EventTicketSales.jsx";
 import TicketDoorScanner from "../components/tickets/TicketDoorScanner.jsx";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const API_BASE =
+  typeof window !== "undefined" &&
+  window.location.hostname === "tngos.tngboxinggym.com"
+    ? ""
+    : (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 const API = API_BASE;
 
@@ -398,6 +402,15 @@ const [ticketTypes, setTicketTypes] = useState([]);
   }
 
   async function emailSellerLink(seller) {
+    const sellerEmail = String(seller?.email || "").trim();
+
+    if (!sellerEmail) {
+      setSellerActionMessage(
+        `${seller?.display_name || "This fighter"} does not have an email address saved. Add an email to the fighter profile, then refresh Ticket Sales.`
+      );
+      return;
+    }
+
     try {
       setSellerActionMessage("");
 
@@ -1184,9 +1197,25 @@ const [ticketTypes, setTicketTypes] = useState([]);
 
                           <button
                             type="button"
+                            disabled={!String(seller?.email || "").trim()}
+                            title={
+                              String(seller?.email || "").trim()
+                                ? `Send ticket link to ${seller.email}`
+                                : "No email saved for this fighter"
+                            }
                             onClick={() => emailSellerLink(seller)}
+                            style={{
+                              opacity: String(seller?.email || "").trim()
+                                ? 1
+                                : 0.5,
+                              cursor: String(seller?.email || "").trim()
+                                ? "pointer"
+                                : "not-allowed",
+                            }}
                           >
-                            Email Fighter
+                            {String(seller?.email || "").trim()
+                              ? "Email Fighter"
+                              : "No Email"}
                           </button>
                         </div>
                       </td>
