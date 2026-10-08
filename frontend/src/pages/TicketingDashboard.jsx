@@ -2,11 +2,7 @@ import React, { useEffect, useState } from "react";
 import EventTicketSales from "./EventTicketSales.jsx";
 import TicketDoorScanner from "../components/tickets/TicketDoorScanner.jsx";
 
-const API_BASE =
-  typeof window !== "undefined" &&
-  window.location.hostname === "tngos.tngboxinggym.com"
-    ? ""
-    : (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_URL || "https://sea-lion-app-2-gxyfr.ondigitalocean.app").replace(/\/$/, "");
 
 const API = API_BASE;
 
