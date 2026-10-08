@@ -1791,13 +1791,12 @@ export default function Matchmaker() {
                   description:
                     "Select a fighter, rank opponents, and build bouts for an event.",
                   icon: <SportsMmaRoundedIcon />,
-                  action: () =>
-                    document
-                      .getElementById("promoter-matchmaking")
-                      ?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      }),
+                  action: () => {
+                    setResult(null);
+                    setSocialOpen(false);
+                    setPromoterPage("matchmaking");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  },
                 },
                 {
                   title: "Event Operations",
@@ -2066,6 +2065,133 @@ export default function Matchmaker() {
             </Card>
           </Grid>
         </Grid>
+
+
+
+
+          </>
+        )}
+
+
+        {promoterPage === "matchmaking" && (
+          <Box>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "stretch", md: "center" }}
+              spacing={2}
+              sx={{ mb: 3 }}
+            >
+              <Box>
+                <Button
+                  startIcon={<ArrowBackRoundedIcon />}
+                  onClick={() => {
+                    setResult(null);
+                    setSocialOpen(false);
+                    setPromoterPage("home");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  sx={{
+                    px: 0,
+                    mb: 1,
+                    color: "text.secondary",
+                    fontWeight: 850,
+                  }}
+                >
+                  Promoter Home
+                </Button>
+
+                <Typography
+                  variant="h3"
+                  fontWeight={950}
+                  sx={{
+                    fontSize: { xs: 30, md: 40 },
+                    letterSpacing: "-0.04em",
+                  }}
+                >
+                  Matchmaking
+                </Typography>
+
+                <Typography
+                  color="text.secondary"
+                  sx={{ mt: 0.5, maxWidth: 720 }}
+                >
+                  Select a fighter and event, review possible opponents,
+                  verify fighter information, and build the bout when the
+                  matchup is ready.
+                </Typography>
+              </Box>
+
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+              >
+                <Button
+                  variant="outlined"
+                  startIcon={<GroupsRoundedIcon />}
+                  onClick={() => {
+                    setResult(null);
+                    setSocialOpen(false);
+                    setPromoterPage("fighter-pool");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  sx={{ fontWeight: 850 }}
+                >
+                  Fighter Pool
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<AddRoundedIcon />}
+                  onClick={() => setFighterOpen(true)}
+                  sx={{ fontWeight: 900 }}
+                >
+                  Add Fighter
+                </Button>
+              </Stack>
+            </Stack>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Available Fighters
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {fighters.length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Match Ready
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {eligible}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Events
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {events.length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
 
         <Card
           id="promoter-matchmaking"
@@ -2379,8 +2505,100 @@ export default function Matchmaker() {
           </CardContent>
         </Card>
 
+            <Box sx={{ mt: 3 }}>
+        {result && (
+          <>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Box>
+                <Typography variant="h6" fontWeight={900}>
+                  Ranked Opponents for {result.fighter?.legal_name}
+                </Typography>
+                <Typography color="text.secondary">
+                  Higher scores indicate closer competitive matches.
+                </Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                onClick={() => setResult(null)}
+                sx={{ fontWeight: 850 }}
+              >
+                Clear Results
+              </Button>
+            </Stack>
 
+            <TableContainer component={Card}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Rank</TableCell>
+                    <TableCell>Match</TableCell>
+                    <TableCell>Opponent</TableCell>
+                    <TableCell>Weight</TableCell>
+                    <TableCell>Record</TableCell>
+                    <TableCell>Why</TableCell>
+                    <TableCell>Action</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(result.matches || []).map((m, i) => (
+                    <TableRow key={m.fighter.id}>
+                      <TableCell>#{i + 1}</TableCell>
+                      <TableCell>
+                        <Typography variant="h5" fontWeight={950}>{m.score}%</Typography>
+                        <Typography variant="caption">{m.tier}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <b>{m.fighter.legal_name}</b>
+                        <Typography display="block" variant="caption">
+                          {[m.fighter.gym, m.fighter.city, m.fighter.state]
+                            .filter(Boolean)
+                            .join(" • ")}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {m.fighter.fight_weight || "?"} lb
+                        <br />
+                        <Typography variant="caption">Δ {m.weight_diff} lb</Typography>
+                      </TableCell>
+                      <TableCell>{m.fighter.pro_record || "N/A"}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" useFlexGap flexWrap="wrap" spacing={0.5}>
+                          {(m.reasons || []).slice(0, 4).map((x) => (
+                            <Chip key={x} size="small" label={x} />
+                          ))}
+                          {(m.warnings || []).map((x) => (
+                            <Chip key={x} size="small" variant="outlined" label={`Review: ${x}`} />
+                          ))}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          disabled={!eventId || working}
+                          onClick={() => buildBout(m)}
+                          sx={{ bgcolor: "#e31b23" }}
+                        >
+                          Build Bout
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+
+                  {!result.matches?.length && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center">
+                        No eligible opponent matches found. Add more fighters or review eligibility.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </>
+        )}
+            </Box>
+          </Box>
         )}
 
         {promoterPage === "fighter-pool" && (
@@ -3494,91 +3712,7 @@ export default function Matchmaker() {
           </>
         )}
 
-        {result && (
-          <>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography variant="h6" fontWeight={900}>
-                  Ranked Opponents for {result.fighter?.legal_name}
-                </Typography>
-                <Typography color="text.secondary">
-                  Higher scores indicate closer competitive matches.
-                </Typography>
-              </Box>
-              <Button onClick={() => setResult(null)}>Back to Fighter Pool</Button>
-            </Stack>
 
-            <TableContainer component={Card}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Rank</TableCell>
-                    <TableCell>Match</TableCell>
-                    <TableCell>Opponent</TableCell>
-                    <TableCell>Weight</TableCell>
-                    <TableCell>Record</TableCell>
-                    <TableCell>Why</TableCell>
-                    <TableCell>Action</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(result.matches || []).map((m, i) => (
-                    <TableRow key={m.fighter.id}>
-                      <TableCell>#{i + 1}</TableCell>
-                      <TableCell>
-                        <Typography variant="h5" fontWeight={950}>{m.score}%</Typography>
-                        <Typography variant="caption">{m.tier}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <b>{m.fighter.legal_name}</b>
-                        <Typography display="block" variant="caption">
-                          {[m.fighter.gym, m.fighter.city, m.fighter.state]
-                            .filter(Boolean)
-                            .join(" • ")}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {m.fighter.fight_weight || "?"} lb
-                        <br />
-                        <Typography variant="caption">Δ {m.weight_diff} lb</Typography>
-                      </TableCell>
-                      <TableCell>{m.fighter.pro_record || "N/A"}</TableCell>
-                      <TableCell>
-                        <Stack direction="row" useFlexGap flexWrap="wrap" spacing={0.5}>
-                          {(m.reasons || []).slice(0, 4).map((x) => (
-                            <Chip key={x} size="small" label={x} />
-                          ))}
-                          {(m.warnings || []).map((x) => (
-                            <Chip key={x} size="small" variant="outlined" label={`Review: ${x}`} />
-                          ))}
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          disabled={!eventId || working}
-                          onClick={() => buildBout(m)}
-                          sx={{ bgcolor: "#e31b23" }}
-                        >
-                          Build Bout
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-
-                  {!result.matches?.length && (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center">
-                        No eligible opponent matches found. Add more fighters or review eligibility.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </>
-        )}
 
           </Box>
         )}
