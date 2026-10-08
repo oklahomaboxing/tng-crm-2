@@ -1767,13 +1767,10 @@ export default function Matchmaker() {
                   description:
                     "Open an event and manage the fight card, contracts, tickets, compliance, revenue, and fight night.",
                   icon: <EventRoundedIcon />,
-                  action: () =>
-                    document
-                      .getElementById("promoter-event-workspaces")
-                      ?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      }),
+                  action: () => {
+                    setPromoterPage("events");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  },
                 },
                 {
                   title: "Fighter Pool",
@@ -1803,13 +1800,10 @@ export default function Matchmaker() {
                   description:
                     "Move from planning to contracts, medicals, tickets, revenue, compliance, and fight night.",
                   icon: <HubRoundedIcon />,
-                  action: () =>
-                    document
-                      .getElementById("promoter-event-workspaces")
-                      ?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      }),
+                  action: () => {
+                    setPromoterPage("events");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  },
                 },
               ].map((item) => (
                 <Grid item xs={12} sm={6} lg={3} key={item.title}>
@@ -1939,135 +1933,300 @@ export default function Matchmaker() {
         )}
 
 
-        {promoterPage === "home" && (
-          <>
-                <Box id="promoter-event-workspaces" sx={{ mb: 3, scrollMarginTop: 24 }}>
-          <Typography
-            variant="h6"
-            fontWeight={950}
-            sx={{ mb: 1 }}
-          >
-            Event Workspaces
-          </Typography>
 
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mb: 1.5 }}
-          >
-            Select an event to open its fight card, contracts,
-            checklists, revenue, and event operations.
-          </Typography>
-
-          {!events.length ? (
-            <Button
-              variant="outlined"
-              startIcon={<EventRoundedIcon />}
-              onClick={() => setEventOpen(true)}
-            >
-              Add Your First Event
-            </Button>
-          ) : (
+        {promoterPage === "events" && (
+          <Box>
             <Stack
-              direction="row"
-              spacing={1}
-              useFlexGap
-              flexWrap="wrap"
+              direction={{ xs: "column", md: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "stretch", md: "center" }}
+              spacing={2}
+              sx={{ mb: 3 }}
             >
-              {events.map((event) => {
-                const selected =
-                  Number(eventId) === Number(event.id);
+              <Box>
+                <Button
+                  startIcon={<ArrowBackRoundedIcon />}
+                  onClick={() => {
+                    setPromoterPage("home");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  sx={{
+                    px: 0,
+                    mb: 1,
+                    color: "text.secondary",
+                    fontWeight: 850,
+                  }}
+                >
+                  Promoter Home
+                </Button>
 
-                return (
-                  <Button
-                    key={event.id}
-                    variant={
-                      selected ? "contained" : "outlined"
-                    }
-                    color="error"
-                    startIcon={<EventRoundedIcon />}
-                    onClick={() => {
-                      setEventId(event.id);
-                      setResult(null);
-                      setEventWorkspaceId(event.id);
-                    }}
+                <Typography
+                  variant="h3"
+                  fontWeight={950}
+                  sx={{
+                    fontSize: { xs: 30, md: 40 },
+                    letterSpacing: "-0.04em",
+                  }}
+                >
+                  Events
+                </Typography>
+
+                <Typography
+                  color="text.secondary"
+                  sx={{ mt: 0.5, maxWidth: 720 }}
+                >
+                  Create promotions and open each event workspace to manage
+                  the fight card, contracts, fighters, medicals, compliance,
+                  tickets, revenue, expenses, and fight night.
+                </Typography>
+              </Box>
+
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<AddRoundedIcon />}
+                onClick={() => setEventOpen(true)}
+                sx={{
+                  fontWeight: 900,
+                  px: 2.5,
+                  py: 1.15,
+                  borderRadius: 2.5,
+                }}
+              >
+                Create Event
+              </Button>
+            </Stack>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Events
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {events.length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Dates Scheduled
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {
+                        events.filter(
+                          (event) => Boolean(event.event_date)
+                        ).length
+                      }
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Venues Assigned
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {
+                        events.filter(
+                          (event) => Boolean(event.venue)
+                        ).length
+                      }
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            {!events.length ? (
+              <Card
+                sx={{
+                  borderRadius: 3.5,
+                  border: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                <CardContent
+                  sx={{
+                    textAlign: "center",
+                    py: { xs: 5, md: 7 },
+                  }}
+                >
+                  <EventRoundedIcon
                     sx={{
-                      borderRadius: 2.5,
-                      px: 2,
-                      py: 1.25,
-                      textAlign: "left",
-                      textTransform: "none",
-                      fontWeight: 900,
+                      fontSize: 58,
+                      color: "#d71920",
+                      mb: 1.5,
                     }}
+                  />
+
+                  <Typography variant="h5" fontWeight={950}>
+                    No events yet
+                  </Typography>
+
+                  <Typography
+                    color="text.secondary"
+                    sx={{ mt: 0.75, mb: 2.5 }}
                   >
-                    <Box
-                      component="span"
+                    Create your first promotion to start building the
+                    fight card and event workflow.
+                  </Typography>
+
+                  <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<AddRoundedIcon />}
+                    onClick={() => setEventOpen(true)}
+                    sx={{ fontWeight: 900 }}
+                  >
+                    Create First Event
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <Grid container spacing={2}>
+                {events.map((event) => (
+                  <Grid
+                    item
+                    xs={12}
+                    md={6}
+                    lg={4}
+                    key={event.id}
+                  >
+                    <Card
                       sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-start",
-                        lineHeight: 1.15,
+                        height: "100%",
+                        borderRadius: 3.5,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        boxShadow: "0 5px 20px rgba(0,0,0,.045)",
+                        transition:
+                          "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
+                        "&:hover": {
+                          transform: "translateY(-3px)",
+                          boxShadow:
+                            "0 18px 42px rgba(0,0,0,.09)",
+                          borderColor:
+                            "rgba(215,25,32,.35)",
+                        },
                       }}
                     >
-                      <Box component="span">
-                        {event.name}
-                      </Box>
-
-                      <Box
-                        component="span"
+                      <CardContent
                         sx={{
-                          fontSize: 11,
-                          opacity: 0.75,
-                          fontWeight: 700,
-                          mt: 0.4,
+                          p: 2.5,
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
                         }}
                       >
-                        {event.event_date || "Date not set"}
-                        {event.venue
-                          ? ` - ${event.venue}`
-                          : ""}
-                      </Box>
-                    </Box>
-                  </Button>
-                );
-              })}
-            </Stack>
-          )}
-        </Box>
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="flex-start"
+                          spacing={1}
+                        >
+                          <Box
+                            sx={{
+                              width: 46,
+                              height: 46,
+                              borderRadius: 2.5,
+                              display: "grid",
+                              placeItems: "center",
+                              bgcolor: "rgba(215,25,32,.08)",
+                              color: "#d71920",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <EventRoundedIcon />
+                          </Box>
 
-<Grid container spacing={2}>
-          <Grid item xs={12} sm={4}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">Fighters</Typography>
-                <Typography variant="h4" fontWeight={950}>{fighters.length}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">Eligible</Typography>
-                <Typography variant="h4" fontWeight={950}>{eligible}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">Events</Typography>
-                <Typography variant="h4" fontWeight={950}>{events.length}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={
+                              (event.status || "planning")
+                                .replaceAll("_", " ")
+                                .replace(/\b\w/g, (char) =>
+                                  char.toUpperCase()
+                                )
+                            }
+                            sx={{ fontWeight: 800 }}
+                          />
+                        </Stack>
 
+                        <Typography
+                          variant="h5"
+                          fontWeight={950}
+                          sx={{
+                            mt: 2,
+                            lineHeight: 1.15,
+                          }}
+                        >
+                          {event.name}
+                        </Typography>
 
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 1 }}
+                        >
+                          {event.event_date || "Date not set"}
+                        </Typography>
 
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.4 }}
+                        >
+                          {event.venue || "Venue not set"}
+                        </Typography>
 
-          </>
+                        {event.venue_address && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ mt: 0.4 }}
+                          >
+                            {event.venue_address}
+                          </Typography>
+                        )}
+
+                        <Box sx={{ flex: 1, minHeight: 24 }} />
+
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          color="error"
+                          endIcon={<ChevronRightRoundedIcon />}
+                          onClick={() => {
+                            setEventId(event.id);
+                            setResult(null);
+                            setEventWorkspaceId(event.id);
+                          }}
+                          sx={{
+                            mt: 2.5,
+                            borderRadius: 2.5,
+                            fontWeight: 900,
+                          }}
+                        >
+                          Open Event
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
         )}
-
 
         {promoterPage === "matchmaking" && (
           <Box>
