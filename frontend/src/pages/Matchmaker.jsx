@@ -16,6 +16,7 @@ import HubRoundedIcon from "@mui/icons-material/HubRounded";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
 import AutoMatchPlanner from "./AutoMatchPlanner.jsx";
+import PromoterManagersPage from "./PromoterManagersPage.jsx";
 import TicketSellerControls from "../components/tickets/TicketSellerControls.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -1796,12 +1797,12 @@ export default function Matchmaker() {
                   },
                 },
                 {
-                  title: "Event Operations",
+                  title: "Managers",
                   description:
-                    "Move from planning to contracts, medicals, tickets, revenue, compliance, and fight night.",
+                    "Manage manager profiles, licensing, fighter assignments, and active rosters.",
                   icon: <HubRoundedIcon />,
                   action: () => {
-                    setPromoterPage("events");
+                    setPromoterPage("managers");
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   },
                 },
@@ -2226,6 +2227,15 @@ export default function Matchmaker() {
               </Grid>
             )}
           </Box>
+        )}
+
+        {promoterPage === "managers" && (
+          <PromoterManagersPage
+            onBack={() => {
+              setPromoterPage("home");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
         )}
 
         {promoterPage === "matchmaking" && (
