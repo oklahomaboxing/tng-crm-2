@@ -30,7 +30,6 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import { buildOfficialContractHtml } from "../utils/officialContract";
 import EventCommandCenter from "./EventCommandCenter.jsx";
-import EventFightCardBuilder from "./EventFightCardBuilder.jsx";
 import EventHomeNavigation from "./EventHomeNavigation.jsx";
 import EventFightCardPage from "./EventFightCardPage.jsx";
 import EventContractsPage from "./EventContractsPage.jsx";
@@ -42,6 +41,7 @@ import EventSettingsPage from "./EventSettingsPage.jsx";
 import EventRevenuePage from "./EventRevenuePage.jsx";
 import EventFightersPage from "./EventFightersPage.jsx";
 import EventFightNightPage from "./EventFightNightPage.jsx";
+import EventMatchmakingPage from "./EventMatchmakingPage.jsx";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -1628,9 +1628,9 @@ export default function EventWorkspace({
           </Grid>
         )}
 
-        {/* FIGHT CARD */}
-                {tab === 10 && (
-          <EventFightCardBuilder
+        {/* MATCHMAKING */}
+        {tab === 10 && (
+          <EventMatchmakingPage
             eventId={eventId}
             event={event}
             bouts={bouts}
