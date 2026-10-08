@@ -1941,10 +1941,6 @@ export default function Matchmaker() {
 
         {promoterPage === "home" && (
           <>
-        <AutoMatchPlanner
-          events={events}
-        />
-
                 <Box id="promoter-event-workspaces" sx={{ mb: 3, scrollMarginTop: 24 }}>
           <Typography
             variant="h6"
@@ -2165,6 +2161,32 @@ export default function Matchmaker() {
                   </CardContent>
                 </Card>
               </Grid>
+
+            <Card
+              sx={{
+                mb: 3,
+                borderRadius: 3.5,
+                border: "1px solid",
+                borderColor: "divider",
+                overflow: "hidden",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+                <Stack spacing={0.75} sx={{ mb: 2 }}>
+                  <Typography variant="h5" fontWeight={950}>
+                    Auto Match
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Generate proposed matchups for an event, review the card,
+                    and move approved matchups into the fight workflow.
+                  </Typography>
+                </Stack>
+
+                <AutoMatchPlanner
+                  events={events}
+                />
+              </CardContent>
+            </Card>
 
               <Grid item xs={12} sm={4}>
                 <Card sx={{ borderRadius: 3 }}>
