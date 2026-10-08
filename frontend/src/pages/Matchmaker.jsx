@@ -9,10 +9,13 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import EventRoundedIcon from "@mui/icons-material/EventRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
+import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
+import HubRoundedIcon from "@mui/icons-material/HubRounded";
+import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
-import MatchmakerOfferCenter from "./MatchmakerOfferCenter.jsx";
 import AutoMatchPlanner from "./AutoMatchPlanner.jsx";
-import ContractTemplateManager from "./ContractTemplateManager.jsx";
 import TicketSellerControls from "../components/tickets/TicketSellerControls.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -171,6 +174,7 @@ export default function Matchmaker() {
   const [fighterId, setFighterId] = useState("");
   const [eventId, setEventId] = useState("");
   const [eventWorkspaceId, setEventWorkspaceId] = useState("");
+  const [promoterPage, setPromoterPage] = useState("home");
   const [weightDivision, setWeightDivision] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1676,99 +1680,273 @@ export default function Matchmaker() {
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
 
-      <Card
-        sx={{
-          mb: 3,
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-        }}
-      >
-        <CardContent>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={2}
-            alignItems={{ xs: "stretch", md: "center" }}
-            justifyContent="space-between"
-          >
-            <Box>
-              <Typography
-                variant="h5"
-                fontWeight={900}
-              >
-                Promoter
-              </Typography>
-
-              <Typography color="text.secondary">
-                Send fighters or managers your public fighter
-                registration link.
-              </Typography>
-            </Box>
-
-            <Button
-              variant="contained"
-              color="error"
-              startIcon={<ContentCopyRoundedIcon />}
-              onClick={copyFighterRegistrationLink}
-              sx={{ whiteSpace: "nowrap" }}
-            >
-              Copy Fighter Registration Link
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
-
       <Stack spacing={2}>
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={2}
-          justifyContent="space-between"
-          alignItems={{ xs: "stretch", md: "center" }}
-        >
-          <Box>
-            <Typography variant="h4" fontWeight={950}>
-              TNG Matchmaker
-            </Typography>
-            <Typography color="text.secondary">
-              Build the fighter pool, create events, rank opponents, and build bout drafts.
-            </Typography>
-          </Box>
-
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-
-
-            <Button
-              variant="outlined"
-              startIcon={<EventRoundedIcon />}
-              onClick={() => setEventOpen(true)}
-            >
-              Add Event
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddRoundedIcon />}
-              onClick={() => setFighterOpen(true)}
-              sx={{ bgcolor: "#e31b23" }}
-            >
-              Add Fighter
-            </Button>
-          </Stack>
-        </Stack>
-
         {msg && <Alert severity={msgType}>{msg}</Alert>}
 
-        <ContractTemplateManager />
+        {promoterPage === "home" && (
+          <Box>
+            <Card
+              sx={{
+                mb: 3,
+                borderRadius: 4,
+                overflow: "hidden",
+                border: "1px solid",
+                borderColor: "divider",
+                background:
+                  "linear-gradient(135deg, #111 0%, #222 68%, #400b0f 100%)",
+                color: "#fff",
+                boxShadow: "0 18px 50px rgba(0,0,0,.12)",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
+                  spacing={3}
+                >
+                  <Box>
+                    <Chip
+                      label="TNG PROMOTER OS"
+                      size="small"
+                      sx={{
+                        bgcolor: "rgba(255,255,255,.10)",
+                        color: "#fff",
+                        fontWeight: 900,
+                        mb: 1.5,
+                      }}
+                    />
 
+                    <Typography
+                      variant="h3"
+                      fontWeight={950}
+                      sx={{
+                        fontSize: { xs: 30, md: 44 },
+                        letterSpacing: "-0.04em",
+                      }}
+                    >
+                      Promoter Command Center
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 1,
+                        maxWidth: 720,
+                        color: "rgba(255,255,255,.72)",
+                      }}
+                    >
+                      Run your boxing operation from one place. Open events,
+                      manage fighters, build matchups, and move each promotion
+                      toward fight night.
+                    </Typography>
+                  </Box>
+
+                  <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<AddRoundedIcon />}
+                    onClick={() => setEventOpen(true)}
+                    sx={{
+                      borderRadius: 2.5,
+                      px: 2.5,
+                      py: 1.25,
+                      fontWeight: 900,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Create Event
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              {[
+                {
+                  title: "Events",
+                  description:
+                    "Open an event and manage the fight card, contracts, tickets, compliance, revenue, and fight night.",
+                  icon: <EventRoundedIcon />,
+                  action: () =>
+                    document
+                      .getElementById("promoter-event-workspaces")
+                      ?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      }),
+                },
+                {
+                  title: "Fighter Pool",
+                  description:
+                    "Manage your roster, fighter logins, signed talent, First 5 fighters, and matchmaking readiness.",
+                  icon: <GroupsRoundedIcon />,
+                  action: () => {
+                    setResult(null);
+                    setPromoterPage("fighter-pool");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  },
+                },
+                {
+                  title: "Matchmaking",
+                  description:
+                    "Select a fighter, rank opponents, and build bouts for an event.",
+                  icon: <SportsMmaRoundedIcon />,
+                  action: () =>
+                    document
+                      .getElementById("promoter-matchmaking")
+                      ?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      }),
+                },
+                {
+                  title: "Event Operations",
+                  description:
+                    "Move from planning to contracts, medicals, tickets, revenue, compliance, and fight night.",
+                  icon: <HubRoundedIcon />,
+                  action: () =>
+                    document
+                      .getElementById("promoter-event-workspaces")
+                      ?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      }),
+                },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} lg={3} key={item.title}>
+                  <Card
+                    onClick={item.action}
+                    sx={{
+                      height: "100%",
+                      cursor: "pointer",
+                      borderRadius: 3.5,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      boxShadow: "0 4px 18px rgba(0,0,0,.04)",
+                      transition:
+                        "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
+                      "&:hover": {
+                        transform: "translateY(-4px)",
+                        boxShadow: "0 18px 42px rgba(0,0,0,.09)",
+                        borderColor: "rgba(215,25,32,.35)",
+                      },
+                    }}
+                  >
+                    <CardContent
+                      sx={{
+                        p: 2.5,
+                        minHeight: 205,
+                        display: "flex",
+                        flexDirection: "column",
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          display: "grid",
+                          placeItems: "center",
+                          borderRadius: 2.5,
+                          bgcolor: "rgba(215,25,32,.08)",
+                          color: "#d71920",
+                          mb: 2,
+                        }}
+                      >
+                        {item.icon}
+                      </Box>
+
+                      <Typography variant="h6" fontWeight={950}>
+                        {item.title}
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.75, flex: 1 }}
+                      >
+                        {item.description}
+                      </Typography>
+
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={0.25}
+                        sx={{ mt: 2, color: "#d71920" }}
+                      >
+                        <Typography variant="body2" fontWeight={900}>
+                          Open
+                        </Typography>
+                        <ChevronRightRoundedIcon fontSize="small" />
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Card
+              variant="outlined"
+              sx={{
+                mb: 3,
+                borderRadius: 3,
+                bgcolor: "rgba(215,25,32,.025)",
+              }}
+            >
+              <CardContent>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "stretch", sm: "center" }}
+                  spacing={2}
+                >
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 2,
+                        bgcolor: "rgba(215,25,32,.08)",
+                        color: "#d71920",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      <BoltRoundedIcon />
+                    </Box>
+
+                    <Box>
+                      <Typography fontWeight={900}>
+                        Fighter Registration
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Send your public registration link to fighters,
+                        managers, and coaches.
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Button
+                    variant="outlined"
+                    startIcon={<ContentCopyRoundedIcon />}
+                    onClick={copyFighterRegistrationLink}
+                    sx={{ fontWeight: 850 }}
+                  >
+                    Copy Registration Link
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Box>
+        )}
+
+
+        {promoterPage === "home" && (
+          <>
         <AutoMatchPlanner
           events={events}
         />
 
-        <MatchmakerOfferCenter
-          fighters={fighters}
-          events={events}
-        />
-
-                <Box sx={{ mb: 3 }}>
+                <Box id="promoter-event-workspaces" sx={{ mb: 3, scrollMarginTop: 24 }}>
           <Typography
             variant="h6"
             fontWeight={950}
@@ -1889,7 +2067,10 @@ export default function Matchmaker() {
           </Grid>
         </Grid>
 
-        <Card>
+        <Card
+          id="promoter-matchmaking"
+          sx={{ scrollMarginTop: 24, borderRadius: 3 }}
+        >
           <CardContent>
             <Typography variant="h6" fontWeight={900} sx={{ mb: 2 }}>
               Find a Match
@@ -2197,6 +2378,123 @@ export default function Matchmaker() {
 
           </CardContent>
         </Card>
+
+
+          </>
+        )}
+
+        {promoterPage === "fighter-pool" && (
+          <Box>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "stretch", md: "center" }}
+              spacing={2}
+              sx={{ mb: 3 }}
+            >
+              <Box>
+                <Button
+                  startIcon={<ArrowBackRoundedIcon />}
+                  onClick={() => {
+                    setResult(null);
+                    setPromoterPage("home");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  sx={{
+                    px: 0,
+                    mb: 1,
+                    color: "text.secondary",
+                    fontWeight: 850,
+                  }}
+                >
+                  Promoter Home
+                </Button>
+
+                <Typography
+                  variant="h3"
+                  fontWeight={950}
+                  sx={{
+                    fontSize: { xs: 30, md: 40 },
+                    letterSpacing: "-0.04em",
+                  }}
+                >
+                  Fighter Pool
+                </Typography>
+
+                <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                  Manage your roster, portal access, signed talent,
+                  development fighters, and matchmaking readiness.
+                </Typography>
+              </Box>
+
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+              >
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentCopyRoundedIcon />}
+                  onClick={copyFighterRegistrationLink}
+                  sx={{ fontWeight: 850 }}
+                >
+                  Registration Link
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<AddRoundedIcon />}
+                  onClick={() => setFighterOpen(true)}
+                  sx={{
+                    fontWeight: 900,
+                    px: 2.25,
+                  }}
+                >
+                  Add Fighter
+                </Button>
+              </Stack>
+            </Stack>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Fighters
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {fighters.length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Match Ready
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {eligible}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Card sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Signed to TNG
+                    </Typography>
+                    <Typography variant="h4" fontWeight={950}>
+                      {signedFighters.length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
 
         {!fighters.length && (
           <Card>
@@ -3281,6 +3579,10 @@ export default function Matchmaker() {
             </TableContainer>
           </>
         )}
+
+          </Box>
+        )}
+
       </Stack>
 
       <Dialog
