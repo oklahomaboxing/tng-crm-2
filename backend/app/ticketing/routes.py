@@ -16,7 +16,7 @@ from app.ticketing.emailing import send_fighter_report, send_seller_ticket_link
 from app.ticketing.security import decrypt_token
 from fastapi.responses import StreamingResponse
 from app.models import User
-from app.core.permissions import require_admin_or_staff
+from app.core.permissions import require_admin_or_staff, require_matchmaker_access
 
 router = APIRouter(prefix="/api/ticketing", tags=["ticketing"])
 
@@ -926,9 +926,9 @@ def download_event_report_pdf(
 def list_event_ticket_types(
     event_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(staff_user),
+    user: User = Depends(current_user),
 ):
-    require_admin_or_staff(user)
+    require_matchmaker_access(user)
 
     rows = (
         db.query(EventTicketType)
@@ -962,9 +962,9 @@ def update_event_ticket_type(
     ticket_type_id: int,
     data: dict,
     db: Session = Depends(get_db),
-    user: User = Depends(staff_user),
+    user: User = Depends(current_user),
 ):
-    require_admin_or_staff(user)
+    require_matchmaker_access(user)
 
     row = (
         db.query(EventTicketType)
@@ -1110,9 +1110,9 @@ def create_event_ticket_type(
     event_id: int,
     data: dict,
     db: Session = Depends(get_db),
-    user: User = Depends(staff_user),
+    user: User = Depends(current_user),
 ):
-    require_admin_or_staff(user)
+    require_matchmaker_access(user)
 
     name = str(data.get("name") or "").strip()
     if not name:
