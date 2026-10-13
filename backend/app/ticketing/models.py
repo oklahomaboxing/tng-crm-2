@@ -28,6 +28,15 @@ class EventSeller(Base):
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TicketSmsConsent(Base):
+    __tablename__ = "ticket_sms_consents"
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, ForeignKey("ticket_orders.id"), unique=True, nullable=False)
+    phone = Column(String(40), nullable=False)
+    notice_version = Column(String(40), nullable=False)
+    notice_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
 class TicketOrder(Base):
     __tablename__ = "ticket_orders"
     id = Column(Integer, primary_key=True)

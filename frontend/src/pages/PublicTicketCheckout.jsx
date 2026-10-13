@@ -43,6 +43,8 @@ export default function PublicTicketCheckout() {
   const [buyerEmail, setBuyerEmail] =
     useState("");
 
+  const [ticketSmsConsent, setTicketSmsConsent] = useState(false);
+
   const [buyerPhone, setBuyerPhone] =
     useState("");
 
@@ -259,10 +261,10 @@ export default function PublicTicketCheckout() {
 
     if (
       !buyerName.trim() ||
-      !buyerEmail.trim() || !buyerPhone.trim()
+      !buyerEmail.trim() || (ticketSmsConsent && !buyerPhone.trim())
     ) {
       setMessage(
-        "Name, email, and mobile phone are required to deliver your tickets."
+        "Name and email are required. Enter a mobile number if you choose ticket texts."
       );
       return;
     }
@@ -286,8 +288,8 @@ export default function PublicTicketCheckout() {
               buyer_email:
                 buyerEmail.trim(),
               buyer_phone:
-                buyerPhone.trim() ||
-                null,
+                ticketSmsConsent ? buyerPhone.trim() : null,
+              ticket_sms_consent: ticketSmsConsent,
               seller_code:
                 sellerCode || null,
               items,
@@ -614,7 +616,7 @@ export default function PublicTicketCheckout() {
             <input
               style={styles.input}
               type="tel"
-              placeholder="Mobile phone for ticket text (+1...)"
+              placeholder="Mobile phone for ticket text (optional, +1...)"
               value={buyerPhone}
               onChange={(e) =>
                 setBuyerPhone(
@@ -622,6 +624,14 @@ export default function PublicTicketCheckout() {
                 )
               }
             />
+
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <input type="checkbox" checked={ticketSmsConsent}
+                onChange={(e) => setTicketSmsConsent(e.target.checked)} />
+              <span>I agree to receive TNG Boxing text messages about this ticket purchase, including my QR ticket link and delivery updates. Message frequency varies. Message and data rates may apply. Reply STOP to opt out. Consent is optional and is not a condition of purchase.</span>
+            </label>
+
+            <p>Review our <a href="/ticket-privacy" target="_blank" rel="noopener noreferrer">Ticket Privacy Notice</a> and <a href="/ticket-terms" target="_blank" rel="noopener noreferrer">Ticket Terms</a>. For help: <a href="mailto:marketing@tngboxinggym.com">marketing@tngboxinggym.com</a> or <a href="tel:+14059595823">405-959-5823</a>.</p>
 
             <div style={styles.total}>
               Total: {money(total)}

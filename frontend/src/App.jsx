@@ -35,6 +35,7 @@ import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
 import Matchmaker from "./pages/Matchmaker.jsx";
 import ManagerPortal from "./pages/ManagerPortal.jsx";
 import PublicTicketCheckout from "./pages/PublicTicketCheckout.jsx";
+import TicketPolicies from "./pages/TicketPolicies.jsx";
 import FighterActivate from "./pages/FighterActivate.jsx";
 import FighterPortal from "./pages/FighterPortal.jsx";
 import FighterPortalVideos from "./pages/FighterPortalVideos.jsx";
@@ -178,6 +179,10 @@ function RootEntry() {
   }
 
   const path = window.location.pathname;
+
+  if (/^\/ticket-(privacy|terms)\/?$/.test(path)) {
+    return <TicketPolicies privacy={path.startsWith("/ticket-privacy")} />;
+  }
 
   const isPublicTicketPage =
     /^\/events\/\d+\/tickets\/?$/.test(path);

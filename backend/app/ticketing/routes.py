@@ -20,6 +20,8 @@ from app.core.permissions import require_admin_or_staff, require_matchmaker_acce
 
 router = APIRouter(prefix="/api/ticketing", tags=["ticketing"])
 
+TICKET_SMS_NOTICE = "I agree to receive TNG Boxing text messages about this ticket purchase, including my QR ticket link and delivery updates. Message frequency varies. Message and data rates may apply. Reply STOP to opt out. Consent is optional and is not a condition of purchase."
+
 class SellerCreate(BaseModel):
     seller_type: str
     seller_ref_id: int
@@ -35,6 +37,7 @@ class PublicTicketOrderCreate(BaseModel):
     buyer_name: str
     buyer_email: EmailStr
     buyer_phone: str | None = None
+    ticket_sms_consent: bool = False
     seller_code: str | None = None
     items: list[dict]
 
@@ -65,9 +68,11 @@ def create_public_ticket_order(
         raise HTTPException(status_code=400, detail="Customer name is required")
     from .delivery import normalize_ticket_phone
     try:
-        phone = normalize_ticket_phone(body.buyer_phone)
+        phone = normalize_ticket_phone(body.buyer_phone) if body.ticket_sms_consent else ""
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    if body.ticket_sms_consent and not phone:
+        raise HTTPException(400, "A mobile phone is required for ticket texts")
     from .service import seller_commission_cents
     normalized_items = []
     subtotal_cents = 0
@@ -122,6 +127,11 @@ def create_public_ticket_order(
     )
 
     db.add(order)
+    db.flush()
+    if body.ticket_sms_consent:
+        from .models import TicketSmsConsent
+        db.add(TicketSmsConsent(order_id=order.id, phone=phone,
+            notice_version="ticket-sms-v1", notice_text=TICKET_SMS_NOTICE))
     db.commit()
     db.refresh(order)
 

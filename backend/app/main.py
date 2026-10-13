@@ -334,7 +334,7 @@ async def stop_ticket_delivery_worker():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "release": "ticket-production-repair-2"}
+    return {"status": "ok", "release": "ticket-production-repair-3"}
 
 
 app.include_router(operations_router)

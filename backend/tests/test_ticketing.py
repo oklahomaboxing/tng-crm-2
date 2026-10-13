@@ -16,7 +16,7 @@ class TicketingTests(unittest.TestCase):
     headers = support.StabilizationTests.headers
     payment = support.StabilizationTests.payment
 
-    def order(self, quantity=2, price=4000):
+    def order(self, quantity=2, price=4000, consent=True):
         self.event = BoxingEvent(slug="test-night", name="Test Fight Night")
         self.db.add(self.event); self.db.flush()
         self.seller = EventSeller(event_id=self.event.id, seller_type="fighter", seller_ref_id=42,
@@ -25,12 +25,33 @@ class TicketingTests(unittest.TestCase):
                                     commission_type="percent", commission_value=10)
         self.db.add_all([self.seller, self.kind]); self.db.commit()
         r = self.client.post(f"/api/ticketing/public/events/{self.event.id}/orders", json={
-            "buyer_name":"Test Customer", "buyer_email":"tickets@example.com", "buyer_phone":"+15555550123",
+            "buyer_name":"Test Customer", "buyer_email":"tickets@example.com", "buyer_phone":"+15555550123", "ticket_sms_consent":consent,
             "seller_code":self.seller.public_code, "items":[{"ticket_type_id":self.kind.id, "quantity":quantity}]})
         self.assertEqual(r.status_code,200,r.text)
         o = self.db.get(TicketOrder,r.json()["order_id"])
         o.clover_checkout_id="test-checkout"; self.db.commit()
         return o
+
+    def test_ticket_text_consent_is_recorded(self):
+        from app.ticketing.models import TicketSmsConsent
+        from app.ticketing.routes import TICKET_SMS_NOTICE
+        o = self.order()
+        record = self.db.query(TicketSmsConsent).filter_by(order_id=o.id).one()
+        self.assertEqual(record.phone, o.buyer_phone)
+        self.assertEqual(record.notice_text, TICKET_SMS_NOTICE)
+        self.assertEqual(record.notice_version, "ticket-sms-v1")
+        self.assertIsNotNone(record.created_at)
+
+    def test_purchase_without_text_consent_delivers_email_only(self):
+        from app.ticketing.models import TicketSmsConsent
+        o = self.order(consent=False)
+        self.assertEqual(o.buyer_phone, "")
+        self.assertEqual(self.db.query(TicketSmsConsent).count(), 0)
+        sm, em = self.providers()
+        self.assertEqual(self.payment(o.clover_checkout_id).status_code, 200)
+        sm.assert_not_called()
+        em.assert_called_once()
+        self.assertEqual(self.db.query(IssuedTicket).filter_by(order_id=o.id).count(), 2)
 
     def providers(self, sms="test-sms", email=None):
         from contextlib import ExitStack

@@ -32,12 +32,12 @@ Use a sample URL without an actual customer's access token when submitting regis
 Supply the exact public checkout page, not the CRM login page:
 https://tngos.tngboxinggym.com/events/2/tickets
 
-The business must verify that the live consent notice and documented opt-in process meet Twilio's
-requirements. The current checkout collects a mobile number for ticket texts, but it does not
-record a separate consent checkbox. Do not claim one exists. Twilio may require a clearer consent
-flow, message/data-rate disclosure, support information, and accessible privacy/terms links.
-Use the business's approved policies; do not assert unverified privacy practices or invent opt-in
-records. Any proposed policy/consent changes must be reviewed by the business before publication.
+The public checkout now records an optional, unchecked ticket-text consent checkbox,
+with the exact wording and timestamp tied to the order. It links to:
+https://tngos.tngboxinggym.com/ticket-privacy
+https://tngos.tngboxinggym.com/ticket-terms
+Support is marketing@tngboxinggym.com / +1 405-959-5823.
+The administrator approved the mobile-data non-sharing policy and refund terms.
 
 This draft has NOT been submitted. It is not an approved campaign and does not unblock US SMS.
 Resubmission may require a provider fee and carrier review. Once the campaign is APPROVED,
