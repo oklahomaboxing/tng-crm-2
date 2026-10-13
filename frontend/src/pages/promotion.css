@@ -1,0 +1,14 @@
+.promotion-scope { color: #17202c; font-family: Inter, "Segoe UI", sans-serif; }
+.promotion-hero { background: radial-gradient(ellipse at 100% 0%, #64202a 0%, transparent 47%), linear-gradient(125deg,#10141d,#1b202b); color: white; border-radius: 20px; padding: clamp(24px,4vw,44px); position: relative; overflow: hidden; }
+.promotion-eyebrow { font-size: 11px !important; font-weight: 800 !important; letter-spacing: .16em !important; }
+.promotion-scope .promotion-lane { border: 1px solid #e1e5eb; background: white; border-radius: 12px; padding: 20px; gap: 13px; color: #17202c; justify-content: flex-start; text-transform: none; }
+.promotion-scope .promotion-lane:hover { border-color: #d71920; background: #fffafa; }
+.promotion-scope .promotion-event-row { width: 100%; justify-content: flex-start; gap: 16px; padding: 16px 0; border-radius: 0; border-bottom: 1px solid #edf0f3; text-transform: none; color: inherit; }
+.promotion-scope .promotion-event-row:hover { background: #f8f9fb; }
+.promotion-scope button:focus-visible, .promotion-scope a:focus-visible { outline: 3px solid #d71920; outline-offset: 3px; }
+.promotion-nav { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px; background: white; border: 1px solid #e1e5eb; border-radius: 14px; }
+.promotion-scope .promotion-nav button { color: #5b6472; padding: 9px 16px; border-radius: 9px; }
+.promotion-scope .promotion-nav button[aria-current="page"] { background: #17202c; color: white; }
+@media (prefers-reduced-motion: reduce) { .promotion-scope * { transition: none !important; scroll-behavior: auto !important; } }
+
+.promotion-scope nav { position: static !important; }

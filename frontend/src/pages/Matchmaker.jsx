@@ -15,6 +15,8 @@ import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import HubRoundedIcon from "@mui/icons-material/HubRounded";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
+import PromoterOverview from "./PromoterOverview.jsx";
+import PromotionTheme from "./PromotionTheme.jsx";
 import AutoMatchPlanner from "./AutoMatchPlanner.jsx";
 import PromoterManagersPage from "./PromoterManagersPage.jsx";
 import TicketSellerControls from "../components/tickets/TicketSellerControls.jsx";
@@ -170,11 +172,18 @@ function slugify(value) {
 }
 
 export default function Matchmaker() {
+  return <PromotionTheme><MatchmakerContent /></PromotionTheme>;
+}
+
+function MatchmakerContent() {
   const [fighters, setFighters] = useState([]);
   const [events, setEvents] = useState([]);
   const [fighterId, setFighterId] = useState("");
   const [eventId, setEventId] = useState("");
   const [eventWorkspaceId, setEventWorkspaceId] = useState("");
+  const [workspaceInitialTab, setWorkspaceInitialTab] = useState(0);
+  function openWorkspace(id, initialTab = 0) { setWorkspaceInitialTab(initialTab); setEventWorkspaceId(id); window.scrollTo({ top: 0 }); }
+  function navigatePromoter(next) { setResult(null); setSocialOpen(false); setPromoterPage(next); window.scrollTo({ top: 0 }); }
   const [promoterPage, setPromoterPage] = useState("home");
   const [weightDivision, setWeightDivision] = useState("");
   const [result, setResult] = useState(null);
@@ -1664,7 +1673,9 @@ export default function Matchmaker() {
   if (eventWorkspaceId) {
     return (
       <EventWorkspace
+        key={eventWorkspaceId}
         eventId={eventWorkspaceId}
+        initialTab={workspaceInitialTab}
         onBack={() => setEventWorkspaceId("")}
       />
     );
@@ -1684,256 +1695,10 @@ export default function Matchmaker() {
       <Stack spacing={2}>
         {msg && <Alert severity={msgType}>{msg}</Alert>}
 
-        {promoterPage === "home" && (
-          <Box>
-            <Card
-              sx={{
-                mb: 3,
-                borderRadius: 4,
-                overflow: "hidden",
-                border: "1px solid",
-                borderColor: "divider",
-                background:
-                  "linear-gradient(135deg, #111 0%, #222 68%, #400b0f 100%)",
-                color: "#fff",
-                boxShadow: "0 18px 50px rgba(0,0,0,.12)",
-              }}
-            >
-              <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-                <Stack
-                  direction={{ xs: "column", md: "row" }}
-                  justifyContent="space-between"
-                  alignItems={{ xs: "flex-start", md: "center" }}
-                  spacing={3}
-                >
-                  <Box>
-                    <Chip
-                      label="TNG PROMOTER OS"
-                      size="small"
-                      sx={{
-                        bgcolor: "rgba(255,255,255,.10)",
-                        color: "#fff",
-                        fontWeight: 900,
-                        mb: 1.5,
-                      }}
-                    />
-
-                    <Typography
-                      variant="h3"
-                      fontWeight={950}
-                      sx={{
-                        fontSize: { xs: 30, md: 44 },
-                        letterSpacing: "-0.04em",
-                      }}
-                    >
-                      Promoter Command Center
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        mt: 1,
-                        maxWidth: 720,
-                        color: "rgba(255,255,255,.72)",
-                      }}
-                    >
-                      Run your boxing operation from one place. Open events,
-                      manage fighters, build matchups, and move each promotion
-                      toward fight night.
-                    </Typography>
-                  </Box>
-
-                  <Button
-                    variant="contained"
-                    color="error"
-                    startIcon={<AddRoundedIcon />}
-                    onClick={() => setEventOpen(true)}
-                    sx={{
-                      borderRadius: 2.5,
-                      px: 2.5,
-                      py: 1.25,
-                      fontWeight: 900,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Create Event
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-              {[
-                {
-                  title: "Events",
-                  description:
-                    "Open an event and manage the fight card, contracts, tickets, compliance, revenue, and fight night.",
-                  icon: <EventRoundedIcon />,
-                  action: () => {
-                    setPromoterPage("events");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  },
-                },
-                {
-                  title: "Fighter Pool",
-                  description:
-                    "Manage your roster, fighter logins, signed talent, First 5 fighters, and matchmaking readiness.",
-                  icon: <GroupsRoundedIcon />,
-                  action: () => {
-                    setResult(null);
-                    setPromoterPage("fighter-pool");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  },
-                },
-                {
-                  title: "Matchmaking",
-                  description:
-                    "Select a fighter, rank opponents, and build bouts for an event.",
-                  icon: <SportsMmaRoundedIcon />,
-                  action: () => {
-                    setResult(null);
-                    setSocialOpen(false);
-                    setPromoterPage("matchmaking");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  },
-                },
-                {
-                  title: "Managers",
-                  description:
-                    "Manage manager profiles, licensing, fighter assignments, and active rosters.",
-                  icon: <HubRoundedIcon />,
-                  action: () => {
-                    setPromoterPage("managers");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  },
-                },
-              ].map((item) => (
-                <Grid item xs={12} sm={6} lg={3} key={item.title}>
-                  <Card
-                    onClick={item.action}
-                    sx={{
-                      height: "100%",
-                      cursor: "pointer",
-                      borderRadius: 3.5,
-                      border: "1px solid",
-                      borderColor: "divider",
-                      boxShadow: "0 4px 18px rgba(0,0,0,.04)",
-                      transition:
-                        "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
-                      "&:hover": {
-                        transform: "translateY(-4px)",
-                        boxShadow: "0 18px 42px rgba(0,0,0,.09)",
-                        borderColor: "rgba(215,25,32,.35)",
-                      },
-                    }}
-                  >
-                    <CardContent
-                      sx={{
-                        p: 2.5,
-                        minHeight: 205,
-                        display: "flex",
-                        flexDirection: "column",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 48,
-                          height: 48,
-                          display: "grid",
-                          placeItems: "center",
-                          borderRadius: 2.5,
-                          bgcolor: "rgba(215,25,32,.08)",
-                          color: "#d71920",
-                          mb: 2,
-                        }}
-                      >
-                        {item.icon}
-                      </Box>
-
-                      <Typography variant="h6" fontWeight={950}>
-                        {item.title}
-                      </Typography>
-
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.75, flex: 1 }}
-                      >
-                        {item.description}
-                      </Typography>
-
-                      <Stack
-                        direction="row"
-                        alignItems="center"
-                        spacing={0.25}
-                        sx={{ mt: 2, color: "#d71920" }}
-                      >
-                        <Typography variant="body2" fontWeight={900}>
-                          Open
-                        </Typography>
-                        <ChevronRightRoundedIcon fontSize="small" />
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-
-            <Card
-              variant="outlined"
-              sx={{
-                mb: 3,
-                borderRadius: 3,
-                bgcolor: "rgba(215,25,32,.025)",
-              }}
-            >
-              <CardContent>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  justifyContent="space-between"
-                  alignItems={{ xs: "stretch", sm: "center" }}
-                  spacing={2}
-                >
-                  <Stack direction="row" spacing={1.5} alignItems="center">
-                    <Box
-                      sx={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 2,
-                        bgcolor: "rgba(215,25,32,.08)",
-                        color: "#d71920",
-                        display: "grid",
-                        placeItems: "center",
-                      }}
-                    >
-                      <BoltRoundedIcon />
-                    </Box>
-
-                    <Box>
-                      <Typography fontWeight={900}>
-                        Fighter Registration
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Send your public registration link to fighters,
-                        managers, and coaches.
-                      </Typography>
-                    </Box>
-                  </Stack>
-
-                  <Button
-                    variant="outlined"
-                    startIcon={<ContentCopyRoundedIcon />}
-                    onClick={copyFighterRegistrationLink}
-                    sx={{ fontWeight: 850 }}
-                  >
-                    Copy Registration Link
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Box>
-        )}
-
-
+        <nav className="promotion-nav" aria-label="Promoter navigation">
+          {[["home", "Overview"], ["events", "Events"], ["fighter-pool", "Fighter pool"], ["matchmaking", "Matchmaking"], ["managers", "Managers"]].map(([key, label]) => <Button key={key} aria-current={promoterPage === key ? "page" : undefined} onClick={() => navigatePromoter(key)}>{label}</Button>)}
+        </nav>
+        {promoterPage === "home" && <PromoterOverview events={events} fighters={fighters} eligible={eligible} onNavigate={navigatePromoter} onCreate={() => setEventOpen(true)} onOpen={openWorkspace} onCopyRegistration={copyFighterRegistrationLink} />}
 
         {promoterPage === "events" && (
           <Box>
@@ -2210,7 +1975,7 @@ export default function Matchmaker() {
                           onClick={() => {
                             setEventId(event.id);
                             setResult(null);
-                            setEventWorkspaceId(event.id);
+                            openWorkspace(event.id);
                           }}
                           sx={{
                             mt: 2.5,
@@ -2468,7 +2233,7 @@ export default function Matchmaker() {
               <Button
                 variant="outlined"
                 disabled={!eventId}
-                onClick={() => setEventWorkspaceId(eventId)}
+                onClick={() => openWorkspace(eventId)}
                 sx={{ minWidth: 130 }}
               >
                 Open Event

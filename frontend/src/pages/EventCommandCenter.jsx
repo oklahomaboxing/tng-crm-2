@@ -287,7 +287,7 @@ export default function EventCommandCenter({
         py: 1.25,
       }}
     >
-      {complete ? "? " : ""}
+      {complete ? "✓ " : ""}
       {label}
     </Button>
   );

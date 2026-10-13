@@ -103,100 +103,20 @@ const pages = [
 ];
 
 export default function EventHomeNavigation({ setTab }) {
-  return (
-    <Box>
-      <Stack spacing={0.5} sx={{ mb: 2.5 }}>
-        <Typography variant="h5" fontWeight={950}>
-          Event Operations
-        </Typography>
-
-        <Typography color="text.secondary">
-          Choose one area to work on. Each section opens as its own focused page.
-        </Typography>
-      </Stack>
-
-      <Grid container spacing={2}>
-        {pages.map((page) => {
+  const groups = ["Competition", "Operations", "Revenue", "Finance", "Event Day", "Settings"];
+  return <Box>
+    <Typography component="h2" variant="h5" sx={{ mb: 1 }}>Your event, end to end.</Typography>
+    <Typography color="text.secondary" sx={{ mb: 3 }}>Build the card, prepare the roster, manage the business and run fight night.</Typography>
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0,1fr))", xl: "repeat(3,minmax(0,1fr))" }, gap: 2 }}>
+      {groups.map(group => <Card key={group} sx={{ p: 2.5 }}>
+        <Typography variant="overline" sx={{ fontWeight: 850, letterSpacing: ".12em", color: "text.secondary" }}>{group}</Typography>
+        {pages.filter(page => page.group === group).map(page => {
           const Icon = page.icon;
-
-          return (
-            <Grid item xs={12} sm={6} lg={4} key={page.label}>
-              <Card
-                sx={{
-                  height: "100%",
-                  borderRadius: 4,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  boxShadow: "0 10px 30px rgba(15,23,42,.05)",
-                  transition: "transform .18s ease, box-shadow .18s ease",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 16px 40px rgba(15,23,42,.09)",
-                  },
-                }}
-              >
-                <CardActionArea
-                  onClick={() => setTab(page.tab)}
-                  sx={{ height: "100%" }}
-                >
-                  <CardContent sx={{ p: 2.5, height: "100%" }}>
-                    <Stack spacing={2} height="100%">
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="flex-start"
-                        spacing={1}
-                      >
-                        <Box
-                          sx={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 3,
-                            display: "grid",
-                            placeItems: "center",
-                            bgcolor: "rgba(215,25,32,.08)",
-                            color: "error.main",
-                          }}
-                        >
-                          <Icon />
-                        </Box>
-
-                        <Chip
-                          size="small"
-                          label={page.group}
-                          variant="outlined"
-                        />
-                      </Stack>
-
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="h6" fontWeight={950}>
-                          {page.label}
-                        </Typography>
-
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ mt: 0.75 }}
-                        >
-                          {page.description}
-                        </Typography>
-                      </Box>
-
-                      <Typography
-                        variant="body2"
-                        fontWeight={900}
-                        color="error.main"
-                      >
-                        Open {page.label} ?
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            </Grid>
-          );
+          return <CardActionArea key={page.tab} onClick={() => setTab(page.tab)} sx={{ borderRadius: 2, mt: 1, p: 1.5 }}>
+            <Stack direction="row" spacing={2} alignItems="center"><Icon sx={{ color: "primary.main" }} /><Box><Typography fontWeight={800}>{page.label}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{page.description}</Typography></Box></Stack>
+          </CardActionArea>;
         })}
-      </Grid>
+      </Card>)}
     </Box>
-  );
+  </Box>;
 }
