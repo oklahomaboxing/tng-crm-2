@@ -11,7 +11,7 @@ class EventTicketType(Base):
     price_cents = Column(Integer, nullable=False)
     inventory = Column(Integer, nullable=True)
     commission_type = Column(String(20), default="percent")  # percent|flat|none
-    commission_value = Column(Numeric(10,2), default=0)
+    commission_value = Column(Numeric(10,2), default=20)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

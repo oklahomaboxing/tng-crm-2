@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 $Backend = $Backend.TrimEnd('/')
 if (-not $Backend.StartsWith('https://')) { throw 'Use an HTTPS backend.' }
 $health = Invoke-RestMethod "$Backend/api/health"
-if ($health.release -ne 'ticket-production-repair-1') {
+if ($health.release -notlike 'ticket-production-repair-*') {
     throw "Repair is not deployed. Current release: $($health.release)"
 }
 $email = Read-Host 'TNG admin/staff email'

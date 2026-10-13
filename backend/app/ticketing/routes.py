@@ -68,7 +68,7 @@ def create_public_ticket_order(
         phone = normalize_ticket_phone(body.buyer_phone)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    from .service import cents_from_commission
+    from .service import seller_commission_cents
     normalized_items = []
     subtotal_cents = 0
     valid_ticket_count = 0
@@ -96,7 +96,7 @@ def create_public_ticket_order(
 
         normalized_items.append({"ticket_type_id": ticket_type.id, "quantity": quantity,
             "price_cents": ticket_type.price_cents,
-            "commission_cents": cents_from_commission(ticket_type, ticket_type.price_cents)})
+            "commission_cents": seller_commission_cents(db, ticket_type, ticket_type.price_cents, seller_record.id if seller_record else None)})
         subtotal_cents += ticket_type.price_cents * quantity
         valid_ticket_count += quantity
 
@@ -1153,7 +1153,7 @@ def create_event_ticket_type(
             raise HTTPException(status_code=400, detail="Inventory must be an integer.")
 
     commission_type = str(data.get("commission_type") or "percent")
-    commission_value = data.get("commission_value", 0)
+    commission_value = data.get("commission_value", 20)
 
     existing = (
         db.query(EventTicketType)

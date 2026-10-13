@@ -4,6 +4,7 @@ import os
 from app.ticketing.routes import router as ticketing_router
 from app.ticketing.checkout_routes import router as ticketing_checkout_router
 from app.ticketing.recovery import router as ticketing_recovery_router
+from app.ticketing.sms_status import router as ticketing_sms_status_router
 import logging
 from app.ticketing.models import TicketOrder
 from app.ticketing.emailing import send_ticket_email
@@ -333,7 +334,7 @@ async def stop_ticket_delivery_worker():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "release": "ticket-production-repair-1"}
+    return {"status": "ok", "release": "ticket-production-repair-2"}
 
 
 app.include_router(operations_router)
@@ -342,6 +343,7 @@ app.include_router(ai_router)
 app.include_router(ticketing_router)
 app.include_router(ticketing_checkout_router)
 app.include_router(ticketing_recovery_router)
+app.include_router(ticketing_sms_status_router)
 
 app.include_router(academy_router)
 app.include_router(revenue_router)

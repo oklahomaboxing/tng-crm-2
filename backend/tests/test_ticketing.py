@@ -125,6 +125,102 @@ class TicketingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             normalize_ticket_phone('not a phone')
 
+    def contract(self, rate, status='signed', event_id=None):
+        from app.matchmaker.models import BoxingFighter, BoxingBout, BoxingContract
+        for fighter_id in (42, 43):
+            if not self.db.get(BoxingFighter, fighter_id):
+                self.db.add(BoxingFighter(id=fighter_id, legal_name=f'Test Fighter {fighter_id}'))
+        self.db.flush()
+        bout = BoxingBout(event_id=event_id or self.event.id, red_fighter_id=42, blue_fighter_id=43)
+        self.db.add(bout); self.db.flush()
+        contract = BoxingContract(event_id=event_id or self.event.id, bout_id=bout.id,
+            fighter_id=42, opponent_id=43, corner='red', status=status, ticket_commission_percent=rate)
+        self.db.add(contract); self.db.commit()
+        return contract
+
+    def test_negotiated_fighter_rate_overrides_default_and_is_snapshotted(self):
+        from app.ticketing.service import seller_commission_cents
+        self.order();self.kind.commission_value=20;self.db.commit()
+        contract=self.contract(10)
+        self.assertEqual(seller_commission_cents(self.db,self.kind,4000,self.seller.id),400)
+        r=self.client.post(f'/api/ticketing/public/events/{self.event.id}/orders',json={
+            'buyer_name':'Rate Test','buyer_email':'rate@example.com','seller_code':self.seller.public_code,
+            'items':[{'ticket_type_id':self.kind.id,'quantity':1}]})
+        self.assertEqual(r.status_code,200,r.text)
+        order=self.db.get(TicketOrder,r.json()['order_id'])
+        self.assertEqual(json.loads(order.items_json)[0]['commission_cents'],400)
+        contract.ticket_commission_percent=20;self.db.commit()
+        order.payment_status='paid'
+        tickets=issue_paid_order(self.db,order,json.loads(order.items_json));self.db.commit()
+        self.assertEqual(tickets[0]['ticket'].commission_cents,400)
+
+    def test_declined_or_other_event_contract_does_not_override_rate(self):
+        from app.ticketing.service import seller_commission_cents
+        self.order();self.kind.commission_value=20;self.db.commit()
+        self.contract(10,status='declined')
+        other=BoxingEvent(slug='other-event',name='Other Event');self.db.add(other);self.db.commit()
+        self.contract(15,event_id=other.id)
+        self.assertEqual(seller_commission_cents(self.db,self.kind,4000,self.seller.id),800)
+
+    def test_booked_bout_rate_and_invalid_percent(self):
+        from app.ticketing.service import seller_commission_cents
+        self.order();self.kind.commission_value=20;self.db.commit()
+        contract=self.contract(15,status='generated')
+        self.assertEqual(seller_commission_cents(self.db,self.kind,4000,self.seller.id),600)
+        contract.ticket_commission_percent=101;self.db.commit()
+        with self.assertRaises(ValueError):
+            seller_commission_cents(self.db,self.kind,4000,self.seller.id)
+
+    def test_accepted_offer_rate_and_zero_placeholder_default(self):
+        from app.matchmaker.models import BoxingFightOffer
+        from app.ticketing.service import seller_commission_cents
+        self.order();self.kind.commission_value=20;self.db.commit()
+        self.contract(0)
+        self.assertEqual(seller_commission_cents(self.db,self.kind,4000,self.seller.id),800)
+        offer=BoxingFightOffer(event_id=self.event.id,fighter_id=42,status='accepted',ticket_commission_percent=10)
+        self.db.add(offer);self.db.commit()
+        self.assertEqual(seller_commission_cents(self.db,self.kind,4000,self.seller.id),400)
+
+    def sms_callback(self, delivery, status, code=None, valid=True, message_id=None):
+        from twilio.request_validator import RequestValidator
+        from app.ticketing.delivery import sms_status_url
+        data={'AccountSid':'test-account','MessageSid':message_id or delivery.provider_id,'MessageStatus':status}
+        if code is not None:data['ErrorCode']=str(code)
+        signature=RequestValidator('test-auth').compute_signature(sms_status_url(delivery.id),data) if valid else 'invalid'
+        with patch.dict(os.environ,{'TWILIO_ACCOUNT_SID':'test-account','TWILIO_AUTH_TOKEN':'test-auth'}):
+            return self.client.post(f'/api/ticketing/sms/status?delivery_id={delivery.id}',data=data,
+                                    headers={'X-Twilio-Signature':signature})
+
+    def test_verified_sms_callback_records_delivery_and_rejects_forgery(self):
+        o=self.order();self.providers();self.payment(o.clover_checkout_id)
+        d=self.db.query(TicketDelivery).filter_by(channel='sms').one()
+        self.assertEqual(self.sms_callback(d,'delivered',valid=False).status_code,401)
+        self.assertEqual(self.sms_callback(d,'delivered',message_id='wrong-message').status_code,409)
+        self.assertEqual(self.sms_callback(d,'delivered').status_code,200)
+        self.db.refresh(d);self.assertEqual(d.status,'delivered')
+        self.assertEqual(self.sms_callback(d,'queued').status_code,200)
+        self.db.refresh(d);self.assertEqual(d.status,'delivered')
+
+    def test_carrier_rejection_is_tracked_and_permanent_failure_waits_for_correction(self):
+        from app.ticketing.worker import retry_deliveries
+        o=self.order();sm,em=self.providers();self.payment(o.clover_checkout_id)
+        d=self.db.query(TicketDelivery).filter_by(channel='sms').one()
+        self.assertEqual(self.sms_callback(d,'undelivered',30034).status_code,200)
+        self.db.refresh(d);self.assertEqual(d.status,'failed');self.assertIn('30034',d.last_error)
+        retry_deliveries();sm.assert_called_once();em.assert_called_once()
+        sm.return_value='corrected-sender-message'
+        r=self.client.post(f'/api/ticketing/orders/{o.id}/recover',headers=self.headers())
+        self.assertEqual(r.status_code,200,r.text)
+        self.db.refresh(d);self.assertEqual(d.provider_id,'corrected-sender-message')
+        self.assertEqual(self.sms_callback(d,'delivered',message_id='test-sms').status_code,409)
+        self.assertEqual(self.sms_callback(d,'delivered').status_code,200)
+
+    def test_sms_provider_callback_is_requested(self):
+        from app.ticketing.delivery import sms_status_url
+        o=self.order();sm,em=self.providers();self.payment(o.clover_checkout_id)
+        d=self.db.query(TicketDelivery).filter_by(channel='sms').one()
+        self.assertEqual(sm.call_args.kwargs['status_callback'],sms_status_url(d.id))
+
     def evidence(self,o):
         return {"id":"CLOVER-ORDER", "paymentState":"PAID","total":o.total_cents,"currency":"USD",
                 "payments":{"elements":[{"id":"verified-payment","result":"SUCCESS","amount":o.total_cents}]}}

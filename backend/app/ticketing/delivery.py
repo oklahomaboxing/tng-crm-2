@@ -32,6 +32,10 @@ def ticket_page_url(order):
                        "access_token": order_access_token(order)})
     return f"{base}/events/{order.event_id}/tickets?{query}"
 
+def sms_status_url(delivery_id):
+    base = os.getenv("TNG_BACKEND_URL", "https://sea-lion-app-2-gxyfr.ondigitalocean.app").rstrip("/")
+    return f"{base}/api/ticketing/sms/status?delivery_id={delivery_id}"
+
 
 def queue_deliveries(db, order):
     for channel in ("sms", "email"):
@@ -60,7 +64,7 @@ def deliver_order(db, order, force=True):
         db.query(TicketDelivery).filter_by(id=delivery_id).update(
             {TicketDelivery.status: TicketDelivery.status}, synchronize_session=False)
         delivery = db.query(TicketDelivery).filter_by(id=delivery_id).populate_existing().one()
-        if delivery.status == "sent":
+        if delivery.status in ("sent", "delivered"):
             db.commit()
             continue
         if not force and (delivery.attempts >= 8 or
@@ -71,7 +75,8 @@ def deliver_order(db, order, force=True):
         try:
             if delivery.channel == "sms":
                 provider_id = send_sms(normalize_ticket_phone(order.buyer_phone),
-                    f"Your TNG tickets for {event.name} are ready. View your QR tickets: {ticket_page_url(order)}")
+                    f"Your TNG tickets for {event.name} are ready. View your QR tickets: {ticket_page_url(order)} Reply STOP to opt out.",
+                    status_callback=sms_status_url(delivery.id))
             else:
                 result = send_ticket_email(order.buyer_email, event.name, order.receipt_number,
                     [{"ticket_number": t.ticket_number, "status": t.status, "price_cents": t.price_cents,
@@ -93,6 +98,8 @@ def deliver_order(db, order, force=True):
             if isinstance(code, int):
                 delivery.last_error += f" (provider code {code})"
             delivery.next_attempt_at = datetime.utcnow() + timedelta(seconds=min(3600, 30 * 2 ** min(delivery.attempts, 7)))
+            if code in (21211, 21610, 30034):
+                delivery.next_attempt_at = datetime.max
         db.commit()
     return [{"channel": d.channel, "status": d.status, "attempts": d.attempts,
              "last_error": d.last_error} for d in db.query(TicketDelivery).filter_by(order_id=order.id).all()]

@@ -76,7 +76,7 @@ Publish the tested repair branch, fast-forward the deployment branch, and deploy
 Do not reset branches, discard local changes, or copy secrets into this repository. Goldfish's
 actual branch/build settings must be checked; a backend deployment alone does not update the ticket page.
 Before deployment take a managed PostgreSQL backup/snapshot through DigitalOcean if available.
-Verify `/api/health` returns `ticket-production-repair-1` and `/openapi.json` includes
+Verify `/api/health` returns `ticket-production-repair-2` and `/openapi.json` includes
 `/api/ticketing/orders/{order_id}/reconcile-clover`. Review runtime callback/worker errors.
 
 ## Recover affected purchases from PowerShell
@@ -122,3 +122,29 @@ Log bodies/secrets must not be copied into public reports.
 Rollback application code to the previous deployment through DigitalOcean if necessary. Leave
 the additive tables and recovery history intact. Rolling back the frontend/backend can affect
 notification retries, but must not delete issued tickets or charge customers again.
+
+## Production repair results and commission policy
+
+The missing runtime `TICKET_QR_SECRET` was added securely as a stable DigitalOcean secret after
+confirming zero issued tickets. `TICKET_FROM_EMAIL` now reuses the existing configured sender.
+Clover paid orders were matched to CRM orders using event name, product, quantity, amount, unique
+CRM candidate, and checkout creation timestamps (12–18 seconds apart). Refund-free payment
+evidence was verified again by the recovery endpoint.
+
+- CRM 7 / Clover 1K85Y0DGCA256: one $125 Table Seat, Rocky Hernandez; $25 commission; email delivered.
+- CRM 8 / Clover YQ31QWGSE3P7A: one $40 General Admission, TNG Promotions; $8 commission; email delivered.
+
+These recoveries preserve seller IDs and include an admin recovery audit. Neither purchase was
+charged again. Existing QR tickets and delivered emails must not be recreated/resubmitted.
+
+New ticket types default to 20%. A fighter's latest positive, non-cancelled booked-contract rate
+overrides the event default; if absent, an accepted offer rate applies. Zero/unset legacy rate fields
+use the event default. Existing valid negotiated 10%, 15%, and 20% rates are preserved. The calculated
+commission is snapshotted when the order is created; later negotiation/catalog edits do not silently
+rewrite paid ticket earnings. Legacy orders without snapshots use the recorded terms at recovery.
+
+Twilio delivery callbacks are signature-verified, tied to the account and current message ID, and
+record actual delivery or carrier failure. Permanent destination/registration failures wait for
+correction rather than repeatedly retrying. See [Twilio-Campaign-Correction.md](Twilio-Campaign-Correction.md)
+for the remaining campaign rejection and missing customer phone prerequisites. SMS is still blocked;
+successful provider acceptance must never be reported as handset delivery.

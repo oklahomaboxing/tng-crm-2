@@ -2,7 +2,7 @@ import os
 from twilio.rest import Client
 
 
-def send_sms(to_phone: str, message: str):
+def send_sms(to_phone: str, message: str, status_callback: str | None = None):
     account_sid = os.getenv("TWILIO_ACCOUNT_SID")
     auth_token = os.getenv("TWILIO_AUTH_TOKEN")
     twilio_number = os.getenv("TWILIO_PHONE_NUMBER")
@@ -12,10 +12,12 @@ def send_sms(to_phone: str, message: str):
 
     client = Client(account_sid, auth_token)
 
+    options = {"status_callback": status_callback} if status_callback else {}
     message = client.messages.create(
         body=message,
         from_=twilio_number,
-        to=to_phone
+        to=to_phone,
+        **options,
     )
 
     return message.sid

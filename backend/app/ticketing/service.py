@@ -14,6 +14,36 @@ def cents_from_commission(ticket_type: EventTicketType, price_cents: int) -> int
     pct = Decimal(ticket_type.commission_value) / Decimal(100)
     return int(Decimal(price_cents) * pct)
 
+def seller_commission_cents(db: Session, ticket_type: EventTicketType, price_cents: int, seller_id: int | None) -> int:
+    """Booked fighter terms override the event default; snapshot the result at purchase."""
+    from app.matchmaker.models import BoxingContract, BoxingFightOffer
+    seller = db.get(EventSeller, seller_id) if seller_id else None
+    rate = None
+    if seller and seller.seller_type == "fighter":
+        contracts = db.query(BoxingContract).filter(
+            BoxingContract.event_id == ticket_type.event_id,
+            BoxingContract.fighter_id == seller.seller_ref_id,
+            BoxingContract.ticket_commission_percent > 0,
+            ~BoxingContract.status.in_(["declined", "cancelled", "withdrawn", "void", "change_requested"]),
+        ).order_by(BoxingContract.id.desc()).all()
+        if contracts:
+            rate = contracts[0].ticket_commission_percent
+        else:
+            offer = db.query(BoxingFightOffer).filter(
+                BoxingFightOffer.event_id == ticket_type.event_id,
+                BoxingFightOffer.fighter_id == seller.seller_ref_id,
+                BoxingFightOffer.status == "accepted",
+                BoxingFightOffer.ticket_commission_percent > 0,
+            ).order_by(BoxingFightOffer.id.desc()).first()
+            if offer:
+                rate = offer.ticket_commission_percent
+    if rate is None:
+        return cents_from_commission(ticket_type, price_cents)
+    percent = Decimal(str(rate))
+    if not percent.is_finite() or not 0 <= percent <= 100:
+        raise ValueError("Invalid negotiated ticket commission percentage")
+    return int(Decimal(price_cents) * percent / Decimal(100))
+
 def generate_public_code(event_id: int, seller_type: str) -> str:
     return f"{seller_type[:1].upper()}{event_id}-{secrets.token_hex(4).upper()}"
 
@@ -42,7 +72,7 @@ def issue_paid_order(db: Session, order: TicketOrder, line_items: list[dict]) ->
         if qty < 1 or qty > 100:
             raise ValueError("Invalid ticket quantity")
         price = int(item.get("price_cents", ticket_type.price_cents))
-        commission = int(item.get("commission_cents", cents_from_commission(ticket_type, price)))
+        commission = int(item["commission_cents"]) if "commission_cents" in item else seller_commission_cents(db, ticket_type, price, order.seller_id)
         if price < 0 or commission < 0 or commission > price:
             raise ValueError("Invalid ticket price or commission")
         expected[ticket_type.id] = expected.get(ticket_type.id, 0) + qty

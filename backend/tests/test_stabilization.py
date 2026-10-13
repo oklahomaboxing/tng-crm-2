@@ -214,7 +214,7 @@ class StabilizationTests(unittest.TestCase):
 
     def test_health_reports_release(self):
         self.assertEqual(self.client.get("/api/health").json(),
-                         {"status":"ok","release":"ticket-production-repair-1"})
+                         {"status":"ok","release":"ticket-production-repair-2"})
 
     def test_new_member_payment_and_retry(self):
         lead=Lead(first_name="New",last_name="Member",email="new@example.com",phone="5550303",

@@ -166,8 +166,8 @@ const [ticketTypes, setTicketTypes] = useState([]);
             name,
             price_cents: Math.round(price * 100),
             inventory,
-            commission_type: "none",
-            commission_value: 0,
+            commission_type: "percent",
+            commission_value: 20,
           }),
         }
       );
