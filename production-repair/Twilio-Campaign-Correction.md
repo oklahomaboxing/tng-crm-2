@@ -1,6 +1,8 @@
-# Twilio campaign correction — draft for business review
+# Twilio ticket campaign — corrected and resubmitted
 
-The existing TNG Boxing brand is APPROVED. Its ACCOUNT_NOTIFICATION campaign is FAILED.
+The existing TNG Boxing brand is APPROVED. Its ACCOUNT_NOTIFICATION campaign was FAILED.
+On October 13, 2026 the corrected campaign update was accepted by Twilio with status
+IN_PROGRESS and an empty errors list. This is pending review, not carrier approval.
 The configured phone number belongs to the account and is assigned to TNG Boxing's messaging
 service. No alternate approved sender exists in this account.
 
@@ -39,8 +41,9 @@ https://tngos.tngboxinggym.com/ticket-terms
 Support is marketing@tngboxinggym.com / +1 405-959-5823.
 The administrator approved the mobile-data non-sharing policy and refund terms.
 
-This draft has NOT been submitted. It is not an approved campaign and does not unblock US SMS.
-Resubmission may require a provider fee and carrier review. Once the campaign is APPROVED,
+The corrected description, two samples matching the private ticket-link message, recorded
+checkout opt-in flow, public privacy URL, and public terms URL have been submitted.
+Twilio returned IN_PROGRESS; US SMS is not yet unblocked. Once the campaign is APPROVED,
 confirm the configured phone number remains assigned to it and retry only the failed ticket texts.
 Do not resend delivered ticket emails or issue duplicate tickets.
 
