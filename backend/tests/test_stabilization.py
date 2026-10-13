@@ -17,8 +17,12 @@ sys.path.insert(0, str(ROOT))
 TEMP = tempfile.TemporaryDirectory(prefix="tng-regression-")
 ORIGINAL_CWD = os.getcwd()
 os.chdir(TEMP.name)
+TEST_DATABASE_URL = os.getenv("TNG_TEST_POSTGRES_URL", "")
+if TEST_DATABASE_URL and not (TEST_DATABASE_URL.startswith("postgresql://")
+        and "@127.0.0.1:55432/tng_ticket_test" in TEST_DATABASE_URL):
+    raise RuntimeError("PostgreSQL tests require the dedicated local tng_ticket_test database")
 os.environ.update({
-    "DATABASE_URL": "sqlite:///" + Path(TEMP.name, "test.db").as_posix(),
+    "DATABASE_URL": TEST_DATABASE_URL or "sqlite:///" + Path(TEMP.name, "test.db").as_posix(),
     "SECRET_KEY": "test-only-signing-secret-not-used-in-production",
     "OPENAI_API_KEY": "",
     "RESEND_API_KEY": "", "BOOTSTRAP_ADMIN_PASSWORD": "",
@@ -210,7 +214,7 @@ class StabilizationTests(unittest.TestCase):
 
     def test_health_reports_release(self):
         self.assertEqual(self.client.get("/api/health").json(),
-                         {"status":"ok","release":"membership-stabilization-1"})
+                         {"status":"ok","release":"ticket-production-repair-1"})
 
     def test_new_member_payment_and_retry(self):
         lead=Lead(first_name="New",last_name="Member",email="new@example.com",phone="5550303",
@@ -251,11 +255,12 @@ class StabilizationTests(unittest.TestCase):
     def test_failed_invitation_can_be_retried(self):
         other=Member(first_name="Invite",last_name="Test",email="invite@example.com")
         self.db.add(other);self.db.commit()
-        with patch.dict(os.environ,{"RESEND_API_KEY":"test-only"}):
+        with patch.dict(os.environ,{"RESEND_API_KEY":"test-only"}), \
+             patch("app.member_portal.routes.httpx.post", return_value=Mock(status_code=503, text="offline test failure")):
             response=self.client.post("/api/member/admin/invite",json={"member_id":other.id},headers=self.headers())
             self.assertEqual(response.status_code,502,response.text)
             self.assertEqual(self.db.query(MemberInvite).count(),0)
-            with patch("resend.Emails.send",return_value={"id":"test-email"}):
+            with patch("app.member_portal.routes.httpx.post",return_value=Mock(status_code=200)):
                 response=self.client.post("/api/member/admin/invite",json={"member_id":other.id},headers=self.headers())
                 self.assertEqual(response.status_code,200,response.text)
                 self.assertTrue(response.json()["email_sent"])

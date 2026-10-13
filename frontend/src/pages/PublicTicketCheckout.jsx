@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -28,6 +28,9 @@ export default function PublicTicketCheckout() {
 
   const returnedOrderId =
     params.get("order");
+  const accessToken = params.get("access_token") || "";
+  const [lookupEmail, setLookupEmail] = useState("");
+  const [lookupAttempt, setLookupAttempt] = useState(0);
 
   const [data, setData] = useState(null);
 
@@ -149,11 +152,11 @@ export default function PublicTicketCheckout() {
         saved = {};
       }
 
-      const email = saved.email;
+      const email = lookupEmail.trim() || (String(saved.orderId) === returnedOrderId ? saved.email : "");
 
-      if (!email) {
+      if (!email && !accessToken) {
         setMessage(
-          "Payment was received. Check your email for your TNG tickets."
+          "Enter the email used for this order to retrieve your tickets."
         );
         return;
       }
@@ -169,13 +172,16 @@ export default function PublicTicketCheckout() {
           const response = await fetch(
             `${API}/api/ticketing/public/orders/` +
               `${returnedOrderId}/tickets` +
-              `?email=${encodeURIComponent(
-                email
-              )}`
+              (accessToken ? `?access_token=${encodeURIComponent(accessToken)}` : `?email=${encodeURIComponent(email)}`)
           );
 
           const body =
             await response.json();
+          if (!response.ok) {
+            if (!cancelled) setMessage(body.detail || "Could not retrieve tickets. Please retry.");
+            return;
+          }
+          if (cancelled) return;
 
           if (
             response.ok &&
@@ -202,8 +208,8 @@ export default function PublicTicketCheckout() {
         );
       }
 
-      setMessage(
-        "Payment successful. Your tickets are being processed and will also be sent to your email."
+      if (!cancelled) setMessage(
+        "Payment confirmation is still pending. Do not pay again. Retry ticket lookup or contact TNG with your order number."
       );
     }
 
@@ -214,7 +220,7 @@ export default function PublicTicketCheckout() {
     };
   }, [
     paymentStatus,
-    returnedOrderId,
+    returnedOrderId, accessToken, lookupEmail, lookupAttempt,
   ]);
 
   async function purchaseTickets(event) {
@@ -253,10 +259,10 @@ export default function PublicTicketCheckout() {
 
     if (
       !buyerName.trim() ||
-      !buyerEmail.trim()
+      !buyerEmail.trim() || !buyerPhone.trim()
     ) {
       setMessage(
-        "Name and email are required."
+        "Name, email, and mobile phone are required to deliver your tickets."
       );
       return;
     }
@@ -331,7 +337,7 @@ export default function PublicTicketCheckout() {
 
       if (checkout.status === "paid" && Number(checkout.total_cents) === 0) {
         window.location.href =
-          `/events/${eventId}/tickets?ticket_payment=success&order=${order.order_id}`;
+          checkout.ticket_url || `/events/${eventId}/tickets?ticket_payment=success&order=${order.order_id}`;
         return;
       }
 
@@ -388,6 +394,7 @@ export default function PublicTicketCheckout() {
             </div>
           )}
 
+          <button type="button" onClick={() => window.print()}>Print / Save Tickets</button>
           <div style={styles.ticketGrid}>
             {tickets.map(
               (ticket) => (
@@ -425,7 +432,7 @@ export default function PublicTicketCheckout() {
                       />
                     ) : (
                       <div>
-                        QR sent by email
+                        QR unavailable. Contact TNG for help.
                       </div>
                     )}
                   </div>
@@ -447,6 +454,18 @@ export default function PublicTicketCheckout() {
         </section>
       </main>
     );
+  }
+
+  if (paymentStatus === "success" && returnedOrderId) {
+    return <main style={styles.page}><section style={styles.container}>
+      <h1>Your Ticket Order #{returnedOrderId}</h1>
+      <p role="status">{message || "Waiting for payment confirmation…"}</p>
+      {!accessToken && <label>Email used for this order
+        <input type="email" value={lookupEmail} onChange={(e) => setLookupEmail(e.target.value)} />
+      </label>}
+      <button type="button" onClick={() => setLookupAttempt((n) => n + 1)}>Retry Ticket Lookup</button>
+      <p>Please do not purchase again while we confirm this payment.</p>
+    </section></main>;
   }
 
   return (
@@ -594,7 +613,8 @@ export default function PublicTicketCheckout() {
 
             <input
               style={styles.input}
-              placeholder="Phone"
+              type="tel"
+              placeholder="Mobile phone for ticket text (+1...)"
               value={buyerPhone}
               onChange={(e) =>
                 setBuyerPhone(

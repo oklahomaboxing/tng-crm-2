@@ -18,6 +18,14 @@ def make_raw_token(event_id: int, ticket_number: str) -> str:
 def hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode()).hexdigest()
 
+def order_access_token(order) -> str:
+    require_secret()
+    payload = f"ticket-order:{order.id}:{order.receipt_number}"
+    return hmac.new(QR_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+def verify_order_access(order, token: str) -> bool:
+    return bool(token) and hmac.compare_digest(order_access_token(order), token)
+
 def verify_token(raw_token: str) -> bool:
     require_secret()
     try:

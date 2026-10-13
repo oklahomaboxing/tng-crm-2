@@ -59,15 +59,28 @@ def create_public_ticket_order(
             EventSeller.active == True,
         ).first()
 
+    if body.seller_code and not seller_record:
+        raise HTTPException(status_code=400, detail="Invalid or inactive fighter/seller link")
+    if not body.buyer_name.strip():
+        raise HTTPException(status_code=400, detail="Customer name is required")
+    from .delivery import normalize_ticket_phone
+    try:
+        phone = normalize_ticket_phone(body.buyer_phone)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    from .service import cents_from_commission
+    normalized_items = []
     subtotal_cents = 0
     valid_ticket_count = 0
 
     for item in body.items:
-        ticket_type_id = int(item.get("ticket_type_id"))
-        quantity = int(item.get("quantity", 0))
-
-        if quantity <= 0:
-            continue
+        try:
+            ticket_type_id = int(item["ticket_type_id"])
+            quantity = int(item["quantity"])
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid ticket selection")
+        if quantity < 1 or quantity > 100:
+            raise HTTPException(status_code=400, detail="Ticket quantity must be between 1 and 100")
 
         ticket_type = db.query(EventTicketType).filter(
             EventTicketType.id == ticket_type_id,
@@ -81,6 +94,9 @@ def create_public_ticket_order(
                 detail=f"Invalid ticket type {ticket_type_id}",
             )
 
+        normalized_items.append({"ticket_type_id": ticket_type.id, "quantity": quantity,
+            "price_cents": ticket_type.price_cents,
+            "commission_cents": cents_from_commission(ticket_type, ticket_type.price_cents)})
         subtotal_cents += ticket_type.price_cents * quantity
         valid_ticket_count += quantity
 
@@ -95,13 +111,13 @@ def create_public_ticket_order(
         seller_id=seller_record.id if seller_record else None,
         buyer_name=body.buyer_name.strip(),
         buyer_email=str(body.buyer_email).lower(),
-        buyer_phone=(body.buyer_phone or "").strip(),
+        buyer_phone=phone,
         subtotal_cents=subtotal_cents,
         fee_cents=0,
         total_cents=subtotal_cents,
         payment_provider="clover",
         payment_status="pending",
-        items_json=json.dumps(body.items),
+        items_json=json.dumps(normalized_items),
         receipt_number=generate_receipt_number(event_id),
     )
 
@@ -143,7 +159,8 @@ def create_seller(event_id: int, body: SellerCreate, db: Session = Depends(get_d
 @router.get("/public/orders/{order_id}/tickets")
 def public_order_tickets(
     order_id: int,
-    email: str,
+    email: str | None = None,
+    access_token: str | None = None,
     db: Session = Depends(get_db),
 ):
     order = db.query(TicketOrder).filter(TicketOrder.id == order_id).first()
@@ -151,8 +168,13 @@ def public_order_tickets(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if order.buyer_email.lower() != email.strip().lower():
-        raise HTTPException(status_code=403, detail="Email does not match order")
+    from .security import verify_order_access
+    if access_token:
+        authorized = verify_order_access(order, access_token)
+    else:
+        authorized = bool(email) and order.buyer_email.lower() == email.strip().lower()
+    if not authorized:
+        raise HTTPException(status_code=403, detail="Ticket access does not match order")
 
     if order.payment_status != "paid":
         return {
@@ -514,10 +536,10 @@ def event_report(event_id: int, db: Session = Depends(get_db), user=Depends(staf
     tickets = db.query(IssuedTicket).filter(IssuedTicket.event_id == event_id).all()
     return {
         "event_id": event_id,
-        "tickets_sold": sum(1 for t in tickets if t.status != "refunded"),
+        "tickets_sold": sum(1 for t in tickets if t.status in ("valid", "used")),
         "tickets_scanned": sum(1 for t in tickets if t.status == "used"),
-        "gross_sales_cents": sum(t.price_cents for t in tickets if t.status != "refunded"),
-        "commission_cents": sum(t.commission_cents for t in tickets if t.status != "refunded"),
+        "gross_sales_cents": sum(t.price_cents for t in tickets if t.status in ("valid", "used")),
+        "commission_cents": sum(t.commission_cents for t in tickets if t.status in ("valid", "used")),
         "sellers": sellers,
     }
 
@@ -700,11 +722,11 @@ def download_seller_report_pdf(
     ).order_by(IssuedTicket.id.asc()).all()
 
     gross_sales_cents = sum(
-        t.price_cents for t in tickets if t.status != "refunded"
+        t.price_cents for t in tickets if t.status in ("valid", "used")
     )
 
     commission_cents = sum(
-        t.commission_cents for t in tickets if t.status != "refunded"
+        t.commission_cents for t in tickets if t.status in ("valid", "used")
     )
 
     output = io.BytesIO()
@@ -803,7 +825,7 @@ def download_event_report_pdf(
     ).all()
 
     tickets_sold = sum(
-        1 for t in tickets if t.status != "refunded"
+        1 for t in tickets if t.status in ("valid", "used")
     )
 
     tickets_scanned = sum(
@@ -811,11 +833,11 @@ def download_event_report_pdf(
     )
 
     gross_sales_cents = sum(
-        t.price_cents for t in tickets if t.status != "refunded"
+        t.price_cents for t in tickets if t.status in ("valid", "used")
     )
 
     commission_cents = sum(
-        t.commission_cents for t in tickets if t.status != "refunded"
+        t.commission_cents for t in tickets if t.status in ("valid", "used")
     )
 
     output = io.BytesIO()

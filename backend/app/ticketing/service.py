@@ -24,32 +24,56 @@ def generate_ticket_number(event_id: int) -> str:
     return f"TNG-{event_id}-{secrets.token_hex(5).upper()}"
 
 def issue_paid_order(db: Session, order: TicketOrder, line_items: list[dict]) -> list[dict]:
+    # A write lock also serializes issuance on SQLite; PostgreSQL holds the row lock
+    # until the caller commits both payment and tickets together.
+    db.flush()
+    db.query(TicketOrder).filter_by(id=order.id).update(
+        {TicketOrder.payment_status: TicketOrder.payment_status}, synchronize_session=False)
+    order = db.query(TicketOrder).filter_by(id=order.id).populate_existing().one()
     if order.payment_status != "paid":
         raise ValueError("Cannot issue tickets until order is paid")
-    issued = []
+    existing = db.query(IssuedTicket).filter_by(order_id=order.id).order_by(IssuedTicket.id).all()
+    expected = {}
+    normalized = []
     for item in line_items:
-        ticket_type = db.query(EventTicketType).filter(EventTicketType.id == item["ticket_type_id"]).one()
+        ticket_type = db.query(EventTicketType).filter_by(
+            id=int(item["ticket_type_id"]), event_id=order.event_id).one()
         qty = int(item["quantity"])
+        if qty < 1 or qty > 100:
+            raise ValueError("Invalid ticket quantity")
+        price = int(item.get("price_cents", ticket_type.price_cents))
+        commission = int(item.get("commission_cents", cents_from_commission(ticket_type, price)))
+        if price < 0 or commission < 0 or commission > price:
+            raise ValueError("Invalid ticket price or commission")
+        expected[ticket_type.id] = expected.get(ticket_type.id, 0) + qty
+        normalized.append((ticket_type, qty, price, commission))
+    if not normalized or sum(qty * price for _, qty, price, _ in normalized) != order.subtotal_cents:
+        raise ValueError("Ticket items do not match order subtotal")
+    if order.total_cents != order.subtotal_cents + order.fee_cents:
+        raise ValueError("Ticket order total is invalid")
+    counts = {}
+    for ticket in existing:
+        counts[ticket.ticket_type_id] = counts.get(ticket.ticket_type_id, 0) + 1
+    if existing:
+        if counts != expected:
+            raise ValueError("Partially issued order requires manual review")
+        from .security import decrypt_token
+        return [{"ticket": t, "raw_qr_token": decrypt_token(t.qr_token_encrypted)} for t in existing]
+    issued = []
+    for ticket_type, qty, price, commission in normalized:
         for _ in range(qty):
             ticket_number = generate_ticket_number(order.event_id)
             raw = make_raw_token(order.event_id, ticket_number)
             ticket = IssuedTicket(
-                order_id=order.id,
-                event_id=order.event_id,
-                ticket_type_id=ticket_type.id,
-                seller_id=order.seller_id,
-                ticket_number=ticket_number,
-                qr_token_hash=hash_token(raw),
-                qr_token_encrypted=encrypt_token(raw),
-                price_cents=ticket_type.price_cents,
-                commission_cents=cents_from_commission(ticket_type, ticket_type.price_cents),
-                status="valid",
-                attendee_email=order.buyer_email,
-            )
+                order_id=order.id, event_id=order.event_id, ticket_type_id=ticket_type.id,
+                seller_id=order.seller_id, ticket_number=ticket_number,
+                qr_token_hash=hash_token(raw), qr_token_encrypted=encrypt_token(raw),
+                price_cents=price, commission_cents=commission, status="valid",
+                attendee_name=order.buyer_name, attendee_email=order.buyer_email)
             db.add(ticket)
             db.flush()
             issued.append({"ticket": ticket, "raw_qr_token": raw})
-    db.commit()
+    # The caller owns the transaction. Never leave paid state committed without tickets.
     return issued
 
 def scan_ticket(db: Session, event_id: int, raw_token: str, scanned_by_user_id: int | None, device_label: str | None = None):
@@ -57,7 +81,9 @@ def scan_ticket(db: Session, event_id: int, raw_token: str, scanned_by_user_id: 
         return {"ok": False, "result": "invalid"}
 
     token_hash = hash_token(raw_token)
-    ticket = db.query(IssuedTicket).filter(IssuedTicket.qr_token_hash == token_hash).first()
+    db.query(IssuedTicket).filter_by(qr_token_hash=token_hash).update(
+        {IssuedTicket.status: IssuedTicket.status}, synchronize_session=False)
+    ticket = db.query(IssuedTicket).filter_by(qr_token_hash=token_hash).populate_existing().first()
     if not ticket:
         return {"ok": False, "result": "invalid"}
     if ticket.event_id != event_id:
@@ -66,6 +92,8 @@ def scan_ticket(db: Session, event_id: int, raw_token: str, scanned_by_user_id: 
         result = "already_used"
     elif ticket.status in ("void", "refunded"):
         result = ticket.status
+    elif ticket.status != "valid":
+        result = "invalid"
     else:
         ticket.status = "used"
         ticket.scanned_at = datetime.utcnow()
@@ -101,7 +129,7 @@ def seller_totals(db: Session, event_id: int):
             func.coalesce(func.sum(IssuedTicket.price_cents), 0).label("gross_sales_cents"),
             func.coalesce(func.sum(IssuedTicket.commission_cents), 0).label("commission_cents"),
         )
-        .outerjoin(IssuedTicket, (IssuedTicket.seller_id == EventSeller.id) & (IssuedTicket.status != "refunded"))
+        .outerjoin(IssuedTicket, (IssuedTicket.seller_id == EventSeller.id) & (IssuedTicket.status.in_(["valid", "used"])))
         .filter(EventSeller.event_id == event_id)
         .group_by(
             EventSeller.id,

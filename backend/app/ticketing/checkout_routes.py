@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.matchmaker.models import BoxingEvent
-from app.ticketing.models import TicketOrder, EventTicketType
+from app.ticketing.models import TicketOrder, EventTicketType, TicketCheckoutAttempt
 from app.ticketing.service import issue_paid_order
+from app.ticketing.delivery import queue_deliveries, deliver_order, ticket_page_url
 
 
 router = APIRouter(
@@ -33,12 +34,26 @@ def create_ticket_clover_checkout(
             detail="Ticket order not found",
         )
 
+    db.query(TicketOrder).filter_by(id=order.id).update(
+        {TicketOrder.payment_status: TicketOrder.payment_status}, synchronize_session=False)
+    db.refresh(order)
+
     if order.payment_status == "paid":
         return {
             "order_id": order.id,
             "status": "paid",
             "message": "Order is already paid",
         }
+
+    if order.payment_status != "pending":
+        raise HTTPException(status_code=409, detail="Order cannot start another checkout")
+    saved = db.query(TicketCheckoutAttempt).filter_by(order_id=order.id).first()
+    if saved:
+        return {"success": True, "order_id": order.id, "status": order.payment_status,
+                "clover_checkout_id": saved.checkout_id, "checkout_url": saved.checkout_url,
+                "total_cents": order.total_cents}
+    if order.clover_checkout_id:
+        raise HTTPException(status_code=409, detail="Checkout already exists; use the original payment link or contact TNG")
 
     event = db.query(BoxingEvent).filter(
         BoxingEvent.id == order.event_id
@@ -85,7 +100,7 @@ def create_ticket_clover_checkout(
                 detail=f"Ticket type {ticket_type_id} not found",
             )
 
-        unit_price = int(ticket_type.price_cents or 0)
+        unit_price = int(item.get("price_cents", ticket_type.price_cents or 0))
 
         calculated_total += unit_price * quantity
 
@@ -105,7 +120,7 @@ def create_ticket_clover_checkout(
     if calculated_total != int(order.total_cents or 0):
         raise HTTPException(
             status_code=400,
-            detail="Ticket order total does not match current ticket prices",
+            detail="Ticket order total does not match ticket prices",
         )
 
     # --------------------------------------------------------
@@ -127,8 +142,10 @@ def create_ticket_clover_checkout(
             items,
         )
 
+        queue_deliveries(db, order)
         db.commit()
         db.refresh(order)
+        deliveries = deliver_order(db, order)
 
         return {
             "success": True,
@@ -137,6 +154,8 @@ def create_ticket_clover_checkout(
             "payment_provider": "comp",
             "total_cents": 0,
             "tickets_issued": len(issued),
+            "ticket_url": ticket_page_url(order),
+            "deliveries": deliveries,
             "checkout_url": None,
         }
 
@@ -185,11 +204,7 @@ def create_ticket_clover_checkout(
     if order.buyer_phone:
         customer["phoneNumber"] = order.buyer_phone
 
-    success_url = (
-        f"{app_url}/events/{order.event_id}/tickets"
-        f"?ticket_payment=success"
-        f"&order={order.id}"
-    )
+    success_url = ticket_page_url(order)
 
     failure_url = (
         f"{app_url}/events/{order.event_id}/tickets"
@@ -258,6 +273,7 @@ def create_ticket_clover_checkout(
         )
 
     order.clover_checkout_id = str(checkout_id)
+    db.add(TicketCheckoutAttempt(order_id=order.id, checkout_id=str(checkout_id), checkout_url=checkout_url))
 
     db.commit()
     db.refresh(order)

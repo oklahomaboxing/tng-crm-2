@@ -2633,7 +2633,7 @@ def fighter_ticket_sales(
             db.query(IssuedTicket)
             .filter(
                 IssuedTicket.seller_id == seller.id,
-                IssuedTicket.status != "refunded",
+                IssuedTicket.status.in_(["valid", "used"]),
             )
             .all()
         )

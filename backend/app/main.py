@@ -3,6 +3,7 @@ load_dotenv(override=False)
 import os
 from app.ticketing.routes import router as ticketing_router
 from app.ticketing.checkout_routes import router as ticketing_checkout_router
+from app.ticketing.recovery import router as ticketing_recovery_router
 import logging
 from app.ticketing.models import TicketOrder
 from app.ticketing.emailing import send_ticket_email
@@ -19,6 +20,7 @@ from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import base64, io, qrcode
@@ -310,10 +312,28 @@ else:
     )
 app = FastAPI(title="TNG CRM 2.0")
 
+@app.on_event("startup")
+async def start_ticket_delivery_worker():
+    import asyncio
+    from app.ticketing.worker import delivery_loop
+    if os.getenv("TICKET_DELIVERY_WORKER_ENABLED", "1") == "1":
+        app.state.ticket_delivery_task = asyncio.create_task(delivery_loop())
+
+@app.on_event("shutdown")
+async def stop_ticket_delivery_worker():
+    import asyncio
+    task = getattr(app.state, "ticket_delivery_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "release": "membership-stabilization-1"}
+    return {"status": "ok", "release": "ticket-production-repair-1"}
 
 
 app.include_router(operations_router)
@@ -321,6 +341,7 @@ app.include_router(operations_router)
 app.include_router(ai_router)
 app.include_router(ticketing_router)
 app.include_router(ticketing_checkout_router)
+app.include_router(ticketing_recovery_router)
 
 app.include_router(academy_router)
 app.include_router(revenue_router)
@@ -3590,7 +3611,11 @@ def member_payments(member_id: int, db: Session = Depends(get_db), user: User = 
 @app.post("/api/clover/webhook")
 async def clover_webhook(request: Request, db: Session = Depends(get_db)):
     raw_body = await request.body()
-    verify_clover_webhook(raw_body, request.headers.get("Clover-Signature", ""))
+    try:
+        verify_clover_webhook(raw_body, request.headers.get("Clover-Signature", ""))
+    except HTTPException as exc:
+        logger.warning("Clover webhook rejected: status=%s reason=%s", exc.status_code, exc.detail)
+        raise
     try:
         payload = json.loads(raw_body)
     except (ValueError, UnicodeDecodeError):
@@ -3647,71 +3672,34 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         ).first()
 
     if ticket_order:
-        if webhook_status == "APPROVED":
-
-            # Clover may retry the same webhook.
-            # Never issue the same ticket order twice.
-            if ticket_order.payment_status == "paid":
-                return {
-                    "received": True,
-                    "message": "Ticket payment already processed",
-                    "order_id": ticket_order.id,
-                }
-
-            ticket_order.payment_status = "paid"
-            ticket_order.payment_id = str(payment_id or "")
-            ticket_order.paid_at = datetime.utcnow()
-
-            items = json.loads(ticket_order.items_json or "[]")
-
-            issued = issue_paid_order(
-                db,
-                ticket_order,
-                items,
-            )
-            from app.matchmaker.models import BoxingEvent
-            from app.ticketing.routes import generate_ticket_qr_base64
-
-            event = db.query(BoxingEvent).filter(
-                BoxingEvent.id == ticket_order.event_id
-            ).first()
-
-            email_tickets = []
-
-            for item in issued:
-                ticket = item["ticket"]
-
-                email_tickets.append({
-                    "ticket_number": ticket.ticket_number,
-                    "status": ticket.status,
-                    "price_cents": ticket.price_cents,
-                    "qr_png_base64": generate_ticket_qr_base64(
-                        ticket.qr_token_encrypted
-                    ),
-                })
-
-            try:
-                send_ticket_email(
-                    ticket_order.buyer_email,
-                    event.name if event else "TNG Boxing Event",
-                    ticket_order.receipt_number,
-                    email_tickets,
-                    ticket_order.total_cents,
-                )
-            except Exception as email_error:
-                # Payment and ticket issuance succeeded.
-                # Do not make Clover retry the payment webhook
-                # just because email delivery failed.
-                print(
-                    "TICKET EMAIL DELIVERY ERROR:",
-                    str(email_error),
-                )
-
-            return {
-                "received": True,
-                "message": "Ticket payment recorded and tickets issued",
-                "order_id": ticket_order.id,
-            }
+        from app.ticketing.delivery import queue_deliveries, deliver_order
+        # Serialize all paid-state transitions for this checkout. Retries also heal
+        # legacy paid orders with zero tickets and retry failed notifications.
+        db.query(TicketOrder).filter_by(id=ticket_order.id).update(
+            {TicketOrder.payment_status: TicketOrder.payment_status}, synchronize_session=False)
+        db.refresh(ticket_order)
+        if ticket_order.payment_status in ("refunded", "partial_refund"):
+            return {"received": True, "message": "Refunded ticket order requires review"}
+        if not payment_id:
+            raise HTTPException(status_code=400, detail="Payment ID is required")
+        if ticket_order.payment_id and ticket_order.payment_id != str(payment_id):
+            raise HTTPException(status_code=409, detail="Order already has another payment")
+        already_paid = ticket_order.payment_status == "paid"
+        ticket_order.payment_status = "paid"
+        ticket_order.payment_id = str(payment_id)
+        ticket_order.paid_at = ticket_order.paid_at or datetime.utcnow()
+        try:
+            issued = issue_paid_order(db, ticket_order, json.loads(ticket_order.items_json or "[]"))
+            queue_deliveries(db, ticket_order)
+            db.commit()
+        except (ValueError, RuntimeError, IntegrityError) as exc:
+            db.rollback()
+            logging.getLogger(__name__).exception("Ticket issuance failed for order %s", ticket_order.id)
+            raise HTTPException(status_code=503, detail="Ticket issuance failed; payment event can be retried") from exc
+        deliveries = deliver_order(db, ticket_order)
+        return {"received": True, "message": "Ticket payment processed",
+                "order_id": ticket_order.id, "tickets_issued": len(issued),
+                "already_paid": already_paid, "deliveries": deliveries}
 
     merchandise_checkout = None
     if hosted_checkout_id:
@@ -3774,11 +3762,8 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         ).with_for_update().first()
 
     if not lead:
-        return {
-            "received": True,
-            "message": "No matching lead found",
-            "checkout_id": matching_checkout_id,
-        }
+        logger.warning("Approved Clover payment has no matching checkout: %s", matching_checkout_id)
+        raise HTTPException(status_code=404, detail="Approved payment checkout is not recorded; reconciliation required")
 
     if lead.status == "converted":
         return {"received": True, "message": "Membership payment already processed"}

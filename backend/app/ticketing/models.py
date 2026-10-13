@@ -77,6 +77,37 @@ class TicketScanLog(Base):
     device_label = Column(String(120), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TicketDelivery(Base):
+    __tablename__ = "ticket_deliveries"
+    __table_args__ = (UniqueConstraint("order_id", "channel", name="uq_ticket_delivery_channel"),)
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, ForeignKey("ticket_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    attempts = Column(Integer, nullable=False, default=0)
+    provider_id = Column(String(255), nullable=True)
+    last_error = Column(String(255), nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+    next_attempt_at = Column(DateTime, nullable=True, default=datetime.utcnow)
+
+class TicketRecovery(Base):
+    __tablename__ = "ticket_recoveries"
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, ForeignKey("ticket_orders.id"), nullable=False, unique=True)
+    clover_order_id = Column(String(255), nullable=False, unique=True)
+    payment_ids_json = Column(Text, nullable=False)
+    verified_total_cents = Column(Integer, nullable=False)
+    confirmed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    confirmed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class TicketCheckoutAttempt(Base):
+    __tablename__ = "ticket_checkout_attempts"
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, ForeignKey("ticket_orders.id"), nullable=False, unique=True)
+    checkout_id = Column(String(255), nullable=False, unique=True)
+    checkout_url = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
 class SellerPayout(Base):
     __tablename__ = "seller_payouts"
     id = Column(Integer, primary_key=True)
