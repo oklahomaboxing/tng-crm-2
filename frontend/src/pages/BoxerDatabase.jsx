@@ -1,3 +1,4 @@
+import BoxingContactDirectory from '../components/BoxingContactDirectory';
 import React, { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Card, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { BookmarkPlus, ExternalLink, Search, Users } from "lucide-react";
@@ -45,6 +46,7 @@ export default function BoxerDatabase() {
  }
  async function stopResearch(){try{applyJob(await request(`/research/${progress.id}/stop`,{method:'POST'}));}catch(e){setError(e.message);}}
  return <Stack spacing={2.5}>
+  <BoxingContactDirectory />
   <Box><Typography className="promotion-eyebrow" color="text.secondary">NATIONWIDE SCOUTING / SEPARATE FROM YOUR ACTIVE ROSTER</Typography><Typography component="h1" variant="h4" sx={{mt:1}}>Your boxer scouting database.</Typography><Typography color="text.secondary" sx={{mt:1}}>Browse professional boxing prospects across weight groups, including beginner pros in Texas, Oklahoma and New Mexico. Review the evidence, choose your shortlist, then confirm the details.</Typography></Box>
   <Stack direction="row" useFlexGap sx={{gap:2,flexWrap:"wrap"}}>{[[data.database_total,'Saved prospects'],[data.shortlisted,'Shortlisted'],[options.divisions.length,'Weight groups']].map(([n,l])=><Chip key={l} icon={<Users size={15}/>} label={`${n} ${l}`}/>)}</Stack>
   <Alert severity="info">Research records are not certified records or confirmed availability. Weight group is a search category; verify actual weight, current record, identity and commission eligibility before making a match. Selecting a prospect does not book or contact them.</Alert>

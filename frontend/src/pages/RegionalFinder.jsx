@@ -1,3 +1,4 @@
+import BoxingContactDirectory from '../components/BoxingContactDirectory';
 import React, { useEffect, useState } from "react";
 import { Alert, Box, Button, Card, Chip, CircularProgress, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import { Search, ExternalLink, BookmarkPlus, MapPin, Phone, Mail } from "lucide-react";
@@ -56,6 +57,7 @@ export default function RegionalFinder() {
   async function update(id, body) { setBusy(true); setError(""); try { const row = await request(`/leads/${id}`, { method: "PATCH", body: JSON.stringify(body) }); setLeads(old => old.map(x => x.id === id ? row : x)); } catch(e) {setError(e.message);} finally {setBusy(false);} }
   const researchQuery = `${query} professional boxing ${kind} ${region.map(s => states[s]).join(" ")}`;
   return <Stack spacing={2.5}>
+  <BoxingContactDirectory />
     <Box><Typography className="promotion-eyebrow" color="text.secondary">OKLAHOMA + SURROUNDING STATES</Typography><Typography component="h1" variant="h4" sx={{ mt: 1 }}>Find your next connection.</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Locate pro boxers, gyms and managers. Keep the source, save the lead, track the conversation.</Typography></Box>
     <Alert severity="info">Recent activity does not confirm availability. Verify records, licensing, suspensions and contact details before booking. Searches never send outreach messages.</Alert>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
