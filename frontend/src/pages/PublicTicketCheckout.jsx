@@ -484,7 +484,7 @@ export default function PublicTicketCheckout() {
         <div style={styles.eventInfo}>
           {data.event?.event_date}
           {data.event?.venue
-            ? ` â€¢ ${data.event.venue}`
+            ? ` · ${data.event.venue}`
             : ""}
         </div>
 
@@ -631,7 +631,7 @@ export default function PublicTicketCheckout() {
               <span>I agree to receive TNG Boxing text messages about this ticket purchase, including my QR ticket link and delivery updates. Message frequency varies. Message and data rates may apply. Reply STOP to opt out. Consent is optional and is not a condition of purchase.</span>
             </label>
 
-            <p>Review our <a href="/ticket-privacy" target="_blank" rel="noopener noreferrer">Ticket Privacy Notice</a> and <a href="/ticket-terms" target="_blank" rel="noopener noreferrer">Ticket Terms</a>. For help: <a href="mailto:marketing@tngboxinggym.com">marketing@tngboxinggym.com</a> or <a href="tel:+14059595823">405-959-5823</a>.</p>
+            <p>Review our <a style={{ color: "#fca5a5", textDecoration: "underline" }} href="/ticket-privacy.html" target="_blank" rel="noopener noreferrer">Ticket Privacy Notice</a> and <a style={{ color: "#fca5a5", textDecoration: "underline" }} href="/ticket-terms.html" target="_blank" rel="noopener noreferrer">Ticket Terms</a>. For help: <a style={{ color: "#fca5a5", textDecoration: "underline" }} href="mailto:marketing@tngboxinggym.com">marketing@tngboxinggym.com</a> or <a style={{ color: "#fca5a5", textDecoration: "underline" }} href="tel:+14059595823">405-959-5823</a>.</p>
 
             <div style={styles.total}>
               Total: {money(total)}

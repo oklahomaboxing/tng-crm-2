@@ -25,8 +25,8 @@ export default function TicketPolicies({ privacy = false }) {
       <h2>Refunds and event changes</h2>
       <p>Tickets are nonrefundable when a customer cancels their purchase. If TNG cancels the event, the ticket purchase will be refunded. If TNG reschedules the event, existing tickets remain valid; customers unable to attend the new date may request a refund by contacting {contact}.</p>
       <h2>Privacy</h2>
-      <p>See our <a href="/ticket-privacy">Ticket Privacy Notice</a> for how we handle ticket information and text consent.</p>
+      <p>See our <a href="/ticket-privacy.html">Ticket Privacy Notice</a> for how we handle ticket information and text consent.</p>
     </>}
-    <p><a href={privacy ? "/ticket-terms" : "/ticket-privacy"}>{privacy ? "Ticket Terms" : "Ticket Privacy Notice"}</a></p>
+    <p><a href={privacy ? "/ticket-terms.html" : "/ticket-privacy.html"}>{privacy ? "Ticket Terms" : "Ticket Privacy Notice"}</a></p>
   </main>;
 }
