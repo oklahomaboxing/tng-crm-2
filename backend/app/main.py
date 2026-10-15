@@ -52,6 +52,7 @@ from .matchmaker import models as matchmaker_models
 from .revenue import models as revenue_models
 from .revenue.routes import router as revenue_router, webhook_router as revenue_webhook_router
 from .matchmaker.routes import build_matchmaker_router
+from .matchmaker.discovery import router as discovery_router
 from .services.sms_service import send_sms
 from .models import (
     User,
@@ -351,6 +352,7 @@ app.include_router(revenue_webhook_router)
 
 # TNG Boxing Matchmaker
 app.include_router(build_matchmaker_router(current_user))
+app.include_router(discovery_router)
 
 os.makedirs("uploads/members", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

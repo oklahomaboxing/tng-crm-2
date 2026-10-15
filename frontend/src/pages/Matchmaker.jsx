@@ -16,6 +16,7 @@ import HubRoundedIcon from "@mui/icons-material/HubRounded";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import EventWorkspace from "./EventWorkspace.jsx";
 import PromoterOverview from "./PromoterOverview.jsx";
+import RegionalFinder from "./RegionalFinder.jsx";
 import PromotionTheme from "./PromotionTheme.jsx";
 import AutoMatchPlanner from "./AutoMatchPlanner.jsx";
 import PromoterManagersPage from "./PromoterManagersPage.jsx";
@@ -1696,9 +1697,11 @@ function MatchmakerContent() {
         {msg && <Alert severity={msgType}>{msg}</Alert>}
 
         <nav className="promotion-nav" aria-label="Promoter navigation">
-          {[["home", "Overview"], ["events", "Events"], ["fighter-pool", "Fighter pool"], ["matchmaking", "Matchmaking"], ["managers", "Managers"]].map(([key, label]) => <Button key={key} aria-current={promoterPage === key ? "page" : undefined} onClick={() => navigatePromoter(key)}>{label}</Button>)}
+          {[["home", "Overview"], ["finder", "Regional finder"], ["events", "Events"], ["fighter-pool", "Fighter pool"], ["matchmaking", "Matchmaking"], ["managers", "Managers"]].map(([key, label]) => <Button key={key} aria-current={promoterPage === key ? "page" : undefined} onClick={() => navigatePromoter(key)}>{label}</Button>)}
         </nav>
         {promoterPage === "home" && <PromoterOverview events={events} fighters={fighters} eligible={eligible} onNavigate={navigatePromoter} onCreate={() => setEventOpen(true)} onOpen={openWorkspace} onCopyRegistration={copyFighterRegistrationLink} />}
+
+        {promoterPage === "finder" && <RegionalFinder />}
 
         {promoterPage === "events" && (
           <Box>
