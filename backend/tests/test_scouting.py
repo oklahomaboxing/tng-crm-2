@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 import test_stabilization as support
-from app.matchmaker.scouting import BoxerProspect, US_STATES, DIVISIONS
+from app.matchmaker.scouting import BoxerProspect, ScoutingResearchJob, US_STATES, DIVISIONS, expire_jobs
 from app.matchmaker.models import BoxingFighter,BoxingBout
 BASE='/api/boxing/scouting'
 P={'name':'Example Boxer','state':'NY','city':'Brooklyn','division':'lightweight','weight':'135 lb','record':'1-1 reported','source_url':'https://example.org/boxing','evidence':'Reported professional boxer; booking office example@example.org','business_email':'example@example.org'}
@@ -61,4 +61,71 @@ class ScoutingTests(unittest.TestCase):
   self.assertEqual(r.status_code,200,r.text)
   listing=self.client.get(BASE+'/prospects',headers=self.headers(),params={'status':'shortlisted'}).json()
   self.assertEqual(listing['shortlisted'],1);self.assertEqual(listing['items'][0]['availability'],'available')
+ def test_research_keeps_full_user_focus(self):
+  focus='Find new opponents with published gym contacts in Tulsa. '+'x'*140
+  with patch('app.matchmaker.scouting.search_public_web',return_value={'leads':[]}) as search:
+   r=self.client.post(BASE+'/discover',headers=self.headers(),json={'division':'super_featherweight','states':['OK'],'query':focus})
+  self.assertEqual(r.status_code,200,r.text)
+  self.assertIn(focus,search.call_args.args[0].query)
+ def test_background_research_returns_job_and_persists_progress(self):
+  with patch('app.matchmaker.scouting.run_research_job') as worker:
+   response=self.client.post(BASE+'/research',headers=self.headers(),json={'divisions':['lightweight','featherweight'],'states':['NY']})
+   self.assertEqual(response.status_code,202,response.text)
+   job=response.json();worker.assert_called_once_with(job['id'])
+  latest=self.client.get(BASE+'/research/latest',headers=self.headers()).json()
+  self.assertEqual(latest['total'],2);self.assertEqual(latest['status'],'running')
+  with patch('app.matchmaker.scouting.run_research_job') as worker:
+   again=self.client.post(BASE+'/research',headers=self.headers(),json={'divisions':['heavyweight']}).json()
+   self.assertEqual(again['id'],job['id']);worker.assert_not_called()
+  stopped=self.client.post(BASE+f"/research/{job['id']}/stop",headers=self.headers()).json()
+  self.assertEqual(stopped['status'],'stopping')
+ def test_interrupted_worker_does_not_leave_permanent_spinner(self):
+  from datetime import datetime,timedelta
+  row=ScoutingResearchJob(active_key='nationwide',request_json='{}',total=1,updated_by=1,updated_at=datetime.utcnow()-timedelta(minutes=6))
+  self.db.add(row);self.db.commit();expire_jobs(self.db)
+  self.assertEqual(row.status,'interrupted');self.assertIsNone(row.active_key)
+ def test_worker_records_success_and_failure_without_losing_prospects(self):
+  from fastapi import HTTPException
+  with patch('app.matchmaker.scouting.search_public_web',side_effect=[{'leads':[{**P,'kind':'fighter'}]},HTTPException(502,'Public web search is unavailable.')]):
+   r=self.client.post(BASE+'/research',headers=self.headers(),json={'divisions':['lightweight','featherweight'],'states':['NY']})
+  self.assertEqual(r.status_code,202,r.text)
+  job=self.client.get(BASE+'/research/latest',headers=self.headers()).json()
+  self.assertEqual(job['status'],'complete');self.assertEqual(job['completed'],2)
+  self.assertEqual(job['inserted'],1);self.assertEqual(len(job['errors']),1)
+  self.assertEqual(self.db.query(BoxerProspect).count(),1)
+ def test_beginner_regional_filter_excludes_unknown_and_experienced_records(self):
+  self.create(name='Texas Beginner',state='TX',record='2-1-0 (reported)')
+  self.create(name='New Mexico Pro',state='NM',record='0-1')
+  self.create(name='California Beginner',state='CA',record='1-0')
+  self.create(name='Experienced Texas',state='TX',record='12-0')
+  self.create(name='Unknown Texas',state='TX',record='')
+  rows=self.client.get(BASE+'/prospects',headers=self.headers(),params={'state':'regional','experience':'beginner'}).json()
+  self.assertEqual({r['name'] for r in rows['items']},{'Texas Beginner','New Mexico Pro'})
+  self.assertEqual({r['reported_pro_bouts'] for r in rows['items']},{1,3})
+ def test_official_profiles_work_without_ai_and_do_not_overwrite_reviews(self):
+  row=self.create(name='Example Boxer',state='TX',record='2-0').json()['prospect']
+  leads=[{**P,'state':'TX','weight':'Lightweight (135 lbs)','source_url':'https://toprank.com/fighters/example'},
+         {**P,'name':'Other Pro','state':'TX','weight':'Heavyweight (220 lbs)'}]
+  with patch('app.matchmaker.official_rosters.search_official_rosters',return_value={'leads':leads}),patch('app.matchmaker.scouting.search_public_web') as ai:
+   r=self.client.post(BASE+'/discover',headers=self.headers(),json={'division':'lightweight','states':['TX'],'source':'official_rosters'})
+  self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['inserted'],0)
+  self.assertEqual(r.json()['prospects'][0]['id'],row['id']);ai.assert_not_called()
+ def test_public_profile_parser_uses_source_hometown_and_ignores_foreign_profiles(self):
+  from app.matchmaker.official_rosters import parse_profile
+  raw='<title>Sample Pro | Top Rank Fighter</title><h1>Sample Pro</h1> Lightweight (135 lbs) 2 Wins 1 Losses 0 Draws Hometown Houston, TX Country United States'
+  row=parse_profile('https://toprank.com/fighters/sample',raw)
+  self.assertEqual(row['state'],'TX');self.assertEqual(row['city'],'Houston')
+  self.assertEqual(row['weight'],'Lightweight (135 lbs)');self.assertTrue(row['record'].startswith('2-1-0'))
+  self.assertIsNone(parse_profile('https://toprank.com/fighters/sample',raw.replace('Houston, TX','London, England')))
+ def test_red_owl_beginner_profiles_preserve_reported_record_and_hometown(self):
+  from app.matchmaker.official_rosters import parse_red_owl
+  rows=parse_red_owl('<p>ALEX DONIS 3-0-0 (1 KO) HOUSTON, TX WELTERWEIGHT ARIANA CARRASCO 4-0-0 (1 KO) LAS CRUCES, NM SUPER WELERWEIGHT FOREIGN BOXER 1-0-0 CHIHUAHUA, MX LIGHTWEIGHT</p>')
+  self.assertEqual(len(rows),2);self.assertEqual(rows[0]['name'],'Alex Donis')
+  self.assertEqual(rows[0]['state'],'TX');self.assertEqual(rows[1]['weight'],'Super Welterweight')
+ def test_golden_boy_reads_counter_targets_instead_of_zero_placeholder(self):
+  from app.matchmaker.official_rosters import parse_profile
+  counters=''.join(f'<h2 data-purecounter-end="{value}">0</h2><p>{label}</p>' for label,value in [('WINS',3),('LOSSES',1),('DRAWS',0)])
+  raw='<title>Example Pro - Golden Boy Promotions</title><h1>Example Pro</h1>'+counters+'Weight Class Stance Age Height Lightweight Orthodox 22 6 NATIONALITY: HOMETOWN: Dallas, TX BIOGRAPHY Professional boxer'
+  row=parse_profile('https://www.goldenboy.com/fighter-profile/example/',raw)
+  self.assertTrue(row['record'].startswith('3-1-0'));self.assertEqual(row['city'],'Dallas')
 if __name__=='__main__':unittest.main(verbosity=2)

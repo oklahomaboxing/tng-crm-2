@@ -45,3 +45,28 @@ on SQLite and the dedicated local PostgreSQL database. Browser fixtures exercise
 listing, shortlist persistence, review, sequential research and mobile overflow.
 Live population must be reported with actual counts, empty groups and failed
 requests; no test fixtures may be written into production.
+
+### Research reliability repair
+
+The default UI source is now **Official promoter profiles**, which reads public
+Top Rank, Golden Boy, Matchroom and Red Owl directories and profiles without OpenAI credits.
+Only source-reported US hometowns and recognized boxing weight labels are imported.
+Hometowns do not establish current residence; profile presence does not establish
+current activity or availability. General promoter office contacts are explicitly
+identified in evidence. Golden Boy's zero placeholder counters are omitted; actual published animation target values supply records when present.
+Existing same-name/state records retain their reviews. Public profiles are cached
+for one hour per process; requests follow only the fixed publishers, without redirects.
+
+Broader web research remains optional. It retains source citations before extracting
+structured facts. Exhausted API credits return an actionable error without exposing
+provider credentials. User research focus is preserved instead of being truncated
+by the boilerplate prompt.
+
+Research starts with HTTP 202 and runs in a background worker. Progress and errors
+are stored in `boxing_scouting_research_jobs` and polled by the UI. One shared job
+runs at a time; leaving the page does not cancel it. Stop takes effect after the
+current group. Jobs interrupted by a deployment become visibly interrupted after
+five minutes without progress; saved prospects remain intact. This is not a durable
+queue that automatically resumes work after process termination.
+
+Beginner (0–5 reported pro bouts) and developing (0–10) filters use explicit source-reported records, including documented debut results. Unknown records are excluded from these filters. The Texas / Oklahoma / New Mexico filter and Dallas/Houston city search narrow the view without deleting other findings.

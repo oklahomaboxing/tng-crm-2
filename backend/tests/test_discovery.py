@@ -70,4 +70,26 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(self.client.patch(url,headers=h,json={'outreach_status':'sent','availability':'unknown'}).status_code,400)
         self.assertEqual(self.client.patch(url,headers=h,json={'outreach_status':'contacted','availability':'unknown'}).status_code,404)
 
+    def test_cited_prose_is_extracted_without_losing_source_validation(self):
+        first={'output':[{'type':'message','content':[{'type':'output_text','text':'Example Pro Boxing Gym is in Tulsa, Oklahoma. Published boxing office coach@example.org.',
+            'annotations':[{'type':'url_citation','url':LEAD['source_url']}]}]}]}
+        second={'output':[{'type':'message','content':[{'type':'output_text','text':json.dumps({'leads':[LEAD,{**LEAD,'source_url':'https://uncited.example.org'}]})}]}]}
+        responses=[]
+        for payload in [first,second]:
+            response=Mock();response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=False);response.read.return_value=json.dumps(payload).encode();responses.append(response)
+        with patch.dict('os.environ',{'OPENAI_API_KEY':'local-test-only'}),patch('urllib.request.urlopen',side_effect=responses) as send:
+            result=search_public_web(SearchRequest(kind='gym',states=['OK']))
+        self.assertEqual(len(result['leads']),1)
+        research=json.loads(send.call_args_list[0].args[0].data)
+        extract=json.loads(send.call_args_list[1].args[0].data)
+        self.assertNotIn('text',research);self.assertNotIn('tools',extract)
+        self.assertEqual(extract['text']['format']['type'],'json_schema')
+
+    def test_exhausted_api_credits_have_actionable_error(self):
+        import io,urllib.error
+        error=urllib.error.HTTPError('https://api.openai.com/v1/responses',429,'Quota',{},io.BytesIO(json.dumps({'error':{'code':'credit_balance_exhausted'}}).encode()))
+        with patch.dict('os.environ',{'OPENAI_API_KEY':'local-test-only'}),patch('urllib.request.urlopen',side_effect=error):
+            r=self.client.post('/api/boxing/discovery/search',headers=self.headers(),json={})
+        self.assertEqual(r.status_code,503);self.assertIn('Official promoter profiles',r.json()['detail'])
+
 if __name__=='__main__':unittest.main(verbosity=2)

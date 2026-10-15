@@ -2,13 +2,14 @@
 import hashlib
 import json
 import re
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Literal
+from datetime import datetime, timedelta
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.database import Base, get_db
+from app.database import Base, get_db, SessionLocal
 from app.core.dependencies import current_user
 from app.core.permissions import require_matchmaker_access
 from .discovery import public_url, SearchRequest, search_public_web
@@ -43,6 +44,61 @@ class BoxerProspect(Base):
     updated_by = Column(Integer, nullable=False)
     researched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ScoutingResearchJob(Base):
+    __tablename__ = 'boxing_scouting_research_jobs'
+    id = Column(Integer, primary_key=True)
+    active_key = Column(String(24), unique=True, nullable=True)
+    request_json = Column(Text, nullable=False)
+    status = Column(String(24), default='running', nullable=False)
+    completed = Column(Integer, default=0, nullable=False)
+    total = Column(Integer, nullable=False)
+    inserted = Column(Integer, default=0, nullable=False)
+    errors_json = Column(Text, default='[]', nullable=False)
+    current_group = Column(String(40), default='')
+    updated_by = Column(Integer, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+def job_dict(job):
+    return {key:getattr(job,key) for key in ('id','status','completed','total','inserted','current_group','updated_at')} | {'errors':json.loads(job.errors_json)}
+
+
+def expire_jobs(db):
+    # A deployment can interrupt an in-process worker. Keep saved prospects and
+    # make the interruption visible rather than leaving a permanent spinner.
+    for job in db.query(ScoutingResearchJob).filter(ScoutingResearchJob.active_key.isnot(None)).all():
+        if job.updated_at < datetime.utcnow()-timedelta(minutes=5):
+            job.status='interrupted';job.active_key=None
+    db.commit()
+
+
+def run_research_job(job_id):
+    from app.models import User
+    with SessionLocal() as db:
+        job=db.get(ScoutingResearchJob,job_id)
+        body=json.loads(job.request_json)
+        user=db.get(User,job.updated_by)
+        try:
+            for division in body['divisions']:
+                db.refresh(job)
+                if job.status != 'running':break
+                job.current_group=division;job.updated_at=datetime.utcnow();db.commit()
+                try:
+                    result=discover_batch(DiscoveryBatch(division=division,states=body['states'],query=body['query'],source=body.get('source','public_web')),db=db,user=user)
+                    db.refresh(job);job.inserted+=result['inserted']
+                except Exception as exc:
+                    db.rollback();job=db.get(ScoutingResearchJob,job_id)
+                    errors=json.loads(job.errors_json)
+                    detail=exc.detail if isinstance(exc,HTTPException) and isinstance(exc.detail,str) else 'Research could not finish this group. Saved prospects are retained.'
+                    errors.append({'division':division,'detail':detail});job.errors_json=json.dumps(errors)
+                job.completed+=1;job.updated_at=datetime.utcnow();db.commit()
+            if job.status=='running':job.status='complete'
+            elif job.status=='stopping':job.status='stopped'
+        finally:
+            if job.status=='running':job.status='interrupted'
+            job.active_key=None;job.updated_at=datetime.utcnow();db.commit()
 
 
 class ProspectCreate(BaseModel):
@@ -83,7 +139,13 @@ class ProspectCreate(BaseModel):
 
 
 def row_dict(row):
-    return {c.name:getattr(row,c.name) for c in row.__table__.columns if c.name not in ('identity','updated_by')}
+    return {c.name:getattr(row,c.name) for c in row.__table__.columns if c.name not in ('identity','updated_by')} | {'reported_pro_bouts':reported_bouts(row.record)}
+
+
+def reported_bouts(record):
+    if re.match(r'^Debut (?:TKO )?(?:win|decision loss) reported',record or '',re.I):return 1
+    match=re.match(r'^\s*(\d+)\s*[-‐‑‒–—]\s*(\d+)(?:\s*[-‐‑‒–—]\s*(\d+))?',record or '')
+    return sum(int(x or 0) for x in match.groups()) if match else None
 
 
 def store_prospect(body, db, user):
@@ -113,17 +175,23 @@ def options(user=Depends(current_user)):
 
 
 @router.get('/prospects')
-def list_prospects(q: str=Query('',max_length=150), state: str='', division: str='', status: str='', contact_only: bool=False,
+def list_prospects(q: str=Query('',max_length=150), state: str='', division: str='', status: str='', contact_only: bool=False, experience: str='',
                    page: int=Query(1,ge=1), page_size: int=Query(30,ge=1,le=100), db: Session=Depends(get_db),user=Depends(current_user)):
     require_matchmaker_access(user)
     query=db.query(BoxerProspect)
     if q.strip():
         value='%'+q.strip().replace('%','\\%').replace('_','\\_')+'%'
         query=query.filter(or_(BoxerProspect.name.ilike(value,escape='\\'),BoxerProspect.record.ilike(value,escape='\\'),BoxerProspect.city.ilike(value,escape='\\'),BoxerProspect.gym_or_manager.ilike(value,escape='\\')))
-    if state:query=query.filter(BoxerProspect.state==state.upper())
+    if state=='regional':query=query.filter(BoxerProspect.state.in_(['TX','OK','NM']))
+    elif state:query=query.filter(BoxerProspect.state==state.upper())
     if division:query=query.filter(BoxerProspect.division==division)
     if status:query=query.filter(BoxerProspect.status==status)
     if contact_only:query=query.filter(or_(BoxerProspect.business_phone!='',BoxerProspect.business_email!=''))
+    if experience:
+        if experience not in ('beginner','developing'):raise HTTPException(400,'Choose beginner or developing experience')
+        limit=5 if experience=='beginner' else 10
+        ids=[pid for pid,record in query.with_entities(BoxerProspect.id,BoxerProspect.record).all() if (count:=reported_bouts(record)) is not None and count<=limit]
+        query=query.filter(BoxerProspect.id.in_(ids))
     total=query.count()
     rows=query.order_by(BoxerProspect.updated_at.desc(),BoxerProspect.id.desc()).offset((page-1)*page_size).limit(page_size).all()
     return {'items':[row_dict(r) for r in rows],'total':total,'page':page,'page_size':page_size,
@@ -159,6 +227,7 @@ class DiscoveryBatch(BaseModel):
     division:str
     states:list[str]=Field(default_factory=lambda:list(US_STATES),min_length=1,max_length=51)
     query:str=Field(default='',max_length=200)
+    source:Literal['public_web','official_rosters']='public_web'
     @field_validator('division')
     @classmethod
     def division_valid(cls,v):
@@ -180,10 +249,19 @@ def discover_batch(body:DiscoveryBatch,db:Session=Depends(get_db),user=Depends(c
     # Heavyweight has no upper research limit; bridgerweight inclusion is source-specific.
     if body.division=='heavyweight':lower=200
     request=SearchRequest(kind='fighter',states=body.states,weight_min=lower,weight_max=upper,
-        query=(f'Find currently competing professional boxers based in the USA in {body.division.replace("_"," ")}. Prefer approachable developing fighters, but include any properly sourced professional. Exclude amateurs-only, MMA, bare-knuckle, retired boxers. '+body.query)[:300])
-    results=search_public_web(request)
+        query=(body.query.strip()+' '+f'Find developing US pro {body.division.replace("_"," ")} boxers. Exclude retired, amateur-only, MMA and bare-knuckle.')[:300])
+    if body.source=='official_rosters':
+        from .official_rosters import search_official_rosters
+        results=search_official_rosters(body.states)
+    else:results=search_public_web(request)
     inserted=0;found=[]
     for lead in results['leads']:
+        if body.source=='official_rosters' and body.query.strip():
+            haystack=' '.join(str(lead.get(k,'')) for k in ('name','city','state','gym_or_manager')).casefold()
+            if not all(word in haystack for word in body.query.casefold().split()):continue
+        weight_label=re.sub('[^a-z]','',lead.get('weight','').lower())
+        named_division=next((key for key,_ in sorted(DIVISIONS,key=lambda x:-len(x[0])) if key.replace('_','') in weight_label),None)
+        if named_division and named_division!=body.division:continue
         numbers=[float(x) for x in re.findall(r'\d+(?:\.\d+)?',lead.get('weight',''))]
         if len(numbers)==1 and (numbers[0] < lower or (upper is not None and numbers[0] > upper)):
             continue
@@ -192,7 +270,61 @@ def discover_batch(body:DiscoveryBatch,db:Session=Depends(get_db),user=Depends(c
             continue
         data={k:v for k,v in lead.items() if k in ProspectCreate.model_fields}
         data['division']=body.division if lead.get('weight') else 'unknown'
+        if body.source=='official_rosters':
+            if not named_division:continue
+            # Preserve reviewed records found earlier through another source.
+            normalized=re.sub(r'\W+','',data['name'].casefold())
+            existing=next((r for r in db.query(BoxerProspect).filter_by(state=data['state']).all() if re.sub(r'\W+','',r.name.casefold())==normalized),None)
+            if existing:found.append(row_dict(existing));continue
         # This is the searched weight group, not a verified sanctioning classification.
         row,created=store_prospect(ProspectCreate(**data),db,user)
         inserted+=int(created);found.append(row_dict(row))
     return {'division':body.division,'found':len(found),'inserted':inserted,'prospects':found}
+
+
+class ResearchStart(BaseModel):
+    divisions: list[str] = Field(min_length=1,max_length=19)
+    states: list[str] = Field(default_factory=lambda:list(US_STATES),min_length=1,max_length=51)
+    query: str = Field(default='',max_length=200)
+    source: Literal['public_web','official_rosters']='public_web'
+
+    @field_validator('divisions')
+    @classmethod
+    def valid_divisions(cls,value):
+        if any(x not in DIVISION_KEYS-{'unknown'} for x in value):raise ValueError('Choose weight groups')
+        return list(dict.fromkeys(value))
+
+    @field_validator('states')
+    @classmethod
+    def valid_states(cls,value):
+        return DiscoveryBatch.state_valid(value)
+
+
+@router.get('/research/latest')
+def latest_research(db:Session=Depends(get_db),user=Depends(current_user)):
+    require_matchmaker_access(user);expire_jobs(db)
+    row=db.query(ScoutingResearchJob).order_by(ScoutingResearchJob.id.desc()).first()
+    return job_dict(row) if row else None
+
+
+@router.post('/research',status_code=202)
+def start_research(body:ResearchStart,background:BackgroundTasks,db:Session=Depends(get_db),user=Depends(current_user)):
+    require_matchmaker_access(user);expire_jobs(db)
+    existing=db.query(ScoutingResearchJob).filter_by(active_key='nationwide').first()
+    if existing:return job_dict(existing)
+    row=ScoutingResearchJob(active_key='nationwide',request_json=body.model_dump_json(),total=len(body.divisions),updated_by=user.id)
+    db.add(row)
+    try:db.commit();db.refresh(row)
+    except IntegrityError:
+        db.rollback();return job_dict(db.query(ScoutingResearchJob).filter_by(active_key='nationwide').one())
+    background.add_task(run_research_job,row.id)
+    return job_dict(row)
+
+
+@router.post('/research/{job_id}/stop')
+def stop_research(job_id:int,db:Session=Depends(get_db),user=Depends(current_user)):
+    require_matchmaker_access(user)
+    row=db.get(ScoutingResearchJob,job_id)
+    if not row:raise HTTPException(404,'Research not found')
+    if row.status=='running':row.status='stopping';db.commit();db.refresh(row)
+    return job_dict(row)
