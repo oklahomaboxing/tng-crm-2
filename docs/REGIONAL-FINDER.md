@@ -39,3 +39,24 @@ persistence. SQLite and PostgreSQL use temporary/dedicated local test databases.
 Browser checks use labeled UI fixtures for search/save/follow-up and mobile layout.
 A separate live provider probe returned cited regional research leads without
 writing them to production or contacting anyone.
+
+### Search without API credits
+
+Regional Finder defaults to `source=catalog`: it searches the saved scouting
+prospects and saved leads by entity kind, state, name/city/gym, reported weight,
+record profile and documented bout date. No OpenAI request is made. Fighter
+results can be saved into the outreach lead list without changing the active
+roster or booking a bout. The original research timestamp is retained.
+
+`source=official_rosters` fetches the public promoter profiles for fighters.
+`source=public_web` remains an explicit paid-provider option. Gyms/managers can
+be searched among saved leads, or researched using the direct public links and
+the optional provider. These are distinct sources; a saved-catalogue search is
+not presented as a fresh search of the entire web. Results return a match count
+and show up to 50 candidates. Publication dates do not qualify as bout dates.
+
+Both Regional Finder and Boxer Database offer losing (losses greater than wins),
+at least one loss, even and winning record filters. Unknown records remain
+unknown and are excluded from record-specific filters. Beginner/developing and
+record filters can be combined. Regional losing-record quick selection clears
+the experience filter so experienced losing-record prospects are not hidden.

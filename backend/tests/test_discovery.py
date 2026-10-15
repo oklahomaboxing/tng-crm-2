@@ -92,4 +92,34 @@ class DiscoveryTests(unittest.TestCase):
             r=self.client.post('/api/boxing/discovery/search',headers=self.headers(),json={})
         self.assertEqual(r.status_code,503);self.assertIn('Official promoter profiles',r.json()['detail'])
 
+    def test_saved_fighter_search_works_without_provider_and_filters_losing_records(self):
+        from app.matchmaker.scouting import ProspectCreate,store_prospect
+        from types import SimpleNamespace
+        common=dict(state='TX',city='Dallas',weight='133 lb',source_url='https://example.org/pro-result')
+        for name,record in [('Losing Pro','1-4'),('Winning Pro','4-1'),('Unknown Pro','')]:
+            store_prospect(ProspectCreate(name=name,record=record,**common),self.db,SimpleNamespace(id=1))
+        with patch('app.matchmaker.discovery.search_public_web') as web:
+            r=self.client.post('/api/boxing/discovery/search',headers=self.headers(),json={'source':'catalog','states':['TX'],'query':'Dallas','record_type':'losing','weight_min':130,'weight_max':135})
+        self.assertEqual(r.status_code,200,r.text);web.assert_not_called()
+        self.assertEqual([p['name'] for p in r.json()['leads']],['Losing Pro'])
+        self.assertNotIn('id',r.json()['leads'][0])
+        saved=self.client.post('/api/boxing/discovery/leads',headers=self.headers(),json=r.json()['leads'][0])
+        self.assertEqual(saved.status_code,200,saved.text)
+
+    def test_saved_search_requires_actual_bout_date_not_article_publication(self):
+        from app.matchmaker.discovery import filter_research_leads
+        base={**LEAD,'kind':'fighter','business_phone':'','business_email':''}
+        body=SearchRequest(source='catalog',states=['OK'],active_since='2026-01-01')
+        rows=filter_research_leads(body,[{**base,'name':'Publication only','last_activity':'Professional coverage published 2026-09-24'},
+            {**base,'name':'Actual bout','last_activity':'Professional bout listed in official TDLR results on 2026-09-24; 4 scheduled rounds.'}])
+        self.assertEqual([p['name'] for p in rows],['Actual bout'])
+
+    def test_official_source_and_saved_gyms_work_without_provider(self):
+        self.client.post('/api/boxing/discovery/leads',headers=self.headers(),json=LEAD)
+        r=self.client.post('/api/boxing/discovery/search',headers=self.headers(),json={'source':'catalog','kind':'gym','states':['OK']})
+        self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['total'],1)
+        with patch('app.matchmaker.official_rosters.search_official_rosters',return_value={'leads':[{**LEAD,'kind':'fighter','record':'0-2','weight':'130 lb'}]}):
+            r=self.client.post('/api/boxing/discovery/search',headers=self.headers(),json={'source':'official_rosters','states':['OK'],'record_type':'losing'})
+        self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['total'],1)
+
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -139,13 +139,30 @@ class ProspectCreate(BaseModel):
 
 
 def row_dict(row):
-    return {c.name:getattr(row,c.name) for c in row.__table__.columns if c.name not in ('identity','updated_by')} | {'reported_pro_bouts':reported_bouts(row.record)}
+    parsed=reported_record(row.record)
+    return {c.name:getattr(row,c.name) for c in row.__table__.columns if c.name not in ('identity','updated_by')} | {
+        'reported_pro_bouts':sum(parsed) if parsed is not None else None,
+        'reported_wins':parsed[0] if parsed is not None else None,
+        'reported_losses':parsed[1] if parsed is not None else None}
+
+
+def reported_record(record):
+    if re.match(r'^Debut (?:TKO )?win reported',record or '',re.I):return (1,0,0)
+    if re.match(r'^Debut decision loss reported',record or '',re.I):return (0,1,0)
+    match=re.match(r'^\s*(\d+)\s*[-‐‑‒–—]\s*(\d+)(?:\s*[-‐‑‒–—]\s*(\d+))?',record or '')
+    return tuple(int(x or 0) for x in match.groups()) if match else None
 
 
 def reported_bouts(record):
-    if re.match(r'^Debut (?:TKO )?(?:win|decision loss) reported',record or '',re.I):return 1
-    match=re.match(r'^\s*(\d+)\s*[-‐‑‒–—]\s*(\d+)(?:\s*[-‐‑‒–—]\s*(\d+))?',record or '')
-    return sum(int(x or 0) for x in match.groups()) if match else None
+    parsed=reported_record(record)
+    return sum(parsed) if parsed is not None else None
+
+
+def matches_record(record,kind):
+    parsed=reported_record(record)
+    if parsed is None:return False
+    wins,losses,_=parsed
+    return {'losing':losses>wins,'has_losses':losses>0,'even':wins==losses,'winning':wins>losses}[kind]
 
 
 def store_prospect(body, db, user):
@@ -175,7 +192,7 @@ def options(user=Depends(current_user)):
 
 
 @router.get('/prospects')
-def list_prospects(q: str=Query('',max_length=150), state: str='', division: str='', status: str='', contact_only: bool=False, experience: str='',
+def list_prospects(q: str=Query('',max_length=150), state: str='', division: str='', status: str='', contact_only: bool=False, experience: str='', record_type: str='',
                    page: int=Query(1,ge=1), page_size: int=Query(30,ge=1,le=100), db: Session=Depends(get_db),user=Depends(current_user)):
     require_matchmaker_access(user)
     query=db.query(BoxerProspect)
@@ -187,6 +204,10 @@ def list_prospects(q: str=Query('',max_length=150), state: str='', division: str
     if division:query=query.filter(BoxerProspect.division==division)
     if status:query=query.filter(BoxerProspect.status==status)
     if contact_only:query=query.filter(or_(BoxerProspect.business_phone!='',BoxerProspect.business_email!=''))
+    if record_type:
+        if record_type not in ('losing','has_losses','even','winning'):raise HTTPException(400,'Choose a supported record profile')
+        ids=[pid for pid,record in query.with_entities(BoxerProspect.id,BoxerProspect.record).all() if matches_record(record,record_type)]
+        query=query.filter(BoxerProspect.id.in_(ids))
     if experience:
         if experience not in ('beginner','developing'):raise HTTPException(400,'Choose beginner or developing experience')
         limit=5 if experience=='beginner' else 10

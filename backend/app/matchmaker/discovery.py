@@ -6,6 +6,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+from typing import Literal
 from datetime import datetime, date
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from fastapi import APIRouter, Depends, HTTPException
@@ -44,6 +45,8 @@ class SearchRequest(BaseModel):
     weight_min: float | None = Field(default=None, ge=50, le=500)
     weight_max: float | None = Field(default=None, ge=50, le=500)
     active_since: str = ""
+    source: Literal['public_web','catalog','official_rosters'] = 'public_web'
+    record_type: Literal['','losing','has_losses','even','winning'] = ''
 
     @field_validator("active_since")
     @classmethod
@@ -238,6 +241,9 @@ Criteria: """ + json.dumps(criteria)
             continue
         if body.active_since and (not lead["last_bout_date"] or lead["last_bout_date"] < body.active_since):
             continue
+        if body.kind=='fighter' and body.record_type:
+            from .scouting import matches_record
+            if not matches_record(lead['record'],body.record_type):continue
         identity = (lead["name"].casefold(), lead["source_url"])
         if identity not in seen:
             leads.append(lead); seen.add(identity)
@@ -247,12 +253,83 @@ Criteria: """ + json.dumps(criteria)
         "notice":"Public-web research leads. Verify identity, records, contacts and bout eligibility; availability is unknown until confirmed."}
 
 
+def known_bout_date(lead):
+    if lead.get('last_bout_date'):return lead['last_bout_date']
+    activity=lead.get('last_activity','')
+    match=re.search(r'^Professional bout listed in official TDLR results on (\d{4}-\d{2}-\d{2})',activity)
+    if match:
+        try:
+            parsed=date.fromisoformat(match[1])
+            return parsed.isoformat() if parsed<=date.today() else ''
+        except ValueError:return ''
+    match=re.search(r'^Profile lists bout (\w{3} \d{1,2}, \d{4})',activity)
+    if match:
+        try:
+            parsed=datetime.strptime(match[1],'%b %d, %Y').date()
+            return parsed.isoformat() if parsed<=date.today() else ''
+        except ValueError:pass
+    return ''
+
+
+def filter_research_leads(body,candidates):
+    from .scouting import matches_record,DIVISIONS
+    matches=[];seen=set()
+    for raw in candidates:
+        lead=clean_lead(raw)
+        if not lead or lead['state'] not in body.states or lead['kind']!=body.kind:continue
+        if body.query.strip():
+            haystack=' '.join(lead.get(k,'') for k in ('name','city','state','record','weight','gym_or_manager')).casefold()
+            if not all(word in haystack for word in body.query.casefold().split()):continue
+        if body.kind=='fighter':
+            if body.record_type and not matches_record(lead['record'],body.record_type):continue
+            weight=re.search(r'(\d+(?:\.\d+)?)\s*(?:lbs?|pounds)\b',lead['weight'],re.I)
+            weight_lb=float(weight[1]) if weight else None
+            if weight_lb is None:
+                label=re.sub('[^a-z]','',lead['weight'].lower())
+                aliases={'juniorlightweight':130,'juniorwelterweight':140,'juniormiddleweight':154,'juniorfeatherweight':122,'juniorbantamweight':115,'strawweight':105}
+                weight_lb=next((limit for key,limit in aliases.items() if key in label),None)
+                if weight_lb is None:weight_lb=next((limit for key,limit in sorted(DIVISIONS,key=lambda x:-len(x[0])) if key.replace('_','') in label),None)
+            if body.weight_min is not None and (weight_lb is None or weight_lb<body.weight_min):continue
+            if body.weight_max is not None and (weight_lb is None or weight_lb>body.weight_max):continue
+            bout=known_bout_date(lead)
+            if body.active_since and (not bout or bout<body.active_since):continue
+            lead['last_bout_date']=bout
+        identity=(lead['name'].casefold(),citation_key(lead['source_url']))
+        if identity in seen:continue
+        seen.add(identity)
+        # Research age is retained; displaying a saved finding is not new research.
+        if raw.get('researched_at'):lead['researched_at']=raw['researched_at']
+        matches.append(lead)
+    return matches
+
+
+def search_saved_findings(body,db):
+    from .scouting import BoxerProspect
+    candidates=[]
+    for row in db.query(DiscoveryLead).order_by(DiscoveryLead.updated_at.desc()).all():
+        candidates.append(json.loads(row.data_json))
+    if body.kind=='fighter':
+        for row in db.query(BoxerProspect).filter(BoxerProspect.state.in_(body.states)).order_by(BoxerProspect.updated_at.desc()).all():
+            candidates.append({**{c.name:getattr(row,c.name) for c in row.__table__.columns if c.name not in ('identity','updated_by')},'kind':'fighter','researched_at':row.researched_at.isoformat()+'Z'})
+    return filter_research_leads(body,candidates)
+
+
 @router.post("/search")
-def search(body: SearchRequest, user=Depends(current_user)):
+def search(body: SearchRequest, db: Session=Depends(get_db), user=Depends(current_user)):
     require_matchmaker_access(user)
     if body.weight_min and body.weight_max and body.weight_min > body.weight_max:
         raise HTTPException(400, "Minimum weight must not exceed maximum weight")
-    return search_public_web(body)
+    if body.source=='public_web':return search_public_web(body)
+    if body.source=='official_rosters':
+        if body.kind!='fighter':raise HTTPException(400,'Official rosters cover pro boxers. Choose saved findings or broader web research for gyms and managers.')
+        from .official_rosters import search_official_rosters
+        matches=filter_research_leads(body,search_official_rosters(body.states)['leads'])
+        label='Public promoter profiles'
+    else:
+        matches=search_saved_findings(body,db);label='Saved scouting findings'
+    notice=f'{label}: {len(matches)} matches. Showing up to 50. Narrow the city, state, weight or record filters for more specific results. Records and availability still need confirmation.'
+    if not matches:notice=f'No {body.kind} matches in {label.lower()}. Clear filters, use official pro rosters, or follow the public research links. Broader web research requires OpenAI API credits.'
+    return {'leads':matches[:50],'total':len(matches),'source':body.source,'searched_at':datetime.utcnow().isoformat()+'Z','notice':notice}
 
 
 def lead_dict(row):

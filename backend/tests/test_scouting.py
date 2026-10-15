@@ -102,6 +102,17 @@ class ScoutingTests(unittest.TestCase):
   rows=self.client.get(BASE+'/prospects',headers=self.headers(),params={'state':'regional','experience':'beginner'}).json()
   self.assertEqual({r['name'] for r in rows['items']},{'Texas Beginner','New Mexico Pro'})
   self.assertEqual({r['reported_pro_bouts'] for r in rows['items']},{1,3})
+ def test_record_filters_compare_wins_and_losses_and_preserve_unknowns(self):
+  for name,record,state in [('Losing Texas','2‑7‑1 (reported)','TX'),('Winning Texas','7-2','TX'),('Even Texas','2-2','TX'),('Unknown Texas','','TX'),('Debut Loss','Debut decision loss reported; current record unverified','NM'),('Colorado Loss','1-7','CO')]:
+   self.create(name=name,record=record,state=state)
+  def names(**params):return {p['name'] for p in self.client.get(BASE+'/prospects',headers=self.headers(),params=params).json()['items']}
+  self.assertEqual(names(record_type='losing',state='regional'),{'Losing Texas','Debut Loss'})
+  self.assertEqual(names(record_type='losing',experience='beginner'),{'Debut Loss'})
+  self.assertEqual(names(record_type='has_losses',state='TX'),{'Losing Texas','Winning Texas','Even Texas'})
+  self.assertEqual(names(record_type='even'),{'Even Texas'})
+  self.assertEqual(names(record_type='winning'),{'Winning Texas'})
+  self.assertEqual(len(names()),6)
+  self.assertEqual(self.client.get(BASE+'/prospects',headers=self.headers(),params={'record_type':'invalid'}).status_code,400)
  def test_official_profiles_work_without_ai_and_do_not_overwrite_reviews(self):
   row=self.create(name='Example Boxer',state='TX',record='2-0').json()['prospect']
   leads=[{**P,'state':'TX','weight':'Lightweight (135 lbs)','source_url':'https://toprank.com/fighters/example'},
