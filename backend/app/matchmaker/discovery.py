@@ -18,6 +18,8 @@ from app.core.dependencies import current_user
 from app.core.permissions import require_matchmaker_access
 
 STATES = {"OK": "Oklahoma", "TX": "Texas", "KS": "Kansas", "AR": "Arkansas", "MO": "Missouri", "CO": "Colorado", "NM": "New Mexico"}
+REGIONAL_STATES = list(STATES)
+STATES.update(dict(zip("AL AK AZ CA CT DE DC FL GA HI ID IL IN IA KY LA ME MD MA MI MN MS MT NE NV NH NJ NY NC ND OH OR PA RI SC SD TN UT VT VA WA WV WI WY".split(), ["Alabama","Alaska","Arizona","California","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New York","North Carolina","North Dakota","Ohio","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"])))
 router = APIRouter(prefix="/api/boxing/discovery", tags=["regional-discovery"])
 
 
@@ -38,7 +40,7 @@ class DiscoveryLead(Base):
 class SearchRequest(BaseModel):
     query: str = Field(default="", max_length=300)
     kind: str = "fighter"
-    states: list[str] = Field(default_factory=lambda: list(STATES), min_length=1, max_length=7)
+    states: list[str] = Field(default_factory=lambda: list(REGIONAL_STATES), min_length=1, max_length=51)
     weight_min: float | None = Field(default=None, ge=50, le=500)
     weight_max: float | None = Field(default=None, ge=50, le=500)
     active_since: str = ""
@@ -61,7 +63,7 @@ class SearchRequest(BaseModel):
     @classmethod
     def states_valid(cls, values):
         if any(value not in STATES for value in values):
-            raise ValueError("Choose Oklahoma or a surrounding state")
+            raise ValueError("Choose a US state")
         return list(dict.fromkeys(values))
 
 
@@ -108,7 +110,8 @@ def clean_lead(data, citations=None):
         "last_activity":250, "last_bout_date":10, "gym_or_manager":200, "evidence":1200,
         "business_phone":60, "business_email":180,
     }.items()}
-    result["state"] = result["state"].upper()
+    raw_state = str(data.get("state") or "").strip()
+    result["state"] = next((k for k,v in STATES.items() if v.casefold()==raw_state.casefold()), raw_state.upper())
     try:
         if result["last_bout_date"]:
             parsed_date = date.fromisoformat(result["last_bout_date"])

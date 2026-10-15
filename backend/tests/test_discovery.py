@@ -31,8 +31,8 @@ class DiscoveryTests(unittest.TestCase):
     def test_rejects_bad_urls_and_unsupported_states(self):
         for url in ['javascript:alert(1)','https://127.0.0.1/x','https://192.168.0.1/x','https://user:pass@example.org/x','https://host.internal/x','http://example.org']:
             self.assertIsNone(public_url(url),url)
-        self.assertIsNone(clean_lead({**LEAD,'state':'NY'}))
-        self.assertEqual(self.client.post('/api/boxing/discovery/search',headers=self.headers('admin'),json={'states':['NY']}).status_code,422)
+        self.assertIsNone(clean_lead({**LEAD,'state':'ZZ'}))
+        self.assertEqual(self.client.post('/api/boxing/discovery/search',headers=self.headers('admin'),json={'states':['ZZ']}).status_code,422)
         self.assertEqual(self.client.post('/api/boxing/discovery/search',headers=self.headers('admin'),json={'weight_min':200,'weight_max':150}).status_code,400)
     def test_uncited_sources_and_unsupported_contacts_are_removed(self):
         self.assertIsNone(clean_lead(LEAD,{'https://other.example.org'}))

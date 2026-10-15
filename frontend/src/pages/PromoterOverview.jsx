@@ -12,6 +12,7 @@ export function displayEventDate(value) {
 }
 const statusLabel = (event) => String(event.status || "planning").replaceAll("_", " ");
 const lanes = [
+  ["scouting", Users, "Boxer database", "Nationwide prospects. All weight groups."],
   ["finder", Search, "Regional finder", "Discover fighters, gyms and managers."],
   ["events", CalendarDays, "Events", "Plan the promotion. Run the show."],
   ["fighter-pool", Users, "Fighter pool", "Talent, profiles and availability."],
@@ -37,7 +38,7 @@ export default function PromoterOverview({ events, fighters, eligible, onNavigat
         {[[events.length, "Total events"], [upcoming.length, "Upcoming events"], [fighters.length, "Fighters in pool"], [eligible, "Eligible fighters"]].map(([value, label]) => <Box key={label}><Typography sx={{ fontSize: 30, fontWeight: 850, fontVariantNumeric: "tabular-nums" }}>{value}</Typography><Typography sx={{ color: "#b8bec8", fontSize: 12 }}>{label}</Typography></Box>)}
     </Box>
     </Box>
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,1fr)", xl: "repeat(5,1fr)" }, gap: 1.5 }}>
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,1fr)", xl: "repeat(3,1fr)" }, gap: 1.5 }}>
       {lanes.map(([key, Icon, title, detail]) => <Button key={key} className="promotion-lane" onClick={() => onNavigate(key)}><Icon size={21} /><Box sx={{ flex: 1, textAlign: "left" }}><Typography fontWeight={800}>{title}</Typography><Typography sx={{ fontSize: 12, color: "text.secondary", mt: .5 }}>{detail}</Typography></Box><ArrowUpRight size={17} /></Button>)}
     </Box>
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.7fr) minmax(280px,1fr)" }, gap: 3 }}>
