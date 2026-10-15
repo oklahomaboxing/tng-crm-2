@@ -55,7 +55,7 @@ Hometowns do not establish current residence; profile presence does not establis
 current activity or availability. General promoter office contacts are explicitly
 identified in evidence. Golden Boy's zero placeholder counters are omitted; actual published animation target values supply records when present.
 Existing same-name/state records retain their reviews. Public profiles are cached
-for one hour per process; requests follow only the fixed publishers, without redirects.
+for one hour per process; requests follow only the fixed publishers, with bounded canonical redirects only within the same publisher.
 
 Broader web research remains optional. It retains source citations before extracting
 structured facts. Exhausted API credits return an actionable error without exposing

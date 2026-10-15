@@ -4,7 +4,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urljoin
 import requests
 from fastapi import HTTPException
 from .discovery import STATES, public_url
@@ -17,6 +17,19 @@ SOURCES = [
 _cache = None
 _cache_at = 0
 _lock = threading.Lock()
+PUBLISHERS={'toprank.com','goldenboy.com','matchroomboxing.com','redowlboxing.com'}
+
+
+def get_public_page(url,timeout=10):
+    """Allow canonical www/slash redirects only within the same publisher."""
+    publisher=(urlsplit(url).hostname or '').removeprefix('www.')
+    if publisher not in PUBLISHERS:return None
+    for _ in range(4):
+        if not public_url(url) or (urlsplit(url).hostname or '').removeprefix('www.')!=publisher:return None
+        response=requests.get(url,timeout=timeout,allow_redirects=False)
+        if response.status_code not in (301,302,303,307,308):return response
+        url=urljoin(url,response.headers.get('Location',''))
+    return None
 
 
 def plain(raw):
@@ -84,9 +97,14 @@ def parse_profile(url, raw):
 def parse_red_owl(raw):
     """The promoter publishes record, hometown and division together in each card."""
     text=plain(raw);rows=[]
+    name_nodes=[plain(node) for node in re.findall(r'>([^<>]+)<',raw) if len(node)<180]
     pattern=r"([A-Z][A-Z .’'\-]{2,65}?) (\d+-\d+-\d+|PRO DEBUT)(?: \([^)]*\))? ([A-Z][A-Z .’'\-]{1,60}?), ([A-Z]{2}) ((?:(?:SUPER|LIGHT) )?[A-Z]*WEIGHT)"
     for name,record,city,state,weight in re.findall(pattern,text):
         if state not in STATES:continue
+        # The first card follows uppercase marketing copy. Recover the actual
+        # name node rather than treating the slogan as part of the boxer name.
+        names=[node for node in name_nodes if node and name.endswith(node) and re.fullmatch(r"[A-Z][A-Z .’'\-]+",node)]
+        if names:name=max(names,key=len)
         # Preserve the publisher's typo as quoted evidence, normalize the label.
         evidence=f'{name} {record} {city}, {state} {weight}'
         if record=='PRO DEBUT':record='0-0-0 (pro debut listed; verify current record)'
@@ -101,8 +119,8 @@ def fetch_profile(url):
     # URL fetch endpoint or redirect to another host.
     if not public_url(url) or urlsplit(url).hostname not in ('toprank.com','www.toprank.com','www.goldenboy.com','www.matchroomboxing.com'):return None
     try:
-        response=requests.get(url,timeout=5,allow_redirects=False)
-        if response.status_code==200:return parse_profile(url,response.text)
+        response=get_public_page(url,timeout=5)
+        if response is not None and response.status_code==200:return parse_profile(url,response.text)
     except requests.RequestException:pass
     return None
 
@@ -114,8 +132,8 @@ def public_profiles():
         urls=[];available=0
         for source,pattern in SOURCES:
             try:
-                response=requests.get(source,timeout=10,allow_redirects=False)
-                if response.status_code!=200:continue
+                response=get_public_page(source)
+                if response is None or response.status_code!=200:continue
                 available+=1
                 urls.extend(re.findall(pattern,response.text))
             except requests.RequestException:continue
@@ -123,8 +141,8 @@ def public_profiles():
         urls=list(dict.fromkeys(u.replace('https://www.toprank.com/','https://toprank.com/') for u in urls))[:220]
         with ThreadPoolExecutor(max_workers=6) as pool:rows=list(pool.map(fetch_profile,urls))
         try:
-            response=requests.get('https://redowlboxing.com/pages/fighters',timeout=10,allow_redirects=False)
-            if response.status_code==200:rows.extend(parse_red_owl(response.text))
+            response=get_public_page('https://redowlboxing.com/pages/fighters')
+            if response is not None and response.status_code==200:rows.extend(parse_red_owl(response.text))
         except requests.RequestException:pass
         _cache=[r for r in rows if r];_cache_at=time.monotonic()
         return _cache

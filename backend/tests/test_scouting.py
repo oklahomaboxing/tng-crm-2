@@ -122,10 +122,24 @@ class ScoutingTests(unittest.TestCase):
   rows=parse_red_owl('<p>ALEX DONIS 3-0-0 (1 KO) HOUSTON, TX WELTERWEIGHT ARIANA CARRASCO 4-0-0 (1 KO) LAS CRUCES, NM SUPER WELERWEIGHT FOREIGN BOXER 1-0-0 CHIHUAHUA, MX LIGHTWEIGHT</p>')
   self.assertEqual(len(rows),2);self.assertEqual(rows[0]['name'],'Alex Donis')
   self.assertEqual(rows[0]['state'],'TX');self.assertEqual(rows[1]['weight'],'Super Welterweight')
+  first=parse_red_owl('<p>BRING ATTENTION TO ALL LEVELS.</p><h3>ADRIAN SALAZAR</h3><p>2-0-0 (1 KO) TYLER, TX WELTERWEIGHT</p>')
+  self.assertEqual(first[0]['name'],'Adrian Salazar')
  def test_golden_boy_reads_counter_targets_instead_of_zero_placeholder(self):
   from app.matchmaker.official_rosters import parse_profile
   counters=''.join(f'<h2 data-purecounter-end="{value}">0</h2><p>{label}</p>' for label,value in [('WINS',3),('LOSSES',1),('DRAWS',0)])
   raw='<title>Example Pro - Golden Boy Promotions</title><h1>Example Pro</h1>'+counters+'Weight Class Stance Age Height Lightweight Orthodox 22 6 NATIONALITY: HOMETOWN: Dallas, TX BIOGRAPHY Professional boxer'
   row=parse_profile('https://www.goldenboy.com/fighter-profile/example/',raw)
   self.assertTrue(row['record'].startswith('3-1-0'));self.assertEqual(row['city'],'Dallas')
+ def test_public_directory_accepts_canonical_redirect_but_blocks_other_hosts(self):
+  from app.matchmaker.official_rosters import get_public_page
+  from unittest.mock import Mock
+  redirect=Mock(status_code=301,headers={'Location':'https://www.redowlboxing.com/pages/fighters'})
+  page=Mock(status_code=200)
+  with patch('app.matchmaker.official_rosters.requests.get',side_effect=[redirect,page]) as fetch:
+   self.assertIs(get_public_page('https://redowlboxing.com/pages/fighters'),page)
+   self.assertEqual(fetch.call_count,2)
+  redirect.headers={'Location':'https://127.0.0.1/private'}
+  with patch('app.matchmaker.official_rosters.requests.get',return_value=redirect) as fetch:
+   self.assertIsNone(get_public_page('https://redowlboxing.com/pages/fighters'))
+   self.assertEqual(fetch.call_count,1)
 if __name__=='__main__':unittest.main(verbosity=2)
