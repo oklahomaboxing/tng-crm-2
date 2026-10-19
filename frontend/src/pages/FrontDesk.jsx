@@ -1,3 +1,4 @@
+import { simpleMemberNumber } from "../utils/memberNumber";
 import React, { useEffect, useRef, useState } from "react";
 import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from "html5-qrcode";
 
@@ -206,7 +207,7 @@ export default function FrontDesk({ standalone = false }) {
               {fullScreen ? "Exit Full Screen" : "Full Screen"}
             </button>
             <button type="button" style={styles.smallButton} onClick={toggleKioskMode} disabled={checkingIn}>
-              {kioskMode ? "Manual Mode" : "Camera Mode"}
+              {kioskMode ? "Type member number" : "Scan QR code"}
             </button>
           </div>
         </header>
@@ -218,7 +219,7 @@ export default function FrontDesk({ standalone = false }) {
             <div style={styles.successLabel}>CHECK-IN COMPLETE</div>
             <h1 style={styles.memberName}>{result.name}</h1>
 
-            <div style={{fontSize: 17}}>Member #{result.member_number || "-"} · {result.membership || "Membership"} · {result.total_checkins || 0} visits</div>
+            <div style={{fontSize: 17}}>Member #{simpleMemberNumber(result.member_number) || "-"} · {result.membership || "Membership"} · {result.total_checkins || 0} visits</div>
 
             <div style={styles.tapMessage}>Your check-in is saved. Scanner resets automatically, or choose Next member.</div>
           </section>
@@ -251,15 +252,18 @@ export default function FrontDesk({ standalone = false }) {
           </section>
         ) : !result && !error ? (
           <section style={styles.manualCard}>
-            <div style={styles.scanTitle}>Manual or handheld scanner check-in</div>
+            <div style={styles.scanTitle}>Enter your member number</div>
 
+            <p>Enter the number on your member card. You can leave off TNG and the leading zeros.</p>
             <form onSubmit={submitCheckin}>
               <input
                 ref={inputRef}
                 style={styles.input}
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
-                placeholder="Scan or enter member number"
+                placeholder="Example: 42"
+                inputMode="numeric"
+                aria-label="Member number"
                 autoComplete="off"
                 disabled={checkingIn}
               />

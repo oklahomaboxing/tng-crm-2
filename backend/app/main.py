@@ -9,6 +9,7 @@ import logging
 from app.ticketing.models import TicketOrder
 from app.ticketing.emailing import send_ticket_email
 from app.ticketing.service import issue_paid_order
+from .services.member_numbers import find_checkin_member
 from .services.memberships import (
     apply_membership,
     is_event_product,
@@ -4083,15 +4084,7 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/api/checkin")
 def checkin(data: dict, db: Session = Depends(get_db), user: User = Depends(staff_user)):
-    code = str(data.get("code") or "").strip().replace("-", "").upper()
-    if not code:
-        raise HTTPException(status_code=400, detail="Member code is required")
-
-    member = db.query(Member).filter(
-        (Member.barcode == code) |
-        (Member.member_number == code) |
-        (Member.qr_code == code)
-    ).first()
+    member = find_checkin_member(db, data.get("code"))
 
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")

@@ -1,3 +1,4 @@
+import { simpleMemberNumber } from "../utils/memberNumber";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 import { QRCodeCanvas } from "qrcode.react";
@@ -701,7 +702,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                   <Grid item xs={12} sm={6}>
                     <Metric
                       label="Member #"
-                      value={m.member_number || "?"}
+                      value={simpleMemberNumber(m.member_number) || "?"}
                     />
                   </Grid>
 
@@ -926,7 +927,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                         fontWeight: 800,
                       }}
                     >
-                      MEMBER #{memberCardNumber}
+                      MEMBER #{simpleMemberNumber(memberCardNumber)}
                     </Typography>
                   </Box>
                 </Stack>
@@ -1612,7 +1613,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                   fontSize: 16,
                 }}
               >
-                MEMBER #{memberCardNumber}
+                MEMBER #{simpleMemberNumber(memberCardNumber)}
               </Typography>
 
               <Typography

@@ -1,3 +1,4 @@
+import { simpleMemberNumber } from "../utils/memberNumber";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -140,6 +141,7 @@ export default function Members() {
         member.email,
         member.phone,
         member.member_number,
+        simpleMemberNumber(member.member_number),
         member.membership_type,
       ]
         .filter(Boolean)
@@ -259,7 +261,7 @@ export default function Members() {
                       </Avatar>
                       <Box flex={1} minWidth={0}>
                         <Typography fontWeight={900} noWrap>{name || "Member"}</Typography>
-                        <Typography variant="body2" color="text.secondary" noWrap>{member.member_number || "No member number"}</Typography>
+                        <Typography variant="body2" color="text.secondary" noWrap>{simpleMemberNumber(member.member_number) || "No member number"}</Typography>
                         <Typography variant="body2" noWrap>{member.membership_type || "Membership"}</Typography>
                       </Box>
                       <Chip size="small" label={chip.label} color={chip.color} />
@@ -303,7 +305,7 @@ export default function Members() {
                           <Avatar src={member.photo_url ? `${API}${member.photo_url}` : undefined} sx={{ bgcolor: "#111" }}>{name.charAt(0).toUpperCase() || "?"}</Avatar>
                           <Box>
                             <Typography fontWeight={800}>{name || "Member"}</Typography>
-                            <Typography variant="caption" color="text.secondary">{member.member_number || "—"}</Typography>
+                            <Typography variant="caption" color="text.secondary">{simpleMemberNumber(member.member_number) || "—"}</Typography>
                           </Box>
                         </Stack>
                       </TableCell>

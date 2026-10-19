@@ -1,3 +1,4 @@
+import { simpleMemberNumber } from "../utils/memberNumber";
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
@@ -402,7 +403,7 @@ export default function MemberProfile({ member, onBack }) {
             <Grid item xs={12} md={5}>
               <Typography variant="h4" fontWeight="bold">{fullName}</Typography>
               <Typography color="text.secondary" sx={{ mt: 1 }}>
-                Member # {memberData.member_number || "-"}
+                Member # {simpleMemberNumber(memberData.member_number) || "-"}
               </Typography>
               <Typography sx={{ mt: 1 }}>
                 {memberData.membership_type || "Membership"}
@@ -615,7 +616,7 @@ export default function MemberProfile({ member, onBack }) {
         <DialogContent sx={{ textAlign: "center", py: 4 }}>
           <Typography variant="h4" fontWeight="bold">{fullName}</Typography>
           <Typography color="text.secondary" sx={{ mb: 3 }}>
-            {memberData.member_number || qrValue}
+            {simpleMemberNumber(memberData.member_number) || qrValue}
           </Typography>
 
           <Box sx={{ display: "inline-flex", p: 2, bgcolor: "white", border: "4px solid #111", borderRadius: 3 }}>
