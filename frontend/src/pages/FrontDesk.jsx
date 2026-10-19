@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from "html5-qrcode";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const SCANNER_ID = "tng-tablet-checkin-scanner";
@@ -48,7 +48,11 @@ export default function FrontDesk() {
       setCameraError("");
       try {
         scanner = new Html5QrcodeScanner(SCANNER_ID, {
-          fps: 15,
+          fps: 12,
+          // Membership cards use QR. Trying every retail barcode format adds
+          // expensive decode passes on iPad CPUs before the next video frame.
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          disableFlip: true,
           // Omit qrbox: decode the full preview, including codes near its edges.
           rememberLastUsedCamera: true,
           supportedScanTypes: [0],
@@ -188,7 +192,7 @@ export default function FrontDesk() {
           <section style={styles.scannerCard}>
             <div style={styles.scanTitle}>Hold your QR code in front of the camera</div>
             <div style={styles.scanSubtitle}>
-              Keep the entire code visible anywhere in the camera view. Move it a little closer if needed.
+              Show the large member QR card. Keep the whole code visible, brighten the phone screen and hold it still about 8–12 inches from the camera.
             </div>
 
             <div style={styles.scannerFrame}>
