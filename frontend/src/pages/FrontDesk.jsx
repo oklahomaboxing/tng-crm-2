@@ -9,34 +9,93 @@ export default function FrontDesk() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [checkingIn, setCheckingIn] = useState(false);
-  const [scannerActive, setScannerActive] = useState(false);
   const [kioskMode, setKioskMode] = useState(true);
-
+  const [cameraVersion, setCameraVersion] = useState(0);
+  const [cameraError, setCameraError] = useState("");
   const inputRef = useRef(null);
   const scannerRef = useRef(null);
   const resetTimerRef = useRef(null);
+  const cleanupRef = useRef(Promise.resolve());
+  const busyRef = useRef(false);
+  const mountedRef = useRef(false);
+  const requestRef = useRef(null);
+  const lastScanRef = useRef({ code: "", at: 0 });
 
   useEffect(() => {
-    if (kioskMode) {
-      startScanner();
-    } else {
-      inputRef.current?.focus();
-    }
-
+    mountedRef.current = true;
     return () => {
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-      stopScanner();
+      mountedRef.current = false;
+      clearTimeout(resetTimerRef.current);
+      requestRef.current?.abort();
     };
-  }, [kioskMode]);
+  }, []);
 
-  async function checkInMember(rawCode) {
+  useEffect(() => {
+    if (!kioskMode && !result && !error) inputRef.current?.focus();
+  }, [kioskMode, result, error]);
+
+  // Keep the camera element mounted and decoding between members. Only gate
+  // submissions; stopping/remounting a stream after every read breaks tablets.
+  useEffect(() => {
+    if (!kioskMode) {
+      inputRef.current?.focus();
+      return;
+    }
+    let cancelled = false;
+    let scanner;
+    cleanupRef.current.then(() => {
+      if (cancelled) return;
+      setCameraError("");
+      try {
+        scanner = new Html5QrcodeScanner(SCANNER_ID, {
+          fps: 15,
+          // Omit qrbox: decode the full preview, including codes near its edges.
+          rememberLastUsedCamera: true,
+          supportedScanTypes: [0],
+        }, false);
+        scannerRef.current = scanner;
+        scanner.render(decodedText => {
+          if (!cancelled) checkInMember(decodedText, true);
+        }, () => {});
+      } catch {
+        setCameraError("Camera could not start. Allow camera access, then restart the camera or use Manual Mode.");
+      }
+    });
+    return () => {
+      cancelled = true;
+      if (scannerRef.current === scanner) scannerRef.current = null;
+      if (scanner) {
+        // Serialize camera teardown before a replacement uses the same element.
+        cleanupRef.current = Promise.resolve().then(() => scanner.clear()).catch(() => {});
+      }
+    };
+  }, [kioskMode, cameraVersion]);
+
+  function resetScreen() {
+    if (requestRef.current) return;
+    clearTimeout(resetTimerRef.current);
+    busyRef.current = false;
+    setResult(null);
+    setError("");
+    setCode("");
+    inputRef.current?.focus();
+  }
+
+  async function checkInMember(rawCode, fromCamera = false) {
     const normalizedCode = String(rawCode || "").trim();
-    if (!normalizedCode || checkingIn) return;
-
+    if (!normalizedCode || busyRef.current) return;
+    const last = lastScanRef.current;
+    if (fromCamera && last.code === normalizedCode && Date.now() - last.at < 8000) return;
+    // A ref locks immediately: multiple video frames can arrive before React renders.
+    busyRef.current = true;
+    if (fromCamera) lastScanRef.current = { code: normalizedCode, at: Date.now() };
+    clearTimeout(resetTimerRef.current);
     setCheckingIn(true);
     setError("");
     setResult(null);
-
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await fetch(`${API}/api/checkin`, {
         method: "POST",
@@ -45,33 +104,26 @@ export default function FrontDesk() {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify({ code: normalizedCode }),
+        signal: controller.signal,
       });
-
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Check-in failed");
-
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : "Check-in failed. Please ask the front desk.");
+      if (!data.member) throw new Error("Could not confirm check-in. Please ask the front desk before retrying.");
+      if (!mountedRef.current) return;
       setResult(data.member);
-      setCode("");
-      if (navigator.vibrate) navigator.vibrate(150);
-
-      resetTimerRef.current = setTimeout(() => {
-        setResult(null);
-        setError("");
-        if (kioskMode) startScanner();
-        else inputRef.current?.focus();
-      }, 3500);
+      navigator.vibrate?.(150);
     } catch (err) {
-      setError(err.message || "Check-in failed");
-      setCode("");
-      if (navigator.vibrate) navigator.vibrate([150, 100, 150]);
-
-      resetTimerRef.current = setTimeout(() => {
-        setError("");
-        if (kioskMode) startScanner();
-        else inputRef.current?.focus();
-      }, 3500);
+      if (!mountedRef.current) return;
+      setError(err.name === 'AbortError' ? "Connection timed out. Ask the front desk to confirm your check-in before retrying." : err.message || "Check-in failed");
+      navigator.vibrate?.([150, 100, 150]);
     } finally {
-      setCheckingIn(false);
+      clearTimeout(timeout);
+      if (requestRef.current === controller) requestRef.current = null;
+      if (mountedRef.current) {
+        setCheckingIn(false);
+        setCode("");
+        resetTimerRef.current = setTimeout(resetScreen, 2500);
+      }
     }
   }
 
@@ -80,75 +132,16 @@ export default function FrontDesk() {
     await checkInMember(code);
   }
 
-  function startScanner() {
-    if (scannerRef.current || result || error) return;
-
-    setScannerActive(true);
-
-    const scanner = new Html5QrcodeScanner(
-      SCANNER_ID,
-      {
-        fps: 12,
-        qrbox: { width: 280, height: 220 },
-        rememberLastUsedCamera: true,
-        supportedScanTypes: [0, 1],
-        aspectRatio: 1.333334,
-      },
-      false
-    );
-
-    scannerRef.current = scanner;
-
-    scanner.render(
-      async (decodedText) => {
-        await stopScanner();
-        await checkInMember(decodedText);
-      },
-      () => {}
-    );
-  }
-
-  async function stopScanner() {
-    const scanner = scannerRef.current;
-
-    if (!scanner) {
-      setScannerActive(false);
-      return;
-    }
-
-    try {
-      await scanner.clear();
-    } catch (err) {
-      console.warn("Scanner cleanup warning:", err);
-    } finally {
-      scannerRef.current = null;
-      setScannerActive(false);
-    }
-  }
-
-  async function toggleKioskMode() {
-    if (kioskMode) {
-      await stopScanner();
-      setKioskMode(false);
-      inputRef.current?.focus();
-    } else {
-      setKioskMode(true);
-    }
+  function toggleKioskMode() {
+    if (busyRef.current) return;
+    resetScreen();
+    setKioskMode(value => !value);
   }
 
   async function enterFullscreen() {
     if (document.documentElement.requestFullscreen) {
       await document.documentElement.requestFullscreen();
     }
-  }
-
-  function resetScreen() {
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    setResult(null);
-    setError("");
-    setCode("");
-    if (kioskMode) startScanner();
-    else inputRef.current?.focus();
   }
 
   return (
@@ -164,54 +157,51 @@ export default function FrontDesk() {
             <button type="button" style={styles.smallButton} onClick={enterFullscreen}>
               Full Screen
             </button>
-            <button type="button" style={styles.smallButton} onClick={toggleKioskMode}>
+            <button type="button" style={styles.smallButton} onClick={toggleKioskMode} disabled={checkingIn}>
               {kioskMode ? "Manual Mode" : "Camera Mode"}
             </button>
           </div>
         </header>
 
         {result ? (
-          <section style={styles.successCard} onClick={resetScreen}>
-            <div style={styles.statusIcon}>✓</div>
+          <section style={styles.successCard} role="status" aria-live="polite">
+            <button type="button" style={styles.smallButton} onClick={resetScreen}>Next member</button>
+
             <div style={styles.successLabel}>CHECK-IN COMPLETE</div>
             <h1 style={styles.memberName}>{result.name}</h1>
 
-            <div style={styles.infoGrid}>
-              <Info label="Status" value={result.status || "active"} />
-              <Info label="Membership" value={result.membership || "Membership"} />
-              <Info label="Member #" value={result.member_number || "-"} />
-              <Info label="Total Visits" value={result.total_checkins || 0} />
-            </div>
+            <div style={{fontSize: 17}}>Member #{result.member_number || "-"} · {result.membership || "Membership"} · {result.total_checkins || 0} visits</div>
 
-            <div style={styles.tapMessage}>Tap anywhere for the next member</div>
+            <div style={styles.tapMessage}>Your check-in is saved. Scanner resets automatically, or choose Next member.</div>
           </section>
         ) : error ? (
-          <section style={styles.errorCard} onClick={resetScreen}>
+          <section style={styles.errorCard} role="alert">
+            <button type="button" style={styles.smallButton} onClick={resetScreen}>Try another member</button>
             <div style={styles.statusIcon}>✕</div>
             <div style={styles.errorTitle}>CHECK-IN FAILED</div>
             <div style={styles.errorMessage}>{error}</div>
-            <div style={styles.tapMessage}>Tap anywhere to try again</div>
+            <div style={styles.tapMessage}>The scanner will be ready again shortly. Choose Try another member to continue.</div>
           </section>
-        ) : kioskMode ? (
+        ) : null}
+
+        {kioskMode ? (
           <section style={styles.scannerCard}>
             <div style={styles.scanTitle}>Hold your QR code in front of the camera</div>
             <div style={styles.scanSubtitle}>
-              Membership cards and barcodes can also be scanned.
+              Keep the entire code visible anywhere in the camera view. Move it a little closer if needed.
             </div>
 
             <div style={styles.scannerFrame}>
               <div id={SCANNER_ID} style={styles.scannerContainer} />
             </div>
 
-            {!scannerActive && (
-              <button type="button" style={styles.primaryButton} onClick={startScanner}>
-                Start Camera
-              </button>
-            )}
+            {cameraError && <div role="alert" style={styles.errorMessage}>{cameraError}</div>}
+            <button type="button" style={styles.smallButton} disabled={checkingIn} onClick={() => setCameraVersion(value => value + 1)}>Restart Camera</button>
+            {!checkingIn && !result && !error && <div style={styles.processing}>Ready for the next member</div>}
 
             {checkingIn && <div style={styles.processing}>Checking member in...</div>}
           </section>
-        ) : (
+        ) : !result && !error ? (
           <section style={styles.manualCard}>
             <div style={styles.scanTitle}>Manual or handheld scanner check-in</div>
 
@@ -235,7 +225,7 @@ export default function FrontDesk() {
               </button>
             </form>
           </section>
-        )}
+        ) : null}
       </section>
     </main>
   );
@@ -327,12 +317,12 @@ const styles = {
   scannerFrame: {
     maxWidth: 700,
     margin: "0 auto",
-    padding: 12,
+    padding: 4,
     background: "white",
     borderRadius: 18,
     overflow: "hidden",
   },
-  scannerContainer: { width: "100%" },
+  scannerContainer: { width: "100%", minHeight: 280, color: "#171720" },
   input: {
     width: "100%",
     padding: "clamp(18px, 4vw, 28px)",
@@ -361,7 +351,8 @@ const styles = {
   successCard: {
     background: "#0f7a34",
     borderRadius: 24,
-    padding: "clamp(26px, 6vw, 54px)",
+    padding: "clamp(18px, 3vw, 28px)",
+    marginBottom: 18,
     textAlign: "center",
     boxShadow: "0 24px 70px rgba(0,0,0,.35)",
     cursor: "pointer",
@@ -369,7 +360,8 @@ const styles = {
   errorCard: {
     background: "#8a1111",
     borderRadius: 24,
-    padding: "clamp(26px, 6vw, 54px)",
+    padding: "clamp(18px, 3vw, 28px)",
+    marginBottom: 18,
     textAlign: "center",
     boxShadow: "0 24px 70px rgba(0,0,0,.35)",
     cursor: "pointer",
@@ -383,7 +375,7 @@ const styles = {
   },
   errorTitle: { marginTop: 14, fontSize: "clamp(24px, 5vw, 42px)", fontWeight: 900 },
   errorMessage: { marginTop: 12, fontSize: "clamp(18px, 3vw, 26px)" },
-  memberName: { margin: "12px 0 24px", fontSize: "clamp(30px, 6vw, 58px)" },
+  memberName: { margin: "8px 0 12px", fontSize: "clamp(26px, 4vw, 36px)" },
   infoGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
