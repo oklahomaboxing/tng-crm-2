@@ -790,6 +790,10 @@ if (window.location.pathname === "/register") return <JoinPage />;
     return <FighterPortal onLogout={logout} />;
   }
 
+if (/^\/check-in\/?$/.test(window.location.pathname) && ["admin", "staff"].includes(role)) {
+  return <FrontDesk standalone />;
+}
+
 return (
     <AppShell
       role={role}

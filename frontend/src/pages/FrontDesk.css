@@ -1,0 +1,75 @@
+.member-camera-fullscreen {
+  position: fixed !important;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+  z-index: 2000;
+  overflow: hidden;
+  --preview-scale: 1;
+}
+.member-camera-fullscreen .checkin-header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 20;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  background: linear-gradient(#000e, #0004);
+}
+.member-camera-fullscreen .checkin-header > div:first-child { display: none; }
+.member-camera-fullscreen .checkin-camera { border: 0 !important; padding: 0 !important; background: transparent !important; }
+.member-camera-fullscreen .checkin-instructions,
+.member-camera-fullscreen .checkin-help { display: none; }
+.member-camera-fullscreen .checkin-preview { padding: 0 !important; background: transparent !important; overflow: visible !important; }
+.member-camera-fullscreen #tng-tablet-checkin-scanner { border: 0 !important; background: #000; color: #fff !important; }
+.member-camera-fullscreen #tng-tablet-checkin-scanner video {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(var(--preview-scale));
+  max-width: none !important;
+  z-index: 1;
+}
+.member-camera-fullscreen #tng-tablet-checkin-scanner__dashboard {
+  position: absolute;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  left: 5%;
+  width: 90%;
+  background: #111c;
+  border-radius: 12px;
+  z-index: 10;
+}
+.member-camera-fullscreen .checkin-result {
+  position: absolute;
+  top: 80px;
+  left: 5%;
+  width: 90%;
+  box-sizing: border-box;
+  z-index: 30;
+  max-height: calc(100dvh - 180px);
+  overflow: auto;
+}
+.member-camera-fullscreen .checkin-processing {
+  position: absolute;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  left: 12px;
+  right: 150px;
+  padding: 10px;
+  background: #000b;
+  border-radius: 10px;
+  z-index: 20;
+  font-size: 16px !important;
+}
+.member-camera-fullscreen .checkin-restart {
+  position: absolute;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  right: 12px;
+  z-index: 20;
+}
+
+.member-camera-fullscreen .checkin-camera-error { position: absolute; top: 90px; left: 5%; right: 5%; z-index: 30; background: #8a1111; padding: 16px; border-radius: 12px; }
+
+.member-camera-fullscreen[data-camera-live="true"] #tng-tablet-checkin-scanner__dashboard { display: none; }

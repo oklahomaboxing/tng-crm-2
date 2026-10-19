@@ -1,10 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from "html5-qrcode";
 
+import "./FrontDesk.css";
+
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const SCANNER_ID = "tng-tablet-checkin-scanner";
 
-export default function FrontDesk() {
+export default function FrontDesk({ standalone = false }) {
+  const [fullScreen, setFullScreen] = useState(false);
+  const pageRef = useRef(null);
   const [code, setCode] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -138,28 +142,68 @@ export default function FrontDesk() {
 
   function toggleKioskMode() {
     if (busyRef.current) return;
+    if (fullScreen) { toggleFullscreen(); }
     resetScreen();
     setKioskMode(value => !value);
   }
 
-  async function enterFullscreen() {
-    if (document.documentElement.requestFullscreen) {
-      await document.documentElement.requestFullscreen();
+  async function toggleFullscreen() {
+    if (fullScreen) {
+      setFullScreen(false);
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+      return;
     }
+    setKioskMode(true);
+    setFullScreen(true);
+    // iPad versions without the Fullscreen API still get a viewport-filling page.
+    try { await pageRef.current?.requestFullscreen?.(); } catch { /* Use CSS fullscreen. */ }
   }
 
+  useEffect(() => {
+    function changed() { if (!document.fullscreenElement) setFullScreen(false); }
+    document.addEventListener("fullscreenchange", changed);
+    return () => document.removeEventListener("fullscreenchange", changed);
+  }, []);
+
+  useEffect(() => {
+    if (!fullScreen) return;
+    const page = pageRef.current;
+    function fitPreview() {
+      const video = page?.querySelector("video");
+      page.dataset.cameraLive = String(Boolean(video && !video.paused && video.readyState >= 2));
+      if (!video?.clientWidth || !video.clientHeight) return;
+      // Transform only the presentation. Changing video client dimensions would
+      // invalidate the scanner's existing decode coordinates and crop its view.
+      const scale = Math.min(window.innerWidth / video.clientWidth, window.innerHeight / video.clientHeight);
+      page.style.setProperty("--preview-scale", String(scale));
+    }
+    const observer = new MutationObserver(fitPreview);
+    observer.observe(page, { childList: true, subtree: true });
+    const timer = setInterval(fitPreview, 500);
+    window.addEventListener("resize", fitPreview);
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    fitPreview();
+    return () => {
+      observer.disconnect(); clearInterval(timer);
+      window.removeEventListener("resize", fitPreview);
+      document.body.style.overflow = oldOverflow;
+    };
+  }, [fullScreen]);
+
   return (
-    <main style={result ? styles.pageSuccess : error ? styles.pageError : styles.page}>
+    <main ref={pageRef} className={fullScreen ? "member-camera-fullscreen" : "member-checkin"} style={{...(result ? styles.pageSuccess : error ? styles.pageError : styles.page), ...(standalone ? {minHeight:"100dvh",borderRadius:0} : {})}}>
       <section style={styles.shell}>
-        <header style={styles.header}>
+        <header className="checkin-header" style={styles.header}>
           <div>
             <div style={styles.brand}>TNG BOXING</div>
             <div style={styles.subtitle}>TABLET CHECK-IN</div>
           </div>
 
           <div style={styles.headerActions}>
-            <button type="button" style={styles.smallButton} onClick={enterFullscreen}>
-              Full Screen
+            {!fullScreen && <a style={styles.smallButton} href={standalone ? "/" : "/check-in"}>{standalone ? "Back to TNGOS" : "Open check-in page"}</a>}
+            <button type="button" style={styles.smallButton} onClick={toggleFullscreen}>
+              {fullScreen ? "Exit Full Screen" : "Full Screen"}
             </button>
             <button type="button" style={styles.smallButton} onClick={toggleKioskMode} disabled={checkingIn}>
               {kioskMode ? "Manual Mode" : "Camera Mode"}
@@ -168,7 +212,7 @@ export default function FrontDesk() {
         </header>
 
         {result ? (
-          <section style={styles.successCard} role="status" aria-live="polite">
+          <section className="checkin-result" style={styles.successCard} role="status" aria-live="polite">
             <button type="button" style={styles.smallButton} onClick={resetScreen}>Next member</button>
 
             <div style={styles.successLabel}>CHECK-IN COMPLETE</div>
@@ -179,7 +223,7 @@ export default function FrontDesk() {
             <div style={styles.tapMessage}>Your check-in is saved. Scanner resets automatically, or choose Next member.</div>
           </section>
         ) : error ? (
-          <section style={styles.errorCard} role="alert">
+          <section className="checkin-result" style={styles.errorCard} role="alert">
             <button type="button" style={styles.smallButton} onClick={resetScreen}>Try another member</button>
             <div style={styles.statusIcon}>✕</div>
             <div style={styles.errorTitle}>CHECK-IN FAILED</div>
@@ -189,21 +233,21 @@ export default function FrontDesk() {
         ) : null}
 
         {kioskMode ? (
-          <section style={styles.scannerCard}>
-            <div style={styles.scanTitle}>Hold your QR code in front of the camera</div>
-            <div style={styles.scanSubtitle}>
+          <section className="checkin-camera" style={styles.scannerCard}>
+            <div className="checkin-instructions" style={styles.scanTitle}>Hold your QR code in front of the camera</div>
+            <div className="checkin-help" style={styles.scanSubtitle}>
               Show the large member QR card. Keep the whole code visible, brighten the phone screen and hold it still about 8–12 inches from the camera.
             </div>
 
-            <div style={styles.scannerFrame}>
+            <div className="checkin-preview" style={styles.scannerFrame}>
               <div id={SCANNER_ID} style={styles.scannerContainer} />
             </div>
 
-            {cameraError && <div role="alert" style={styles.errorMessage}>{cameraError}</div>}
-            <button type="button" style={styles.smallButton} disabled={checkingIn} onClick={() => setCameraVersion(value => value + 1)}>Restart Camera</button>
-            {!checkingIn && !result && !error && <div style={styles.processing}>Ready for the next member</div>}
+            {cameraError && <div className="checkin-camera-error" role="alert" style={styles.errorMessage}>{cameraError}</div>}
+            <button type="button" className="checkin-restart" style={styles.smallButton} disabled={checkingIn} onClick={() => setCameraVersion(value => value + 1)}>Restart Camera</button>
+            {!checkingIn && !result && !error && <div className="checkin-processing" style={styles.processing}>Ready for the next member</div>}
 
-            {checkingIn && <div style={styles.processing}>Checking member in...</div>}
+            {checkingIn && <div className="checkin-processing" style={styles.processing}>Checking member in...</div>}
           </section>
         ) : !result && !error ? (
           <section style={styles.manualCard}>
