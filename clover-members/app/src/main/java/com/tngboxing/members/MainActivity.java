@@ -245,7 +245,10 @@ public class MainActivity extends Activity {
             try {JSONObject data=ApiClient.call(session,method,path,body);handler.post(() -> {if(!isFinishing()&&screenVersion==version)done.accept(data);});}
             catch(Exception error){handler.post(() -> {
                 if(isFinishing()||screenVersion!=version)return;failed.run();
-                if(error instanceof ApiClient.Failure && ((ApiClient.Failure)error).status==401 && !path.equals("/login")){customerDisplay.close();token="";store.clear();showLogin();}
+                if(error instanceof ApiClient.Failure && !path.equals("/login")){
+                    int status=((ApiClient.Failure)error).status;
+                    if(status==401 || (status==403 && (path.equals("/session") || String.valueOf(error.getMessage()).startsWith("An active TNG")))){customerDisplay.close();token="";store.clear();showLogin();}
+                }
                 String detail=error instanceof ApiClient.Failure?error.getMessage():method.equals("POST")&&path.equals("/checkin")?"Connection interrupted. The check-in may have been recorded. Review the member’s recent visits before trying again.":"Could not reach the gym service. Check this Clover’s internet connection.";
                 message(detail);
             });}
