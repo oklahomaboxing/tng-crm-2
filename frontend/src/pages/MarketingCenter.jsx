@@ -1,3 +1,4 @@
+import MemberSmsComposer from '../components/MemberSmsComposer';
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -571,11 +572,13 @@ async function saveSmsDraft() {
     setError("");
     setNotice("");
 
+    const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),25000);
     try {
       const response = await fetch(
         `${API}/api/marketing/generate`,
         {
           method: "POST",
+          signal:controller.signal,
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
@@ -610,12 +613,13 @@ async function saveSmsDraft() {
         message: data.sms || "",
       }));
 
-      setNotice("AI campaign generated successfully.");
+      setNotice(data.notice || "Campaign draft generated. Review before sending.");
     } catch (err) {
       setError(
-        err.message || "AI campaign generation failed."
+        err.name==='AbortError' ? 'Draft generation timed out. Try again; no campaign was sent.' : err.message || "AI campaign generation failed."
       );
     } finally {
+      clearTimeout(deadline);
       setAiLoading(false);
     }
   }
@@ -1187,12 +1191,7 @@ async function saveSmsDraft() {
           )}
 
           {tab === 3 && (
-            <EmptyState
-              title="Text Campaigns"
-              text="SMS sending will remain disabled until consent, STOP, and HELP handling are connected. Drafts can still be created."
-              buttonText="Create Text Draft"
-              onClick={() => setSmsDialogOpen(true)}
-            />
+            <Box><Typography variant="h5" fontWeight={900}>Member text campaigns</Typography><Typography color="text.secondary" sx={{my:2}}>Create member notices or prepare promotions, review consent and audience, then track carrier delivery.</Typography><Button variant="contained" onClick={()=>setSmsDialogOpen(true)}>New member text</Button><Button onClick={loadCampaigns}>Refresh delivery results</Button><CampaignTable campaigns={campaigns.filter(c=>(c.campaign_type||c.type)==='sms')} formatDate={formatCampaignDate} statusColor={campaignStatusColor}/></Box>
           )}
 
           {tab === 4 && (
@@ -1458,81 +1457,8 @@ async function saveSmsDraft() {
 </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={smsDialogOpen}
-        onClose={() => setSmsDialogOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          Create Text Campaign
-        </DialogTitle>
+      <MemberSmsComposer open={smsDialogOpen} onClose={()=>setSmsDialogOpen(false)} contacts={contacts} selectedIds={selectedIds} onSelect={setSelectedIds} initial={smsCampaign} onRefresh={()=>{loadContacts();loadCampaigns();}} onNotice={setNotice}/>
 
-        <DialogContent>
-          <Alert
-            severity="warning"
-            sx={{ mb: 2 }}
-          >
-            Marketing texts may only be sent to contacts
-            with documented SMS consent. STOP and HELP
-            handling will be added before sending is
-            enabled.
-          </Alert>
-
-          <Typography sx={{ mb: 2 }}>
-            Selected recipients:{" "}
-            <strong>
-              {selectedContacts.length}
-            </strong>
-          </Typography>
-
-          <TextField
-            fullWidth
-            label="Campaign name"
-            value={smsCampaign.name}
-            onChange={(event) =>
-              setSmsCampaign((current) => ({
-                ...current,
-                name: event.target.value,
-              }))
-            }
-            sx={{ mb: 2 }}
-          />
-
-          <TextField
-            fullWidth
-            multiline
-            minRows={6}
-            label="Text message"
-            value={smsCampaign.message}
-            onChange={(event) =>
-              setSmsCampaign((current) => ({
-                ...current,
-                message: event.target.value,
-              }))
-            }
-            helperText={`${smsCampaign.message.length} characters`}
-          />
-        </DialogContent>
-
-        <DialogActions>
-          <Button
-            onClick={() =>
-              setSmsDialogOpen(false)
-            }
-          >
-            Cancel
-          </Button>
-
-          <Button
-            variant="contained"
-            onClick={saveSmsDraft}
-            disabled={!smsCampaign.message.trim()}
-          >
-            Save Draft
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }
@@ -1598,7 +1524,7 @@ function CampaignTable({
           sx={{
             display: "grid",
             gridTemplateColumns:
-              "1.5fr 1.4fr 1fr 0.7fr 0.7fr 0.7fr 0.9fr",
+              "1.5fr 1.4fr 1fr 0.7fr 0.7fr 0.7fr 0.7fr 0.9fr",
             gap: 1,
             px: 2,
             py: 1.25,
@@ -1610,7 +1536,8 @@ function CampaignTable({
           <span>Date</span>
           <span>Type</span>
           <span>Recipients</span>
-          <span>Sent</span>
+          <span>Accepted / sent</span>
+          <span>Delivered</span>
           <span>Failed</span>
           <span>Status</span>
         </Box>
@@ -1621,7 +1548,7 @@ function CampaignTable({
             sx={{
               display: "grid",
               gridTemplateColumns:
-                "1.5fr 1.4fr 1fr 0.7fr 0.7fr 0.7fr 0.9fr",
+                "1.5fr 1.4fr 1fr 0.7fr 0.7fr 0.7fr 0.7fr 0.9fr",
               gap: 1,
               px: 2,
               py: 1.25,
@@ -1654,6 +1581,7 @@ function CampaignTable({
             <Typography>
               {campaign.sent_count ?? 0}
             </Typography>
+            <Typography>{campaign.campaign_type==='sms' ? (campaign.delivered_count ?? 0) : '—'}</Typography>
             <Typography>
               {campaign.failed_count ?? 0}
             </Typography>

@@ -356,6 +356,10 @@ app.include_router(revenue_webhook_router)
 app.include_router(build_matchmaker_router(current_user))
 app.include_router(discovery_router)
 app.include_router(scouting_router)
+from .clover_pos.routes import router as clover_pos_router
+app.include_router(clover_pos_router)
+from .marketing.sms import router as marketing_sms_router
+app.include_router(marketing_sms_router)
 
 os.makedirs("uploads/members", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -4307,7 +4311,7 @@ def sync_marketing_audiences(
     lead_created = 0
     lead_updated = 0
 
-    members = db.query(Member).all()
+    members = db.query(Member).filter(Member.member_type == "MEMBER").all()
 
     for member in members:
         email = normalize_marketing_email(member.email)
@@ -4317,9 +4321,7 @@ def sync_marketing_audiences(
             skipped += 1
             continue
 
-        member_status = (
-            member.membership_status or ""
-        ).strip().lower()
+        member_status = effective_membership_status(member)
 
         if member_status == "active":
             audience_tag = "Active Member"
@@ -4780,37 +4782,8 @@ def generate_marketing(
 ):
     require_admin_or_staff(user)
 
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[
-            {
-                "role": "system",
-                "content": """
-You are the TNG Boxing Marketing AI.
-
-Return ONLY valid JSON.
-
-{
- "subject":"",
- "email":"",
- "sms":"",
- "social":""
-}
-                """,
-            },
-            {
-                "role": "user",
-                "content": request.prompt,
-            },
-        ],
-        temperature=0.8,
-    )
-
-    import json
-
-    return json.loads(
-        response.choices[0].message.content
-    )
+    from .marketing.generator import generate
+    return generate(request.prompt, client)
 
 @app.post("/api/marketing/campaigns")
 def create_marketing_campaign(
@@ -4856,6 +4829,8 @@ def create_marketing_campaign(
             detail="Email subject is required.",
         )
 
+    if campaign_type == 'sms' and len(message)>1200:
+        raise HTTPException(400,'Keep a text campaign at or below 1,200 characters.')
     clean_contact_ids = []
 
     for contact_id in contact_ids:
@@ -4878,6 +4853,12 @@ def create_marketing_campaign(
     )
 
     db.add(campaign)
+    db.flush()
+    if campaign_type == 'sms':
+        from .marketing.models import SmsCampaignConfig
+        purpose=data.get('sms_purpose','promotion')
+        if purpose not in ('notification','promotion'):raise HTTPException(400,'Choose member notification or promotion.')
+        db.add(SmsCampaignConfig(campaign_id=campaign.id,purpose=purpose))
     db.commit()
     db.refresh(campaign)
 
@@ -4918,6 +4899,10 @@ def send_marketing_campaign(
             status_code=404,
             detail="Campaign not found.",
         )
+
+    if campaign.campaign_type == 'sms':
+        from .marketing.sms import send_campaign
+        return send_campaign(db, campaign)
 
     if campaign.campaign_type != "email":
         raise HTTPException(

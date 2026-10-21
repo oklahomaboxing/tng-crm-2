@@ -1,0 +1,11 @@
+# Member texting and generator repair
+
+The former SMS UI only saved drafts, and the send endpoint explicitly rejected non-email campaigns. The generator assumed an available AI client and valid JSON, causing failures when the account had no API credits or returned malformed content.
+
+The text composer now selects actual member phone contacts, records staff-supplied consent evidence, previews eligibility, and submits once. SMS uses an approved Twilio Messaging Service containing the configured sending number. Account notifications and promotions are separate purpose selections; promotions stay blocked unless the provider reports a verified compatible campaign with the sender attached. Importing or syncing a member does not imply SMS consent. STOP blocks sending; START clears the unsubscribe block but does not infer promotional consent. Contact consent must be documented again.
+
+New delivery rows persist per-campaign recipient phone uniqueness, provider IDs, carrier status and provider error codes. Ambiguous provider submissions are marked unknown and not automatically replayed. Signed Twilio callbacks validate the account and message attempt. Configure the approved service's inbound URL to `/api/marketing/sms/inbound`, POST. Twilio's own STOP suppression remains effective; Advanced Opt-Out forwards opt-out events to the signed handler when enabled. HELP returns gym support information. Do not overwrite an existing unrelated inbound integration without review.
+
+The generator asks for structured AI JSON with a fifteen-second timeout and no retries. Missing credentials, provider errors, quota exhaustion or invalid output return an explicitly labeled editable template. Templates do not restore paid AI service or invent campaign dates, prices or offers. The frontend explains the source and has a request timeout. AI generation does not send campaigns.
+
+The campaign sender uses the existing endpoint and requires staff/admin authentication. No bulk campaign has been sent during repair validation. Local tests use synthetic recipients and mocked providers. Public production verification should use readiness/preview APIs and signed HELP callbacks without sending real messages.

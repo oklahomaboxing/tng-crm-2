@@ -1,0 +1,29 @@
+plugins { id 'com.android.application' }
+def apiBase = providers.gradleProperty('tngApiBaseUrl').getOrElse('https://sea-lion-app-2-gxyfr.ondigitalocean.app')
+def apiUri = new URI(apiBase)
+if (apiUri.scheme != 'https' || !apiUri.host || apiUri.userInfo || apiUri.query || apiUri.fragment || (apiUri.path && apiUri.path != '/')) {
+    throw new GradleException('tngApiBaseUrl must be an HTTPS origin without credentials, query or path')
+}
+android {
+    namespace 'com.tngboxing.members'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.tngboxing.members'
+        minSdk 25
+        // Clover's SDK-version guidance recommends target 25 for account compatibility.
+        targetSdk 25
+        versionCode 2
+        versionName '0.2.0'
+        buildConfigField 'String', 'CLOVER_APP_ID', '"55ZJ8M8JZA8JT"'
+        buildConfigField 'String', 'API_BASE_URL', groovy.json.JsonOutput.toJson(apiBase.replaceAll('/+$', ''))
+    }
+    buildFeatures { buildConfig true }
+    buildTypes { release { minifyEnabled false } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+    lint { abortOnError true }
+}
+dependencies {
+    implementation 'com.clover.sdk:clover-android-sdk:341'
+    implementation 'com.google.zxing:core:3.5.3'
+    testImplementation 'junit:junit:4.13.2'
+}
