@@ -69,6 +69,10 @@ class MarketingTests(unittest.TestCase):
  def test_member_audience_excludes_retail_customer(self):
   c=self.contact();self.member.phone=c.phone;self.db.commit()
   r=self.client.get('/api/marketing/sms/member-audience',headers=self.headers());self.assertEqual(r.json()['contact_ids'],[c.id])
+ def test_sync_does_not_transfer_consent_to_a_new_number(self):
+  c=self.contact(email=self.member.email);self.member.phone='+15555550123';self.db.commit()
+  r=self.client.post('/api/marketing/sync-audiences',headers=self.headers());self.assertEqual(r.status_code,200,r.text)
+  self.db.refresh(c);self.assertFalse(c.sms_opt_in)
  def test_permissions_and_invalid_number_do_not_send(self):
   self.assertEqual(self.client.get('/api/marketing/sms/readiness',headers=self.headers('member')).status_code,403)
   c=self.contact();c.phone='not-a-number';self.db.commit();campaign=self.campaign([c.id])

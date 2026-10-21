@@ -2262,6 +2262,8 @@ def sync_clover_customer_to_marketing(
             existing.email = normalized_email
 
         if phone:
+            if normalize_marketing_phone(existing.phone) != normalize_marketing_phone(phone):
+                existing.sms_opt_in = False
             existing.phone = phone
 
         existing.tags = merge_marketing_tags(
@@ -4352,6 +4354,8 @@ def sync_marketing_audiences(
                 existing.email = email
 
             if phone:
+                if normalize_marketing_phone(existing.phone) != normalize_marketing_phone(phone):
+                    existing.sms_opt_in = False
                 existing.phone = phone
 
             existing.tags = merge_marketing_tags(
@@ -4432,6 +4436,8 @@ def sync_marketing_audiences(
                 existing.email = email
 
             if phone and not existing.phone:
+                if normalize_marketing_phone(existing.phone) != normalize_marketing_phone(phone):
+                    existing.sms_opt_in = False
                 existing.phone = phone
 
             existing.tags = merge_marketing_tags(
@@ -4658,6 +4664,8 @@ async def import_marketing_contacts(
             if email and not existing.email:
                 existing.email = email
             if phone and not existing.phone:
+                if normalize_marketing_phone(existing.phone) != normalize_marketing_phone(phone):
+                    existing.sms_opt_in = False
                 existing.phone = phone
             if company and not existing.company:
                 existing.company = company

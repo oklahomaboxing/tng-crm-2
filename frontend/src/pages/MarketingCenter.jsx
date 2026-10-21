@@ -611,6 +611,7 @@ async function saveSmsDraft() {
       setSmsCampaign((current) => ({
         ...current,
         message: data.sms || "",
+        purpose: 'promotion',
       }));
 
       setNotice(data.notice || "Campaign draft generated. Review before sending.");
