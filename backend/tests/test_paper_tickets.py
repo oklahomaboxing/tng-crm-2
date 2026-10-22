@@ -67,6 +67,13 @@ class PaperTicketTests(unittest.TestCase):
         row=next(o for o in report['orders'] if o['payment_provider']=='paper_cash')
         self.assertEqual(row['issues'],[]);self.assertFalse(row['can_recover'])
 
+    def test_commission_uses_terms_when_sold_not_when_printed(self):
+        b=self.batch().json()['id'];p=self.db.query(PaperTicket).first()
+        self.kind.commission_value=20;self.db.commit()
+        r=self.sell(b,[p.id]);self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()['commission_cents'],800)
+        self.assertEqual(self.db.query(IssuedTicket).one().commission_cents,800)
+
     def test_returned_tickets_cannot_be_sold_or_admitted(self):
         b=self.batch().json()['id'];tickets=self.db.query(PaperTicket).all()
         r=self.client.post(f'/api/ticketing/paper-batches/{b}/return-unsold',headers=self.headers(),json={'ticket_ids':[tickets[0].id]})

@@ -48,13 +48,16 @@ def batch_summary(db, batch):
         batch_id=batch.id).group_by(PaperTicket.status).all())
     seller, kind = db.get(EventSeller, batch.seller_id), db.get(EventTicketType, batch.ticket_type_id)
     sold = counts.get('sold', 0)
+    earned = db.query(func.coalesce(func.sum(IssuedTicket.commission_cents), 0)).join(
+        PaperTicket, PaperTicket.order_id == IssuedTicket.order_id).filter(
+        PaperTicket.batch_id == batch.id, IssuedTicket.status.in_(('valid', 'used'))).scalar()
     return {'id': batch.id, 'event_id': batch.event_id, 'seller_id': batch.seller_id,
         'seller_name': seller.display_name if seller else 'Unknown seller',
         'ticket_type_id': batch.ticket_type_id, 'ticket_type_name': kind.name if kind else 'Ticket',
         'quantity': batch.quantity, 'price_cents': batch.price_cents,
-        'commission_per_ticket_cents': batch.commission_cents,
+        'allocation_commission_estimate_cents': batch.commission_cents,
         'allocated': counts.get('allocated', 0), 'sold': sold, 'returned': counts.get('returned', 0),
-        'sold_total_cents': sold * batch.price_cents, 'commission_cents': sold * batch.commission_cents,
+        'sold_total_cents': sold * batch.price_cents, 'commission_cents': int(earned),
         'created_at': batch.created_at.isoformat()}
 
 
@@ -134,6 +137,10 @@ def record_sales(batch_id: int, body: PaperSale, db: Session = Depends(get_db), 
         raise HTTPException(409, 'Confirm the full face value of the selected tickets')
     if any(t.status == 'returned' for t in rows):
         raise HTTPException(409, 'Returned tickets cannot be activated or sold')
+    kind = db.get(EventTicketType, batch.ticket_type_id)
+    commission = seller_commission_cents(db, kind, batch.price_cents, batch.seller_id)
+    if not 0 <= commission <= batch.price_cents:
+        raise HTTPException(409, 'Current commission terms need review before recording the sale')
     recorded = 0
     for t in rows:
         if t.status == 'sold':
@@ -147,12 +154,12 @@ def record_sales(batch_id: int, body: PaperSale, db: Session = Depends(get_db), 
             payment_provider='paper_cash', payment_status='paid', payment_id=f'PAPER-CASH-{t.id}',
             receipt_number=generate_receipt_number(batch.event_id), paid_at=now,
             items_json=json.dumps([{'ticket_type_id': batch.ticket_type_id, 'quantity':1,
-                'price_cents': batch.price_cents, 'commission_cents': batch.commission_cents}]))
+                'price_cents': batch.price_cents, 'commission_cents': commission}]))
         db.add(order); db.flush()
         db.add(IssuedTicket(order_id=order.id, event_id=batch.event_id, ticket_type_id=batch.ticket_type_id,
             seller_id=batch.seller_id, ticket_number=t.ticket_number, qr_token_hash=t.qr_token_hash,
             qr_token_encrypted=t.qr_token_encrypted, status='valid', price_cents=batch.price_cents,
-            commission_cents=batch.commission_cents))
+            commission_cents=commission))
         t.status='sold';t.order_id=order.id;t.sold_at=now;recorded+=1
     db.add(SecurityLog(user_id=user.id, action='PAPER_TICKET_SALES_RECORDED',
         description=f'Batch {batch_id}; new sales {recorded}; staff attested customer cash payment. Not fighter remittance.', success=True))
