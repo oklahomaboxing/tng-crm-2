@@ -1,4 +1,5 @@
 import React from "react";
+import DocuSignConnectionPanel from "../components/DocuSignConnectionPanel.jsx";
 import {
   Alert,
   Box,
@@ -39,6 +40,7 @@ export default function EventContractsPage({
 }) {
   return (
           <Stack spacing={2}>
+            <DocuSignConnectionPanel />
             {activeBouts.map((bout, index) => (
               <Card key={bout.id}>
                 <CardContent>
@@ -905,7 +907,7 @@ export default function EventContractsPage({
                                   )
                                 }
                               >
-                                Sync Adobe
+                                Sync DocuSign
                               </Button>
                             )}
 
@@ -1522,7 +1524,7 @@ export default function EventContractsPage({
                                   )
                                 }
                               >
-                                Sync Adobe
+                                Sync DocuSign
                               </Button>
                             )}
 

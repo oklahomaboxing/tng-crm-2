@@ -171,10 +171,13 @@ def _docusign_access_token():
             config["private_key"].encode("utf-8"),
             password=None,
         )
+        from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+        if not isinstance(private_key, RSAPrivateKey):
+            raise ValueError("An RSA private key is required")
     except Exception as exc:
         print(
             "DOCUSIGN PRIVATE KEY ERROR: "
-            f"{exc.__class__.__name__}: {str(exc)[:300]}",
+            f"{exc.__class__.__name__}",
             flush=True,
         )
         raise HTTPException(
@@ -204,52 +207,47 @@ def _docusign_access_token():
         algorithm="RS256",
     )
 
-    response = requests.post(
-        (
-            "https://"
-            f'{config["auth_server"]}'
-            "/oauth/token"
-        ),
-        data={
-            "grant_type":
-                "urn:ietf:params:oauth:"
-                "grant-type:jwt-bearer",
-            "assertion": assertion,
-        },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=10,
-    )
+    try:
+        response = requests.post(
+            (
+                "https://"
+                f'{config["auth_server"]}'
+                "/oauth/token"
+            ),
+            data={
+                "grant_type":
+                    "urn:ietf:params:oauth:"
+                    "grant-type:jwt-bearer",
+                "assertion": assertion,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=10,
+        )
+    except requests.RequestException:
+        raise HTTPException(502, "DocuSign authentication service could not be reached. Check the connection before sending contracts.")
 
     if not response.ok:
-        detail = ""
-
         try:
-            body = response.json()
+            failure = response.json()
+            error = str(failure.get("error") or "authentication_failed") if isinstance(failure, dict) else "authentication_failed"
+        except ValueError:
+            error = "authentication_failed"
+        messages = {
+            "no_valid_keys_or_signatures": "The RSA signing key does not match this DocuSign integration or environment. Register the server's public key under the configured integration in the matching demo or production account.",
+            "consent_required": "The DocuSign sending user must grant signature and impersonation consent to this integration.",
+            "user_not_found": "The configured DocuSign user was not found in this environment. Check the sending user ID and demo/production settings.",
+            "issuer_not_found": "The integration key was not found in this DocuSign environment. Check the integration key and demo/production settings.",
+            "invalid_grant": "DocuSign rejected the JWT grant. Check the integration, user, RSA key, consent, environment, and server clock.",
+        }
+        raise HTTPException(502, "DocuSign authentication failed: " + messages.get(error, "The provider rejected authentication. Check the sending account configuration."))
 
-            detail = str(
-                body.get("error_description")
-                or body.get("error")
-                or ""
-            ).strip()
-        except Exception:
-            detail = str(
-                response.text or ""
-            ).strip()
+    try:
+        body = response.json()
+    except ValueError:
+        raise HTTPException(502, "DocuSign returned an invalid authentication response.")
 
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "DocuSign authentication failed"
-                + (
-                    f": {detail[:500]}"
-                    if detail
-                    else "."
-                )
-            ),
-        )
-
-    body = response.json()
-
+    if not isinstance(body, dict):
+        raise HTTPException(502, "DocuSign returned an invalid authentication response.")
     access_token = str(
         body.get("access_token") or ""
     ).strip()
@@ -1560,6 +1558,58 @@ def build_matchmaker_router(current_user_dependency):
 
     def require_staff(user):
         require_matchmaker_access(user)
+
+    @router.post("/docusign/connection-check")
+    def check_docusign_connection(user=Depends(current_user_dependency)):
+        require_staff(user)
+        import requests
+        from urllib.parse import urlparse
+        result = {"ready": False, "no_contracts_sent": True}
+        try:
+            config = _docusign_config()
+            result["environment"] = "demo" if config["auth_server"] == "account-d.docusign.com" else "production"
+            result["integration_key_suffix"] = config["integration_key"][-6:]
+            token = _docusign_access_token()
+            response = requests.get("https://" + config["auth_server"] + "/oauth/userinfo",
+                headers={"Authorization": "Bearer " + token}, timeout=10)
+            if not response.ok:
+                raise HTTPException(502, "DocuSign authenticated, but the sending account could not be verified.")
+            identity = response.json()
+            if not isinstance(identity, dict) or not isinstance(identity.get("accounts"), list):
+                raise ValueError("Invalid account response")
+            accounts = identity["accounts"]
+            account = next((a for a in accounts if isinstance(a, dict) and a.get("account_id") == config["account_id"]), None)
+            if not account:
+                raise HTTPException(502, "The configured sending user does not have access to the configured DocuSign account ID.")
+            actual_base = str(account.get("base_uri") or "").rstrip("/")
+            if actual_base != config["base_uri"]:
+                result["account_api_host"] = urlparse(actual_base).hostname
+                raise HTTPException(502, "DOCUSIGN_BASE_URI does not match this sending account. Update it to the account API host shown by this check.")
+            result.update(ready=True, message="DocuSign authentication and account access verified. No contract was sent.")
+        except HTTPException as exc:
+            result["message"] = exc.detail
+        except (requests.RequestException, ValueError, TypeError):
+            result["message"] = "DocuSign connection could not be verified. Try again before sending a contract."
+        return result
+
+    @router.get("/docusign/public-key")
+    def docusign_public_key(user=Depends(current_user_dependency)):
+        require_admin(user)
+        from cryptography.hazmat.primitives import serialization
+        try:
+            key = serialization.load_pem_private_key(_docusign_config()["private_key"].encode(), password=None)
+            from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+            if not isinstance(key, RSAPrivateKey):
+                raise ValueError("RSA required")
+            public_pem = key.public_key().public_bytes(serialization.Encoding.PEM,
+                serialization.PublicFormat.SubjectPublicKeyInfo)
+        except HTTPException:
+            raise
+        except (ValueError, TypeError):
+            raise HTTPException(503, "The configured DocuSign RSA key could not be loaded.")
+        return Response(public_pem, media_type="application/x-pem-file",
+            headers={"Content-Disposition": 'attachment; filename="TNG-DocuSign-PUBLIC-key.pem"',
+                     "Cache-Control": "no-store"})
 
     @router.post("/register-fighter")
     def public_register_fighter(
