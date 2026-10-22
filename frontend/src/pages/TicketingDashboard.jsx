@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import EventTicketSales from "./EventTicketSales.jsx";
+import TicketRecoveryPanel from "../components/tickets/TicketRecoveryPanel.jsx";
 import TicketDoorScanner from "../components/tickets/TicketDoorScanner.jsx";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "https://sea-lion-app-2-gxyfr.ondigitalocean.app").replace(/\/$/, "");
@@ -1087,6 +1088,8 @@ const [ticketTypes, setTicketTypes] = useState([]);
 
       {eventId && (
         <>
+          <TicketRecoveryPanel key={eventId} eventId={eventId} onChanged={() => loadSummary(eventId)} />
+
           <EventTicketSales eventId={eventId} />
 
           <TicketDoorScanner />
@@ -1134,7 +1137,7 @@ const [ticketTypes, setTicketTypes] = useState([]);
                         <button
                           onClick={() =>
                             downloadReport(
-                              `${API_BASE}/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/report.pdf`,
+                              `/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/report.pdf`,
                               `seller_${seller.seller_id}_report.pdf`
                             )
                           }
@@ -1147,7 +1150,7 @@ const [ticketTypes, setTicketTypes] = useState([]);
                         <button
                           onClick={() =>
                             downloadReport(
-                              `${API_BASE}/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/report.csv`,
+                              `/api/ticketing/events/${eventId}/sellers/${seller.seller_id}/report.csv`,
                               `seller_${seller.seller_id}_report.csv`
                             )
                           }

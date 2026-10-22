@@ -32,6 +32,67 @@ class TicketingTests(unittest.TestCase):
         o.clover_checkout_id="test-checkout"; self.db.commit()
         return o
 
+    def test_recovery_dashboard_fighter_credit_health_and_privacy(self):
+        o = self.order(); self.providers()
+        self.assertEqual(self.payment(o.clover_checkout_id).status_code, 200)
+        delivery = self.db.query(TicketDelivery).filter_by(order_id=o.id, channel="sms").one()
+        delivery.status = "failed"; delivery.last_error = "Provider error"; self.db.commit()
+        path = f"/api/ticketing/events/{o.event_id}/recovery-dashboard"
+        r = self.client.get(path, headers=self.headers())
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json(); row = body["orders"][0]
+        self.assertEqual(body["summary"]["needs_attention"], 1)
+        self.assertEqual(body["summary"]["paid_total_cents"], 8000)
+        self.assertEqual(row["commission_cents"], 800)
+        self.assertEqual(row["seller_name"], "Test Fighter")
+        self.assertEqual((row["issued_tickets"], row["expected_tickets"]), (2, 2))
+        self.assertIn("SMS failed", row["issues"])
+        self.assertNotIn("access_token", r.text)
+        self.assertNotIn("qr_token", r.text)
+        self.assertEqual(self.client.get(path, params={"q":"TEST FIGHTER", "issue":"attention"}, headers=self.headers()).json()["total"], 1)
+        self.assertEqual(self.client.get(path, params={"q":"unmatched"}, headers=self.headers()).json()["total"], 0)
+        other = BoxingEvent(slug="another-night", name="Another Night")
+        self.db.add(other); self.db.commit()
+        self.assertEqual(self.client.get(f"/api/ticketing/events/{other.id}/recovery-dashboard", headers=self.headers()).json()["total"], 0)
+
+    def test_recovery_dashboard_pending_never_implies_paid_and_protects_links(self):
+        o = self.order()
+        path = f"/api/ticketing/events/{o.event_id}/recovery-dashboard"
+        result = self.client.get(path, params={"issue":"pending"}, headers=self.headers("staff")).json()
+        self.assertEqual(result["summary"]["pending_orders"], 1)
+        self.assertEqual(result["summary"]["needs_attention"], 0)
+        self.assertEqual(result["summary"]["paid_total_cents"], 0)
+        self.assertFalse(result["can_reconcile"])
+        self.assertEqual(self.client.get(f"/api/ticketing/orders/{o.id}/ticket-page", headers=self.headers()).status_code, 409)
+        for role in ("fighter", "member", "rep"):
+            self.assertEqual(self.client.get(path, headers=self.headers(role)).status_code, 403)
+            self.assertEqual(self.client.get(f"/api/ticketing/orders/{o.id}/ticket-page", headers=self.headers(role)).status_code, 403)
+        self.assertEqual(self.client.get(path, params={"page_size":101}, headers=self.headers()).status_code, 422)
+
+    def test_recovery_dashboard_detects_partial_issuance_and_refund_excludes_commission(self):
+        o = self.order(); o.payment_status = "paid"; self.db.commit()
+        issue_paid_order(self.db, o, json.loads(o.items_json)); self.db.commit()
+        ticket = self.db.query(IssuedTicket).filter_by(order_id=o.id).first()
+        self.db.delete(ticket); self.db.commit()
+        path = f"/api/ticketing/events/{o.event_id}/recovery-dashboard"
+        row = self.client.get(path, headers=self.headers()).json()["orders"][0]
+        self.assertIn("Ticket count does not match order", row["issues"])
+        self.assertEqual(row["commission_cents"], 400)
+        o.payment_status = "refunded"; self.db.commit()
+        result = self.client.get(path, headers=self.headers()).json()
+        self.assertEqual(result["summary"]["commission_earned_cents"], 0)
+        self.assertEqual(self.client.get(f"/api/ticketing/orders/{o.id}/ticket-page", headers=self.headers()).status_code, 409)
+
+    def test_staff_ticket_page_reads_without_sending_or_issuing(self):
+        o = self.order(); sm, em = self.providers()
+        self.assertEqual(self.payment(o.clover_checkout_id).status_code, 200)
+        sm.reset_mock(); em.reset_mock()
+        r = self.client.get(f"/api/ticketing/orders/{o.id}/ticket-page", headers=self.headers("staff"))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("access_token=", r.json()["ticket_url"])
+        self.assertEqual(self.db.query(IssuedTicket).filter_by(order_id=o.id).count(), 2)
+        sm.assert_not_called(); em.assert_not_called()
+
     def test_ticket_text_consent_is_recorded(self):
         from app.ticketing.models import TicketSmsConsent
         from app.ticketing.routes import TICKET_SMS_NOTICE
