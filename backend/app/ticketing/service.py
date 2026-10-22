@@ -115,6 +115,12 @@ def scan_ticket(db: Session, event_id: int, raw_token: str, scanned_by_user_id: 
         {IssuedTicket.status: IssuedTicket.status}, synchronize_session=False)
     ticket = db.query(IssuedTicket).filter_by(qr_token_hash=token_hash).populate_existing().first()
     if not ticket:
+        from .models import PaperTicket, PaperTicketBatch
+        paper = db.query(PaperTicket, PaperTicketBatch.event_id).join(PaperTicketBatch).filter(PaperTicket.qr_token_hash == token_hash).first()
+        if paper:
+            item, paper_event_id = paper
+            result = "wrong_event" if paper_event_id != event_id else "void" if item.status == "returned" else "not_activated" if item.status == "allocated" else "invalid"
+            return {"ok": False, "result": result, "ticket_number": item.ticket_number}
         return {"ok": False, "result": "invalid"}
     if ticket.event_id != event_id:
         result = "wrong_event"

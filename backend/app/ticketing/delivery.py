@@ -38,6 +38,8 @@ def sms_status_url(delivery_id):
 
 
 def queue_deliveries(db, order):
+    if order.payment_provider == "paper_cash":
+        return  # Customer already holds the paper ticket; no automatic messages.
     for channel in ("sms", "email"):
         if channel == "sms" and not order.buyer_phone:
             continue

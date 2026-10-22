@@ -10,12 +10,12 @@ import {
 
 const API =
   import.meta.env.VITE_API_URL ||
-  "http://127.0.0.1:8000";
+  "https://sea-lion-app-2-gxyfr.ondigitalocean.app";
 
 const SCANNER_ID =
   "tng-event-ticket-scanner";
 
-export default function TicketDoorScanner() {
+export default function TicketDoorScanner({ eventId }) {
   const scannerRef = useRef(null);
 
   const [token, setToken] =
@@ -47,6 +47,7 @@ export default function TicketDoorScanner() {
     ).trim();
 
     if (!value || working) return;
+    if (!eventId) { setError("Select an event before scanning tickets."); return; }
 
     setWorking(true);
     setResult(null);
@@ -67,6 +68,7 @@ export default function TicketDoorScanner() {
           },
           body: JSON.stringify({
             token: value,
+            event_id: Number(eventId),
           }),
         }
       );
@@ -239,7 +241,7 @@ export default function TicketDoorScanner() {
           </div>
 
           <div>
-            {result.result}
+            {result.result === "not_activated" ? "Paper ticket not activated. Ask staff to verify and record the sale." : result.result}
           </div>
 
           {result.ticket_number && (

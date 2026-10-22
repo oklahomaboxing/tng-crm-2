@@ -88,7 +88,7 @@ def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
             elif usable != expected:
                 problems.append("Voided or refunded tickets need review")
             channels = {d["channel"] for d in ds}
-            for channel in (["email", "sms"] if o.buyer_phone else ["email"]):
+            for channel in ([] if o.payment_provider == "paper_cash" else ["email", "sms"] if o.buyer_phone else ["email"]):
                 if channel not in channels:
                     problems.append(f"{channel.upper()} delivery not queued")
             for d in ds:
@@ -101,12 +101,12 @@ def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
         row = {"order_id": o.id, "receipt_number": o.receipt_number,
                "buyer_name": o.buyer_name, "buyer_email": o.buyer_email,
                "buyer_phone": o.buyer_phone, "seller_id": o.seller_id,
-               "seller_name": seller_name, "payment_status": o.payment_status,
+               "seller_name": seller_name, "payment_status": o.payment_status, "payment_provider": o.payment_provider,
                "total_cents": o.total_cents, "payment_id": o.payment_id,
                "clover_checkout_id": o.clover_checkout_id,
                "expected_tickets": expected, "issued_tickets": issued, "usable_tickets": usable,
                "commission_cents": commission, "deliveries": ds, "issues": problems,
-               "can_recover": o.payment_status == "paid" and expected is not None and
+               "can_recover": o.payment_status == "paid" and o.payment_provider != "paper_cash" and expected is not None and
                    (issued == 0 or issued == usable == expected),
                "created_at": o.created_at.isoformat() if o.created_at else None}
         if query and query not in " ".join(str(row[k] or "") for k in (

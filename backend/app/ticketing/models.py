@@ -129,3 +129,28 @@ class SellerPayout(Base):
     paid_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class PaperTicketBatch(Base):
+    __tablename__ = "paper_ticket_batches"
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("boxing_events.id"), nullable=False, index=True)
+    seller_id = Column(Integer, ForeignKey("event_sellers.id"), nullable=False, index=True)
+    ticket_type_id = Column(Integer, ForeignKey("event_ticket_types.id"), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    commission_cents = Column(Integer, nullable=False)
+    request_key = Column(String(36), unique=True, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+class PaperTicket(Base):
+    __tablename__ = "paper_tickets"
+    id = Column(Integer, primary_key=True)
+    batch_id = Column(Integer, ForeignKey("paper_ticket_batches.id"), nullable=False, index=True)
+    ticket_number = Column(String(50), unique=True, nullable=False, index=True)
+    qr_token_hash = Column(String(128), unique=True, nullable=False, index=True)
+    qr_token_encrypted = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="allocated")  # allocated|sold|returned
+    order_id = Column(Integer, ForeignKey("ticket_orders.id"), unique=True, nullable=True)
+    sold_at = Column(DateTime, nullable=True)
+    returned_at = Column(DateTime, nullable=True)

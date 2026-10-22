@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import EventTicketSales from "./EventTicketSales.jsx";
+import PaperTicketPanel from "../components/tickets/PaperTicketPanel.jsx";
 import TicketRecoveryPanel from "../components/tickets/TicketRecoveryPanel.jsx";
 import TicketDoorScanner from "../components/tickets/TicketDoorScanner.jsx";
 
@@ -1090,9 +1091,11 @@ const [ticketTypes, setTicketTypes] = useState([]);
         <>
           <TicketRecoveryPanel key={eventId} eventId={eventId} onChanged={() => loadSummary(eventId)} />
 
+          <PaperTicketPanel key={`paper-${eventId}`} eventId={eventId} sellers={summary?.sellers || []} ticketTypes={ticketTypes} onChanged={() => loadSummary(eventId)} />
+
           <EventTicketSales eventId={eventId} />
 
-          <TicketDoorScanner />
+          <TicketDoorScanner eventId={eventId} />
 
           <div style={{ marginTop: 30 }}>
             <h2>Seller Reports</h2>
