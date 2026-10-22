@@ -43,7 +43,7 @@ class DocuSignTests(unittest.TestCase):
                 r=self.check();self.assertFalse(r.json()['ready']);self.assertIn(message,r.json()['message'])
 
     def test_rsa_mismatch_is_actionable_and_does_not_expose_provider_body(self):
-        response=Mock(ok=False);response.json.return_value={'error':'no_valid_keys_or_signatures','error_description':'PRIVATE_PROVIDER_DETAIL'}
+        response=Mock(ok=False);response.json.return_value={'error':'invalid_grant','error_description':'no_valid_keys_or_signatures','untrusted_detail':'PRIVATE_PROVIDER_DETAIL'}
         with patch.dict(os.environ,self.config),patch('requests.post',return_value=response) as post:
             r=self.check();self.assertFalse(r.json()['ready']);self.assertIn('RSA signing key',r.json()['message'])
             self.assertNotIn('PRIVATE_PROVIDER_DETAIL',r.text)

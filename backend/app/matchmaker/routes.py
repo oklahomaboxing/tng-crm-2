@@ -230,6 +230,9 @@ def _docusign_access_token():
         try:
             failure = response.json()
             error = str(failure.get("error") or "authentication_failed") if isinstance(failure, dict) else "authentication_failed"
+            if isinstance(failure, dict) and failure.get("error_description") in {
+                    "no_valid_keys_or_signatures", "consent_required", "user_not_found", "issuer_not_found"}:
+                error = failure["error_description"]
         except ValueError:
             error = "authentication_failed"
         messages = {
