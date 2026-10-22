@@ -11,3 +11,5 @@ Open an event's Event Ticket Sales page and use **Orders & ticket recovery**. Ad
 The dashboard also fixes seller PDF/CSV download paths that previously included the backend URL twice.
 
 Validation: 30 ticketing regression tests, frontend production build, and browser checks using synthetic API fixtures for read-only load/view, explicit reconciliation confirmation, and a single recovery submission. No customer notifications are sent by these checks.
+
+Deployment runtime: `.python-version` files pin Python 3.11.15, the existing live runtime. DigitalOcean selected 3.11.17 from an unpinned 3.11 declaration but its Ubuntu 22.04 runtime archive returned HTTP 404; the 3.11.15 archive was verified available before retry. Review the pin when a newer runtime is available.
