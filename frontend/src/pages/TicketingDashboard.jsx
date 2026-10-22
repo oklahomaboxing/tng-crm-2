@@ -1095,7 +1095,7 @@ const [ticketTypes, setTicketTypes] = useState([]);
 
           <EventTicketSales eventId={eventId} />
 
-          <TicketDoorScanner eventId={eventId} />
+          <TicketDoorScanner key={`door-${eventId}`} eventId={eventId} />
 
           <div style={{ marginTop: 30 }}>
             <h2>Seller Reports</h2>

@@ -27,7 +27,7 @@ export default function PaperTicketPanel({ eventId, sellers = [], ticketTypes = 
       const signature = JSON.stringify([seller, kind, qty]);
       if (allocation.current?.signature !== signature) allocation.current = { signature, key: crypto.randomUUID() };
       const body = await request(`/events/${eventId}/paper-batches`, { method: 'POST', body: JSON.stringify({ seller_id: Number(seller), ticket_type_id: Number(kind), quantity: qty, request_key: allocation.current.key }) });
-      allocation.current = null; await load(); await openBatch(body.id);
+      await load(); await openBatch(body.id); allocation.current = null;
       setNotice(`Batch #${body.id} created. Download the PDF below and print at Actual Size (100%). These tickets are not active until sales are recorded.`);
     });
   }
