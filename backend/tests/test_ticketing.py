@@ -93,6 +93,44 @@ class TicketingTests(unittest.TestCase):
         self.assertEqual(self.db.query(IssuedTicket).filter_by(order_id=o.id).count(), 2)
         sm.assert_not_called(); em.assert_not_called()
 
+    def test_paid_and_unfinished_views_preserve_referral_without_counting_checkout_value(self):
+        paid = self.order(); self.providers()
+        self.assertEqual(self.payment(paid.clover_checkout_id).status_code, 200)
+        pending = TicketOrder(event_id=paid.event_id, seller_id=paid.seller_id,
+            buyer_name="Checkout Visitor", buyer_email="visitor@example.com", buyer_phone="",
+            subtotal_cents=8000, fee_cents=0, total_cents=8000, payment_provider="clover",
+            payment_status="pending", clover_checkout_id="unfinished-checkout", items_json=paid.items_json,
+            receipt_number="TEST-UNFINISHED-RECORD")
+        self.db.add(pending); self.db.commit()
+        path = f"/api/ticketing/events/{paid.event_id}/recovery-dashboard"
+        purchased = self.client.get(path, params={"issue":"paid"}, headers=self.headers()).json()
+        unfinished = self.client.get(path, params={"issue":"unfinished"}, headers=self.headers()).json()
+        self.assertEqual([r["order_id"] for r in purchased["orders"]], [paid.id])
+        self.assertEqual([r["order_id"] for r in unfinished["orders"]], [pending.id])
+        row = unfinished["orders"][0]
+        self.assertEqual(row["record_kind"], "unfinished_checkout")
+        self.assertEqual(row["payment_status_label"], "Checkout started — payment not confirmed")
+        self.assertEqual(row["seller_id"], paid.seller_id)
+        self.assertEqual(row["commission_cents"], 0)
+        self.assertEqual(unfinished["summary"]["paid_total_cents"], 8000)
+        self.assertEqual(unfinished["summary"]["unfinished_checkouts"], 1)
+        self.assertEqual(self.client.get(path,headers=self.headers()).json()["total"], 2)
+        self.db.refresh(pending)
+        self.assertEqual(pending.payment_status, "pending")
+        self.assertIsNone(pending.payment_id)
+
+    def test_checkout_labels_distinguish_saved_details_from_recorded_failure(self):
+        o = self.order(); o.clover_checkout_id = None; self.db.commit()
+        path = f"/api/ticketing/events/{o.event_id}/recovery-dashboard"
+        r = self.client.get(path,params={"issue":"unfinished"},headers=self.headers()).json()
+        self.assertEqual(r["orders"][0]["payment_status_label"], "Details saved — checkout not confirmed")
+        o.payment_status = "failed"; self.db.commit()
+        r = self.client.get(path,params={"issue":"unfinished"},headers=self.headers()).json()
+        self.assertEqual(r["orders"][0]["payment_status_label"], "Payment failed — not a completed purchase")
+        self.assertEqual(r["summary"]["unfinished_checkouts"], 1)
+        self.assertEqual(r["summary"]["pending_orders"], 0)
+        self.assertEqual(r["summary"]["paid_total_cents"], 0)
+
     def test_ticket_text_consent_is_recorded(self):
         from app.ticketing.models import TicketSmsConsent
         from app.ticketing.routes import TICKET_SMS_NOTICE

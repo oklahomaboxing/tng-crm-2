@@ -36,7 +36,7 @@ def incident_orders(event_id: int, db: Session = Depends(get_db), user=Depends(s
 
 @router.get("/events/{event_id}/recovery-dashboard")
 def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
-                       issue: str = Query("all", pattern="^(all|attention|pending|unattributed)$"),
+                       issue: str = Query("all", pattern="^(all|paid|unfinished|attention|pending|unattributed)$"),
                        page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100),
                        db: Session = Depends(get_db), user=Depends(staff_user)):
     from app.matchmaker.models import BoxingEvent
@@ -58,7 +58,7 @@ def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
             "attempts": d.attempts, "last_error": d.last_error,
             "sent_at": d.sent_at.isoformat() if d.sent_at else None})
     summary = {"orders": len(orders), "paid_orders": 0, "paid_total_cents": 0,
-               "pending_orders": 0, "needs_attention": 0, "unattributed_paid_orders": 0,
+               "pending_orders": 0, "unfinished_checkouts": 0, "needs_attention": 0, "unattributed_paid_orders": 0,
                "commission_earned_cents": 0}
     rows = []
     query = q.strip().casefold()
@@ -98,7 +98,16 @@ def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
                 summary["needs_attention"] += 1
         if o.payment_status == "pending":
             summary["pending_orders"] += 1
+        if o.payment_status in ("pending", "failed"):
+            summary["unfinished_checkouts"] += 1
+        if o.payment_status == "pending":
+            payment_label = "Checkout started — payment not confirmed" if o.clover_checkout_id else "Details saved — checkout not confirmed"
+        else:
+            payment_label = {"paid": "Paid", "failed": "Payment failed — not a completed purchase",
+                "refunded": "Refunded", "partial_refund": "Partially refunded"}.get(o.payment_status, "Payment status needs review")
+        record_kind = "unfinished_checkout" if o.payment_status in ("pending", "failed") else "purchase" if o.payment_status in ("paid", "refunded", "partial_refund") else "review"
         row = {"order_id": o.id, "receipt_number": o.receipt_number,
+               "record_kind": record_kind, "payment_status_label": payment_label,
                "buyer_name": o.buyer_name, "buyer_email": o.buyer_email,
                "buyer_phone": o.buyer_phone, "seller_id": o.seller_id,
                "seller_name": seller_name, "payment_status": o.payment_status, "payment_provider": o.payment_provider,
@@ -111,6 +120,10 @@ def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
                "created_at": o.created_at.isoformat() if o.created_at else None}
         if query and query not in " ".join(str(row[k] or "") for k in (
                 "order_id", "receipt_number", "buyer_name", "buyer_email", "seller_name", "clover_checkout_id", "payment_id")).casefold():
+            continue
+        if issue == "paid" and o.payment_status != "paid":
+            continue
+        if issue == "unfinished" and record_kind != "unfinished_checkout":
             continue
         if issue == "attention" and not problems:
             continue
