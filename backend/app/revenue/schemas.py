@@ -223,7 +223,13 @@ class RevenueOrganizationUpdate(BaseModel):
 
 
 class SponsorScoutPipelineCreate(BaseModel):
-    business_name: str
+    business_name: str = Field(min_length=1, max_length=180)
+    phone: Optional[str] = Field(default=None, max_length=80)
+    email: Optional[str] = Field(default=None, max_length=254)
+    address: Optional[str] = Field(default=None, max_length=300)
+    zip_code: Optional[str] = Field(default=None, max_length=20)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     website: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None

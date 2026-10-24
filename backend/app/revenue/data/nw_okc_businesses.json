@@ -1,0 +1,868 @@
+{
+  "source": "OpenStreetMap contributors",
+  "license_url": "https://www.openstreetmap.org/copyright",
+  "source_url": "https://api.openstreetmap.org/api/0.6/map?bbox=-97.683,35.554,-97.645,35.586",
+  "retrieved_at": "2026-10-24T00:29:10.100513+00:00",
+  "center": {
+    "lat": 35.56871056141,
+    "lon": -97.66325776497,
+    "address": "8416 NW Expressway, Oklahoma City, OK 73162"
+  },
+  "coverage_note": "Nearby map sample, not a complete business directory. Verify current location, contact details, and sponsorship interest.",
+  "elements": [
+    {
+      "type": "node",
+      "id": 357394542,
+      "lat": 35.5726439,
+      "lon": -97.6702595,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Hi-Way Church"
+      }
+    },
+    {
+      "type": "node",
+      "id": 357403943,
+      "lat": 35.5628328,
+      "lon": -97.6453203,
+      "tags": {
+        "amenity": "school",
+        "name": "Saint Francis DeSales Seminary"
+      }
+    },
+    {
+      "type": "node",
+      "id": 357413121,
+      "lat": 35.5794983,
+      "lon": -97.6747655,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Community Church"
+      }
+    },
+    {
+      "type": "node",
+      "id": 357413125,
+      "lat": 35.5688691,
+      "lon": -97.6749357,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Harvest Hills Church"
+      }
+    },
+    {
+      "type": "node",
+      "id": 357468343,
+      "lat": 35.5686657,
+      "lon": -97.6553205,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Highland Hills Baptist Church"
+      }
+    },
+    {
+      "type": "node",
+      "id": 357469847,
+      "lat": 35.5675546,
+      "lon": -97.6555983,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Shook Memorial United Methodist Church"
+      }
+    },
+    {
+      "type": "node",
+      "id": 357470097,
+      "lat": 35.5768725,
+      "lon": -97.6552571,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Saint Pauls Lutheran Church"
+      }
+    },
+    {
+      "type": "node",
+      "id": 883241829,
+      "lat": 35.5633003,
+      "lon": -97.6516311,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7720",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "fast_food",
+        "name": "WingStreet",
+        "phone": "+1-405-722-2300",
+        "website": "https://locations.pizzahut.com/ok/oklahoma-city/7720-nw-expressway"
+      }
+    },
+    {
+      "type": "node",
+      "id": 2160336283,
+      "lat": 35.5698335,
+      "lon": -97.6685678,
+      "tags": {
+        "addr:housenumber": "8700",
+        "addr:street": "Northwest Expressway",
+        "name": "Battison Honda",
+        "shop": "car",
+        "website": "http://www.battisonhonda.com/"
+      }
+    },
+    {
+      "type": "node",
+      "id": 3767570260,
+      "lat": 35.5627235,
+      "lon": -97.6551019,
+      "tags": {
+        "name": "Walmart Auto Center",
+        "shop": "car_repair"
+      }
+    },
+    {
+      "type": "node",
+      "id": 3767593857,
+      "lat": 35.5630753,
+      "lon": -97.6548491,
+      "tags": {
+        "name": "Walmart Garden Center",
+        "shop": "garden_centre"
+      }
+    },
+    {
+      "type": "node",
+      "id": 4384787184,
+      "lat": 35.5804897,
+      "lon": -97.6534169,
+      "tags": {
+        "addr:housenumber": "7829",
+        "addr:street": "West Hefner Road",
+        "amenity": "restaurant",
+        "name": "China House",
+        "phone": "+1-405-773-0110"
+      }
+    },
+    {
+      "type": "node",
+      "id": 6359597951,
+      "lat": 35.5631803,
+      "lon": -97.6517079,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7720",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "restaurant",
+        "name": "Pizza Hut",
+        "phone": "+1-405-722-2300",
+        "website": "https://locations.pizzahut.com/ok/oklahoma-city/7720-nw-expressway"
+      }
+    },
+    {
+      "type": "node",
+      "id": 8127227907,
+      "lat": 35.5634134,
+      "lon": -97.6566985,
+      "tags": {
+        "addr:housenumber": "9201",
+        "addr:street": "North Council Road",
+        "name": "Rover’s Makeover Dog Grooming",
+        "shop": "pet_grooming",
+        "website": "https://roversmakeoverokc.com/"
+      }
+    },
+    {
+      "type": "node",
+      "id": 9694473128,
+      "lat": 35.5602373,
+      "lon": -97.6528537,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7800",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest 89th Street",
+        "name": "Precision Restoration, Inc.",
+        "office": "yes",
+        "phone": "+1-844-245-7979",
+        "website": "https://precisionresto.com"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11537865979,
+      "lat": 35.5804534,
+      "lon": -97.652333,
+      "tags": {
+        "amenity": "restaurant",
+        "name": "Hefner Sushi & Poke"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11537865990,
+      "lat": 35.5680239,
+      "lon": -97.6567295,
+      "tags": {
+        "amenity": "restaurant",
+        "name": "Creek Sushi and Poke"
+      }
+    },
+    {
+      "type": "node",
+      "id": 11751347836,
+      "lat": 35.5676745,
+      "lon": -97.6573859,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "8015",
+        "addr:postcode": "73162",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "Goodwill Thrift Store & Donation Center",
+        "phone": "+14057280722",
+        "shop": "second_hand"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555281,
+      "lat": 35.5617089,
+      "lon": -97.6496261,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "GameStop",
+        "phone": "+1 405 728 1395",
+        "shop": "video_games"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555282,
+      "lat": 35.5618344,
+      "lon": -97.6495604,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "Sport Clips",
+        "shop": "hairdresser"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555283,
+      "lat": 35.5619784,
+      "lon": -97.6494759,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132-1571",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "Sally Beauty",
+        "phone": "+1 405 722 9215",
+        "shop": "hairdresser_supply"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555284,
+      "lat": 35.5621246,
+      "lon": -97.649382,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "OK Nails",
+        "phone": "+1 405 721 0992",
+        "shop": "beauty"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555285,
+      "lat": 35.5622664,
+      "lon": -97.6492787,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "Mattress Firm",
+        "shop": "bed"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555286,
+      "lat": 35.5620307,
+      "lon": -97.6491554,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "Kernels & Kandies",
+        "phone": "+1 405 470 7446",
+        "shop": "confectionery",
+        "website": "https://www.kernelsandkandies.com/"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555287,
+      "lat": 35.5621617,
+      "lon": -97.6490896,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "restaurant",
+        "name": "S&B's Burger Joint",
+        "phone": "+1 405 603 8116",
+        "website": "https://www.sandbburgers.com/"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555288,
+      "lat": 35.5619369,
+      "lon": -97.6492238,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "Great Clips",
+        "shop": "hairdresser"
+      }
+    },
+    {
+      "type": "node",
+      "id": 12177555289,
+      "lat": 35.5617989,
+      "lon": -97.6493156,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7640",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "dentist",
+        "name": "Toothbrusher's Dental",
+        "phone": "+1 405 789 6935",
+        "website": "https://www.toothbrushers.com/"
+      }
+    },
+    {
+      "type": "node",
+      "id": 13354492053,
+      "lat": 35.5588354,
+      "lon": -97.656777,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "8613",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "North Council Road",
+        "name": "Speedee Oil Change",
+        "shop": "car_repair"
+      }
+    },
+    {
+      "type": "way",
+      "id": 181904132,
+      "lat": 35.568960999999994,
+      "lon": -97.67473754999999,
+      "tags": {
+        "amenity": "parking",
+        "name": "Harvest Hills Church Parking"
+      }
+    },
+    {
+      "type": "way",
+      "id": 182877032,
+      "lat": 35.562780193939396,
+      "lon": -97.65411940909088,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7800",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "Walmart Supercenter",
+        "phone": "+1 405-773-2625",
+        "shop": "supermarket",
+        "website": "https://www.walmart.com/store/622-oklahoma-city-ok"
+      }
+    },
+    {
+      "type": "way",
+      "id": 188637424,
+      "lat": 35.57660459333333,
+      "lon": -97.66010518,
+      "tags": {
+        "amenity": "school",
+        "name": "Harvest Hills School"
+      }
+    },
+    {
+      "type": "way",
+      "id": 228120809,
+      "lat": 35.56634758888889,
+      "lon": -97.65570195555556,
+      "tags": {
+        "name": "Walgreens",
+        "shop": "chemist",
+        "website": "https://www.walgreens.com/locator/walgreens-7930+nw+expressway-oklahoma+city-ok-73132/id=5740"
+      }
+    },
+    {
+      "type": "way",
+      "id": 229567440,
+      "lat": 35.56479629166667,
+      "lon": -97.65544902500001,
+      "tags": {
+        "amenity": "pharmacy",
+        "name": "CVS Pharmacy"
+      }
+    },
+    {
+      "type": "way",
+      "id": 229953667,
+      "lat": 35.56201898571428,
+      "lon": -97.65277234285713,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7730",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "Office Depot",
+        "phone": "+1 405-773-1762",
+        "shop": "stationery",
+        "website": "https://www.officedepot.com/storelocator/ok/oklahoma-city/office-depot-2163"
+      }
+    },
+    {
+      "type": "way",
+      "id": 229953668,
+      "lat": 35.56080953225806,
+      "lon": -97.64805102580648,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7620",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "name": "The Home Depot",
+        "phone": "+1 405-773-6077",
+        "shop": "doityourself",
+        "website": "https://www.homedepot.com/l/nw-oklahoma-city/ok/oklahoma-city/73132/3909"
+      }
+    },
+    {
+      "type": "way",
+      "id": 229953669,
+      "lat": 35.56157274827586,
+      "lon": -97.65187976551725,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "9001",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Passage",
+        "name": "Kohl's",
+        "phone": "+1 405-621-1779",
+        "shop": "department_store",
+        "website": "https://www.kohls.com/stores/ok/oklahomacity-488.shtml"
+      }
+    },
+    {
+      "type": "way",
+      "id": 229953670,
+      "lat": 35.560054287499995,
+      "lon": -97.65027603125002,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "9000",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Passage",
+        "name": "Sam's Club",
+        "phone": "+1 405-773-3602",
+        "shop": "wholesale",
+        "website": "https://www.samsclub.com/club/oklahoma-city-ok-sams-club/4731"
+      }
+    },
+    {
+      "type": "way",
+      "id": 229953672,
+      "lat": 35.559650999999995,
+      "lon": -97.64890806000001,
+      "tags": {
+        "amenity": "fuel",
+        "name": "Sam's Club"
+      }
+    },
+    {
+      "type": "way",
+      "id": 229953673,
+      "lat": 35.564763815384616,
+      "lon": -97.6566920153846,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "9401",
+        "addr:postcode": "73162-6207",
+        "addr:state": "OK",
+        "addr:street": "North Council Road",
+        "amenity": "fast_food",
+        "name": "Burger King",
+        "phone": "+1 405-722-4595",
+        "website": "https://www.bk.com/store-locator/store/restaurant_2323"
+      }
+    },
+    {
+      "type": "way",
+      "id": 254396941,
+      "lat": 35.58454951111111,
+      "lon": -97.65554619999999,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Grace Presbyterian Church"
+      }
+    },
+    {
+      "type": "way",
+      "id": 291854643,
+      "lat": 35.557098540909095,
+      "lon": -97.66617158181818,
+      "tags": {
+        "amenity": "school",
+        "name": "Northridge Elementary School"
+      }
+    },
+    {
+      "type": "way",
+      "id": 292008147,
+      "lat": 35.56647077692308,
+      "lon": -97.65674757692305,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "8001",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "fast_food",
+        "name": "McDonald's",
+        "phone": "+1 405-721-8000",
+        "website": "https://www.mcdonalds.com/us/en-us/location/7856.html"
+      }
+    },
+    {
+      "type": "way",
+      "id": 292021131,
+      "lat": 35.57093345789474,
+      "lon": -97.67052687894736,
+      "tags": {
+        "addr:housenumber": "8800",
+        "addr:street": "Northwest Expressway",
+        "name": "Orr Nissan West",
+        "shop": "car",
+        "website": "https://orrnissanwest.com/"
+      }
+    },
+    {
+      "type": "way",
+      "id": 292021133,
+      "lat": 35.571492588235294,
+      "lon": -97.6722665235294,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "8900",
+        "addr:postcode": "73162",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "email": "social@classicchevynwexpy.com",
+        "name": "Classic Chevrolet OKC",
+        "phone": "+1 405 470 8800",
+        "shop": "car"
+      }
+    },
+    {
+      "type": "way",
+      "id": 292021561,
+      "lat": 35.56615971111111,
+      "lon": -97.65834653333336,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "8104",
+        "addr:postcode": "73162",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "fast_food",
+        "name": "Arby's",
+        "phone": "+1 405-721-1693",
+        "website": "https://www.arbys.com/locations/us/ok/oklahoma-city/8104-nw-expressway/store-8441/"
+      }
+    },
+    {
+      "type": "way",
+      "id": 323889959,
+      "lat": 35.56309295454546,
+      "lon": -97.65124152727272,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7716",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "fast_food",
+        "name": "Wendy's",
+        "phone": "+1 405-721-8929",
+        "website": "https://locations.wendys.com/united-states/ok/oklahoma-city/7716-northwest-expressway"
+      }
+    },
+    {
+      "type": "way",
+      "id": 323890015,
+      "lat": 35.5628934,
+      "lon": -97.65091039230768,
+      "tags": {
+        "amenity": "restaurant",
+        "name": "IHOP"
+      }
+    },
+    {
+      "type": "way",
+      "id": 323890084,
+      "lat": 35.562720254545454,
+      "lon": -97.65044335909091,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "7700",
+        "addr:postcode": "73132",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "fast_food",
+        "name": "Panda Express",
+        "phone": "+1 405-720-6666",
+        "website": "https://www.pandaexpress.com/locations/ok/oklahoma-city/1445"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886694,
+      "lat": 35.576577594117644,
+      "lon": -97.65689948235297,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "10509",
+        "addr:postcode": "73162",
+        "addr:state": "OK",
+        "addr:street": "North Council Road",
+        "amenity": "place_of_worship",
+        "name": "Anglican Church of the Holy Cross"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886721,
+      "lat": 35.57955814444444,
+      "lon": -97.65272105555556,
+      "tags": {
+        "amenity": "post_office",
+        "name": "Hefner Post Office"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886730,
+      "lat": 35.566500112,
+      "lon": -97.65909815200001,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "8116",
+        "addr:postcode": "73162",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "fast_food",
+        "name": "Sonic",
+        "phone": "+1 405-722-1444",
+        "website": "https://locations.sonicdrivein.com/ok/oklahomacity/8116-n.w.-expressway.html"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886825,
+      "lat": 35.56814946153847,
+      "lon": -97.66280172307691,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "8390",
+        "addr:postcode": "73162",
+        "addr:state": "OK",
+        "addr:street": "Northwest Expressway",
+        "amenity": "fast_food",
+        "name": "Taco Bell",
+        "phone": "+1 405-720-7576",
+        "website": "https://locations.tacobell.com/ok/oklahoma-city/8390-nw-expressway-st.html"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886835,
+      "lat": 35.5675581,
+      "lon": -97.6557823,
+      "tags": {
+        "name": "7-Eleven",
+        "shop": "convenience"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886907,
+      "lat": 35.567582,
+      "lon": -97.6617638,
+      "tags": {
+        "name": "Discount Tire",
+        "shop": "tyres"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886909,
+      "lat": 35.56921128571429,
+      "lon": -97.66208004285714,
+      "tags": {
+        "amenity": "clinic",
+        "name": "Mercy Urgent Care"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886923,
+      "lat": 35.56794093333333,
+      "lon": -97.66236226000001,
+      "tags": {
+        "amenity": "fast_food",
+        "name": "Braum's",
+        "shop": "dairy"
+      }
+    },
+    {
+      "type": "way",
+      "id": 324886928,
+      "lat": 35.56727908888889,
+      "lon": -97.66121816666667,
+      "tags": {
+        "amenity": "bank",
+        "name": "TrueSky Credit Union"
+      }
+    },
+    {
+      "type": "way",
+      "id": 567648954,
+      "lat": 35.567550680000004,
+      "lon": -97.65603331999999,
+      "tags": {
+        "amenity": "fuel",
+        "name": "7-Eleven"
+      }
+    },
+    {
+      "type": "way",
+      "id": 568377586,
+      "lat": 35.581545818181816,
+      "lon": -97.65424563636363,
+      "tags": {
+        "name": "SecurCare Self Storage",
+        "shop": "storage_rental"
+      }
+    },
+    {
+      "type": "way",
+      "id": 568377587,
+      "lat": 35.581345500000005,
+      "lon": -97.65314387142858,
+      "tags": {
+        "name": "Amercian Self Storage",
+        "shop": "storage_rental"
+      }
+    },
+    {
+      "type": "way",
+      "id": 723141513,
+      "lat": 35.56882976666667,
+      "lon": -97.67512920666667,
+      "tags": {
+        "amenity": "place_of_worship",
+        "name": "Harvest Hills Church"
+      }
+    },
+    {
+      "type": "way",
+      "id": 723172196,
+      "lat": 35.565304003703694,
+      "lon": -97.65707042592594,
+      "tags": {
+        "addr:city": "Okalhoma City",
+        "addr:housenumber": "9417",
+        "addr:postcode": "73162",
+        "addr:state": "OK",
+        "addr:street": "North Council Road",
+        "amenity": "clinic",
+        "name": "INTEGRIS Community Hospital - Council Crossing",
+        "phone": "+1-405-500-3280"
+      }
+    },
+    {
+      "type": "way",
+      "id": 723172227,
+      "lat": 35.565256575,
+      "lon": -97.65750612500001,
+      "tags": {
+        "addr:city": "Oklahoma City",
+        "addr:housenumber": "9417",
+        "addr:postcode": "73162",
+        "addr:state": "OK",
+        "addr:street": "North Council Road",
+        "amenity": "hospital",
+        "name": "INTEGRIS Community Hospital - Council Crossing",
+        "website": "https://integriscommunityhospital.com/"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1253476648,
+      "lat": 35.5743233875,
+      "lon": -97.67699695,
+      "tags": {
+        "addr:city": "Yukon",
+        "addr:housenumber": "9102",
+        "addr:postcode": "73099",
+        "addr:state": "Oklahoma",
+        "addr:street": "Northwest Expressway",
+        "email": "darren@trinityboringsolutions.com",
+        "name": "Trinity Boring Solutions",
+        "phone": "+1-405-409-7423; +1-405-201-3377",
+        "shop": "trade",
+        "website": "https://trinityboringsolutions.com/directional-boring-in-yukon-ok/"
+      }
+    }
+  ]
+}

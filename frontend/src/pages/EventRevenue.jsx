@@ -157,6 +157,10 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
 
   const [scoutResults, setScoutResults] = useState([]);
   const [scoutLoading, setScoutLoading] = useState(false);
+  const [scoutAddress, setScoutAddress] = useState("8416 NW Expressway, Oklahoma City, OK 73162");
+  const [scoutRadius, setScoutRadius] = useState(5);
+  const [scoutCategory, setScoutCategory] = useState("all");
+  const [scoutMeta, setScoutMeta] = useState(null);
   const [addingSponsor, setAddingSponsor] = useState("");
   const [proposalLoadingId, setProposalLoadingId] = useState(null);
   const [emailSendingId, setEmailSendingId] = useState(null);
@@ -939,6 +943,12 @@ async function seedSponsorshipInventory() {
           body: JSON.stringify({
             business_name: candidate.business_name,
             website: candidate.website || null,
+            phone: candidate.phone || null,
+            email: candidate.email || null,
+            address: candidate.address || null,
+            zip_code: candidate.zip_code || null,
+            latitude: candidate.latitude ?? null,
+            longitude: candidate.longitude ?? null,
             city: candidate.city || null,
             state: candidate.state || null,
             industry: candidate.industry || null,
@@ -983,7 +993,7 @@ async function seedSponsorshipInventory() {
               candidate.verified_sponsorship_history ?? null,
 
             lead_source:
-              candidate.lead_source || "OPENAI_WEB_SEARCH",
+              candidate.lead_source || "MANUAL",
           }),
         }
       );
@@ -997,60 +1007,7 @@ async function seedSponsorshipInventory() {
         );
       }
 
-      const prospectId =
-        body.prospect_id || body.id;
-
-      if (prospectId) {
-        try {
-          const autoResponse = await revenueFetch(
-            `${API_BASE}/api/events/${eventId}/revenue/prospects/${prospectId}/auto-outreach`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                event_name:
-                  event?.name ||
-                  event?.title ||
-                  event?.event_name ||
-                  "TNG Boxing Event",
-
-                event_date:
-                  event?.event_date || null,
-
-                event_venue:
-                  event?.venue || null,
-
-                event_address:
-                  event?.venue_address || null,
-
-                send_if_ready: true,
-              }),
-            }
-          );
-
-          const autoBody = await autoResponse.json();
-
-          if (!autoResponse.ok) {
-            console.error(
-              "Automatic outreach failed:",
-              autoBody
-            );
-          } else {
-            console.log(
-              "Automatic outreach:",
-              autoBody
-            );
-          }
-        } catch (autoError) {
-          console.error(
-            "Automatic sponsor outreach error:",
-            autoError
-          );
-        }
-      }
-
+      // Saving a lead does not authorize outreach. Use the explicit send controls.
       await loadData();
 
       setScoutResults((current) =>
@@ -1410,7 +1367,7 @@ async function seedSponsorshipInventory() {
       status: prospect.proposal_status || "DRAFT",
     });
   }
-  async function runSponsorScout() {
+  async function runSponsorScout(refresh = false) {
     if (tab !== "SPONSOR") {
       alert("Vendor Scout will be connected next.");
       return;
@@ -1419,6 +1376,7 @@ async function seedSponsorshipInventory() {
     setScoutLoading(true);
     setScoutError("");
     setScoutResults([]);
+    setScoutMeta(null);
 
     const eventName =
       event?.name ||
@@ -1426,24 +1384,30 @@ async function seedSponsorshipInventory() {
       event?.event_name ||
       `TNG Event ${eventId}`;
 
-    const eventAddress =
-      event?.venue_address ||
-      event?.venue ||
-      "Oklahoma City, OK";
+    if (!scoutAddress.trim() || !Number.isFinite(Number(scoutRadius)) || Number(scoutRadius) < 1 || Number(scoutRadius) > 50) {
+      setScoutError("Enter a full search address and a radius from 1 to 50 miles.");
+      setScoutLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 35000);
 
     try {
       const response = await revenueFetch(
         `${API_BASE}/api/events/${eventId}/revenue/scout/sponsors`,
         {
           method: "POST",
+          signal: controller.signal,
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             event_name: eventName,
-            event_address: eventAddress,
-            radius_miles: 10,
-            max_results: 5,
+            event_address: scoutAddress.trim(),
+            radius_miles: Number(scoutRadius),
+            category: scoutCategory,
+            max_results: 20,
+            refresh,
           }),
         }
       );
@@ -1452,18 +1416,19 @@ async function seedSponsorshipInventory() {
 
       if (!response.ok) {
         throw new Error(
-          body?.detail ||
-          `Sponsor Scout failed with status ${response.status}`
+          (typeof body?.detail === "string" ? body.detail : "Sponsor search could not be completed. Check the address and radius.")
         );
       }
 
       setScoutResults(body.results || []);
+      setScoutMeta(body);
     } catch (err) {
       console.error(err);
       setScoutError(
-        err.message || "Unable to run Sponsor Scout."
+        err.name === "AbortError" ? "Sponsor search timed out. Try again; no outreach was sent." : err.message || "Unable to run Sponsor Scout."
       );
     } finally {
+      clearTimeout(timeout);
       setScoutLoading(false);
     }
   }
@@ -1522,7 +1487,7 @@ async function seedSponsorshipInventory() {
 
         <button
           type="button"
-          onClick={runSponsorScout}
+          onClick={() => runSponsorScout(false)}
           disabled={scoutLoading}
           style={{
             border: 0,
@@ -1575,6 +1540,24 @@ async function seedSponsorshipInventory() {
           </button>
         ))}
       </div>
+
+      {tab === "SPONSOR" && <section aria-label="Sponsor search location" style={{ margin: "16px 0", padding: 18, background: "#15151b", border: "1px solid #353541", borderRadius: 12 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+          <label style={{ flex: 2, minWidth: 260 }}>Search near<input value={scoutAddress} onChange={e => setScoutAddress(e.target.value)} disabled={scoutLoading} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", marginTop: 6 }} /></label>
+          <label>Radius (miles)<input type="number" min="1" max="50" value={scoutRadius} onChange={e => setScoutRadius(e.target.value)} disabled={scoutLoading} style={{ ...inputStyle, display: "block", width: 120, marginTop: 6 }} /></label>
+          <label>Business category<select value={scoutCategory} onChange={e => setScoutCategory(e.target.value)} disabled={scoutLoading} style={{ ...inputStyle, display: "block", marginTop: 6 }}><option value="all">All businesses</option><option value="automotive">Automotive</option><option value="food">Food & restaurants</option><option value="finance">Banks & insurance</option><option value="health">Health & wellness</option><option value="retail">Retail & services</option></select></label>
+        </div>
+        <p style={{ color: "#b5b5c2", fontSize: 13 }}>Searches public business-directory records, not confirmed sponsors. No AI credits required. Adding a lead does not send an email.</p>
+        <button style={smallButtonStyle} disabled={scoutLoading} onClick={() => runSponsorScout(true)}>Refresh from public map</button>
+      </section>}
+      {scoutMeta && <div role="status" style={{ margin: "16px 0", padding: 16, border: "1px solid #414155", borderRadius: 12 }}>
+        <strong>{scoutMeta.count} nearby businesses found</strong><p>{scoutMeta.notice}</p>
+        <p>Search center: {scoutMeta.search_address}. Approximate map distances.</p>
+        {scoutMeta.source_checked_at && <p>Directory retrieved: {new Date(scoutMeta.source_checked_at).toLocaleDateString()}</p>}
+        <a href={scoutMeta.attribution_url} target="_blank" rel="noreferrer" style={{ color: "#9ecbff", marginRight: 18 }}>{scoutMeta.attribution}</a>
+        <a href={scoutMeta.map_search_url} target="_blank" rel="noreferrer" style={{ color: "#9ecbff" }}>Open local map search</a>
+        {!scoutMeta.count && <p>No matching entries in this directory sample. Try another category or check the local map search.</p>}
+      </div>}
 
       {error ? (
         <div
@@ -1667,7 +1650,7 @@ async function seedSponsorshipInventory() {
                 marginTop: 5,
               }}
             >
-              AI-researched businesses ranked for this event.
+              Public-directory leads for review. Sponsorship interest, budget, and history are not verified.
               These have not been added to your pipeline yet.
             </div>
           </div>
@@ -1724,10 +1707,15 @@ async function seedSponsorshipInventory() {
                     </div>
                   </div>
 
-                  <ScoreBadge
-                    score={candidate.discovery_score}
-                  />
+                  {candidate.lead_source === "OPENSTREETMAP" ? <span>{Number(candidate.distance_miles).toFixed(2)} mi away</span> : <ScoreBadge score={candidate.discovery_score} />}
                 </div>
+
+                {(candidate.address || candidate.phone || candidate.email) && <div style={{ marginTop: 10, color: "#c9c9d4", lineHeight: 1.6 }}>
+                  {candidate.address && <div>{candidate.address}</div>}
+                  {candidate.phone && <div>Public phone: {candidate.phone}</div>}
+                  {candidate.email && <div>Public email: {candidate.email}</div>}
+                </div>}
+                <div style={{ marginTop: 8 }}>{(candidate.source_urls || []).slice(0, 1).map(url => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ color: "#9ecbff" }}>View directory source</a>)}</div>
 
                 {candidate.why_good_fit ? (
                   <div
@@ -4375,3 +4363,5 @@ const smallButtonStyle = {
   cursor: "pointer",
 };
 
+
+const inputStyle = { background: "#101016", border: "1px solid #484854", color: "#f5f5f7", padding: "10px 12px", borderRadius: 8, fontSize: 14 };

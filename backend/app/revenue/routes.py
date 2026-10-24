@@ -1170,38 +1170,39 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import HTTPException
 
-from .scout import run_sponsor_scout
+from .scout import search_sponsors, GYM_ADDRESS
 
 
 class SponsorScoutRequest(BaseModel):
-    event_name: str
-    event_address: str
-    radius_miles: float = Field(default=15, ge=1, le=50)
-    category: Optional[str] = None
+    event_name: str = Field(min_length=1, max_length=200)
+    event_address: str = Field(default=GYM_ADDRESS, min_length=8, max_length=300)
+    radius_miles: float = Field(default=5, ge=1, le=50)
+    category: Optional[str] = Field(default=None, max_length=40)
     max_results: int = Field(default=20, ge=1, le=30)
+    refresh: bool = False
 
 
 @router.post("/scout/sponsors")
 def scout_sponsors(
     event_id: int,
     payload: SponsorScoutRequest,
+    db: Session = Depends(get_db),
 ):
+    from app.matchmaker.models import BoxingEvent
+    if not db.get(BoxingEvent, event_id):
+        raise HTTPException(404, "Event not found")
     try:
-        results = run_sponsor_scout(
+        results = search_sponsors(
             event_name=payload.event_name,
             event_address=payload.event_address,
             radius_miles=payload.radius_miles,
             category=payload.category,
             max_results=payload.max_results,
+            refresh=payload.refresh,
         )
 
-        return {
-            "event_id": event_id,
-            "count": len(results),
-            "radius_miles": payload.radius_miles,
-            "category": payload.category,
-            "results": results,
-        }
+        return {"event_id": event_id, "radius_miles": payload.radius_miles,
+                "category": payload.category, **results}
 
     except RuntimeError as exc:
         raise HTTPException(
@@ -1247,6 +1248,8 @@ def add_scout_sponsor_to_pipeline(
         organization = models.RevenueOrganization(
             business_name=payload.business_name,
             website=payload.website,
+            phone=payload.phone, email=payload.email, address=payload.address,
+            zip_code=payload.zip_code, latitude=payload.latitude, longitude=payload.longitude,
             city=payload.city,
             state=payload.state,
             industry=payload.industry,
@@ -1276,20 +1279,26 @@ def add_scout_sponsor_to_pipeline(
         if payload.industry and not organization.industry:
             organization.industry = payload.industry
 
-        organization.marketing_propensity = (
-            payload.marketing_propensity
-        )
-
-        organization.verified_sponsorship_history = (
-            payload.verified_sponsorship_history
-        )
-
-        organization.marketing_evidence_json = json.dumps(
-            evidence_payload
-        )
-
-        if payload.why_good_fit:
-            organization.notes = payload.why_good_fit
+        for field in ("phone", "email", "address", "zip_code", "latitude", "longitude"):
+            if getattr(payload, field) is not None and not getattr(organization, field):
+                setattr(organization, field, getattr(payload, field))
+        if payload.lead_source == "OPENSTREETMAP":
+            try:
+                prior = json.loads(organization.marketing_evidence_json or "{}")
+            except ValueError:
+                prior = {"prior_evidence": organization.marketing_evidence_json}
+            if not isinstance(prior, dict):
+                prior = {"prior_evidence": prior}
+            prior["source_urls"] = list(dict.fromkeys((prior.get("source_urls") or []) + payload.source_urls))[:30]
+            organization.marketing_evidence_json = json.dumps(prior)
+            if not organization.notes and payload.why_good_fit:
+                organization.notes = payload.why_good_fit
+        else:
+            organization.marketing_propensity = payload.marketing_propensity
+            organization.verified_sponsorship_history = payload.verified_sponsorship_history
+            organization.marketing_evidence_json = json.dumps(evidence_payload)
+            if payload.why_good_fit:
+                organization.notes = payload.why_good_fit
 
     existing = (
         db.query(models.EventRevenueProspect)
