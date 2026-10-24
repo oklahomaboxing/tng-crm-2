@@ -531,8 +531,8 @@ const [ticketTypes, setTicketTypes] = useState([]);
                   fontSize: 14,
                 }}
               >
-                Enable personal ticket links for every fighter
-                on the current fight card.
+                Personal ticket links are created automatically when a bout is made.
+                Configure event ticket prices below. Use repair for missing links or to reactivate sellers.
               </div>
             </div>
 
@@ -554,8 +554,8 @@ const [ticketTypes, setTicketTypes] = useState([]);
               }}
             >
               {activatingAllFighters
-                ? "Activating..."
-                : "Activate Tickets for All Fighters"}
+                ? "Checking links..."
+                : "Repair Fighter Ticket Links"}
             </button>
           </div>
         )}

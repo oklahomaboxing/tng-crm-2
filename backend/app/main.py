@@ -6,6 +6,8 @@ from app.ticketing.checkout_routes import router as ticketing_checkout_router
 from app.ticketing.recovery import router as ticketing_recovery_router
 from app.ticketing.sms_status import router as ticketing_sms_status_router
 from app.ticketing.paper import router as paper_ticket_router
+from app.ticketing.automation import register_bout_ticket_automation
+register_bout_ticket_automation()
 import logging
 from app.ticketing.models import TicketOrder
 from app.ticketing.emailing import send_ticket_email
