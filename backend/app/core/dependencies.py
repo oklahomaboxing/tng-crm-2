@@ -51,6 +51,9 @@ def current_user(
             detail="Account is inactive",
         )
 
+    from app.account_security import valid_session
+    if not valid_session(payload, user, db):
+        raise HTTPException(status_code=401, detail="Session expired. Sign in again.")
     return user
 
 

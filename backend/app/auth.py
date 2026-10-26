@@ -31,6 +31,15 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def create_token(data: dict, minutes: int = 30) -> str:
     payload = data.copy()
+    from app.database import SessionLocal
+    from app.models import User
+    from app.account_security import AccountSecurity, session_marker
+    if payload.get('sub'):
+        with SessionLocal() as db:
+            user = db.get(User, int(payload['sub']))
+            if user:
+                payload['credential'] = session_marker(user, db.get(AccountSecurity, user.id))
+    payload['iat'] = datetime.now(timezone.utc)
     payload["exp"] = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 

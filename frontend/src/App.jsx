@@ -218,6 +218,8 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [role, setRole] = useState(localStorage.getItem("role") || "");
   const [userName, setUserName] = useState(localStorage.getItem("name") || "");
@@ -240,10 +242,16 @@ function App() {
       const response = await fetch(`${API}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, code: verificationCode.trim() }),
       });
 
       const data = await response.json();
+
+      if (response.ok && data.mfa_required) {
+        setMfaRequired(true);
+        setMsg(data.message);
+        return;
+      }
 
       if (!response.ok || !data.token) {
         setMsg(data.detail || "Login failed");
@@ -262,6 +270,9 @@ function App() {
       setUserName(loggedInName);
       setPage(landingPageForRole(loggedInRole));
       setMsg("");
+      setPassword("");
+      setVerificationCode("");
+      setMfaRequired(false);
     } catch (error) {
       setMsg(error.message || "Login failed");
     } finally {
@@ -607,6 +618,9 @@ if (window.location.pathname === "/register") return <JoinPage />;
           fullWidth
           required
         />
+
+        {mfaRequired && <TextField label="Authenticator or recovery code" value={verificationCode}
+          onChange={event => setVerificationCode(event.target.value)} autoComplete="one-time-code" fullWidth required />}
 
         <Button
           type="submit"

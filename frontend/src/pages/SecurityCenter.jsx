@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import AccountSecurityPanel from '../components/AccountSecurityPanel';
 import {
   Alert,
   Box,
@@ -17,7 +18,7 @@ function formatEventTime(value) {
     return "Unknown time";
   }
 
-  const parsed = new Date(value);
+  const parsed = new Date(/(?:Z|[+-]\d\d:\d\d)$/.test(value) ? value : value + 'Z');
 
   if (Number.isNaN(parsed.getTime())) {
     return "Unknown time";
@@ -111,16 +112,10 @@ export default function SecurityCenter() {
       ? data.recent_logs
       : [];
 
-  const securityScore =
-    data.security_score === null ||
-    data.security_score === undefined
-      ? 95
-      : data.security_score;
-
   const cards = [
     {
-      label: "Security Score",
-      value: `${securityScore}%`,
+      label: "Security Assessment",
+      value: "Not assessed",
     },
     {
       label: "Failed Logins",
@@ -178,6 +173,8 @@ export default function SecurityCenter() {
           </Card>
         ))}
       </Box>
+
+      <AccountSecurityPanel enabled={data.mfa_enabled} />
 
       <Card sx={{ mt: 3 }}>
         <CardContent>

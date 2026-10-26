@@ -38,6 +38,9 @@ def pos_user(authorization: str = Header(default=''), db: Session = Depends(get_
     user = db.get(User, user_id)
     if not user or not user.active or user.role not in {'admin', 'staff'}:
         raise HTTPException(status_code=403, detail='An active TNG admin or staff account is required.')
+    from app.account_security import valid_session
+    if not valid_session(payload, user, db):
+        raise HTTPException(status_code=401, detail='Sign in to TNG Members again.')
     return user
 
 
@@ -72,6 +75,8 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
     # Reuse account lockout, password verification and security auditing.
     from app.main import login as staff_login
     authenticated = staff_login(data, request, db)
+    if authenticated.get('mfa_required'):
+        raise HTTPException(status_code=403, detail='Authenticator verification is required. Use TNGOS web login with your authenticator code.')
     if authenticated['user']['role'] not in {'admin', 'staff'}:
         raise HTTPException(status_code=403, detail='Use a TNG admin or staff account.')
     user = authenticated['user']

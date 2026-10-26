@@ -84,6 +84,7 @@ from .schemas import (
 )
 
 from .auth import verify_password, hash_password, create_token, decode_token
+from .account_security import AccountSecurity, verify_second_factor, build_security_router
 from .core.dependencies import current_user, staff_user, sales_user
 from .core.permissions import require_admin, require_admin_or_staff
 from .services.clover_webhooks import verify_clover_webhook
@@ -364,6 +365,15 @@ from .clover_pos.routes import router as clover_pos_router
 app.include_router(clover_pos_router)
 from .marketing.sms import router as marketing_sms_router
 app.include_router(marketing_sms_router)
+app.include_router(build_security_router())
+
+@app.middleware("http")
+async def protect_auth_responses(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith('/api/auth/') or request.url.path in {'/api/login', '/api/clover-pos/login'}:
+        response.headers['Cache-Control'] = 'no-store'
+        response.headers['Pragma'] = 'no-cache'
+    return response
 
 os.makedirs("uploads/members", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -537,7 +547,11 @@ def login(
             detail="Account temporarily locked. Try again later.",
         )
 
-    if not user or not verify_password(data.password, user.password_hash):
+    security_state = db.get(AccountSecurity, user.id) if user else None
+    password_valid = bool(user and verify_password(data.password, user.password_hash))
+    if password_valid and security_state and security_state.mfa_enabled and not data.code:
+        return {"mfa_required": True, "message": "Enter your authenticator code or a recovery code."}
+    if not password_valid or (security_state and security_state.mfa_enabled and not verify_second_factor(db, security_state, data.code)):
         if user:
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
 
@@ -558,7 +572,7 @@ def login(
 
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password",
+            detail="Invalid email, password, or verification code",
         )
 
     if not user.active:
@@ -702,6 +716,7 @@ def reset_password(
     user.password_hash = hash_password(data.password)
     user.failed_login_attempts = 0
     user.locked_until = None
+    db.add(SecurityLog(user_id=user.id, action='PASSWORD_RESET', success=True))
 
     db.commit()
 
@@ -745,7 +760,9 @@ def security_overview(
     )
 
     return {
-        "security_score": 95,
+        "security_score": None,
+        "assessment": "Not independently assessed",
+        "mfa_enabled": bool((db.get(AccountSecurity, user.id)) and db.get(AccountSecurity, user.id).mfa_enabled),
         "failed_logins": failed_logins,
         "successful_logins": successful_logins,
         "locked_accounts": locked_accounts,
@@ -2787,13 +2804,10 @@ def reset_user_password(
 
     new_password = str(data.get("password") or "")
 
-    if len(new_password) < 8:
-        raise HTTPException(
-            status_code=400,
-            detail="Password must be at least 8 characters",
-        )
+    validate_new_password(new_password)
 
     account.password_hash = hash_password(new_password)
+    db.add(SecurityLog(user_id=user.id, action='ADMIN_PASSWORD_RESET', description=f'Password reset for user {account.id}', success=True))
 
     db.commit()
 

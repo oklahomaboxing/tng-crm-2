@@ -6,6 +6,7 @@ from typing import Optional
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+    code: str = ''
 
 
 class RepCreate(BaseModel):

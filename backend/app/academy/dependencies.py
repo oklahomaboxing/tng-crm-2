@@ -29,4 +29,7 @@ def academy_current_user(
         raise HTTPException(status_code=403, detail="Account is inactive")
     if user.role not in {"admin", "staff"}:
         raise HTTPException(status_code=403, detail="Academy access requires admin or staff")
+    from app.account_security import valid_session
+    if not valid_session(payload, user, db):
+        raise HTTPException(status_code=401, detail="Session expired. Sign in again.")
     return user
