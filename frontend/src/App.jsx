@@ -41,6 +41,7 @@ import FighterActivate from "./pages/FighterActivate.jsx";
 import FighterPortal from "./pages/FighterPortal.jsx";
 import FighterPortalVideos from "./pages/FighterPortalVideos.jsx";
 import EventCalendar from "./pages/EventCalendar.jsx";
+import TngBoxingEvents from './pages/TngBoxingEvents.jsx';
 import PublicFightCalendar from "./pages/PublicFightCalendar.jsx";
 import FighterRegistration from "./pages/FighterRegistration.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
@@ -850,6 +851,7 @@ return (
         <ManagerPortal />
       )}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
+      {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}

@@ -11,3 +11,11 @@ Browser verification uses mocked API calls to check sidebar access, required eve
 ## Scan to activate a paper cash sale
 
 Select the event, choose **Activate paper ticket**, and scan its QR. Lookup only displays the ticket, seller and saved face value; it does not activate or admit anyone. After collecting cash, select **Cash received — activate ticket** and confirm the amount. The existing staff cash-sale flow records one order and commission, preserving the same QR. Repeated submissions do not duplicate sales. Return to **Door check-in** for actual admission. Returned/deleted, wrong-event, unknown, already-sold and digital tickets cannot be newly activated through lookup. Digital purchases use verified-payment issuance automatically.
+
+## Owner-authorized offline stock
+
+An administrator can explicitly release a known batch for offline sales, checking its expected quantity. Release marks unsold tickets `released`, preserving their QR codes and inventory reservations. It creates no paid orders, commissions or cash receipts. Released tickets can admit once; a successful scan changes them to `offline_used` and records an admission audit event. Repeat scans fail. Event check-in totals include these admissions, while cash sales and commissions remain separate until staff records actual payment.
+
+The paper-batch panel distinguishes inactive stock, admission-enabled stock without recorded cash, and admitted tickets awaiting cash reconciliation. Recording cash later creates the ordinary paid sale and commission, carrying an earlier admission forward as used so reconciliation never permits a second entry. Unadmitted stock can be returned; admitted stock cannot be returned as unsold. The normal QR activation flow still requires cash confirmation; only administrator-released stock has admission enabled before reconciliation.
+
+The main **TNG BOXING EVENTS** sidebar entry opens an event list and the existing event workspace directly. Upcoming events appear first by default, with search and an option to include past/other events.

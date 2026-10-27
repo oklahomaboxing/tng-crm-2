@@ -123,7 +123,7 @@ export default function TicketDoorScanner({ eventId, mode = "checkin" }) {
     try{
       const response=await fetch(`${API}/api/ticketing/paper-batches/${review.batch_id}/record-sales`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`},body:JSON.stringify({ticket_ids:[review.ticket_id],confirm_total_cents:review.price_cents})});
       const body=await response.json();if(!response.ok)throw Error(typeof body.detail==='string'?body.detail:'Could not record sale');
-      setReview(null);setResult({ok:true,result:body.new_sales_recorded?'Sale recorded. Ticket activated. Use door check-in separately for admission.':'Sale was already recorded. Check admission status; do not collect payment again.',ticket_number:review.ticket_number});
+      setReview(null);setResult({ok:true,result:body.new_sales_recorded?'Sale recorded. Admission status preserved. Use door check-in only if not already admitted.':'Sale was already recorded. Check admission status; do not collect payment again.',ticket_number:review.ticket_number});
     }catch(e){setError(e.message+' Refresh and check the batch before retrying if the connection failed.');}
     finally{busyRef.current=false;setWorking(false);}
   }
@@ -243,7 +243,7 @@ export default function TicketDoorScanner({ eventId, mode = "checkin" }) {
 
       {review && !error && <div style={styles.reject}>
         <h3>Confirm cash payment received</h3><strong>{review.ticket_number}</strong>
-        <p>{review.ticket_type_name} · {review.seller_name}</p><p>Face value: <strong>${(review.price_cents/100).toFixed(2)}</strong></p>
+        <p>{review.ticket_type_name} · {review.seller_name}</p>{review.status==='released' && <p>Admission already enabled for offline sales. Cash sale is not recorded yet.</p>}{review.status==='offline_used' && <p>Already admitted. Reconcile cash only; this ticket cannot admit anyone again.</p>}<p>Face value: <strong>${(review.price_cents/100).toFixed(2)}</strong></p>
         <p>Only confirm after collecting payment. This records a cash sale and fighter commission; it does not charge a card or admit anyone.</p>
         <button style={styles.button} disabled={working} onClick={activateTicket}>{working?'Recording…':'Cash received — activate ticket'}</button>
         <button style={{...styles.darkButton,marginLeft:10}} disabled={working} onClick={reset}>Cancel</button>
@@ -268,6 +268,7 @@ export default function TicketDoorScanner({ eventId, mode = "checkin" }) {
             {result.result === "not_activated" ? "Paper ticket not activated. Ask staff to verify and record the sale." : result.result}
           </div>
 
+          {result.payment_recorded===false && <p>Owner-authorized offline ticket admitted. Cash sale still needs reconciliation.</p>}
           {result.ticket_number && (
             <strong>
               {

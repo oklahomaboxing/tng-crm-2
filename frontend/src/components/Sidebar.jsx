@@ -31,6 +31,7 @@ export const ROLE_MENUS = {
     "Members",
     "TNGTrainer",
     "Promoter",
+    "TNG BOXING EVENTS",
     "Fight Calendar",
     "Products",
     "Front Desk",
@@ -49,6 +50,7 @@ export const ROLE_MENUS = {
   staff: [
     "Front Desk",
     "Event Check-In",
+    "TNG BOXING EVENTS",
     "Fight Calendar",
     "Members",
     "Sales",
@@ -58,6 +60,7 @@ export const ROLE_MENUS = {
   ],
   matchmaker: [
     "Promoter",
+    "TNG BOXING EVENTS",
     "Fight Calendar",
   ],
   manager: [
@@ -73,6 +76,7 @@ const ICONS = {
   Promoter: <SportsMmaRoundedIcon />,
   "Manager Portal": <GroupsRoundedIcon />,
   "Fight Calendar": <EventRoundedIcon />,
+  "TNG BOXING EVENTS": <EventRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
   "Front Desk": <QrCodeScannerRoundedIcon />,
   "Event Check-In": <QrCode2RoundedIcon />,

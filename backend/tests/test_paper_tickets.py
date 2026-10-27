@@ -113,6 +113,52 @@ class PaperTicketTests(unittest.TestCase):
         self.client.post(f'/api/ticketing/paper-batches/{batch}/return-unsold',json={'ticket_ids':[paper.id]},headers=self.headers())
         self.assertEqual(self.client.post('/api/ticketing/paper-tickets/resolve',json=payload,headers=self.headers()).status_code,409)
 
+    def test_owner_offline_release_enables_admission_without_sales_or_commissions(self):
+        batch=self.batch(2).json()['id'];paper=self.db.query(PaperTicket).filter_by(batch_id=batch).first()
+        path=f'/api/ticketing/paper-batches/{batch}/release-offline';payload={'expected_quantity':2}
+        self.assertEqual(self.client.post(path,json=payload,headers=self.headers('staff')).status_code,403)
+        self.assertEqual(self.client.post(path,json={'expected_quantity':100},headers=self.headers()).status_code,409)
+        before=self.db.query(TicketOrder).count()
+        for count in [2,0]:
+            r=self.client.post(path,json=payload,headers=self.headers());self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['newly_enabled'],count)
+        self.assertEqual(self.db.query(TicketOrder).count(),before)
+        self.assertEqual(self.db.query(IssuedTicket).count(),0)
+        self.assertEqual(self.scan(paper,event=999)['result'],'wrong_event')
+        self.assertEqual(self.scan(paper)['result'],'admitted')
+        self.assertEqual(self.scan(paper)['result'],'already_used')
+        report=self.client.get(f'/api/ticketing/events/{self.event.id}/report',headers=self.headers()).json()
+        self.assertEqual((report['tickets_scanned'],report['tickets_sold'],report['gross_sales_cents'],report['commission_cents']),(1,0,0,0))
+        self.assertEqual(report['unreconciled_paper_admissions'],1)
+        batch_state=self.client.get(f'/api/ticketing/paper-batches/{batch}',headers=self.headers()).json()
+        self.assertEqual((batch_state['released'],batch_state['unreconciled_admissions'],batch_state['sold_total_cents']),(1,1,0))
+        self.assertEqual(self.db.query(TicketOrder).count(),before)
+
+    def test_offline_release_keeps_inventory_reserved(self):
+        self.order();self.kind.inventory=2;self.db.commit()
+        batch=self.batch(2).json()['id']
+        self.client.post(f'/api/ticketing/paper-batches/{batch}/release-offline',json={'expected_quantity':2},headers=self.headers())
+        self.assertEqual(self.batch(1).status_code,409)
+
+    def test_offline_cash_reconciliation_preserves_admission_and_prevents_reuse(self):
+        batch=self.batch(1).json()['id'];paper=self.db.query(PaperTicket).filter_by(batch_id=batch).one()
+        self.client.post(f'/api/ticketing/paper-batches/{batch}/release-offline',json={'expected_quantity':1},headers=self.headers())
+        self.assertEqual(self.scan(paper)['result'],'admitted')
+        self.assertEqual(self.client.post(f'/api/ticketing/paper-batches/{batch}/return-unsold',json={'ticket_ids':[paper.id]},headers=self.headers()).status_code,409)
+        for expected in [1,0]:
+            r=self.sell(batch,[paper.id]);self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['new_sales_recorded'],expected)
+        self.db.expire_all();issued=self.db.query(IssuedTicket).one();self.assertEqual(issued.status,'used');self.assertIsNotNone(issued.scanned_at)
+        self.assertEqual(self.scan(paper)['result'],'already_used')
+        report=self.client.get(f'/api/ticketing/events/{self.event.id}/report',headers=self.headers()).json()
+        self.assertEqual((report['tickets_scanned'],report['unreconciled_paper_admissions'],report['gross_sales_cents']),(1,0,4000))
+
+    def test_unadmitted_offline_stock_can_be_returned_and_never_released_again(self):
+        batch=self.batch(1).json()['id'];paper=self.db.query(PaperTicket).filter_by(batch_id=batch).one()
+        path=f'/api/ticketing/paper-batches/{batch}/release-offline'
+        self.client.post(path,json={'expected_quantity':1},headers=self.headers())
+        self.assertEqual(self.client.post(f'/api/ticketing/paper-batches/{batch}/return-unsold',json={'ticket_ids':[paper.id]},headers=self.headers()).status_code,200)
+        self.assertEqual(self.scan(paper)['result'],'void')
+        self.assertEqual(self.client.post(path,json={'expected_quantity':1},headers=self.headers()).status_code,409)
+
     def test_record_sale_activates_same_qr_and_preserves_fighter_commission_once(self):
         b=self.batch().json()['id'];paper=self.db.query(PaperTicket).first();raw=decrypt_token(paper.qr_token_encrypted)
         with patch('app.services.sms_service.send_sms') as sms,patch('app.ticketing.emailing.send_ticket_email') as email:

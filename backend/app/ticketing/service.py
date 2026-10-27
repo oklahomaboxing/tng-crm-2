@@ -119,6 +119,21 @@ def scan_ticket(db: Session, event_id: int, raw_token: str, scanned_by_user_id: 
         paper = db.query(PaperTicket, PaperTicketBatch.event_id).join(PaperTicketBatch).filter(PaperTicket.qr_token_hash == token_hash).first()
         if paper:
             item, paper_event_id = paper
+            if paper_event_id==event_id and item.status in {'released','offline_used'}:
+                from app.models import SecurityLog
+                db.query(PaperTicketBatch).filter_by(id=item.batch_id).update({PaperTicketBatch.quantity:PaperTicketBatch.quantity},synchronize_session=False)
+                db.refresh(item)
+                if item.status=='released':
+                    item.status='offline_used'
+                    db.add(SecurityLog(user_id=scanned_by_user_id,action='PAPER_OFFLINE_ADMITTED',endpoint=f'/api/ticketing/scan/paper/{item.id}',description=f'Paper ticket {item.ticket_number}; event {event_id}; batch {item.batch_id}; owner-authorized admission, cash sale not yet recorded.',success=True))
+                    db.commit()
+                    return {'ok':True,'result':'admitted','ticket_number':item.ticket_number,'status':'offline_used','payment_recorded':False}
+                if item.status=='offline_used':
+                    db.rollback()
+                    return {'ok':False,'result':'already_used','ticket_number':item.ticket_number}
+                if item.status=='sold':
+                    db.rollback()
+                    return scan_ticket(db,event_id,raw_token,scanned_by_user_id,device_label)
             result = "wrong_event" if paper_event_id != event_id else "void" if item.status == "returned" else "not_activated" if item.status == "allocated" else "invalid"
             return {"ok": False, "result": result, "ticket_number": item.ticket_number}
         return {"ok": False, "result": "invalid"}

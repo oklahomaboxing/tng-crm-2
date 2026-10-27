@@ -150,7 +150,7 @@ class PaperTicket(Base):
     ticket_number = Column(String(50), unique=True, nullable=False, index=True)
     qr_token_hash = Column(String(128), unique=True, nullable=False, index=True)
     qr_token_encrypted = Column(Text, nullable=False)
-    status = Column(String(20), nullable=False, default="allocated")  # allocated|sold|returned
+    status = Column(String(20), nullable=False, default="allocated")  # allocated|released|offline_used|sold|returned
     order_id = Column(Integer, ForeignKey("ticket_orders.id"), unique=True, nullable=True)
     sold_at = Column(DateTime, nullable=True)
     returned_at = Column(DateTime, nullable=True)

@@ -17,6 +17,7 @@ from .paper_design import render_tickets
 from .models import PaperTicketBatch, PaperTicket, EventSeller, EventTicketType, TicketOrder, IssuedTicket
 from .security import make_raw_token, hash_token, encrypt_token, decrypt_token, verify_token
 from .service import generate_ticket_number, generate_receipt_number, seller_commission_cents
+from .offline_paper import UNRECORDED,release_offline_stock
 
 router = APIRouter(prefix='/api/ticketing', tags=['paper-tickets'])
 
@@ -36,6 +37,13 @@ class PaperQrLookup(BaseModel):
     event_id:int
     token:str=Field(min_length=1,max_length=4096)
 
+class OfflineRelease(BaseModel):
+    expected_quantity:int=Field(ge=1,le=200,strict=True)
+
+@router.post('/paper-batches/{batch_id}/release-offline')
+def release_batch(batch_id:int,body:OfflineRelease,db:Session=Depends(get_db),user=Depends(staff_user)):
+    return release_offline_stock(db,batch_id,user,body.expected_quantity)
+
 
 @router.post('/paper-tickets/resolve')
 def resolve_paper_qr(body:PaperQrLookup,db:Session=Depends(get_db),user=Depends(staff_user)):
@@ -46,11 +54,11 @@ def resolve_paper_qr(body:PaperQrLookup,db:Session=Depends(get_db),user=Depends(
     if batch.event_id!=body.event_id:raise HTTPException(409,'This ticket belongs to a different event')
     if ticket.status=='returned':raise HTTPException(409,'This ticket was returned and cannot be activated')
     if ticket.status=='sold':raise HTTPException(409,'Sale already recorded. Use door check-in to check admission; do not collect payment again.')
-    if ticket.status!='allocated' or ticket.order_id is not None:raise HTTPException(409,'Ticket state requires review')
+    if ticket.status not in UNRECORDED or ticket.order_id is not None:raise HTTPException(409,'Ticket state requires review')
     seller=db.get(EventSeller,batch.seller_id);kind=db.get(EventTicketType,batch.ticket_type_id)
     return {'ticket_id':ticket.id,'batch_id':batch.id,'ticket_number':ticket.ticket_number,
         'price_cents':batch.price_cents,'seller_name':seller.display_name if seller else '',
-        'ticket_type_name':kind.name if kind else 'Ticket','status':'allocated'}
+        'ticket_type_name':kind.name if kind else 'Ticket','status':ticket.status}
 
 
 def batch_or_404(db, batch_id):
@@ -73,7 +81,7 @@ def batch_summary(db, batch):
         'ticket_type_id': batch.ticket_type_id, 'ticket_type_name': kind.name if kind else 'Ticket',
         'quantity': batch.quantity, 'price_cents': batch.price_cents,
         'allocation_commission_estimate_cents': batch.commission_cents,
-        'allocated': counts.get('allocated', 0), 'sold': sold, 'returned': counts.get('returned', 0),
+        'allocated': counts.get('allocated', 0), 'released':counts.get('released',0),'unreconciled_admissions':counts.get('offline_used',0), 'sold': sold, 'returned': counts.get('returned', 0),
         'sold_total_cents': sold * batch.price_cents, 'commission_cents': int(earned),
         'created_at': batch.created_at.isoformat()}
 
@@ -103,7 +111,7 @@ def create_batch(event_id: int, body: BatchCreate, db: Session = Depends(get_db)
         return batch_summary(db, existing)
     if kind.inventory is not None:
         sold = db.query(IssuedTicket).filter(IssuedTicket.ticket_type_id == kind.id, IssuedTicket.status.in_(('valid','used'))).count()
-        held = db.query(PaperTicket).join(PaperTicketBatch).filter(PaperTicketBatch.ticket_type_id == kind.id, PaperTicket.status == 'allocated').count()
+        held = db.query(PaperTicket).join(PaperTicketBatch).filter(PaperTicketBatch.ticket_type_id == kind.id, PaperTicket.status.in_(UNRECORDED)).count()
         if sold + held + body.quantity > kind.inventory:
             raise HTTPException(409, 'Not enough unallocated ticket inventory for this batch')
     commission = seller_commission_cents(db, kind, kind.price_cents, seller.id)
@@ -162,8 +170,10 @@ def record_sales(batch_id: int, body: PaperSale, db: Session = Depends(get_db), 
     for t in rows:
         if t.status == 'sold':
             continue  # Exact replay never creates another order or commission.
-        if t.status != 'allocated':
+        if t.status not in UNRECORDED:
             raise HTTPException(409, 'Ticket state requires review')
+        was_admitted=t.status=='offline_used'
+        admission=db.query(SecurityLog).filter_by(action='PAPER_OFFLINE_ADMITTED',endpoint=f'/api/ticketing/scan/paper/{t.id}').order_by(SecurityLog.created_at).first() if was_admitted else None
         now = datetime.utcnow()
         order = TicketOrder(event_id=batch.event_id, seller_id=batch.seller_id,
             buyer_name='Paper ticket customer', buyer_email='', buyer_phone='',
@@ -175,7 +185,9 @@ def record_sales(batch_id: int, body: PaperSale, db: Session = Depends(get_db), 
         db.add(order); db.flush()
         db.add(IssuedTicket(order_id=order.id, event_id=batch.event_id, ticket_type_id=batch.ticket_type_id,
             seller_id=batch.seller_id, ticket_number=t.ticket_number, qr_token_hash=t.qr_token_hash,
-            qr_token_encrypted=t.qr_token_encrypted, status='valid', price_cents=batch.price_cents,
+            qr_token_encrypted=t.qr_token_encrypted, status='used' if was_admitted else 'valid', price_cents=batch.price_cents,
+            scanned_at=(admission.created_at if admission else now) if was_admitted else None,
+            scanned_by_user_id=admission.user_id if admission else None,
             commission_cents=commission))
         t.status='sold';t.order_id=order.id;t.sold_at=now;recorded+=1
     db.add(SecurityLog(user_id=user.id, action='PAPER_TICKET_SALES_RECORDED',
@@ -188,7 +200,7 @@ def record_sales(batch_id: int, body: PaperSale, db: Session = Depends(get_db), 
 def return_unsold(batch_id: int, body: BatchSelection, db: Session = Depends(get_db), user=Depends(staff_user)):
     batch = batch_or_404(db, batch_id)
     rows = selection(db, batch_id, body.ticket_ids)
-    if any(t.status == 'sold' for t in rows):
+    if any(t.status in ('sold','offline_used') for t in rows):
         raise HTTPException(409, 'A sold ticket cannot be returned through the unsold-ticket flow')
     for t in rows:
         t.status='returned';t.returned_at=t.returned_at or datetime.utcnow()
