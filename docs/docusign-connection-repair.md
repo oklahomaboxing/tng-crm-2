@@ -17,3 +17,9 @@ The public-key endpoint derives only SubjectPublicKeyInfo PEM from the configure
 Also corrected two DocuSign sync buttons incorrectly labeled “Sync Adobe.”
 
 Validation: eight mocked-provider diagnostic tests, 20 existing stabilization tests, frontend build, and browser fixture checks of the diagnostic panel. Physical sending and signing are not claimed verified.
+
+## TNG electronic signatures and downloads
+
+TNG electronic signing records are separate from DocuSign envelopes. If no original signed PDF is stored, both staff and the owning fighter can download a clearly labeled electronic signature record from the frozen signing snapshot. The service verifies agreement, signer, contract/fighter ownership identifiers and the exact saved SHA-256 before rendering. It does not rebuild terms from current contract fields or add current template clauses. Legacy snapshots contain material terms rather than a full legal-template copy; the PDF explains this limitation. Existing uploaded/provider PDFs retain their original bytes. Invalid evidence fails closed without changing the original record. No envelope or email is sent by downloading.
+
+Regression coverage includes staff/fighter access, unauthenticated and cross-fighter rejection, altered signature evidence, unchanged original PDF bytes, unsigned contracts and frozen terms after current contract edits.

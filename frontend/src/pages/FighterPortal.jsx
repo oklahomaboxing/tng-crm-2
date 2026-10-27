@@ -2062,7 +2062,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                       <strong>Signed PDF:</strong>{" "}
                       {contract.signed_document
                         ? "Uploaded"
-                        : "Not uploaded"}
+                        : contract.electronic_signature_available ? "Electronic signature record available" : "Not uploaded"}
                     </div>
                   </div>
 
@@ -2153,7 +2153,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                         </div>
                       )}
 
-                      {contract.signed_document && (
+                      {(contract.signed_document || contract.electronic_signature_available) && (
                         <button
                           type="button"
                           disabled={
@@ -2604,7 +2604,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                         : "Upload Signed PDF"}
                     </button>
 
-                    {contract.signed_document && (
+                    {(contract.signed_document || contract.electronic_signature_available) && (
                       <button
                         type="button"
                         disabled={

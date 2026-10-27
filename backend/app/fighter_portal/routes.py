@@ -1180,6 +1180,9 @@ def my_contracts(
         for row in contracts
     ]
 
+    signature_ids = {row.contract_id for row in db.query(BoxingContractSignature).filter(
+        BoxingContractSignature.contract_id.in_(contract_ids), BoxingContractSignature.agreed.is_(True)
+    ).all()} if contract_ids else set()
     documents = {}
 
     if contract_ids:
@@ -1382,6 +1385,7 @@ def my_contracts(
                     row.boxer_paid,
                 "additional_terms":
                     row.additional_terms,
+                "electronic_signature_available": row.id in signature_ids,
                 "signed_document":
                     row.id in documents,
                 "signed_file_name":
