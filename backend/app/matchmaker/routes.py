@@ -7224,41 +7224,8 @@ Do not add fake ticket information.
                 detail="Contract not found",
             )
 
-        document = (
-            db.query(BoxingSignedContractDocument)
-            .filter(
-                BoxingSignedContractDocument.contract_id
-                == contract.id
-            )
-            .first()
-        )
-
-        if not document:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    "No signed contract has been "
-                    "uploaded yet."
-                ),
-            )
-
-        safe_name = (
-            document.file_name
-            or f"contract-{contract.id}-signed.pdf"
-        ).replace('"', "")
-
-        return Response(
-            content=document.file_data,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition":
-                    f'attachment; filename="{safe_name}"',
-                "Cache-Control":
-                    "private, no-store, max-age=0",
-                "X-Content-Type-Options":
-                    "nosniff",
-            },
-        )
+        from app.matchmaker.signed_download import signed_contract_response
+        return signed_contract_response(db, contract)
 
 
     @router.patch("/contracts/{contract_id}")
