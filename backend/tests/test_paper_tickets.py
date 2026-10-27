@@ -75,11 +75,18 @@ class PaperTicketTests(unittest.TestCase):
     def test_both_print_layouts_preserve_ticket_tokens(self):
         batch=self.batch(7).json()['id']
         before=[(t.id,t.qr_token_hash,t.status) for t in self.db.query(PaperTicket).order_by(PaperTicket.id)]
-        for layout,pages in [('fight-night',3),('compact',2)]:
+        for layout,pages in [('fight-night',2),('compact',2)]:
             r=self.client.get(f'/api/ticketing/paper-batches/{batch}/print.pdf?layout={layout}',headers=self.headers())
             self.assertEqual(r.status_code,200)
             self.assertIn(f'/Count {pages}'.encode(),r.content)
         self.assertEqual(before,[(t.id,t.qr_token_hash,t.status) for t in self.db.query(PaperTicket).order_by(PaperTicket.id)])
+
+    def test_default_layout_fits_exactly_four_tickets_per_page(self):
+        for quantity,pages in [(4,1),(5,2)]:
+            batch=self.batch(quantity).json()['id']
+            r=self.client.get(f'/api/ticketing/paper-batches/{batch}/print.pdf',headers=self.headers())
+            self.assertEqual(r.status_code,200)
+            self.assertIn(f'/Count {pages}'.encode(),r.content)
 
     def test_record_sale_activates_same_qr_and_preserves_fighter_commission_once(self):
         b=self.batch().json()['id'];paper=self.db.query(PaperTicket).first();raw=decrypt_token(paper.qr_token_encrypted)

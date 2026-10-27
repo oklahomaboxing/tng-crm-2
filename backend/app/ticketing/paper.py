@@ -211,7 +211,7 @@ def preview_design(event_id:int,ticket_type_id:int,seller_id:int | None=None,
     if not kind or kind.event_id!=event_id:raise HTTPException(404,'Ticket type not found for this event')
     seller=db.get(EventSeller,seller_id) if seller_id else None
     if seller_id and (not seller or seller.event_id!=event_id):raise HTTPException(404,'Seller not found for this event')
-    count=3 if layout=='fight-night' else 6
+    count=4 if layout=='fight-night' else 6
     items=[{'number':f'SAMPLE-{n+1:04d}','raw':'TNG-DESIGN-PREVIEW-NOT-VALID','status':'sample'} for n in range(count)]
     content=render_tickets(event,seller.display_name if seller else 'TNG Boxing',kind.name,kind.price_cents,items,
         layout,schedule=event_schedule(db,event_id),sample=True)
