@@ -49,6 +49,38 @@ class PaperTicketTests(unittest.TestCase):
         self.assertEqual(self.scan(paper)['result'],'not_activated')
         self.assertEqual(self.db.query(TicketDelivery).count(),0)
 
+    def test_design_preview_does_not_allocate_or_create_sales(self):
+        self.order()
+        self.event.event_date='2026-11-14';self.event.venue='Example Arena'
+        self.event.venue_address='123 Example Street, Oklahoma City'
+        self.db.commit()
+        before=[self.db.query(t).count() for t in [PaperTicketBatch,PaperTicket,TicketOrder,IssuedTicket,TicketDelivery]]
+        for layout in ['fight-night','compact']:
+            r=self.client.get(f'/api/ticketing/events/{self.event.id}/paper-ticket-preview.pdf',headers=self.headers(),params={'ticket_type_id':self.kind.id,'seller_id':self.seller.id,'layout':layout})
+            self.assertEqual(r.status_code,200,r.text[:80] if r.status_code!=200 else '')
+            self.assertTrue(r.content.startswith(b'%PDF'))
+            self.assertEqual(r.headers['cache-control'],'private, no-store')
+        self.assertEqual(before,[self.db.query(t).count() for t in [PaperTicketBatch,PaperTicket,TicketOrder,IssuedTicket,TicketDelivery]])
+
+    def test_design_preview_permissions_and_event_scoping(self):
+        self.order()
+        path=f'/api/ticketing/events/{self.event.id}/paper-ticket-preview.pdf?ticket_type_id={self.kind.id}'
+        self.assertEqual(self.client.get(path).status_code,401)
+        self.assertEqual(self.client.get(path,headers=self.headers('fighter')).status_code,403)
+        other=BoxingEvent(name='Other event',slug='other-design');self.db.add(other);self.db.commit()
+        self.assertEqual(self.client.get(f'/api/ticketing/events/{other.id}/paper-ticket-preview.pdf?ticket_type_id={self.kind.id}',headers=self.headers()).status_code,404)
+        self.assertEqual(self.client.get(path+'&seller_id=999999',headers=self.headers()).status_code,404)
+        self.assertEqual(self.client.get(path+'&layout=unknown',headers=self.headers()).status_code,422)
+
+    def test_both_print_layouts_preserve_ticket_tokens(self):
+        batch=self.batch(7).json()['id']
+        before=[(t.id,t.qr_token_hash,t.status) for t in self.db.query(PaperTicket).order_by(PaperTicket.id)]
+        for layout,pages in [('fight-night',3),('compact',2)]:
+            r=self.client.get(f'/api/ticketing/paper-batches/{batch}/print.pdf?layout={layout}',headers=self.headers())
+            self.assertEqual(r.status_code,200)
+            self.assertIn(f'/Count {pages}'.encode(),r.content)
+        self.assertEqual(before,[(t.id,t.qr_token_hash,t.status) for t in self.db.query(PaperTicket).order_by(PaperTicket.id)])
+
     def test_record_sale_activates_same_qr_and_preserves_fighter_commission_once(self):
         b=self.batch().json()['id'];paper=self.db.query(PaperTicket).first();raw=decrypt_token(paper.qr_token_encrypted)
         with patch('app.services.sms_service.send_sms') as sms,patch('app.ticketing.emailing.send_ticket_email') as email:

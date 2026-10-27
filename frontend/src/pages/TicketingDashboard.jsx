@@ -1091,7 +1091,7 @@ const [ticketTypes, setTicketTypes] = useState([]);
         <>
           <TicketRecoveryPanel key={eventId} eventId={eventId} onChanged={() => loadSummary(eventId)} />
 
-          <PaperTicketPanel key={`paper-${eventId}`} eventId={eventId} sellers={summary?.sellers || []} ticketTypes={ticketTypes} onChanged={() => loadSummary(eventId)} />
+          <PaperTicketPanel key={`paper-${eventId}`} eventId={eventId} event={selectedEvent} sellers={summary?.sellers || []} ticketTypes={ticketTypes} onChanged={() => loadSummary(eventId)} />
 
           <EventTicketSales eventId={eventId} />
 

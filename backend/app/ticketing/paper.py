@@ -1,22 +1,19 @@
 """Printable fighter allocations; no sale, commission or admission until recorded."""
-import io
 import json
 from datetime import datetime
 from uuid import UUID
-import qrcode
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.utils import ImageReader
 from app.core.dependencies import staff_user
 from app.database import get_db
 from app.models import SecurityLog
-from app.matchmaker.models import BoxingEvent
+from app.matchmaker.models import BoxingEvent, BoxingEventPublication
+from .paper_design import render_tickets
 from .models import PaperTicketBatch, PaperTicket, EventSeller, EventTicketType, TicketOrder, IssuedTicket
 from .security import make_raw_token, hash_token, encrypt_token, decrypt_token
 from .service import generate_ticket_number, generate_receipt_number, seller_commission_cents
@@ -181,41 +178,43 @@ def return_unsold(batch_id: int, body: BatchSelection, db: Session = Depends(get
 
 
 @router.get('/paper-batches/{batch_id}/print.pdf')
-def print_batch(batch_id: int, db: Session = Depends(get_db), user=Depends(staff_user)):
+def print_batch(batch_id: int, layout: Literal['fight-night', 'compact'] = 'fight-night', db: Session = Depends(get_db), user=Depends(staff_user)):
     batch = batch_or_404(db, batch_id)
     event = db.get(BoxingEvent, batch.event_id)
     seller, kind = db.get(EventSeller, batch.seller_id), db.get(EventTicketType, batch.ticket_type_id)
     tickets = db.query(PaperTicket).filter(PaperTicket.batch_id == batch_id, PaperTicket.status != 'returned').order_by(PaperTicket.id).all()
     if not tickets:
         raise HTTPException(409, 'All tickets in this batch have been returned')
-    output = io.BytesIO();pdf = canvas.Canvas(output, pagesize=letter)
-    pdf.setTitle(f'TNG paper tickets - batch {batch.id}')
-    # Six cut-out tickets per US Letter sheet; high-contrast QR with a quiet zone.
-    for index,t in enumerate(tickets):
-        if index and index % 6 == 0:pdf.showPage()
-        col, row = index % 2, (index % 6)//2
-        x,y,w,h = 24+col*282, 524-row*246, 276, 238
-        pdf.setDash(3,3);pdf.setStrokeColorRGB(.65,.65,.65);pdf.rect(x,y,w,h);pdf.setDash()
-        def line(text, yy, size=10, bold=False, max_width=252):
-            pdf.setFillColorRGB(0,0,0);pdf.setFont('Helvetica-Bold' if bold else 'Helvetica',size)
-            text=str(text or '')
-            while pdf.stringWidth(text,'Helvetica-Bold' if bold else 'Helvetica',size)>max_width and len(text)>3:text=text[:-4]+'...'
-            pdf.drawString(x+12,yy,text)
-        line('TNG BOXING  |  EVENT ADMISSION',y+h-21,11,True)
-        line(event.name,y+h-42,12,True)
-        line(event.event_date,y+h-60)
-        line(event.venue,y+h-76)
-        line(f'{kind.name}  |  ${batch.price_cents/100:.2f}',y+h-96,11,True)
-        line(f'Seller: {seller.display_name}',y+h-114,9)
-        qr=qrcode.QRCode(box_size=6,border=4,error_correction=qrcode.constants.ERROR_CORRECT_M)
-        qr.add_data(decrypt_token(t.qr_token_encrypted));qr.make(fit=True)
-        image=qr.make_image(fill_color='black',back_color='white').convert('RGB')
-        pdf.drawImage(ImageReader(image),x+12,y+25,width=90,height=90)
-        pdf.setFont('Helvetica',8)
-        for j,text in enumerate(['One admission. Keep this ticket.', 'Staff activate after sale is recorded.', 'Copies share the same QR code.', 'Only the first valid scan admits.', f'Batch #{batch.id}']):
-            pdf.drawString(x+111,y+103-j*14,text)
-        line(t.ticket_number,y+12,8,True)
-    pdf.save()
-    return Response(output.getvalue(),media_type='application/pdf',headers={
+    items=[{'number':t.ticket_number,'raw':decrypt_token(t.qr_token_encrypted),'status':t.status} for t in tickets]
+    content=render_tickets(event,seller.display_name,kind.name,batch.price_cents,items,layout,
+        schedule=event_schedule(db,event.id),batch_id=batch.id)
+    return Response(content,media_type='application/pdf',headers={
         'Content-Disposition':f'attachment; filename="TNG-event-{batch.event_id}-paper-batch-{batch.id}.pdf"',
+        'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
+
+
+def event_schedule(db,event_id):
+    publication=db.query(BoxingEventPublication).filter_by(event_id=event_id).first()
+    if not publication:return ''
+    def clock(value):
+        try:return datetime.strptime(value,'%H:%M').strftime('%I:%M %p').lstrip('0')
+        except ValueError:return value
+    return '  |  '.join(label+clock(value) for label,value in [('Doors: ',publication.doors_time),('First bout: ',publication.first_bout_time)] if value)
+
+
+@router.get('/events/{event_id}/paper-ticket-preview.pdf')
+def preview_design(event_id:int,ticket_type_id:int,seller_id:int | None=None,
+    layout:Literal['fight-night','compact']='fight-night',db:Session=Depends(get_db),user=Depends(staff_user)):
+    event=db.get(BoxingEvent,event_id)
+    if not event:raise HTTPException(404,'Event not found')
+    kind=db.get(EventTicketType,ticket_type_id)
+    if not kind or kind.event_id!=event_id:raise HTTPException(404,'Ticket type not found for this event')
+    seller=db.get(EventSeller,seller_id) if seller_id else None
+    if seller_id and (not seller or seller.event_id!=event_id):raise HTTPException(404,'Seller not found for this event')
+    count=3 if layout=='fight-night' else 6
+    items=[{'number':f'SAMPLE-{n+1:04d}','raw':'TNG-DESIGN-PREVIEW-NOT-VALID','status':'sample'} for n in range(count)]
+    content=render_tickets(event,seller.display_name if seller else 'TNG Boxing',kind.name,kind.price_cents,items,
+        layout,schedule=event_schedule(db,event_id),sample=True)
+    return Response(content,media_type='application/pdf',headers={
+        'Content-Disposition':f'attachment; filename="TNG-event-{event_id}-design-preview.pdf"',
         'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})

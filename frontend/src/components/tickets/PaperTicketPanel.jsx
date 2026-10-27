@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './TicketRecoveryPanel.css';
+import './PaperTicketDesign.css';
 const API = (import.meta.env.VITE_API_URL || 'https://sea-lion-app-2-gxyfr.ondigitalocean.app').replace(/\/$/, '');
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((n || 0)/100);
 const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
@@ -9,10 +10,11 @@ async function request(path, options = {}) {
   if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'The paper ticket request could not be completed');
   return body;
 }
-export default function PaperTicketPanel({ eventId, sellers = [], ticketTypes = [], onChanged }) {
+export default function PaperTicketPanel({ eventId, event = {}, sellers = [], ticketTypes = [], onChanged }) {
   const [batches, setBatches] = useState([]), [detail, setDetail] = useState(null), [selected, setSelected] = useState([]);
   const [seller, setSeller] = useState(''), [kind, setKind] = useState(''), [quantity, setQuantity] = useState(20);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const [layout,setLayout] = useState('fight-night');
   const allocation = useRef(null);
   async function load() { const body = await request(`/events/${eventId}/paper-batches`); setBatches(body.batches); }
   useEffect(() => { let live = true; request(`/events/${eventId}/paper-batches`).then(body => { if (live) setBatches(body.batches); }).catch(e => { if (live) setError(e.message); }); return () => { live = false; }; }, [eventId]);
@@ -33,11 +35,21 @@ export default function PaperTicketPanel({ eventId, sellers = [], ticketTypes = 
   }
   async function download(id) {
     await run(async () => {
-      const response = await fetch(`${API}/api/ticketing/paper-batches/${id}/print.pdf`, { headers: headers() });
+      const response = await fetch(`${API}/api/ticketing/paper-batches/${id}/print.pdf?layout=${layout}`, { headers: headers() });
       if (!response.ok) { const body = await response.json(); throw new Error(body.detail || 'Could not download ticket PDF'); }
       const blob = await response.blob(), url = URL.createObjectURL(blob), a = document.createElement('a');
       a.href = url; a.download = `TNG-event-${eventId}-paper-batch-${id}.pdf`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
       setNotice('PDF downloaded. Print on US Letter at Actual Size (100%), then cut along the dashed lines. Reprints use the same QR codes; do not distribute extra copies.');
+    });
+  }
+  async function preview() {
+    await run(async () => {
+      const params=new URLSearchParams({layout,ticket_type_id:kind});if(seller)params.set('seller_id',seller);
+      const response=await fetch(`${API}/api/ticketing/events/${eventId}/paper-ticket-preview.pdf?${params}`,{headers:headers()});
+      if(!response.ok){const body=await response.json();throw new Error(body.detail || 'Could not preview ticket design');}
+      const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');
+      a.href=url;a.download=`TNG-event-${eventId}-design-preview.pdf`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setNotice('Sample design downloaded. It creates no tickets or sales and cannot be used for entry.');
     });
   }
   async function update(action) {
@@ -54,12 +66,18 @@ export default function PaperTicketPanel({ eventId, sellers = [], ticketTypes = 
   }
   const available = detail?.tickets.filter(t => t.status === 'allocated') || [];
   return <section className="ticket-recovery" aria-label="Paper event tickets">
-    <header><div><p className="recovery-eyebrow">FIGHTER DISTRIBUTION</p><h2>Print paper tickets</h2><p>Print six numbered QR tickets per sheet, assigned to a fighter or seller.</p></div><button disabled={busy} onClick={() => run(async () => { await load(); if (detail) await openBatch(detail.id); })}>Refresh batches</button></header>
+    <header><div><p className="recovery-eyebrow">FIGHTER DISTRIBUTION</p><h2>Print paper tickets</h2><p>Branded, numbered QR tickets with your saved event details, assigned to a fighter or seller.</p></div><button disabled={busy} onClick={() => run(async () => { await load(); if (detail) await openBatch(detail.id); })}>Refresh batches</button></header>
+    <div className="paper-design-preview" aria-label="Ticket style illustration">
+      <div className="paper-design-main"><img src="/tng-ticket-logo.jpg" alt="TNG The Next Generation Boxing"/><small>OFFICIAL EVENT ADMISSION</small><h3>{event?.name || 'Your event ticket'}</h3><p>{event?.event_date || 'Saved event date'} · {event?.venue || 'Saved event venue'}</p><div>{ticketTypes.find(t=>String(t.id)===kind)?.name || 'Choose ticket type'}<strong>{kind ? money(ticketTypes.find(t=>String(t.id)===kind)?.price_cents) : 'FACE VALUE'}</strong></div></div>
+      <div className="paper-design-stub"><strong>EVENT PASS</strong><span className="paper-design-qr">QR</span><small>Unique ticket number</small><small>Assigned fighter / seller</small></div>
+    </div>
+    <p className="recovery-note">The system fills the PDF from this event’s saved name, date, venue, address and published doors / first-bout times. Missing details stay marked as unannounced. Preview before printing.</p>
+    <div className="recovery-filters"><label>Print design<select value={layout} disabled={busy} onChange={e=>setLayout(e.target.value)}><option value="fight-night">Fight Night · 3 landscape tickets per sheet</option><option value="compact">Compact · 6 tickets per sheet</option></select></label></div>
     <p className="recovery-note">Printed tickets start inactive. Record sales here before customers arrive. Unsold allocations do not count as sales or commissions. Cash sales are staff-recorded, not Clover-verified. Keep a record of the money fighters remit to TNG separately.</p>
     <div className="recovery-filters"><label>Fighter / seller<select value={seller} onChange={e => setSeller(e.target.value)} disabled={busy}><option value="">Choose seller</option>{sellers.map(s => <option key={s.seller_id} value={s.seller_id}>{s.display_name}</option>)}</select></label>
       <label>Ticket type<select value={kind} onChange={e => setKind(e.target.value)} disabled={busy}><option value="">Choose ticket type</option>{ticketTypes.filter(t => t.active).map(t => <option key={t.id} value={t.id}>{t.name} · {money(t.price_cents)}</option>)}</select></label>
       <label>Quantity<input type="number" min="1" max="200" step="1" value={quantity} disabled={busy} onChange={e => setQuantity(e.target.value)} /></label></div>
-    <button disabled={busy || !seller || !kind} onClick={create}>{busy ? 'Working…' : 'Create paper ticket batch'}</button>
+    <div className="recovery-actions"><button disabled={busy || !kind} onClick={preview}>Preview design PDF · no allocation</button><button disabled={busy || !seller || !kind} onClick={create}>{busy ? 'Working…' : 'Create paper ticket batch'}</button></div>
     {!sellers.length && <p>Add fighters to the fight card, or repair ticket links above, to make sellers available.</p>}
     {error && <p role="alert" className="recovery-error">{error}</p>}{notice && <p role="status" className="recovery-notice">{notice}</p>}
     <div className="recovery-table" style={{ marginTop: 20 }}><table><thead><tr><th>Batch / seller</th><th>Ticket type</th><th>Unsold</th><th>Sold / returned</th><th>Recorded sales</th><th>Actions</th></tr></thead><tbody>
