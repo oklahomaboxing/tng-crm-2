@@ -89,6 +89,30 @@ class PaperTicketTests(unittest.TestCase):
             self.assertEqual(r.status_code,200)
             self.assertIn(f'/Count {pages}'.encode(),r.content)
 
+    def test_activation_qr_lookup_is_read_only_and_event_scoped(self):
+        batch=self.batch(1).json()['id'];paper=self.db.query(PaperTicket).filter_by(batch_id=batch).one()
+        payload={'event_id':self.event.id,'token':decrypt_token(paper.qr_token_encrypted)}
+        path='/api/ticketing/paper-tickets/resolve'
+        before=self.db.query(TicketOrder).count()
+        self.assertEqual(self.client.post(path,json=payload).status_code,401)
+        self.assertEqual(self.client.post(path,json=payload,headers=self.headers('fighter')).status_code,403)
+        self.assertEqual(self.client.post(path,json={**payload,'event_id':9999},headers=self.headers()).status_code,409)
+        r=self.client.post(path,json=payload,headers=self.headers());self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()['price_cents'],4000)
+        self.assertEqual(self.db.query(TicketOrder).count(),before)
+        self.assertEqual(self.scan(paper)['result'],'not_activated')
+        self.assertEqual(self.sell(batch,[paper.id]).status_code,200)
+        self.assertEqual(self.client.post(path,json=payload,headers=self.headers()).status_code,409)
+        self.db.expire_all();self.assertEqual(self.db.query(IssuedTicket).one().status,'valid')
+        self.assertEqual(self.scan(paper)['result'],'admitted')
+
+    def test_activation_qr_lookup_rejects_returned_and_invalid_codes(self):
+        batch=self.batch(1).json()['id'];paper=self.db.query(PaperTicket).filter_by(batch_id=batch).one()
+        payload={'event_id':self.event.id,'token':decrypt_token(paper.qr_token_encrypted)}
+        self.assertEqual(self.client.post('/api/ticketing/paper-tickets/resolve',json={**payload,'token':'bad'},headers=self.headers()).status_code,400)
+        self.client.post(f'/api/ticketing/paper-batches/{batch}/return-unsold',json={'ticket_ids':[paper.id]},headers=self.headers())
+        self.assertEqual(self.client.post('/api/ticketing/paper-tickets/resolve',json=payload,headers=self.headers()).status_code,409)
+
     def test_record_sale_activates_same_qr_and_preserves_fighter_commission_once(self):
         b=self.batch().json()['id'];paper=self.db.query(PaperTicket).first();raw=decrypt_token(paper.qr_token_encrypted)
         with patch('app.services.sms_service.send_sms') as sms,patch('app.ticketing.emailing.send_ticket_email') as email:

@@ -15,7 +15,7 @@ from app.models import SecurityLog
 from app.matchmaker.models import BoxingEvent, BoxingEventPublication
 from .paper_design import render_tickets
 from .models import PaperTicketBatch, PaperTicket, EventSeller, EventTicketType, TicketOrder, IssuedTicket
-from .security import make_raw_token, hash_token, encrypt_token, decrypt_token
+from .security import make_raw_token, hash_token, encrypt_token, decrypt_token, verify_token
 from .service import generate_ticket_number, generate_receipt_number, seller_commission_cents
 
 router = APIRouter(prefix='/api/ticketing', tags=['paper-tickets'])
@@ -31,6 +31,26 @@ class BatchSelection(BaseModel):
 
 class PaperSale(BatchSelection):
     confirm_total_cents: int = Field(ge=0, strict=True)
+
+class PaperQrLookup(BaseModel):
+    event_id:int
+    token:str=Field(min_length=1,max_length=4096)
+
+
+@router.post('/paper-tickets/resolve')
+def resolve_paper_qr(body:PaperQrLookup,db:Session=Depends(get_db),user=Depends(staff_user)):
+    if not verify_token(body.token):raise HTTPException(400,'Invalid ticket QR code')
+    ticket=db.query(PaperTicket).filter_by(qr_token_hash=hash_token(body.token)).first()
+    if not ticket:raise HTTPException(404,'No paper ticket found. Digital purchases are activated automatically after verified payment.')
+    batch=batch_or_404(db,ticket.batch_id)
+    if batch.event_id!=body.event_id:raise HTTPException(409,'This ticket belongs to a different event')
+    if ticket.status=='returned':raise HTTPException(409,'This ticket was returned and cannot be activated')
+    if ticket.status=='sold':raise HTTPException(409,'Sale already recorded. Use door check-in to check admission; do not collect payment again.')
+    if ticket.status!='allocated' or ticket.order_id is not None:raise HTTPException(409,'Ticket state requires review')
+    seller=db.get(EventSeller,batch.seller_id);kind=db.get(EventTicketType,batch.ticket_type_id)
+    return {'ticket_id':ticket.id,'batch_id':batch.id,'ticket_number':ticket.ticket_number,
+        'price_cents':batch.price_cents,'seller_name':seller.display_name if seller else '',
+        'ticket_type_name':kind.name if kind else 'Ticket','status':'allocated'}
 
 
 def batch_or_404(db, batch_id):

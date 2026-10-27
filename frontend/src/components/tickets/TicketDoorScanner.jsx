@@ -15,8 +15,11 @@ const API =
 const SCANNER_ID =
   "tng-event-ticket-scanner";
 
-export default function TicketDoorScanner({ eventId }) {
+export default function TicketDoorScanner({ eventId, mode = "checkin" }) {
   const scannerRef = useRef(null);
+  const busyRef = useRef(false);
+  const [review,setReview] = useState(null);
+  const activation=mode === "activation";
 
   const [token, setToken] =
     useState("");
@@ -46,16 +49,17 @@ export default function TicketDoorScanner({ eventId }) {
       rawToken || ""
     ).trim();
 
-    if (!value || working) return;
+    if (!value || busyRef.current) return;
     if (!eventId) { setError("Select an event before scanning tickets."); return; }
 
+    busyRef.current=true;
     setWorking(true);
     setResult(null);
     setError("");
 
     try {
       const response = await fetch(
-        `${API}/api/ticketing/scan`,
+        `${API}/api/ticketing/${activation ? "paper-tickets/resolve" : "scan"}`,
         {
           method: "POST",
           headers: {
@@ -83,7 +87,7 @@ export default function TicketDoorScanner({ eventId }) {
         );
       }
 
-      setResult(body);
+      if(activation)setReview(body);else setResult(body);
       setToken("");
 
       if (navigator.vibrate) {
@@ -107,8 +111,21 @@ export default function TicketDoorScanner({ eventId }) {
         ]);
       }
     } finally {
+      busyRef.current=false;
       setWorking(false);
     }
+  }
+
+  async function activateTicket() {
+    if(!review || busyRef.current)return;
+    if(!window.confirm(`Confirm cash payment of $${(review.price_cents/100).toFixed(2)} received for ${review.ticket_number}? This records a cash sale and commission. It does not charge a card or check anyone in.`))return;
+    busyRef.current=true;setWorking(true);setError('');
+    try{
+      const response=await fetch(`${API}/api/ticketing/paper-batches/${review.batch_id}/record-sales`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`},body:JSON.stringify({ticket_ids:[review.ticket_id],confirm_total_cents:review.price_cents})});
+      const body=await response.json();if(!response.ok)throw Error(typeof body.detail==='string'?body.detail:'Could not record sale');
+      setReview(null);setResult({ok:true,result:body.new_sales_recorded?'Sale recorded. Ticket activated. Use door check-in separately for admission.':'Sale was already recorded. Check admission status; do not collect payment again.',ticket_number:review.ticket_number});
+    }catch(e){setError(e.message+' Refresh and check the batch before retrying if the connection failed.');}
+    finally{busyRef.current=false;setWorking(false);}
   }
 
   async function startScanner() {
@@ -182,6 +199,7 @@ export default function TicketDoorScanner({ eventId }) {
 
   function reset() {
     setResult(null);
+    setReview(null);
     setError("");
     setToken("");
   }
@@ -195,15 +213,13 @@ export default function TicketDoorScanner({ eventId }) {
               margin: 0,
             }}
           >
-            Fight Night Door Scanner
+            {activation ? "Activate Paper Ticket" : "Fight Night Door Scanner"}
           </h2>
 
           <div
             style={styles.sub}
           >
-            Scan each ticket once.
-            Duplicate scans will be
-            rejected.
+            {activation ? "For cash paper sales: scan, review, then confirm cash payment. Clover purchases activate automatically after verified payment. Activation does not admit the customer." : "Scan each ticket once. Duplicate scans will be rejected."}
           </div>
         </div>
 
@@ -211,6 +227,7 @@ export default function TicketDoorScanner({ eventId }) {
           <button
             style={styles.button}
             onClick={startScanner}
+            disabled={working || !!review}
           >
             Start Camera
           </button>
@@ -224,6 +241,13 @@ export default function TicketDoorScanner({ eventId }) {
         )}
       </div>
 
+      {review && !error && <div style={styles.reject}>
+        <h3>Confirm cash payment received</h3><strong>{review.ticket_number}</strong>
+        <p>{review.ticket_type_name} · {review.seller_name}</p><p>Face value: <strong>${(review.price_cents/100).toFixed(2)}</strong></p>
+        <p>Only confirm after collecting payment. This records a cash sale and fighter commission; it does not charge a card or admit anyone.</p>
+        <button style={styles.button} disabled={working} onClick={activateTicket}>{working?'Recording…':'Cash received — activate ticket'}</button>
+        <button style={{...styles.darkButton,marginLeft:10}} disabled={working} onClick={reset}>Cancel</button>
+      </div>}
       {result && (
         <div
           style={
@@ -236,7 +260,7 @@ export default function TicketDoorScanner({ eventId }) {
             style={styles.bigStatus}
           >
             {result.ok
-              ? "ADMIT"
+              ? (activation ? "ACTIVATION RESULT" : "ADMIT")
               : "DO NOT ADMIT"}
           </div>
 
@@ -286,7 +310,7 @@ export default function TicketDoorScanner({ eventId }) {
         </div>
       )}
 
-      {!result && !error && (
+      {!result && !error && !review && (
         <>
           <div
             id={SCANNER_ID}
@@ -318,7 +342,7 @@ export default function TicketDoorScanner({ eventId }) {
             >
               {working
                 ? "Checking..."
-                : "Check Ticket"}
+                : activation ? "Look up paper ticket" : "Check Ticket"}
             </button>
           </div>
         </>

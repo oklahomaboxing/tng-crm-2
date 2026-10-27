@@ -5,6 +5,7 @@ import TicketDoorScanner from '../components/tickets/TicketDoorScanner';
 const API=(import.meta.env.VITE_API_URL || 'https://sea-lion-app-2-gxyfr.ondigitalocean.app').replace(/\/$/,'');
 
 export default function EventCheckIn() {
+ const [mode,setMode]=useState('checkin');
  const [events,setEvents]=useState([]),[eventId,setEventId]=useState('');
  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[retry,setRetry]=useState(0);
  useEffect(()=>{
@@ -42,7 +43,8 @@ export default function EventCheckIn() {
    </TextField>}
    {selected?<>
     <Box sx={{mt:3,p:2,borderLeft:'4px solid #d71920',backgroundColor:'white',borderRadius:1}}><Typography variant="h6" fontWeight={800}>{selected.name}</Typography><Typography color="text.secondary">{selected.event_date || 'Date to be announced'}{selected.venue?' · '+selected.venue:''}</Typography></Box>
-    <TicketDoorScanner key={`event-door-${eventId}`} eventId={Number(eventId)}/>
+    <Stack direction="row" spacing={1} sx={{mt:2}}><Button variant={mode==='checkin'?'contained':'outlined'} onClick={()=>setMode('checkin')}>Door check-in</Button><Button color="warning" variant={mode==='activation'?'contained':'outlined'} onClick={()=>setMode('activation')}>Activate paper ticket</Button></Stack>
+    <TicketDoorScanner key={`event-door-${eventId}-${mode}`} eventId={Number(eventId)} mode={mode}/>
    </>:events.length>0 && <Alert severity="warning" sx={{mt:3}}>Choose the correct event before starting the ticket scanner.</Alert>}
   </>}
  </Box>;
