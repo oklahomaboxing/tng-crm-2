@@ -29,6 +29,7 @@ import SalesRepDashboard from "./pages/SalesRepDashboard.jsx";
 import JoinPage from "./pages/JoinPage.jsx";
 import Leads from "./pages/Leads.jsx";
 import FrontDesk from "./pages/FrontDesk.jsx";
+import EventCheckIn from './pages/EventCheckIn.jsx';
 import Products from "./pages/Products.jsx";
 import DuplicateReview from "./pages/DuplicateReview.jsx";
 import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
@@ -829,6 +830,7 @@ return (
       )}
       {page === "Members" && role !== "rep" && <Members />}
       {page === "Front Desk" && role !== "rep" && <FrontDesk />}
+      {page === 'Event Check-In' && ['admin','staff'].includes(role) && <EventCheckIn />}
 
       {page === "My Sales" && role === "rep" && (
         <SalesRepDashboard />

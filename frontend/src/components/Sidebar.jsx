@@ -34,6 +34,7 @@ export const ROLE_MENUS = {
     "Fight Calendar",
     "Products",
     "Front Desk",
+    "Event Check-In",
     "Sales",
     "Leads",
     "QR Referrals",
@@ -47,6 +48,7 @@ export const ROLE_MENUS = {
   ],
   staff: [
     "Front Desk",
+    "Event Check-In",
     "Fight Calendar",
     "Members",
     "Sales",
@@ -73,6 +75,7 @@ const ICONS = {
   "Fight Calendar": <EventRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
   "Front Desk": <QrCodeScannerRoundedIcon />,
+  "Event Check-In": <QrCode2RoundedIcon />,
   Sales: <PointOfSaleRoundedIcon />,
   "My Sales": <PointOfSaleRoundedIcon />,
   Leads: <PersonSearchRoundedIcon />,

@@ -14,8 +14,26 @@ export default function PaperTicketPanel({ eventId, event = {}, sellers = [], ti
   const [batches, setBatches] = useState([]), [detail, setDetail] = useState(null), [selected, setSelected] = useState([]);
   const [seller, setSeller] = useState(''), [kind, setKind] = useState(''), [quantity, setQuantity] = useState(20);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
-  const [layout,setLayout] = useState('fight-night');
+  const layout='fight-night';
+  const [sheetUrl,setSheetUrl] = useState(''),[sheetLoading,setSheetLoading] = useState(false),[sheetError,setSheetError] = useState('');
   const allocation = useRef(null);
+  useEffect(()=>{
+    let live=true,objectUrl='';const controller=new AbortController();
+    setSheetUrl('');setSheetError('');
+    if(!kind){setSheetLoading(false);return()=>controller.abort();}
+    setSheetLoading(true);
+    const timer=setTimeout(async()=>{
+      try{
+        const params=new URLSearchParams({layout,ticket_type_id:kind});if(seller)params.set('seller_id',seller);
+        const r=await fetch(`${API}/api/ticketing/events/${eventId}/paper-ticket-preview.pdf?${params}`,{headers:headers(),signal:controller.signal});
+        if(!r.ok){const body=await r.json();throw Error(body.detail || 'Could not load the sheet preview.');}
+        const blob=await r.blob();if(!live)return;
+        objectUrl=URL.createObjectURL(blob);setSheetUrl(objectUrl);
+      }catch(e){if(live && e.name!=='AbortError')setSheetError(e.message || 'Could not load the sheet preview.');}
+      finally{if(live)setSheetLoading(false);}
+    },400);
+    return()=>{live=false;clearTimeout(timer);controller.abort();if(objectUrl)URL.revokeObjectURL(objectUrl);};
+  },[eventId,kind,seller,layout]);
   async function load() { const body = await request(`/events/${eventId}/paper-batches`); setBatches(body.batches); }
   useEffect(() => { let live = true; request(`/events/${eventId}/paper-batches`).then(body => { if (live) setBatches(body.batches); }).catch(e => { if (live) setError(e.message); }); return () => { live = false; }; }, [eventId]);
   async function openBatch(id) { const body = await request(`/paper-batches/${id}`); setDetail(body); setSelected([]); }
@@ -72,11 +90,21 @@ export default function PaperTicketPanel({ eventId, event = {}, sellers = [], ti
       <div className="paper-design-stub"><strong>EVENT PASS</strong><span className="paper-design-qr">QR</span><small>Unique ticket number</small><small>Assigned fighter / seller</small></div>
     </div>
     <p className="recovery-note">The system fills the PDF from this event’s saved name, date, venue, address and published doors / first-bout times. Missing details stay marked as unannounced. Preview before printing.</p>
-    <div className="recovery-filters"><label>Print design<select value={layout} disabled={busy} onChange={e=>setLayout(e.target.value)}><option value="fight-night">Fight Night · 4 landscape tickets per sheet</option><option value="compact">Compact · 6 tickets per sheet</option></select></label></div>
+    <p className="recovery-note"><strong>Print format: 4 landscape tickets per US Letter sheet.</strong></p>
     <p className="recovery-note">Printed tickets start inactive. Record sales here before customers arrive. Unsold allocations do not count as sales or commissions. Cash sales are staff-recorded, not Clover-verified. Keep a record of the money fighters remit to TNG separately.</p>
     <div className="recovery-filters"><label>Fighter / seller<select value={seller} onChange={e => setSeller(e.target.value)} disabled={busy}><option value="">Choose seller</option>{sellers.map(s => <option key={s.seller_id} value={s.seller_id}>{s.display_name}</option>)}</select></label>
       <label>Ticket type<select value={kind} onChange={e => setKind(e.target.value)} disabled={busy}><option value="">Choose ticket type</option>{ticketTypes.filter(t => t.active).map(t => <option key={t.id} value={t.id}>{t.name} · {money(t.price_cents)}</option>)}</select></label>
       <label>Quantity<input type="number" min="1" max="200" step="1" value={quantity} disabled={busy} onChange={e => setQuantity(e.target.value)} /></label></div>
+    <div className="paper-sheet-review">
+      <div><h3>Print sheet preview</h3><p>US Letter · 8.5 × 11 inches · 4 tickets per page</p><p>Review the actual PDF layout before creating a batch. Sample QR codes cannot admit anyone. This preview creates no tickets or sales.</p></div>
+      <div className="paper-sheet-frame">
+        {sheetUrl?<iframe title="US Letter ticket sheet preview" src={`${sheetUrl}#toolbar=0&navpanes=0&view=FitH`} />:<div className="paper-sheet-placeholder" aria-label={'4 ticket positions on Letter paper'}>
+          <span>{sheetLoading?'Loading sheet preview…':kind?'Preview unavailable':'Choose a ticket type to see your print sheet'}</span>
+          <div className="paper-sheet-slots">{Array.from({length:4},(_,n)=><div key={n}>TICKET {n+1}</div>)}</div>
+        </div>}
+      </div>
+    </div>
+    {sheetError && <p role="alert" className="recovery-error">{sheetError} Use Preview design PDF to try downloading the sample.</p>}
     <div className="recovery-actions"><button disabled={busy || !kind} onClick={preview}>Preview design PDF · no allocation</button><button disabled={busy || !seller || !kind} onClick={create}>{busy ? 'Working…' : 'Create paper ticket batch'}</button></div>
     {!sellers.length && <p>Add fighters to the fight card, or repair ticket links above, to make sellers available.</p>}
     {error && <p role="alert" className="recovery-error">{error}</p>}{notice && <p role="status" className="recovery-notice">{notice}</p>}

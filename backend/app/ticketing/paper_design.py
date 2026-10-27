@@ -97,38 +97,16 @@ def landscape(pdf,item,event,seller,kind,price,schedule,x,y,w,h,sample):
     trim(pdf,x,y,w,h)
 
 
-def compact(pdf,item,event,seller,kind,price,schedule,x,y,w,h,sample):
-    pdf.setFillColor(white);pdf.rect(x,y,w,h,fill=1,stroke=0)
-    pdf.setFillColor(INK);pdf.rect(x,y+h-60,w,60,fill=1,stroke=0)
-    pdf.drawImage(str(LOGO),x+10,y+h-53,width=102,height=45,preserveAspectRatio=True)
-    text(pdf,'TNG BOXING',x+124,y+h-25,w-136,10,'TNG-Bold')
-    text(pdf,'EVENT ADMISSION',x+124,y+h-41,w-136,7,'TNG-Bold',RED)
-    for i,line in enumerate(wrap(pdf,str(event.name).upper(),w-24,15)):
-        text(pdf,line,x+12,y+h-79-i*17,w-24,15,'TNG-Bold',black)
-    text(pdf,schedule,x+12,y+129,w-24,7,color=HexColor('#555555'))
-    text(pdf,display_date(event.event_date),x+12,y+116,w-24,9,'TNG-Bold',black)
-    text(pdf,event.venue or 'Venue to be announced',x+12,y+103,w-24,9,color=black)
-    text(pdf,event.venue_address,x+12,y+91,w-24,7,color=HexColor('#555555'))
-    pdf.drawImage(qr_image(item['raw']),x+9,y+9,width=78,height=78)
-    text(pdf,kind,x+96,y+73,w-108,10,'TNG-Bold',black)
-    text(pdf,f'${price/100:,.2f}',x+96,y+56,w-108,14,'TNG-Bold',RED)
-    text(pdf,seller,x+96,y+41,w-108,8,color=black)
-    text(pdf,item['number'],x+96,y+26,w-108,8,'TNG-Bold',black)
-    label='SAMPLE / NOT VALID' if sample else ('ACTIVATE AFTER SALE' if item.get('status')=='allocated' else 'PRESENT AT CHECK-IN')
-    text(pdf,label,x+96,y+12,w-108,7,'TNG-Bold',RED)
-    trim(pdf,x,y,w,h)
-
-
 def render_tickets(event,seller,kind,price,items,layout='fight-night',schedule='',sample=False,batch_id=None):
+    if layout!='fight-night':raise ValueError('Only four tickets per Letter sheet is supported')
     output=io.BytesIO();pdf=canvas.Canvas(output,pagesize=letter,pageCompression=1)
     pdf.setTitle(('SAMPLE - ' if sample else '')+f'TNG Boxing | {event.name} | Paper tickets')
     pdf.setAuthor('TNG Boxing')
-    per_page=4 if layout=='fight-night' else 6
+    per_page=4
     for index,item in enumerate(items):
         if index and index%per_page==0:pdf.showPage()
         if index%per_page==0:
             text(pdf,'TNG BOXING / '+('DESIGN PREVIEW - NOT VALID FOR ENTRY' if sample else f'PAPER TICKETS / BATCH {batch_id}'),24,779,564,7,'TNG-Bold',black)
             text(pdf,'US LETTER / ACTUAL SIZE 100% / CUT ON DASHED LINES / REPRINTS REUSE THE SAME QR',24,12,564,6,color=black)
-        if layout=='fight-night':landscape(pdf,item,event,seller,kind,price,schedule,24,591-(index%4)*189,564,177,sample)
-        else:compact(pdf,item,event,seller,kind,price,schedule,24+(index%2)*282,524-((index%6)//2)*246,276,238,sample)
+        landscape(pdf,item,event,seller,kind,price,schedule,24,591-(index%4)*189,564,177,sample)
     pdf.save();return output.getvalue()

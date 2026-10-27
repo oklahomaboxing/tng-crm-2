@@ -55,7 +55,7 @@ class PaperTicketTests(unittest.TestCase):
         self.event.venue_address='123 Example Street, Oklahoma City'
         self.db.commit()
         before=[self.db.query(t).count() for t in [PaperTicketBatch,PaperTicket,TicketOrder,IssuedTicket,TicketDelivery]]
-        for layout in ['fight-night','compact']:
+        for layout in ['fight-night']:
             r=self.client.get(f'/api/ticketing/events/{self.event.id}/paper-ticket-preview.pdf',headers=self.headers(),params={'ticket_type_id':self.kind.id,'seller_id':self.seller.id,'layout':layout})
             self.assertEqual(r.status_code,200,r.text[:80] if r.status_code!=200 else '')
             self.assertTrue(r.content.startswith(b'%PDF'))
@@ -71,11 +71,12 @@ class PaperTicketTests(unittest.TestCase):
         self.assertEqual(self.client.get(f'/api/ticketing/events/{other.id}/paper-ticket-preview.pdf?ticket_type_id={self.kind.id}',headers=self.headers()).status_code,404)
         self.assertEqual(self.client.get(path+'&seller_id=999999',headers=self.headers()).status_code,404)
         self.assertEqual(self.client.get(path+'&layout=unknown',headers=self.headers()).status_code,422)
+        self.assertEqual(self.client.get(path+'&layout=compact',headers=self.headers()).status_code,422)
 
-    def test_both_print_layouts_preserve_ticket_tokens(self):
+    def test_four_up_reprints_preserve_ticket_tokens(self):
         batch=self.batch(7).json()['id']
         before=[(t.id,t.qr_token_hash,t.status) for t in self.db.query(PaperTicket).order_by(PaperTicket.id)]
-        for layout,pages in [('fight-night',2),('compact',2)]:
+        for layout,pages in [('fight-night',2),('fight-night',2)]:
             r=self.client.get(f'/api/ticketing/paper-batches/{batch}/print.pdf?layout={layout}',headers=self.headers())
             self.assertEqual(r.status_code,200)
             self.assertIn(f'/Count {pages}'.encode(),r.content)
