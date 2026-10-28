@@ -162,6 +162,19 @@ class MemberProfilesTests(unittest.TestCase):
         self.assertEqual(self.db.query(Sale).filter_by(clover_order_id='pos-paid').count(), 1)
         self.assertEqual(self.db.query(MemberInvite).filter_by(member_id=member.id).count(), 1)
 
+    def test_pos_import_without_profile_avoids_existing_card_number(self):
+        self.member.member_number = 'TNG-000002'; self.member.barcode = 'TNG000002'; self.db.commit()
+        order = {'id': 'pos-new', 'total': 15000, 'paymentState': 'PAID',
+                 'payments': {'elements': [{'id': 'pos-new-payment', 'result': 'SUCCESS'}]},
+                 'customers': {'elements': [customer()]},
+                 'lineItems': {'elements': [{'name': self.product.name, 'price': 15000}]}}
+        with patch.dict(os.environ, {'CLOVER_API_TOKEN': 'test', 'CLOVER_MERCHANT_ID': 'test'}), \
+             patch('requests.get', return_value=response([order])):
+            r = self.client.post('/api/clover/sync-sales', headers=self.headers())
+        self.assertEqual(r.status_code, 200, r.text)
+        member = self.db.query(Member).filter_by(clover_customer_id='clover-new').one()
+        self.assertEqual(member.member_number, 'TNG-000003')
+
     def test_customer_profile_with_legacy_active_default_cannot_check_in(self):
         legacy = Member(first_name='Retail', last_name='Customer', member_type='CUSTOMER',
                         membership_status='active', clover_customer_id='retail')

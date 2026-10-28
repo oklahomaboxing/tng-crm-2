@@ -2982,25 +2982,8 @@ def sync_clover_sales(
                     member.status = "active"
                     member.member_type = "MEMBER"
 
-                    if not member.member_number:
-                        member.member_number = (
-                            f"TNG-{member.id:06d}"
-                        )
-
-                    if not member.digital_member_id:
-                        member.digital_member_id = (
-                            generate_digital_member_id()
-                        )
-
-                    if not member.barcode:
-                        member.barcode = generate_barcode(
-                            member.member_number
-                        )
-
-                    if not member.qr_code:
-                        member.qr_code = generate_qr_code(
-                            member.member_number
-                        )
+                    from app.services.member_profiles import ensure_profile_identity
+                    ensure_profile_identity(db, member)
 
                 if registration_line_present:
                     registration_product = (
@@ -3378,17 +3361,8 @@ def sync_clover_sales(
             member.status = "active"
             member.member_type = "MEMBER"
 
-            if not member.member_number:
-                member.member_number = f"TNG-{member.id:06d}"
-
-            if not member.digital_member_id:
-                member.digital_member_id = generate_digital_member_id()
-
-            if not member.barcode:
-                member.barcode = generate_barcode(member.member_number)
-
-            if not member.qr_code:
-                member.qr_code = generate_qr_code(member.member_number)
+            from app.services.member_profiles import ensure_profile_identity
+            ensure_profile_identity(db, member)
 
             paid_member_ids.add(member.id)
             membership_sales += 1
