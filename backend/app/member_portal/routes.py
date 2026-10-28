@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFile, File, Response
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from ..database import Base, engine, get_db
 from ..models import User, Member, MembershipProduct, Sale
@@ -259,7 +260,7 @@ def create_member_invite(
     user: User = Depends(current_user),
 ):
     require_admin(user)
-    member = db.query(Member).filter(Member.id == data.member_id).first()
+    member = db.query(Member).filter(Member.id == data.member_id).with_for_update().first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
     if not (member.email or "").strip():
@@ -268,6 +269,10 @@ def create_member_invite(
     existing_account = db.query(MemberAccount).filter(MemberAccount.member_id == member.id).first()
     if existing_account:
         raise HTTPException(status_code=409, detail="Member account already activated")
+
+    email_user = db.query(User).filter(func.lower(User.email) == member.email.strip().lower()).first()
+    if email_user and (email_user.role != "member" or db.query(MemberAccount).filter_by(user_id=email_user.id).first()):
+        raise HTTPException(409, "This email is already used by another TNGOS account. Review the profile's email before sending access.")
 
     active_invite = (
         db.query(MemberInvite)
@@ -526,7 +531,7 @@ def activate_member(data: ActivateMemberIn, db: Session = Depends(get_db)):
     if not email:
         raise HTTPException(status_code=400, detail="Member does not have an email address")
 
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(func.lower(User.email) == email).first()
     if user and user.role != "member":
         raise HTTPException(
             status_code=409,

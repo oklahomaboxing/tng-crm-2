@@ -829,7 +829,7 @@ return (
       {page === "Dashboard" && role !== "rep" && (
         <Dashboard dash={dash} leader={leader} load={load} />
       )}
-      {page === "Members" && role !== "rep" && <Members />}
+      {page === "Members" && role !== "rep" && <Members role={role} />}
       {page === "Front Desk" && role !== "rep" && <FrontDesk />}
       {page === 'Event Check-In' && ['admin','staff'].includes(role) && <EventCheckIn />}
 

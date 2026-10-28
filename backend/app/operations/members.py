@@ -18,48 +18,73 @@ from ..services.memberships import (
 router = APIRouter(dependencies=[Depends(staff_user)])
 
 
+from pydantic import BaseModel, Field
+import re
+
+
+class CreateMemberProfileIn(BaseModel):
+    first_name: str = Field(default="", max_length=100)
+    last_name: str = Field(default="", max_length=100)
+    email: str = Field(default="", max_length=254)
+    phone: str = Field(default="", max_length=40)
+    address: str = Field(default="", max_length=300)
+    city: str = Field(default="", max_length=100)
+    state: str = Field(default="", max_length=100)
+    zip_code: str = Field(default="", max_length=20)
+    notes: str = Field(default="", max_length=4000)
+
+
+@router.post("/api/members", status_code=201)
+def create_member_profile(data: CreateMemberProfileIn, db: Session = Depends(get_db),
+                          user: User = Depends(current_user)):
+    require_admin(user)
+    from app.services.member_profiles import lock_profiles, matching_profile, ensure_profile_identity, audit_profile
+    first, last = data.first_name.strip(), data.last_name.strip()
+    email, phone = data.email.strip().lower(), data.phone.strip()
+    if not first and not last:
+        raise HTTPException(422, "Enter the member's name.")
+    if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        raise HTTPException(422, "Enter a valid email address.")
+    if phone and not 10 <= len(re.sub(r"\D", "", phone)) <= 15:
+        raise HTTPException(422, "Enter a phone number with area code.")
+    lock_profiles(db)
+    existing = matching_profile(db, email=email, phone=phone)
+    if existing:
+        raise HTTPException(409, f"Profile #{existing.id} already uses this email or phone. Search for the existing profile instead.")
+    member = Member(first_name=first, last_name=last, email=email, phone=phone,
+                    address=data.address.strip(), city=data.city.strip(), state=data.state.strip(),
+                    zip_code=data.zip_code.strip(), notes=data.notes.strip(),
+                    member_type="MEMBER", status="pending", membership_status="pending", waiver_signed=False)
+    db.add(member)
+    ensure_profile_identity(db, member)
+    audit_profile(db, user.id, "MEMBER_PROFILE_CREATED", f"Created profile {member.id} without recording a payment or granting membership access")
+    db.commit()
+    return {"id": member.id, "first_name": member.first_name, "last_name": member.last_name,
+            "email": member.email, "phone": member.phone, "member_number": member.member_number,
+            "membership_status": member.membership_status, "member_type": member.member_type}
+
+
 @router.get("/api/members")
 def list_members(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    paid_membership_member_ids = (
-        db.query(Sale.member_id)
-        .join(
-            MembershipProduct,
-            MembershipProduct.id == Sale.product_id,
-        )
-        .filter(
-            Sale.payment_status == "paid",
-            Sale.member_id != None,
-            MembershipProduct.is_membership == True,
-            MembershipProduct.category == "membership",
-            Sale.refunded.isnot(True),
-        )
-        .distinct()
-        .subquery()
-    )
-
-    members = (
-        db.query(Member)
-        .filter(
-            Member.id.in_(
-                db.query(paid_membership_member_ids.c.member_id)
-            ),
-            Member.member_type == "MEMBER",
-        )
-        .order_by(
-            Member.last_name.asc(),
-            Member.first_name.asc(),
-        )
-        .all()
-    )
+    members = db.query(Member).order_by(Member.last_name.asc(), Member.first_name.asc()).all()
+    from app.member_portal.models import MemberAccount, MemberInvite
+    accounts = {account.member_id: bool(account_user.active) for account, account_user in
+                db.query(MemberAccount, User).join(User, User.id == MemberAccount.user_id).all()}
+    invited = {row.member_id for row in db.query(MemberInvite).filter(
+        MemberInvite.used_at.is_(None), MemberInvite.expires_at > datetime.utcnow()).all()}
 
     results = []
 
     for member in members:
         results.append({
             "id": member.id,
+            "member_type": member.member_type,
+            "profile_source": "clover" if member.clover_customer_id else "tngos",
+            "portal_status": ("active" if accounts[member.id] else "disabled") if member.id in accounts
+                else "invited" if member.id in invited else "not_invited" if member.email else "needs_email",
             "first_name": member.first_name,
             "last_name": member.last_name,
             "email": member.email,

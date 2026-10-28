@@ -77,6 +77,9 @@ def membership_months(product):
 
 
 def effective_membership_status(member, now=None):
+    # A retail/customer profile is not a paid gym membership, including legacy active defaults.
+    if getattr(member, "member_type", "MEMBER") != "MEMBER":
+        return "pending"
     status = member.membership_status or "pending"
     if status == "active" and member.membership_end and member.membership_end < (now or datetime.utcnow()):
         return "inactive"

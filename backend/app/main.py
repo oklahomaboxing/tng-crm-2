@@ -339,6 +339,26 @@ async def stop_ticket_delivery_worker():
             pass
 
 
+@app.on_event("startup")
+async def start_clover_profile_worker():
+    import asyncio
+    from app.services.clover_customers import profile_sync_loop
+    if os.getenv("CLOVER_PROFILE_SYNC_ENABLED", "1") == "1":
+        app.state.clover_profile_task = asyncio.create_task(profile_sync_loop())
+
+
+@app.on_event("shutdown")
+async def stop_clover_profile_worker():
+    import asyncio
+    task = getattr(app.state, "clover_profile_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "release": "ticket-production-repair-3"}
@@ -2332,154 +2352,21 @@ def sync_clover_customers(
 ):
     require_admin(user)
 
-    merchant_id = os.getenv("CLOVER_MERCHANT_ID")
-    api_token = (
-        os.getenv("CLOVER_ECOMMERCE_PRIVATE_KEY")
-        or os.getenv("CLOVER_API_TOKEN")
-    )
-    clover_env = os.getenv("CLOVER_ENV", "production")
-
-    if not merchant_id or not api_token:
-        raise HTTPException(
-            status_code=500,
-            detail="Clover credentials missing",
-        )
-
-    base_url = (
-        "https://api.clover.com"
-        if clover_env == "production"
-        else "https://apisandbox.dev.clover.com"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {api_token}",
-        "Content-Type": "application/json",
-    }
-
-    response = requests.get(
-        (
-            f"{base_url}/v3/merchants/{merchant_id}/customers"
-            "?expand=emailAddresses,phoneNumbers"
-            "&limit=1000"
-        ),
-        headers=headers,
-        timeout=30,
-    )
-
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Clover customer sync error "
-                f"{response.status_code}: {response.text}"
-            ),
-        )
-
-    customers = response.json().get("elements", [])
-
-    linked_members = 0
-    marketing_created = 0
-    marketing_updated = 0
-    marketing_skipped = 0
-
+    from app.services.clover_customers import fetch_customers, reconcile_customers
+    customers = fetch_customers()
+    result = reconcile_customers(db, customers, user.id)
+    marketing = {"created": 0, "updated": 0, "skipped": 0}
     for customer in customers:
-        clover_customer_id = (customer.get("id") or "").strip()
-        first_name = (customer.get("firstName") or "").strip()
-        last_name = (customer.get("lastName") or "").strip()
-
-        emails = (
-            customer.get("emailAddresses", {})
-            .get("elements", [])
-        )
-        email = (
-            (emails[0].get("emailAddress") or "").strip().lower()
-            if emails
-            else ""
-        )
-
-        phones = (
-            customer.get("phoneNumbers", {})
-            .get("elements", [])
-        )
-        phone = (
-            (phones[0].get("phoneNumber") or "").strip()
-            if phones
-            else ""
-        )
-
-        if not first_name and not last_name and not email and not phone:
-            marketing_skipped += 1
-            continue
-
-        existing_member = None
-
-        member_query = db.query(Member).filter(
-            or_(
-                Member.member_type == "MEMBER",
-                Member.membership_start != None,
-                Member.membership_end != None,
-                Member.membership_status.in_(
-                    ["active", "expired", "past_due"]
-                ),
-            )
-        )
-
-        if clover_customer_id:
-            existing_member = member_query.filter(
-                Member.clover_customer_id == clover_customer_id
-            ).first()
-
-        if not existing_member and email:
-            existing_member = member_query.filter(
-                func.lower(Member.email) == email
-            ).first()
-
-        if not existing_member and phone:
-            existing_member = member_query.filter(
-                Member.phone == phone
-            ).first()
-
-        if existing_member:
-            if clover_customer_id:
-                existing_member.clover_customer_id = clover_customer_id
-            if first_name:
-                existing_member.first_name = first_name
-            if last_name:
-                existing_member.last_name = last_name
-            if email:
-                existing_member.email = email
-            if phone:
-                existing_member.phone = phone
-            linked_members += 1
-
-        marketing_result = sync_clover_customer_to_marketing(
-            db,
-            first_name,
-            last_name,
-            email,
-            phone,
-        )
-
-        if marketing_result == "created":
-            marketing_created += 1
-        elif marketing_result == "updated":
-            marketing_updated += 1
-        else:
-            marketing_skipped += 1
-
+        emails = (customer.get("emailAddresses") or {}).get("elements", [])
+        phones = (customer.get("phoneNumbers") or {}).get("elements", [])
+        outcome = sync_clover_customer_to_marketing(db,
+            str(customer.get("firstName") or "").strip(), str(customer.get("lastName") or "").strip(),
+            str(emails[0].get("emailAddress") or "").strip().lower() if emails else "",
+            str(phones[0].get("phoneNumber") or "").strip() if phones else "")
+        marketing[outcome if outcome in marketing else "skipped"] += 1
     db.commit()
+    return {**result, "marketing": marketing}
 
-    return {
-        "message": "Clover customers synced to marketing contacts",
-        "customers_received": len(customers),
-        "members_linked": linked_members,
-        "members_created": 0,
-        "marketing": {
-            "created": marketing_created,
-            "updated": marketing_updated,
-            "skipped": marketing_skipped,
-        },
-    }
 
 @app.post("/api/members/activate-prospects")
 def activate_prospects(
@@ -2936,6 +2823,8 @@ def sync_clover_sales(
 
     orders = response.json().get("elements", [])
     orders.sort(key=lambda order: int(order.get("createdTime") or order.get("clientCreatedTime") or 0))
+    from app.services.member_profiles import lock_profiles
+    lock_profiles(db)
 
     synced = 0
     skipped = 0
@@ -2947,6 +2836,7 @@ def sync_clover_sales(
     non_membership_sales = 0
     repaired_membership_sales = 0
     registration_sales_created = 0
+    paid_member_ids = set()
 
     default_rep = get_or_create_front_desk_rep(db)
 
@@ -2966,6 +2856,7 @@ def sync_clover_sales(
     db.commit()
 
     for order in orders:
+        lock_profiles(db)
         order_id = (order.get("id") or "").strip()
         total_cents = order.get("total", 0) or 0
 
@@ -3499,6 +3390,7 @@ def sync_clover_sales(
             if not member.qr_code:
                 member.qr_code = generate_qr_code(member.member_number)
 
+            paid_member_ids.add(member.id)
             membership_sales += 1
         else:
             non_membership_sales += 1
@@ -3506,9 +3398,13 @@ def sync_clover_sales(
         synced += 1
 
     db.commit()
+    from app.services.member_invites import invite_paid_member
+    portal_results = [invite_paid_member(db, member_id) for member_id in sorted(paid_member_ids)]
+
 
     return {
         "message": "Clover sales synced",
+        "portal_invitations_sent": sum(1 for result in portal_results if result["portal_invite_sent"]),
         "front_desk_rep_id": default_rep.id,
         "front_desk_rep": (
             default_rep.user.name
@@ -3797,12 +3693,24 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Approved payment checkout is not recorded; reconciliation required")
 
     if lead.status == "converted":
-        return {"received": True, "message": "Membership payment already processed"}
+        # Clover retries must repair a failed activation email without recording payment again.
+        member_ids = db.query(Sale.member_id).filter(
+            Sale.clover_checkout_id == matching_checkout_id,
+            Sale.payment_status == "paid").distinct().all()
+        result = {}
+        if len(member_ids) == 1:
+            from app.services.member_invites import invite_paid_member
+            result = invite_paid_member(db, member_ids[0][0])
+        return {"received": True, "message": "Membership payment already processed", **result}
+
     product = db.query(MembershipProduct).filter(MembershipProduct.id == lead.product_id).first()
     if not is_membership_product(product):
         raise HTTPException(status_code=409, detail="Checkout membership product is unavailable")
     if not lead.sales_rep_id:
         lead.sales_rep_id = get_or_create_front_desk_rep(db).id
+
+    from app.services.member_profiles import lock_profiles
+    lock_profiles(db)
 
     # Prevent duplicate members by matching email first, then phone.
     normalized_email = (lead.email or "").strip().lower()
@@ -3871,18 +3779,8 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         member.emergency_contact = waiver.emergency_contact_name
         member.emergency_phone = waiver.emergency_contact_phone
 
-    # Create missing membership credentials for new or existing members.
-    if not member.member_number:
-        member.member_number = f"TNG-{member.id:06d}"
-
-    if not member.digital_member_id:
-        member.digital_member_id = generate_digital_member_id()
-
-    if not member.barcode:
-        member.barcode = generate_barcode(member.member_number)
-
-    if not member.qr_code:
-        member.qr_code = generate_qr_code(member.member_number)
+    from app.services.member_profiles import ensure_profile_identity
+    ensure_profile_identity(db, member)
 
     db.flush()
 
@@ -3956,142 +3854,10 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
 
     db.commit()
 
-    # ------------------------------------------------------------
-    # Automatically invite newly paid members to the TNG member portal.
-    # Payment processing must never fail because of an email problem.
-    # ------------------------------------------------------------
-    portal_invite_sent = False
-    portal_invite_status = "not_sent"
-
-    try:
-        import hashlib
-        import secrets
-        import resend
-        from datetime import timedelta
-        from app.member_portal.models import MemberAccount, MemberInvite
-
-        member_email = (member.email or "").strip().lower()
-
-        if member_email:
-            existing_account = (
-                db.query(MemberAccount)
-                .filter(MemberAccount.member_id == member.id)
-                .first()
-            )
-
-            if existing_account:
-                portal_invite_status = "already_active"
-
-            else:
-                active_invite = (
-                    db.query(MemberInvite)
-                    .filter(
-                        MemberInvite.member_id == member.id,
-                        MemberInvite.used_at == None,
-                        MemberInvite.expires_at > datetime.utcnow(),
-                    )
-                    .order_by(MemberInvite.created_at.desc())
-                    .first()
-                )
-
-                if active_invite:
-                    portal_invite_status = "already_invited"
-
-                else:
-                    raw_token = secrets.token_urlsafe(32)
-
-                    invite = MemberInvite(
-                        member_id=member.id,
-                        token_hash=hashlib.sha256(
-                            raw_token.encode("utf-8")
-                        ).hexdigest(),
-                        expires_at=datetime.utcnow() + timedelta(days=7),
-                    )
-
-                    db.add(invite)
-                    db.flush()
-
-                    frontend_url = os.getenv(
-                        "FRONTEND_URL",
-                        "https://tngos.tngboxinggym.com",
-                    ).rstrip("/")
-
-                    activation_url = (
-                        f"{frontend_url}/member/activate?token={raw_token}"
-                    )
-
-                    resend_api_key = os.getenv("RESEND_API_KEY")
-                    sender_email = os.getenv(
-                        "RESEND_FROM_EMAIL",
-                        "TNG Boxing <marketing@tngboxinggym.com>",
-                    )
-
-                    if resend_api_key:
-                        resend.api_key = resend_api_key
-
-                        resend.Emails.send(
-                            {
-                                "from": sender_email,
-                                "to": [member_email],
-                                "subject": "Activate Your TNG Boxing Member Account",
-                                "html": f"""
-                                <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;">
-                                  <h2>Welcome to TNG Boxing</h2>
-
-                                  <p>Your membership payment was received successfully.</p>
-
-                                  <p>
-                                    Your TNGOS member account is ready.
-                                    Click below to create your password.
-                                  </p>
-
-                                  <p style="margin:30px 0;">
-                                    <a
-                                      href="{activation_url}"
-                                      style="
-                                        background:#d71920;
-                                        color:#ffffff;
-                                        padding:14px 22px;
-                                        text-decoration:none;
-                                        border-radius:6px;
-                                        font-weight:bold;
-                                      "
-                                    >
-                                      Set Up My Member Account
-                                    </a>
-                                  </p>
-
-                                  <p>This link expires in 7 days.</p>
-
-                                  <p>
-                                    After setup, you can sign in anytime at
-                                    <strong>tngos.tngboxinggym.com</strong>.
-                                  </p>
-
-                                  <p><strong>TNG Boxing ? Earned Not Given</strong></p>
-                                </div>
-                                """,
-                            }
-                        )
-
-                        portal_invite_sent = True
-                        portal_invite_status = "sent"
-                        db.commit()
-
-                    else:
-                        db.rollback()
-                        portal_invite_status = "email_not_configured"
-
-        else:
-            portal_invite_status = "member_has_no_email"
-
-    except Exception as portal_error:
-        db.rollback()
-        portal_invite_status = "email_error"
-        print(
-            "MEMBER PORTAL INVITE ERROR:",
-            str(portal_error),
-        )
+    from app.services.member_invites import invite_paid_member
+    portal_result = invite_paid_member(db, member.id)
+    portal_invite_sent = portal_result["portal_invite_sent"]
+    portal_invite_status = portal_result["portal_invite_status"]
 
     return {
         "received": True,

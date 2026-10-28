@@ -28,6 +28,7 @@ import {
 } from "@mui/material";
 import { API, authHeaders } from "../services/api";
 import MemberProfile from "./MemberProfile.jsx";
+import AddMemberDialog from "../components/members/AddMemberDialog.jsx";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -60,9 +61,16 @@ function statusChip(member) {
   return map[status];
 }
 
-export default function Members() {
+function portalLabel(member) {
+  return ({ active: "Portal active", disabled: "Portal disabled", invited: "Activation email sent", not_invited: "Access not sent", needs_email: "Email needed" })[member.portal_status] || "Access not sent";
+}
+
+export default function Members({ role }) {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [addOpen, setAddOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [notice, setNotice] = useState("");
   const [members, setMembers] = useState([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -112,6 +120,19 @@ export default function Members() {
     }
   }
 
+
+  async function syncCloverCustomers() {
+    if (syncing) return;
+    setSyncing(true); setNotice(""); setError("");
+    try {
+      const response = await fetch(`${API}/api/clover/sync-customers`, { method: "POST", headers: authHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Could not sync Clover customers.");
+      await loadMembers();
+      setNotice(`Clover sync complete: ${data.members_created || 0} profiles added, ${data.members_linked || 0} linked, ${data.needs_review || 0} need duplicate review.${data.needs_review ? ` Review Clover customer IDs: ${(data.review_customer_ids || []).join(", ")}.` : ""}`);
+    } catch (err) { setError(err.message || "Could not sync Clover customers."); }
+    finally { setSyncing(false); }
+  }
 
   async function loadMembers() {
     try {
@@ -191,10 +212,14 @@ export default function Members() {
       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={2} mb={3}>
         <Box>
           <Typography variant="h4" fontWeight={900}>Members</Typography>
-          <Typography color="text.secondary">Membership, billing, attendance, and renewals</Typography>
+          <Typography color="text.secondary">Member and Clover customer profiles, membership, and portal access</Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-          <Button
+          {role === "admin" && <>
+            <Button variant="contained" color="error" onClick={() => setAddOpen(true)}>Add Member</Button>
+            <Button variant="outlined" onClick={syncCloverCustomers} disabled={syncing}>{syncing ? "Syncing Clover…" : "Sync Clover Customers"}</Button>
+          </>}
+          {role === "admin" && <Button
             variant="contained"
             color="error"
             onClick={sendAccessToAllMembers}
@@ -203,13 +228,16 @@ export default function Members() {
             {bulkAccessLoading
               ? "Sending Access..."
               : "Send Portal Access to All Members"}
-          </Button>
+          </Button>}
           <Chip label={`${totals.active} Active`} color="success" />
           <Chip label={`${totals.expiring} Expiring`} color="warning" />
           <Chip label={`${totals.inactive} Inactive`} color="error" />
         </Stack>
       </Stack>
 
+      <AddMemberDialog open={addOpen} onClose={() => setAddOpen(false)} onCreated={async (_member, message) => { setAddOpen(false); await loadMembers(); setNotice(message); }} />
+      {notice && <Alert severity="info" sx={{ mb: 2 }}>{notice}</Alert>}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Clover profiles refresh automatically every ten minutes. Open a profile to send portal access or record membership. Customer profiles can exist before a membership payment.</Typography>
       <Card sx={{ borderRadius: 4, mb: 3 }}>
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
@@ -262,10 +290,11 @@ export default function Members() {
                       <Box flex={1} minWidth={0}>
                         <Typography fontWeight={900} noWrap>{name || "Member"}</Typography>
                         <Typography variant="body2" color="text.secondary" noWrap>{simpleMemberNumber(member.member_number) || "No member number"}</Typography>
-                        <Typography variant="body2" noWrap>{member.membership_type || "Membership"}</Typography>
+                        <Typography variant="body2" noWrap>{member.membership_type || (member.member_type === "CUSTOMER" ? "Clover customer" : "No membership recorded")}</Typography>
                       </Box>
                       <Chip size="small" label={chip.label} color={chip.color} />
                     </Stack>
+                    <Typography variant="body2" color="text.secondary" mt={1}>{portalLabel(member)}</Typography>
                     <Stack direction="row" justifyContent="space-between" mt={2} spacing={2}>
                       <Box><Typography variant="caption" color="text.secondary">Expires</Typography><Typography fontWeight={700}>{formatDate(member.membership_end)}</Typography></Box>
                       <Box textAlign="center"><Typography variant="caption" color="text.secondary">Days Left</Typography><Typography fontWeight={700}>{days === null ? "—" : days}</Typography></Box>
@@ -286,6 +315,7 @@ export default function Members() {
                   <TableCell>Member</TableCell>
                   <TableCell>Plan</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Portal Access</TableCell>
                   <TableCell>Join Date</TableCell>
                   <TableCell>Expiration</TableCell>
                   <TableCell>Days Left</TableCell>
@@ -309,8 +339,9 @@ export default function Members() {
                           </Box>
                         </Stack>
                       </TableCell>
-                      <TableCell>{member.membership_type || "—"}</TableCell>
+                      <TableCell>{member.membership_type || (member.member_type === "CUSTOMER" ? "Clover customer" : "No membership recorded")}</TableCell>
                       <TableCell><Chip size="small" label={chip.label} color={chip.color} /></TableCell>
+                      <TableCell>{portalLabel(member)}</TableCell>
                       <TableCell>{formatDate(member.membership_start)}</TableCell>
                       <TableCell>{formatDate(member.membership_end)}</TableCell>
                       <TableCell><Typography fontWeight={800} color={days !== null && days < 0 ? "error.main" : days !== null && days <= 7 ? "warning.main" : "text.primary"}>{days === null ? "—" : days}</Typography></TableCell>
