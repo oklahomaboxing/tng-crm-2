@@ -51,7 +51,12 @@ def reconcile_customers(db, customers, user_id=None):
             counts['needs_review'] += 1
             counts['review_customer_ids'].append(str(customer.get('id') or ''))
             continue
-        counts[{'created': 'members_created', 'linked': 'members_linked', 'skipped': 'skipped'}[outcome]] += 1
+        if outcome == 'created_review':
+            counts['members_created'] += 1
+            counts['needs_review'] += 1
+            counts['review_customer_ids'].append(str(customer.get('id') or ''))
+        else:
+            counts[{'created': 'members_created', 'linked': 'members_linked', 'skipped': 'skipped'}[outcome]] += 1
     audit_profile(db, user_id, 'CLOVER_PROFILE_SYNC',
                   f"Received {len(customers)}; created {counts['members_created']}; linked {counts['members_linked']}; review {counts['needs_review']}")
     db.commit()

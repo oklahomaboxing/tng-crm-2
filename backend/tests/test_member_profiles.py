@@ -79,7 +79,7 @@ class MemberProfilesTests(unittest.TestCase):
     def test_link_preserves_paid_membership_existing_card_and_portal_contacts(self):
         self.member.qr_code = 'member:TNG-000001'; self.db.commit()
         end, card, email = self.member.membership_end, self.member.qr_code, self.member.email
-        r = self.sync([customer(emailAddresses={'elements': [{'emailAddress': email.upper()}]})])
+        r = self.sync([customer(firstName=self.member.first_name, lastName=self.member.last_name, emailAddresses={'elements': [{'emailAddress': email.upper()}]})])
         self.assertEqual(r.json()['members_linked'], 1)
         self.db.refresh(self.member)
         self.assertEqual(self.member.clover_customer_id, 'clover-new'); self.assertEqual(self.member.membership_end, end)
@@ -91,8 +91,23 @@ class MemberProfilesTests(unittest.TestCase):
         self.db.add(Member(first_name='Other', last_name='Person', email=self.member.email)); self.db.commit()
         r = self.sync([customer(emailAddresses={'elements': [{'emailAddress': self.member.email}]})])
         self.assertEqual(r.status_code, 200, r.text); self.assertEqual(r.json()['needs_review'], 1)
-        self.assertEqual(r.json()['members_created'], 0); self.assertEqual(self.db.query(Member).count(), 2)
+        self.assertEqual(r.json()['members_created'], 1); self.assertEqual(self.db.query(Member).count(), 3)
         self.db.refresh(self.member); self.assertFalse(self.member.clover_customer_id)
+        distinct = self.db.query(Member).filter_by(clover_customer_id='clover-new').one()
+        self.assertEqual(distinct.member_type, 'CUSTOMER'); self.assertEqual(distinct.membership_status, 'pending')
+        listed = self.client.get('/api/members', headers=self.headers()).json()
+        self.assertEqual(next(m['portal_status'] for m in listed if m['id'] == distinct.id), 'needs_review')
+        repeated = self.sync([customer(emailAddresses={'elements': [{'emailAddress': self.member.email}]})])
+        self.assertEqual(repeated.json()['members_created'], 0)
+
+    def test_family_contact_does_not_reassign_unlinked_parent_to_child(self):
+        self.member.phone = '+1 405 555 0100'; self.db.commit()
+        r = self.sync([customer(firstName='Child', lastName='Member',
+                      emailAddresses={'elements': [{'emailAddress': self.member.email}]})])
+        self.assertEqual(r.json()['members_created'], 1); self.assertEqual(r.json()['needs_review'], 1)
+        self.db.refresh(self.member); self.assertFalse(self.member.clover_customer_id)
+        child = self.db.query(Member).filter_by(clover_customer_id='clover-new').one()
+        self.assertEqual(child.first_name, 'Child'); self.assertEqual(child.membership_status, 'pending')
 
     def test_same_names_never_merge_and_other_clover_id_not_overwritten(self):
         r = self.sync([customer(firstName=self.member.first_name, lastName=self.member.last_name, emailAddresses={}, phoneNumbers={})])

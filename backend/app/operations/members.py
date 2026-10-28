@@ -76,15 +76,21 @@ def list_members(
     invited = {row.member_id for row in db.query(MemberInvite).filter(
         MemberInvite.used_at.is_(None), MemberInvite.expires_at > datetime.utcnow()).all()}
 
+    from collections import Counter
+    from app.services.member_profiles import phone_key
+    emails = Counter((m.email or "").strip().lower() for m in members if (m.email or "").strip())
+    phones = Counter(phone_key(m.phone) for m in members if phone_key(m.phone))
     results = []
 
     for member in members:
+        shared_contact = emails.get((member.email or "").strip().lower(), 0) > 1 or phones.get(phone_key(member.phone), 0) > 1
         results.append({
             "id": member.id,
             "member_type": member.member_type,
             "profile_source": "clover" if member.clover_customer_id else "tngos",
+            "shared_contact_needs_review": shared_contact,
             "portal_status": ("active" if accounts[member.id] else "disabled") if member.id in accounts
-                else "invited" if member.id in invited else "not_invited" if member.email else "needs_email",
+                else "invited" if member.id in invited else "needs_review" if shared_contact else "not_invited" if member.email else "needs_email",
             "first_name": member.first_name,
             "last_name": member.last_name,
             "email": member.email,

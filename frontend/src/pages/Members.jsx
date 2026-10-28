@@ -62,7 +62,7 @@ function statusChip(member) {
 }
 
 function portalLabel(member) {
-  return ({ active: "Portal active", disabled: "Portal disabled", invited: "Activation email sent", not_invited: "Access not sent", needs_email: "Email needed" })[member.portal_status] || "Access not sent";
+  return ({ active: "Portal active", disabled: "Portal disabled", invited: "Activation email sent", not_invited: "Access not sent", needs_email: "Email needed", needs_review: "Shared contact — review" })[member.portal_status] || "Access not sent";
 }
 
 export default function Members({ role }) {

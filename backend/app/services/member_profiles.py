@@ -71,14 +71,29 @@ def import_customer(db, customer):
     last = str(customer.get('lastName') or '').strip()
     if not any((first, last, email, phone)):
         return 'skipped', None
-    member = matching_profile(db, clover_id=clover_id, email=email, phone=phone)
+    needs_review = False
+    try:
+        member = matching_profile(db, clover_id=clover_id, email=email, phone=phone)
+    except HTTPException as exc:
+        if exc.status_code != 409 or db.query(Member).filter_by(clover_customer_id=clover_id).first():
+            raise
+        # Keep the distinct Clover identity visible (e.g. family members sharing a phone),
+        # without assigning it to an existing person's profile or portal login.
+        member = None
+        needs_review = True
+    if member and member.clover_customer_id != clover_id:
+        saved_name = ' '.join(((member.first_name or '') + ' ' + (member.last_name or '')).split()).casefold()
+        clover_name = ' '.join((first + ' ' + last).split()).casefold()
+        if saved_name and clover_name and saved_name != clover_name:
+            member = None
+            needs_review = True
     outcome = 'linked'
     if not member:
         member = Member(first_name=first, last_name=last, email=email, phone=phone,
                         clover_customer_id=clover_id, member_type='CUSTOMER', status='customer',
                         membership_status='pending', membership_type=None, waiver_signed=False)
         db.add(member)
-        outcome = 'created'
+        outcome = 'created_review' if needs_review else 'created'
     else:
         member.clover_customer_id = clover_id
         # Preserve populated contact details and portal ownership; admin can review changes.
