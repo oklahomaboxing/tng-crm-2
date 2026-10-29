@@ -2449,7 +2449,10 @@ def process_revenue_followups(
 ):
     from .followups import run_due_followups
 
-    result = run_due_followups(db)
+    from app.matchmaker.models import BoxingEvent
+    if not db.get(BoxingEvent, event_id):
+        raise HTTPException(404, "Event not found")
+    result = run_due_followups(db, event_id=event_id)
 
     return {
         "ok": True,

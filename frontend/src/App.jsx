@@ -1,6 +1,6 @@
-﻿import MemberPortal from "./pages/MemberPortal.jsx";
-import MemberActivate from "./pages/MemberActivate.jsx";
-import React, { useEffect, useRef, useState } from "react";
+
+
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Alert,
@@ -19,34 +19,40 @@ import {
 } from "@mui/material";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 
-import SecurityCenter from "./pages/SecurityCenter";
 import AppShell from "./layout/AppShell.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import AIDisplay from "./pages/AIDisplay.jsx";
-import Members from "./pages/Members.jsx";
-import Sales from "./pages/Sales.jsx";
-import SalesRepDashboard from "./pages/SalesRepDashboard.jsx";
-import JoinPage from "./pages/JoinPage.jsx";
-import Leads from "./pages/Leads.jsx";
-import FrontDesk from "./pages/FrontDesk.jsx";
-import EventCheckIn from './pages/EventCheckIn.jsx';
-import Products from "./pages/Products.jsx";
-import DuplicateReview from "./pages/DuplicateReview.jsx";
-import TNGAcademy from "./pages/academy/TNGAcademy.jsx";
-import Matchmaker from "./pages/Matchmaker.jsx";
-import ManagerPortal from "./pages/ManagerPortal.jsx";
-import PublicTicketCheckout from "./pages/PublicTicketCheckout.jsx";
-import TicketPolicies from "./pages/TicketPolicies.jsx";
-import FighterActivate from "./pages/FighterActivate.jsx";
-import FighterPortal from "./pages/FighterPortal.jsx";
-import FighterPortalVideos from "./pages/FighterPortalVideos.jsx";
-import EventCalendar from "./pages/EventCalendar.jsx";
-import TngBoxingEvents from './pages/TngBoxingEvents.jsx';
-import PublicFightCalendar from "./pages/PublicFightCalendar.jsx";
-import FighterRegistration from "./pages/FighterRegistration.jsx";
-import UserManagement from "./pages/UserManagement.jsx";
-import QRReferrals from "./pages/QRReferrals.jsx";
-import MarketingCenter from "./pages/MarketingCenter.jsx";
+
+import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspaces";
+import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
+const MemberPortal = lazy(() => import("./pages/MemberPortal.jsx"));
+const MemberActivate = lazy(() => import("./pages/MemberActivate.jsx"));
+const SecurityCenter = lazy(() => import("./pages/SecurityCenter"));
+const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
+const AIDisplay = lazy(() => import("./pages/AIDisplay.jsx"));
+const Members = lazy(() => import("./pages/Members.jsx"));
+const Sales = lazy(() => import("./pages/Sales.jsx"));
+const SalesRepDashboard = lazy(() => import("./pages/SalesRepDashboard.jsx"));
+const JoinPage = lazy(() => import("./pages/JoinPage.jsx"));
+const Leads = lazy(() => import("./pages/Leads.jsx"));
+const FrontDesk = lazy(() => import("./pages/FrontDesk.jsx"));
+const EventCheckIn = lazy(() => import('./pages/EventCheckIn.jsx'));
+const Products = lazy(() => import("./pages/Products.jsx"));
+const DuplicateReview = lazy(() => import("./pages/DuplicateReview.jsx"));
+const TNGAcademy = lazy(() => import("./pages/academy/TNGAcademy.jsx"));
+const Matchmaker = lazy(() => import("./pages/Matchmaker.jsx"));
+const ManagerPortal = lazy(() => import("./pages/ManagerPortal.jsx"));
+const PublicTicketCheckout = lazy(() => import("./pages/PublicTicketCheckout.jsx"));
+const TicketPolicies = lazy(() => import("./pages/TicketPolicies.jsx"));
+const FighterActivate = lazy(() => import("./pages/FighterActivate.jsx"));
+const FighterPortal = lazy(() => import("./pages/FighterPortal.jsx"));
+const FighterPortalVideos = lazy(() => import("./pages/FighterPortalVideos.jsx"));
+const EventCalendar = lazy(() => import("./pages/EventCalendar.jsx"));
+const TngBoxingEvents = lazy(() => import('./pages/TngBoxingEvents.jsx'));
+const PublicFightCalendar = lazy(() => import("./pages/PublicFightCalendar.jsx"));
+const FighterRegistration = lazy(() => import("./pages/FighterRegistration.jsx"));
+const UserManagement = lazy(() => import("./pages/UserManagement.jsx"));
+const QRReferrals = lazy(() => import("./pages/QRReferrals.jsx"));
+const MarketingCenter = lazy(() => import("./pages/MarketingCenter.jsx"));
+const SystemOverview = lazy(() => import("./pages/SystemOverview"));
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -68,7 +74,7 @@ const theme = createTheme({
   components: {
     MuiButton: {
       styleOverrides: {
-        root: { borderRadius: 10, minHeight: 42 },
+        root: { borderRadius: 10, minHeight: 44 },
       },
     },
     MuiCard: {
@@ -96,8 +102,8 @@ function landingPageForRole(role) {
 function PaymentMessage({ status }) {
   const content = {
     success: {
-      title: "Payment Successful ??",
-      text: "Your TNG Boxing membership is active. We sent your TNGOS account setup link to your email. Check your email to create your password and access your member portal.",
+      title: "Confirming your membership",
+      text: "Clover has returned you to TNGOS. Membership activation and the account setup email follow verified payment confirmation. Contact the front desk if you need help.",
       severity: "success",
     },
     cancelled: {
@@ -140,8 +146,6 @@ function PaymentMessage({ status }) {
     </Box>
   );
 }
-
-
 
 function RootEntry() {
   const isFighterPreview =
@@ -225,16 +229,33 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [role, setRole] = useState(localStorage.getItem("role") || "");
   const [userName, setUserName] = useState(localStorage.getItem("name") || "");
-  const [page, setPage] = useState(() =>
-    landingPageForRole(localStorage.getItem("role") || "")
-  );
+  const [page, setPage] = useState(() => readWorkspace(window.location.hash, localStorage.getItem("role"))?.page || landingPageForRole(localStorage.getItem("role") || ""));
+  const [navigationTarget, setNavigationTarget] = useState(() => readWorkspace(window.location.hash, localStorage.getItem("role"))?.target || {});
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState("");
+  const [dashboardError, setDashboardError] = useState("");
+  const syncInProgress = useRef(false);
+  function navigate(next, target = {}) {
+    const route = readWorkspace(workspaceHash(next, target), role);
+    if (!route) return;
+    setPage(route.page); setNavigationTarget(route.target);
+    window.location.hash = workspaceHash(route.page, route.target);
+  }
+  useEffect(() => {
+    if (!token || !(ROLE_MENUS[role] || []).length) return;
+    const update = () => {
+      const route = readWorkspace(window.location.hash, role);
+      setPage(route?.page || landingPageForRole(role)); setNavigationTarget(route?.target || {});
+    };
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, [token, role]);
   const [dash, setDash] = useState(null);
   const [reps, setReps] = useState([]);
   const [leader, setLeader] = useState([]);
   const [msg, setMsg] = useState("");
   const [qrCodes, setQrCodes] = useState({});
   const [loginLoading, setLoginLoading] = useState(false);
-  const autoSyncStarted = useRef(false);
 
   async function login() {
     setLoginLoading(true);
@@ -270,7 +291,10 @@ function App() {
       setToken(data.token);
       setRole(loggedInRole);
       setUserName(loggedInName);
-      setPage(landingPageForRole(loggedInRole));
+      const requested = readWorkspace(window.location.hash, loggedInRole);
+      const nextPage = requested?.page || landingPageForRole(loggedInRole);
+      setPage(nextPage); setNavigationTarget(requested?.target || {});
+      if (ROLE_MENUS[loggedInRole]) window.history.replaceState(null, '', window.location.pathname + window.location.search + workspaceHash(nextPage, requested?.target));
       setMsg("");
       setPassword("");
       setVerificationCode("");
@@ -380,9 +404,10 @@ async function submitPasswordReset() {
     const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
     try {
-      if (!["rep", "member", "fighter"].includes(role)) {
+      if (["admin", "staff"].includes(role)) {
         const dashboardResponse = await fetch(`${API}/api/dashboard`, { headers });
-        if (dashboardResponse.ok) setDash(await dashboardResponse.json());
+        if (dashboardResponse.ok) { setDash(await dashboardResponse.json()); setDashboardError(""); }
+        else setDashboardError(dashboardResponse.status === 401 ? "Your session expired. Sign in again." : "Gym metrics could not be refreshed. Any previous figures shown may be out of date.");
       }
 
       if (role === "admin") {
@@ -395,7 +420,7 @@ async function submitPasswordReset() {
         if (leaderResponse.ok) setLeader(await leaderResponse.json());
       }
     } catch (error) {
-      console.error("Load failed", error);
+      setDashboardError("Gym metrics could not be loaded. Check your connection and try again.");
     }
   }
 
@@ -414,8 +439,9 @@ async function submitPasswordReset() {
   }
 
   async function syncTngOS({ refreshAfter = true } = {}) {
-    if (role !== "admin") return;
-
+    if (role !== "admin" || syncInProgress.current) return;
+    if (!window.confirm("Import Clover products, customer profiles and paid sales? New paid memberships may receive account setup emails.")) return;
+    syncInProgress.current = true; setSyncing(true); setSyncError("");
     try {
       const response = await fetch(`${API}/api/clover/sync-all`, {
         method: "POST",
@@ -427,25 +453,19 @@ async function submitPasswordReset() {
       const data = await response.json();
 
       if (!response.ok) {
-        setMsg(data.detail || "TNG OS sync failed");
+        setSyncError(typeof data.detail === "string" ? data.detail : "Clover sync failed. Review the connection and try again.");
         return;
       }
 
-      setMsg(
-        `TNG OS is up to date. ${data.sales?.synced || 0} sales imported, ${
-          data.customers?.synced || 0
-        } customers added, and ${
-          data.customers?.updated || 0
-        } customers updated.`
-      );
+      setMsg(`Clover sync complete: ${data.sales?.synced || 0} sales imported, ${data.customers?.members_created || 0} profiles added, ${data.customers?.members_linked || 0} profiles linked, ${data.customers?.needs_review || 0} contact matches need review.`);
 
       if (refreshAfter) {
         await load();
       }
     } catch (error) {
       console.error("TNG OS sync failed", error);
-      setMsg(error.message || "TNG OS sync failed");
-    }
+      setSyncError("Clover sync could not be completed. Check your connection before retrying.");
+    } finally { syncInProgress.current = false; setSyncing(false); }
   }
 
   function logout() {
@@ -462,34 +482,13 @@ async function submitPasswordReset() {
     setLeader([]);
     setQrCodes({});
     setMsg("");
-    autoSyncStarted.current = false;
+    syncInProgress.current = false;
+    setSyncing(false); setNavigationTarget({}); setSyncError(""); setDashboardError("");
+    if (window.location.hash.startsWith('#/')) window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 
   useEffect(() => {
-    if (window.location.pathname === "/member/activate") {
-    return;
-  }
-
-  if (!token) {
-      autoSyncStarted.current = false;
-      return;
-    }
-
-    if (role !== "admin") {
-      load();
-      return;
-    }
-
-    if (autoSyncStarted.current) return;
-
-    autoSyncStarted.current = true;
-
-    async function runAutomaticSync() {
-      await load();
-      await syncTngOS();
-    }
-
-    runAutomaticSync();
+    if (token && ["admin", "staff"].includes(role)) load();
   }, [token, role]);
 
   useEffect(() => {
@@ -814,12 +813,14 @@ return (
     <AppShell
       role={role}
       page={page}
-      setPage={setPage}
+      setPage={navigate}
       userName={userName}
       onRefresh={load}
       onSync={syncTngOS}
       onLogout={logout}
+      syncing={syncing}
     >
+      {syncError && <Alert severity="error" onClose={() => setSyncError("")} sx={{ mb: 2 }}>{syncError}</Alert>}
       {msg && (
         <Alert severity="info" onClose={() => setMsg("")} sx={{ mb: 2 }}>
           {msg}
@@ -827,9 +828,10 @@ return (
       )}
 
       {page === "Dashboard" && role !== "rep" && (
-        <Dashboard dash={dash} leader={leader} load={load} />
+        <Dashboard dash={dash} leader={leader} load={load} onNavigate={navigate} userName={userName} error={dashboardError} />
       )}
-      {page === "Members" && role !== "rep" && <Members role={role} />}
+      {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
+      {page === "Members" && ["admin", "staff"].includes(role) && <Members role={role} initialMemberId={navigationTarget.memberId} onOpenMember={id => navigate("Members", { memberId: id })} onCloseMember={() => navigate("Members")} />}
       {page === "Front Desk" && role !== "rep" && <FrontDesk />}
       {page === 'Event Check-In' && ['admin','staff'].includes(role) && <EventCheckIn />}
 
@@ -851,7 +853,7 @@ return (
         <ManagerPortal />
       )}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
-      {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents />}
+      {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents initialEventId={navigationTarget.eventId} />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
@@ -912,12 +914,7 @@ const root = createRoot(document.getElementById("root"));
 root.render(
   <ThemeProvider theme={theme}>
     <CssBaseline />
-    {host === "display.tngboxinggym.com" ? <AIDisplay /> : <RootEntry />}
+    <WorkspaceBoundary workspace="application"><Suspense fallback={<WorkspaceLoading/>}>{host === "display.tngboxinggym.com" ? <AIDisplay /> : <RootEntry />}</Suspense></WorkspaceBoundary>
   </ThemeProvider>
 );
-
-
-
-
-
 

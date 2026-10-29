@@ -8,6 +8,7 @@ from app.core.dependencies import current_user, staff_user
 from app.database import get_db
 from app.models import Attendance, Lead, Member, MembershipProduct, Sale, User
 from app.services.memberships import effective_membership_status
+from app.services.business_time import reporting_periods
 
 
 router = APIRouter(
@@ -22,8 +23,8 @@ def dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    today = datetime.utcnow().date()
     now = datetime.utcnow()
+    period = reporting_periods(now)
 
     paid_membership_member_ids = (
         db.query(Sale.member_id)
@@ -74,15 +75,15 @@ def dashboard(
 
     today_checkins = (
         db.query(Attendance)
-        .filter(func.date(Attendance.checkin_time) == today)
+        .filter(Attendance.checkin_time >= period["day_start"], Attendance.checkin_time < period["day_end"])
         .count()
     )
 
     month_sales = (
         db.query(Sale)
         .filter(
-            extract("month", Sale.sale_date) == now.month,
-            extract("year", Sale.sale_date) == now.year,
+            Sale.sale_date >= period["month_start"],
+            Sale.sale_date < period["month_end"],
         )
         .all()
     )
@@ -95,22 +96,24 @@ def dashboard(
 
 
     nutrition_club_sales_this_month = sum(
-        sale.amount or 0
+        max(0, (sale.amount or 0) - (sale.refund_amount or 0))
         for sale in month_sales
         if (
             sale.payment_status == "paid"
+            and not sale.refunded
             and sale.sale_type == "nexgen_nutrition"
         )
     )
 
 
     active_member_revenue_this_month = sum(
-        sale.amount or 0
+        max(0, (sale.amount or 0) - (sale.refund_amount or 0))
         for sale in month_sales
         if (
             sale.member_id is not None
             and sale.member_id in active_member_ids
             and sale.payment_status == "paid"
+            and not sale.refunded
         )
     )
 
@@ -151,7 +154,9 @@ def dashboard(
         "active_members": active_members,
         "total_leads": total_leads,
         "today_checkins": today_checkins,
-        "sales_this_month": len(month_sales),
+        "sales_this_month": sum(1 for sale in month_sales if sale.payment_status == "paid" and not sale.refunded),
+        "transactions_this_month": len(month_sales),
+        "timezone": "America/Chicago",
         "revenue_this_month": revenue_this_month,
         "nutrition_club_sales_this_month": nutrition_club_sales_this_month,
         "active_member_revenue_this_month": active_member_revenue_this_month,

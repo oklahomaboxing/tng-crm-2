@@ -60,21 +60,32 @@ class MemberProfilesTests(unittest.TestCase):
             self.assertEqual(r.status_code, 409, r.text)
         self.assertEqual(self.db.query(Member).count(), 1)
 
-    def test_sync_creates_name_only_and_contact_profiles_once_without_activating(self):
+    def test_sync_imports_only_profiles_with_email_and_phone_without_activating(self):
         before_sales = self.db.query(Sale).count()
         rows = [customer(), customer('name-only', emailAddresses={}, phoneNumbers={})]
-        for created in (2, 0):
+        for created in (1, 0):
             r = self.sync(rows); self.assertEqual(r.status_code, 200, r.text)
             self.assertEqual(r.json()['members_created'], created)
         people = self.db.query(Member).filter(Member.clover_customer_id.isnot(None)).all()
-        self.assertEqual(len(people), 2)
+        self.assertEqual(len(people), 1)
         for person in people:
             self.assertEqual(person.member_type, 'CUSTOMER'); self.assertEqual(person.membership_status, 'pending')
             self.assertIsNone(person.membership_end); self.assertTrue(person.member_number)
         self.assertEqual(self.db.query(Sale).count(), before_sales); self.assertEqual(self.db.query(MemberAccount).count(), 1)
         listed = self.client.get('/api/members', headers=self.headers()).json()
-        self.assertEqual(len(listed), 3)
-        self.assertEqual(next(m['portal_status'] for m in listed if m['clover_customer_id'] == 'name-only'), 'needs_email')
+        self.assertEqual(len(listed), 2)
+        self.assertFalse(any(m['clover_customer_id'] == 'name-only' for m in listed))
+
+    def test_missing_or_invalid_contact_skips_new_import_and_keeps_existing_profiles(self):
+        before = self.db.query(Member).count()
+        rows = [customer('no-email', emailAddresses={}), customer('no-phone', phoneNumbers={}),
+                customer('bad-email', emailAddresses={'elements': [{'emailAddress': 'invalid'}]}),
+                customer('bad-phone', phoneNumbers={'elements': [{'phoneNumber': '123'}]})]
+        result = self.sync(rows)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['members_created'], 0); self.assertEqual(result.json()['skipped'], 4)
+        self.assertEqual(self.db.query(Member).count(), before)
+        self.db.refresh(self.member); self.assertEqual(self.member.membership_status, 'active')
 
     def test_link_preserves_paid_membership_existing_card_and_portal_contacts(self):
         self.member.qr_code = 'member:TNG-000001'; self.db.commit()
@@ -111,15 +122,15 @@ class MemberProfilesTests(unittest.TestCase):
 
     def test_same_names_never_merge_and_other_clover_id_not_overwritten(self):
         r = self.sync([customer(firstName=self.member.first_name, lastName=self.member.last_name, emailAddresses={}, phoneNumbers={})])
-        self.assertEqual(r.json()['members_created'], 1)
+        self.assertEqual(r.json()['members_created'], 0)
         self.member.clover_customer_id = 'original'; self.db.commit()
-        r = self.sync([customer('different', emailAddresses={'elements': [{'emailAddress': self.member.email}]}, phoneNumbers={})])
+        r = self.sync([customer('different', emailAddresses={'elements': [{'emailAddress': self.member.email}]})])
         self.assertEqual(r.json()['needs_review'], 1); self.db.refresh(self.member); self.assertEqual(self.member.clover_customer_id, 'original')
 
     def test_pagination_reads_every_page_with_read_token(self):
-        rows = [customer(f'id-{i}', emailAddresses={}, phoneNumbers={}) for i in range(100)]
+        rows = [customer(f'id-{i}', emailAddresses={'elements': [{'emailAddress': f'person-{i}@example.com'}]}, phoneNumbers={'elements': [{'phoneNumber': f'+1405{i:07d}'}]}) for i in range(100)]
         with patch.dict(os.environ, {'CLOVER_API_TOKEN': 'test-api', 'CLOVER_MERCHANT_ID': 'test'}), \
-             patch('requests.get', side_effect=[response(rows), response([customer('last', emailAddresses={}, phoneNumbers={})])]) as get:
+             patch('requests.get', side_effect=[response(rows), response([customer('last', emailAddresses={'elements': [{'emailAddress': 'last@example.com'}]}, phoneNumbers={'elements': [{'phoneNumber': '+14055559999'}]})])]) as get:
             r = self.client.post('/api/clover/sync-customers', headers=self.headers())
         self.assertEqual(r.status_code, 200, r.text); self.assertEqual(r.json()['members_created'], 101)
         self.assertEqual([c.kwargs['params']['offset'] for c in get.call_args_list], [0, 100])
@@ -192,7 +203,7 @@ class MemberProfilesTests(unittest.TestCase):
 
     def test_customer_profile_with_legacy_active_default_cannot_check_in(self):
         legacy = Member(first_name='Retail', last_name='Customer', member_type='CUSTOMER',
-                        membership_status='active', clover_customer_id='retail')
+                        membership_status='active', clover_customer_id='retail', member_number='TNG-000099')
         self.db.add(legacy); self.db.commit()
         r = self.sync([customer('retail', emailAddresses={}, phoneNumbers={})])
         self.assertEqual(r.status_code, 200); self.db.refresh(legacy)

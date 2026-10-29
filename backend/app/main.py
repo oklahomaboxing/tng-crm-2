@@ -361,7 +361,7 @@ async def stop_clover_profile_worker():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "release": "ticket-production-repair-3"}
+    return {"status": "ok", "release": "tngos-2026.10.28"}
 
 
 app.include_router(operations_router)

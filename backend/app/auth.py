@@ -1,7 +1,8 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError as JWTError
 from passlib.context import CryptContext
 
 
@@ -45,11 +46,14 @@ def create_token(data: dict, minutes: int = 30) -> str:
 
 
 def decode_token(token: str):
+    if not isinstance(token, str) or len(token) > 8192:
+        return None
     try:
         return jwt.decode(
             token,
             SECRET_KEY,
             algorithms=[ALGORITHM],
+            options={"require": ["exp", "sub"]},
         )
     except JWTError:
         return None

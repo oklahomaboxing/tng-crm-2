@@ -65,7 +65,7 @@ function portalLabel(member) {
   return ({ active: "Portal active", disabled: "Portal disabled", invited: "Activation email sent", not_invited: "Access not sent", needs_email: "Email needed", needs_review: "Shared contact — review" })[member.portal_status] || "Access not sent";
 }
 
-export default function Members({ role }) {
+export default function Members({ role, initialMemberId, onOpenMember, onCloseMember }) {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down("md"));
   const [addOpen, setAddOpen] = useState(false);
@@ -129,7 +129,7 @@ export default function Members({ role }) {
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Could not sync Clover customers.");
       await loadMembers();
-      setNotice(`Clover sync complete: ${data.members_created || 0} profiles added, ${data.members_linked || 0} linked, ${data.needs_review || 0} need duplicate review.${data.needs_review ? ` Review Clover customer IDs: ${(data.review_customer_ids || []).join(", ")}.` : ""}`);
+      setNotice(`Clover sync complete: ${data.members_created || 0} profiles added, ${data.members_linked || 0} linked, ${data.needs_review || 0} need duplicate review, ${data.skipped || 0} skipped (email and phone required).${data.needs_review ? ` Review Clover customer IDs: ${(data.review_customer_ids || []).join(", ")}.` : ""}`);
     } catch (err) { setError(err.message || "Could not sync Clover customers."); }
     finally { setSyncing(false); }
   }
@@ -152,6 +152,19 @@ export default function Members({ role }) {
   useEffect(() => {
     loadMembers();
   }, []);
+
+  useEffect(() => {
+    if (!initialMemberId) return;
+    const controller = new AbortController();
+    (async () => { try {
+      const response = await fetch(`${API}/api/members/${initialMemberId}`, { headers: authHeaders(), signal: controller.signal });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Member profile could not be opened.');
+      if (!controller.signal.aborted) setSelectedMember(data);
+    } catch (err) { if (!controller.signal.aborted) setError(err.message); } })();
+    return () => controller.abort();
+  }, [initialMemberId]);
+  function openMember(member) { setSelectedMember(member); onOpenMember?.(member.id); }
 
   const visibleMembers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -201,6 +214,7 @@ export default function Members({ role }) {
         member={selectedMember}
         onBack={() => {
           setSelectedMember(null);
+          onCloseMember?.();
           loadMembers();
         }}
       />
@@ -237,7 +251,7 @@ export default function Members({ role }) {
 
       <AddMemberDialog open={addOpen} onClose={() => setAddOpen(false)} onCreated={async (_member, message) => { setAddOpen(false); await loadMembers(); setNotice(message); }} />
       {notice && <Alert severity="info" sx={{ mb: 2 }}>{notice}</Alert>}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Clover profiles refresh automatically every ten minutes. Open a profile to send portal access or record membership. Customer profiles can exist before a membership payment.</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Clover customer-directory imports require both an email address and phone number and refresh automatically every ten minutes. Existing profiles are retained. Open a profile to send portal access or record membership. Customer profiles can exist before a membership payment.</Typography>
       <Card sx={{ borderRadius: 4, mb: 3 }}>
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
@@ -281,7 +295,7 @@ export default function Members({ role }) {
             const name = `${member.first_name || ""} ${member.last_name || ""}`.trim();
             return (
               <Card key={member.id} sx={{ borderRadius: 4 }}>
-                <CardActionArea onClick={() => setSelectedMember(member)}>
+                <CardActionArea onClick={() => openMember(member)}>
                   <CardContent>
                     <Stack direction="row" spacing={2} alignItems="center">
                       <Avatar src={member.photo_url ? `${API}${member.photo_url}` : undefined} sx={{ width: 58, height: 58, bgcolor: "#111" }}>
@@ -329,7 +343,7 @@ export default function Members({ role }) {
                   const days = daysRemaining(member.membership_end);
                   const name = `${member.first_name || ""} ${member.last_name || ""}`.trim();
                   return (
-                    <TableRow key={member.id} hover onClick={() => setSelectedMember(member)} sx={{ cursor: "pointer" }}>
+                    <TableRow key={member.id} hover onClick={() => openMember(member)} sx={{ cursor: "pointer" }}>
                       <TableCell>
                         <Stack direction="row" spacing={1.5} alignItems="center">
                           <Avatar src={member.photo_url ? `${API}${member.photo_url}` : undefined} sx={{ bgcolor: "#111" }}>{name.charAt(0).toUpperCase() || "?"}</Avatar>

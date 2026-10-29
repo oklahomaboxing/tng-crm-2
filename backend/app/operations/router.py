@@ -16,3 +16,6 @@ router.include_router(members_router)
 router.include_router(checkin_router)
 router.include_router(attendance_router)
 router.include_router(duplicates_router)
+
+from .overview import router as overview_router
+router.include_router(overview_router)

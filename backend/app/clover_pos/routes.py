@@ -8,7 +8,8 @@ import re
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError as JWTError
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session

@@ -22,7 +22,7 @@ STOP_EMAIL_STATUSES = {
 }
 
 
-def run_due_followups(db):
+def run_due_followups(db, event_id=None):
     enabled = (
         os.getenv("AUTO_SPONSOR_FOLLOWUPS", "false")
         .strip()
@@ -32,15 +32,17 @@ def run_due_followups(db):
 
     now = datetime.utcnow()
 
-    prospects = (
+    prospects_query = (
         db.query(models.EventRevenueProspect)
         .filter(
             models.EventRevenueProspect.next_follow_up_at.isnot(None),
             models.EventRevenueProspect.next_follow_up_at <= now,
             models.EventRevenueProspect.do_not_contact == False,
         )
-        .all()
     )
+    if event_id is not None:
+        prospects_query = prospects_query.filter(models.EventRevenueProspect.event_id == event_id)
+    prospects = prospects_query.with_for_update(skip_locked=True).all()
 
     summary = {
         "checked": len(prospects),

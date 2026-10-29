@@ -1,233 +1,28 @@
-﻿import React from "react";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Grid,
-  Stack,
-  Typography,
-} from "@mui/material";
-
-export default function Dashboard({ dash, leader, load }) {
-  const revenueThisMonth =
-    "$" + Number(dash?.revenue_this_month || 0).toFixed(2);
-
-  const activeMemberRevenueThisMonth =
-    "$" +
-    Number(
-      dash?.active_member_revenue_this_month || 0
-    ).toFixed(2);
-
-  const nutritionClubSalesThisMonth =
-    "$" +
-    Number(
-      dash?.nutrition_club_sales_this_month || 0
-    ).toFixed(2);
-
-  return (
-    <Box>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 2,
-          mb: 3,
-        }}
-      >
-        <Box>
-          <Typography variant="h4" fontWeight="bold">
-            TNG Command Center
-          </Typography>
-
-          <Typography color="text.secondary">
-            Gym, sales, attendance, and member overview
-          </Typography>
-        </Box>
-
-        <Button
-          variant="contained"
-          color="error"
-          onClick={load}
-        >
-          Refresh Dashboard
-        </Button>
-      </Box>
-
-      <Grid container spacing={2}>
-        <Stat
-          title="Total Members"
-          value={dash?.total_members || 0}
-        />
-
-        <Stat
-          title="Active Members"
-          value={dash?.active_members || 0}
-        />
-
-        <Stat
-          title="Today's Check-ins"
-          value={dash?.today_checkins || 0}
-        />
-
-        <Stat
-          title="Leads"
-          value={dash?.total_leads || 0}
-        />
-
-        <Stat
-          title="Sales This Month"
-          value={dash?.sales_this_month || 0}
-        />
-
-        <Stat
-          title="Revenue This Month"
-          value={revenueThisMonth}
-        />
-
-
-        <Stat
-          title="Active Member Revenue"
-          value={activeMemberRevenueThisMonth}
-        />
-
-
-        <Stat
-          title="Nutrition Club Sales"
-          value={nutritionClubSalesThisMonth}
-        />
-      </Grid>
-
-      <Grid
-        container
-        spacing={3}
-        sx={{ mt: 1 }}
-      >
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ borderRadius: 3 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight="bold">
-                Recent Check-ins
-              </Typography>
-
-              <Stack spacing={1} sx={{ mt: 2 }}>
-                {dash?.recent_checkins?.length ? (
-                  dash.recent_checkins.map((checkin, index) => (
-                    <Box
-                      key={
-                        String(checkin.member || "member") +
-                        "-" +
-                        String(checkin.time || "time") +
-                        "-" +
-                        index
-                      }
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2,
-                        background: "#f7f7f7",
-                      }}
-                    >
-                      <Typography fontWeight="bold">
-                        {checkin.member}
-                      </Typography>
-
-                      <Typography color="text.secondary">
-                        {checkin.time
-                          ? new Date(checkin.time).toLocaleString()
-                          : ""}
-                        {" - "}
-                        {checkin.method || "barcode"}
-                      </Typography>
-                    </Box>
-                  ))
-                ) : (
-                  <Typography color="text.secondary">
-                    No check-ins yet.
-                  </Typography>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ borderRadius: 3 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight="bold">
-                Sales Leaderboard
-              </Typography>
-
-              {Array.isArray(leader) && leader.length > 0 ? (
-                leader.map((rep, index) => (
-                  <Box
-                    key={
-                      rep.rep_id ||
-                      String(rep.name || "rep") + "-" + index
-                    }
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        sm: "2fr 1fr 1fr 1fr",
-                      },
-                      gap: 1,
-                      py: 1.25,
-                      borderBottom: "1px solid #eee",
-                    }}
-                  >
-                    <Typography fontWeight="bold">
-                      #{index + 1} {rep.name}
-                    </Typography>
-
-                    <Typography>
-                      {rep.sales || 0} sales
-                    </Typography>
-
-                    <Typography>
-                      {"$" + Number(rep.revenue || 0).toFixed(2)}
-                    </Typography>
-
-                    <Typography>
-                      {Number((rep.rate || 0) * 100).toFixed(0)}%
-                    </Typography>
-                  </Box>
-                ))
-              ) : (
-                <Typography
-                  color="text.secondary"
-                  sx={{ mt: 2 }}
-                >
-                  No sales leaderboard data available.
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+import React from 'react';
+import { Alert, Avatar, Box, Button, Card, CardActionArea, CardContent, Chip, Skeleton, Stack, Typography } from '@mui/material';
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
+import EventRoundedIcon from '@mui/icons-material/EventRounded';
+import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded';
+import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
+import useOperationsOverview from '../hooks/useOperationsOverview';
+import { WorkQueue, UpcomingEvents } from '../components/workspace/OperationsPanels';
+const dollars = value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number(value || 0));
+export default function Dashboard({ dash, leader, load, onNavigate, userName, error }) {
+  const operations = useOperationsOverview();
+  const launch = [['Members', 'Gym & members', 'Profiles, access and renewals', PeopleAltRoundedIcon], ['TNG BOXING EVENTS', 'TNG Promotions', 'Events, contracts and tickets', EventRoundedIcon], ['Event Check-In', 'Fight-night door', 'Scan tickets and manage entry', QrCodeScannerRoundedIcon], ['Marketing Center', 'Marketing & growth', 'Email, texts and campaigns', CampaignRoundedIcon]];
+  const stats = [['Active members', 'active_members'], ["Today’s gym check-ins", 'today_checkins'], ['Revenue this month', 'revenue_this_month', true], ['Sales this month', 'sales_this_month']];
+  return <Stack spacing={3}>
+    <Box sx={{ position: 'relative', overflow: 'hidden', borderRadius: '24px', p: { xs: 3, md: 4 }, color: 'white', background: 'radial-gradient(ellipse at 95% 0%, #6d151f 0%, transparent 55%), #111116' }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} sx={{justifyContent: "space-between", gap: 3, alignItems: { md: 'center' }}}><Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="overline" sx={{fontWeight: 900,  color: '#ff8c95', letterSpacing: 2 }}>EARNED NOT GIVEN</Typography><Typography variant="h3" sx={{fontWeight: 900,  fontSize: { xs: 30, md: 42 }, letterSpacing: -1.2 }}>Your operation. One command center.</Typography><Typography sx={{ color: '#bebec9', mt: 1.5 }}>Welcome{userName ? `, ${userName.split(' ')[0]}` : ''}. Keep the gym moving and the next fight night on track.</Typography><Chip label={new Date().toLocaleDateString('en-US', { timeZone: 'America/Chicago', weekday: 'long', month: 'long', day: 'numeric' })} size="small" sx={{ mt: 2, color: '#eee', bgcolor: '#ffffff12' }}/></Box><Button variant="contained" color="error" endIcon={<ArrowForwardRoundedIcon/>} onClick={() => onNavigate('System Overview')} sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', md: 'center' }, whiteSpace: 'nowrap' }}>Open operations overview</Button></Stack>
     </Box>
-  );
-}
-
-function Stat({ title, value }) {
-  return (
-    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-      <Card
-        sx={{
-          borderRadius: 3,
-          height: "100%",
-        }}
-      >
-        <CardContent>
-          <Typography color="text.secondary">
-            {title}
-          </Typography>
-
-          <Typography variant="h4" fontWeight="bold">
-            {value}
-          </Typography>
-        </CardContent>
-      </Card>
-    </Grid>
-  );
+    {error && <Alert severity="error">{error}</Alert>}
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 2 }}>{stats.map(([label, key, currency]) => <Card key={key}><CardContent><Typography variant="body2" color="text.secondary" sx={{fontWeight: 700}}>{label}</Typography>{dash ? <Typography variant="h4" sx={{fontWeight: 900,  mt: 1, fontSize: { xs: 26, md: 32 } }}>{currency ? dollars(dash[key]) : dash[key] ?? '—'}</Typography> : <Skeleton width="70%" height={48}/>}<Typography variant="caption" color="text.secondary">{key === 'revenue_this_month' ? 'Recorded paid sales, less refunds' : 'Saved gym operations records'}</Typography></CardContent></Card>)}</Box>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', xl: 'repeat(4, 1fr)' }, gap: 2 }}>{launch.map(([page, label, hint, Icon]) => <Card key={page}><CardActionArea onClick={() => onNavigate(page)} sx={{ height: '100%' }}><CardContent><Stack direction="row" sx={{alignItems: "center", gap: 1.5}}><Avatar variant="rounded" sx={{ bgcolor: '#fbe9eb', color: '#b61c29' }}><Icon/></Avatar><Box><Typography sx={{fontWeight: 900}}>{label}</Typography><Typography variant="body2" color="text.secondary">{hint}</Typography></Box></Stack></CardContent></CardActionArea></Card>)}</Box>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.35fr 1fr' }, gap: 3 }}><WorkQueue data={operations.data} loading={operations.loading} error={operations.error} onNavigate={onNavigate} limit={4}/><UpcomingEvents data={operations.data} loading={operations.loading} onNavigate={onNavigate}/></Box>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+      <Card><CardContent><Stack direction="row" sx={{alignItems: "center", justifyContent: "space-between", mb: 2}}><Typography variant="h6" sx={{fontWeight: 900}}>Recent gym check-ins</Typography><Button onClick={() => onNavigate('Front Desk')}>Front Desk</Button></Stack>{dash?.recent_checkins?.length ? dash.recent_checkins.slice(0, 6).map((row, i) => <Stack key={i} direction="row" sx={{justifyContent: "space-between", gap: 2,  py: 1.3, borderTop: '1px solid #eee' }}><Typography sx={{fontWeight: 700}}>{row.member}</Typography><Typography variant="body2" color="text.secondary">{row.time ? new Date(row.time + (row.time.endsWith('Z') ? '' : 'Z')).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' }) : '—'}</Typography></Stack>) : <Typography color="text.secondary">{dash ? 'No recent check-ins.' : 'Attendance data is loading.'}</Typography>}</CardContent></Card>
+      <Card><CardContent><Typography variant="h6" sx={{fontWeight: 900, mb: 2}}>Sales team</Typography>{leader?.length ? leader.slice(0, 5).map((rep, i) => <Stack key={rep.rep_id || i} direction="row" sx={{alignItems: "center", gap: 1.5,  py: 1.2, borderTop: '1px solid #eee' }}><Avatar sx={{ width: 30, height: 30, bgcolor: '#f1f1f5', color: '#222', fontSize: 13 }}>{i + 1}</Avatar><Box sx={{flex: 1}}><Typography sx={{fontWeight: 800}}>{rep.name}</Typography><Typography variant="caption" color="text.secondary">{rep.sales || 0} sales</Typography></Box><Typography sx={{fontWeight: 800}}>{dollars(rep.revenue)}</Typography></Stack>) : <Typography color="text.secondary">No leaderboard data available.</Typography>}<Button size="small" onClick={load} sx={{ mt: 2 }}>Refresh gym metrics</Button></CardContent></Card>
+    </Box>
+  </Stack>;
 }

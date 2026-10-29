@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
 import { Box, Drawer } from "@mui/material";
 import Sidebar from "../components/Sidebar.jsx";
 import TopBar from "./TopBar.jsx";
+import WorkspaceBoundary, { WorkspaceLoading } from "../components/workspace/WorkspaceBoundary";
 
 const DRAWER_WIDTH = 270;
 
@@ -13,6 +14,7 @@ export default function AppShell({
   onRefresh,
   onSync,
   onLogout,
+  syncing,
   children,
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -75,6 +77,8 @@ export default function AppShell({
           onRefresh={onRefresh}
           onSync={onSync}
           onLogout={onLogout}
+          onNavigate={setPage}
+          syncing={syncing}
         />
 
         <Box
@@ -86,7 +90,7 @@ export default function AppShell({
             p: { xs: 1.5, sm: 2, md: 3 },
           }}
         >
-          {children}
+          <WorkspaceBoundary workspace={page}><Suspense fallback={<WorkspaceLoading/>}>{children}</Suspense></WorkspaceBoundary>
         </Box>
       </Box>
     </Box>

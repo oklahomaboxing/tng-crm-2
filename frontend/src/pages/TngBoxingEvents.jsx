@@ -3,8 +3,9 @@ import {Alert,Box,Button,Card,CardContent,Chip,CircularProgress,Stack,TextField,
 import EventWorkspace from './EventWorkspace';
 const API=(import.meta.env.VITE_API_URL || 'https://sea-lion-app-2-gxyfr.ondigitalocean.app').replace(/\/$/,'');
 
-export default function TngBoxingEvents(){
+export default function TngBoxingEvents({initialEventId}){
  const[events,setEvents]=useState([]),[selected,setSelected]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[refresh,setRefresh]=useState(0),[search,setSearch]=useState(''),[showAll,setShowAll]=useState(false);
+ useEffect(()=>{if(Number.isSafeInteger(Number(initialEventId)) && Number(initialEventId)>0)setSelected(Number(initialEventId));},[initialEventId]);
  useEffect(()=>{
   let live=true;const controller=new AbortController();setLoading(true);setError('');
   (async()=>{try{

@@ -1,4 +1,5 @@
 import React from "react";
+import WorkspaceSearch from "../components/workspace/WorkspaceSearch";
 import {
   AppBar,
   Avatar,
@@ -33,6 +34,8 @@ export default function TopBar({
   onRefresh,
   onSync,
   onLogout,
+  onNavigate,
+  syncing,
 }) {
   return (
     <AppBar
@@ -59,9 +62,8 @@ export default function TopBar({
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
             variant="h5"
-            fontWeight={900}
             noWrap
-            sx={{ letterSpacing: -0.5 }}
+            sx={{fontWeight: 900,  letterSpacing: -0.5 }}
           >
             {page}
           </Typography>
@@ -77,8 +79,9 @@ export default function TopBar({
             alignItems: "center",
           }}
         >
-          <Tooltip title="Refresh page data">
-            <IconButton onClick={onRefresh}>
+          <WorkspaceSearch role={role} onNavigate={onNavigate}/>
+          <Tooltip title="Refresh command-center metrics">
+            <IconButton onClick={onRefresh} aria-label="Refresh command-center metrics">
               <RefreshRoundedIcon />
             </IconButton>
           </Tooltip>
@@ -88,9 +91,10 @@ export default function TopBar({
               variant="outlined"
               startIcon={<SyncRoundedIcon />}
               onClick={onSync}
+              disabled={syncing}
               sx={{ display: { xs: "none", md: "inline-flex" } }}
             >
-              Sync
+              {syncing ? "Syncing…" : "Sync Clover"}
             </Button>
           )}
 

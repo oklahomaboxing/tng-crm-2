@@ -5,7 +5,7 @@ from unittest.mock import patch
 from test_stabilization import StabilizationTests
 from app.auth import create_token, hash_password, SECRET_KEY, ALGORITHM
 from app.account_security import AccountSecurity, totp, cipher
-from jose import jwt
+import jwt
 
 
 class AccountSecurityTests(StabilizationTests):

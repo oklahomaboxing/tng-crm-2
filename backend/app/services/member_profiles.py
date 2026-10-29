@@ -69,7 +69,9 @@ def import_customer(db, customer):
     phone = next((str(r.get('phoneNumber') or '').strip() for r in phone_rows if r.get('phoneNumber')), '')
     first = str(customer.get('firstName') or '').strip()
     last = str(customer.get('lastName') or '').strip()
-    if not any((first, last, email, phone)):
+    # Owner policy: only import customers with both usable contact fields.
+    # Existing profiles are retained; this never deletes or deactivates them.
+    if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email) or not 10 <= len(re.sub(r'\D', '', phone)) <= 15:
         return 'skipped', None
     needs_review = False
     try:

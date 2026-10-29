@@ -1,5 +1,5 @@
 import html2canvas from "html2canvas";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const API_BASE =
   import.meta.env.VITE_API_URL ||
@@ -193,31 +193,26 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
   async function fetchJson(path) {
     const response = await revenueFetch(`${API_BASE}${path}`);
 
-    if (!response.ok) {
-      const text = await response.text();
-
-      throw new Error(
-        `Request failed ${response.status}: ${text || response.statusText}`
-      );
-    }
-
-    return response.json();
+    let data;
+    try { data = await response.json(); } catch { throw new Error('Revenue data could not be read. Refresh and try again.'); }
+    if (!response.ok) throw new Error(response.status === 401 ? 'Your session expired. Sign in again.' : typeof data.detail === 'string' ? data.detail : 'Revenue data could not be loaded.');
+    return data;
   }
 
+  const [processingFollowups, setProcessingFollowups] = useState(false);
+  const processingFollowupsRef = useRef(false);
   async function processDueFollowups() {
+    if (processingFollowupsRef.current || !window.confirm("Process due sponsor/vendor follow-ups for this event? This may send real emails.")) return;
+    processingFollowupsRef.current = true;
+    setProcessingFollowups(true); setError("");
     try {
-      await revenueFetch(
-        `${API_BASE}/api/events/${eventId}/revenue/process-followups`,
-        {
-          method: "POST",
-        }
-      );
-    } catch (err) {
-      console.error(
-        "Automatic sponsor follow-up check failed:",
-        err
-      );
-    }
+      const response = await revenueFetch(`${API_BASE}/api/events/${eventId}/revenue/process-followups`, { method: 'POST' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Follow-up processing failed.');
+      await loadData();
+      window.alert(`Follow-ups checked: ${result.result?.checked || 0}. Emails sent: ${result.result?.sent || 0}.${result.result?.disabled ? ' Automatic follow-up sending is disabled in configuration.' : ''}`);
+    } catch (err) { setError(err.message || 'Follow-up processing failed.'); }
+    finally { processingFollowupsRef.current = false; setProcessingFollowups(false); }
   }
 
   async function loadData() {
@@ -248,14 +243,7 @@ export default function EventRevenue({ eventId = 1, event = {} }) {
     }
   }
 
-  useEffect(() => {
-    async function refreshRevenue() {
-      await processDueFollowups();
-      await loadData();
-    }
-
-    refreshRevenue();
-  }, [eventId, tab]);
+  useEffect(() => { loadData(); }, [eventId, tab]);
 
   const tabPipeline = useMemo(() => {
     return prospects.reduce((total, prospect) => {
@@ -1507,6 +1495,10 @@ async function seedSponsorshipInventory() {
         </button>
       </div>
 
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 18 }}>
+        <button type="button" style={smallButtonStyle} disabled={loading} onClick={loadData}>Refresh revenue data</button>
+        <button type="button" style={smallButtonStyle} disabled={processingFollowups} onClick={processDueFollowups}>{processingFollowups ? 'Processing…' : 'Process due follow-up emails'}</button>
+      </div>
       <div
         style={{
           display: "flex",
