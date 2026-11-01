@@ -14,6 +14,7 @@ from app.database import get_db
 from app.core.dependencies import staff_user
 from app.models import Attendance, Member, SecurityLog
 from app.services.attendance import record_attendance
+from app.services.memberships import effective_membership_status
 from app.services.member_numbers import find_checkin_member
 from app.services.business_time import reporting_periods
 from .models import KioskDevice, KioskAttempt, KioskRateBucket
@@ -81,7 +82,7 @@ def device_summary(db, device):
         'confirmation_seconds': device.confirmation_seconds, 'duplicate_seconds': device.duplicate_seconds,
         'paired': bool(device.credential_hash), 'last_seen': device.last_seen,
         'online': bool(device.last_seen and device.last_seen > datetime.utcnow() - timedelta(seconds=90)),
-        'today': {outcome: sum(a.outcome == outcome for a in attempts) for outcome in ('recorded', 'duplicate', 'invalid', 'inactive', 'ambiguous', 'rate_limited')},
+        'today': {outcome: sum(a.outcome == outcome for a in attempts) for outcome in ('recorded', 'duplicate', 'invalid', 'inactive', 'ineligible', 'ambiguous', 'rate_limited')},
         'recent_attempts': [{'id': a.id, 'outcome': a.outcome, 'at': a.created_at,
             'member_id': a.member_id} for a in sorted(attempts, key=lambda a: a.id, reverse=True)[:50]]}
 
@@ -163,7 +164,8 @@ def checkin(data: CheckinInput, request: Request, response: Response, device=Dep
             recorded, member = record_attendance(db, member, method='kiosk_number', location=f'Kiosk #{device.id}: {device.name}', duplicate_seconds=device.duplicate_seconds)
             outcome = 'recorded' if recorded else 'duplicate'
     except HTTPException as exc:
-        if exc.status_code == 403: outcome = 'inactive'
+        if exc.status_code == 403:
+            outcome = 'inactive' if member and effective_membership_status(member) in ('inactive', 'expired') else 'ineligible'
         elif exc.status_code == 409: outcome = 'ambiguous'
         else: raise
     attendance = db.query(Attendance).filter(Attendance.member_id == member.id).order_by(Attendance.id.desc()).first() if recorded else None
@@ -177,7 +179,9 @@ def checkin(data: CheckinInput, request: Request, response: Response, device=Dep
             'message': 'Attendance recorded.' if recorded else 'You are already checked in. No duplicate attendance recorded.'}
     messages = {
         'invalid': 'Member number not recognized. Check your number or visit the front desk.',
-        'inactive': 'Membership is inactive or expired. Please visit the front desk.',
+        'inactive': 'Membership inactive. Please visit the front desk.',
+        'ineligible': 'Please visit the front desk to verify your membership.',
         'ambiguous': 'This number needs staff verification. Please visit the front desk.',
     }
-    return {'success': False, 'message': messages[outcome], 'reset_seconds': 5}
+    return {'success': False, 'code': 'membership_inactive' if outcome == 'inactive' else outcome,
+        'message': messages[outcome], 'reset_seconds': 5}

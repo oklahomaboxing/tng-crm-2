@@ -64,15 +64,21 @@ class KioskTests(unittest.TestCase):
 
     def test_invalid_inactive_expired_and_ambiguous_do_not_record(self):
         identity, _, token=self.enroll()
-        self.assertFalse(self.enter(token,'999999').json()['success'])
+        invalid = self.enter(token,'999999').json()
+        self.assertFalse(invalid['success']); self.assertNotEqual(invalid['code'], 'membership_inactive')
         self.member.membership_end=datetime.utcnow()-timedelta(days=1);self.db.commit()
         r=self.enter(token);self.assertFalse(r.json()['success']);self.assertEqual(r.json()['reset_seconds'],5)
+        self.assertEqual(r.json()['code'],'membership_inactive')
+        self.assertEqual(r.json()['message'],'Membership inactive. Please visit the front desk.')
         self.member.membership_end=datetime.utcnow()+timedelta(days=1);self.member.membership_status='pending';self.db.commit()
-        self.assertFalse(self.enter(token).json()['success'])
+        pending=self.enter(token).json()
+        self.assertFalse(pending['success']);self.assertNotEqual(pending['code'],'membership_inactive')
+        self.member.membership_status='inactive';self.db.commit()
+        self.assertEqual(self.enter(token).json()['code'],'membership_inactive')
         self.db.add(Member(first_name='Other',last_name='Person',member_number='000001'));self.db.commit()
         self.assertFalse(self.enter(token).json()['success'])
         outcomes=[a.outcome for a in self.db.query(KioskAttempt).all()]
-        self.assertEqual(outcomes,['invalid','inactive','inactive','ambiguous'])
+        self.assertEqual(outcomes,['invalid','inactive','ineligible','inactive','ambiguous'])
         self.assertEqual(self.db.query(Attendance).count(),0)
 
     def test_disable_revoke_expiry_rotation_and_config(self):
