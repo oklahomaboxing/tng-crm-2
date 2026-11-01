@@ -21,11 +21,9 @@ def phone_key(value):
 
 def matching_profile(db, *, clover_id='', email='', phone=''):
     if clover_id:
-        direct = db.query(Member).filter_by(clover_customer_id=clover_id).limit(2).all()
-        if len(direct) > 1:
-            raise HTTPException(409, 'Multiple profiles share this Clover customer ID. Review duplicates before linking.')
-        if direct:
-            return direct[0]
+        from app.services.contact_consolidation import clover_member
+        direct = clover_member(db, clover_id)
+        if direct: return direct
     emails = db.query(Member).filter(func.lower(func.trim(Member.email)) == email).all() if email else []
     key = phone_key(phone)
     phones = [m for m in db.query(Member).filter(Member.phone.isnot(None)).all() if phone_key(m.phone) == key] if key else []
@@ -43,7 +41,9 @@ def ensure_profile_identity(db, member):
     if not member.member_number:
         number = member.id
         occupied = set()
-        for row in db.query(Member.member_number, Member.barcode).all():
+        from app.services.contact_consolidation import ConsolidatedContact
+        rows = db.query(Member.member_number, Member.barcode).all() + db.query(ConsolidatedContact.member_number, ConsolidatedContact.barcode).all()
+        for row in rows:
             for value in row:
                 digits = re.sub(r'^TNG-?', '', (value or '').upper())
                 if digits.isdigit():
@@ -83,7 +83,8 @@ def import_customer(db, customer):
         # without assigning it to an existing person's profile or portal login.
         member = None
         needs_review = True
-    if member and member.clover_customer_id != clover_id:
+    from app.services.contact_consolidation import ConsolidatedContact
+    if member and member.clover_customer_id != clover_id and not db.query(ConsolidatedContact).filter_by(clover_customer_id=clover_id, member_id=member.id).first():
         saved_name = ' '.join(((member.first_name or '') + ' ' + (member.last_name or '')).split()).casefold()
         clover_name = ' '.join((first + ' ' + last).split()).casefold()
         if saved_name and clover_name and saved_name != clover_name:
@@ -97,7 +98,8 @@ def import_customer(db, customer):
         db.add(member)
         outcome = 'created_review' if needs_review else 'created'
     else:
-        member.clover_customer_id = clover_id
+        if not member.clover_customer_id:
+            member.clover_customer_id = clover_id
         # Preserve populated contact details and portal ownership; admin can review changes.
         for field, value in [('first_name', first), ('last_name', last), ('email', email), ('phone', phone)]:
             if not getattr(member, field):

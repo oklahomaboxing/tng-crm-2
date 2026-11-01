@@ -13,6 +13,8 @@ class MemberNumberTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine('sqlite://')
         Member.__table__.create(self.engine)
+        from app.services.contact_consolidation import ConsolidatedContact
+        ConsolidatedContact.__table__.create(self.engine)
         self.db = Session(self.engine)
         self.db.add(Member(first_name='Test', last_name='Member', member_number='TNG-000042', barcode='TNG000042', qr_code='member:TNG-000042'))
         self.db.commit()

@@ -52,8 +52,9 @@ def operations_overview(response: Response, db: Session = Depends(get_db), user=
     paid_members = {member_id for (member_id,) in db.query(Sale.member_id).join(MembershipProduct,
         MembershipProduct.id == Sale.product_id).filter(Sale.payment_status == 'paid', Sale.refunded.isnot(True),
         MembershipProduct.is_membership.is_(True), MembershipProduct.category == 'membership').distinct().all()}
-    expiring = [m for m in members if m.id in paid_members and effective_membership_status(m) == 'active'
-                and m.membership_end and now <= m.membership_end <= now + timedelta(days=7)]
+    from app.services.member_reporting import membership_report, membership_totals
+    roster = membership_totals(members, paid_members, now)
+    expiring = [m for m in members if membership_report(m,paid_members,now)['membership_category']=='expiring']
     missing_email = sum(1 for m in members if not (m.email or '').strip())
     shared = sum(1 for m in members if emails.get((m.email or '').strip().lower(), 0) > 1 or phones.get(phone_key(m.phone), 0) > 1)
     needs_activation = sum(1 for m in members if m.id in paid_members and m.id not in accounts and m.id not in invited and (m.email or '').strip())
@@ -101,7 +102,7 @@ def operations_overview(response: Response, db: Session = Depends(get_db), user=
         integrations.append({'name': name, 'configured': configured, 'verified': False, 'page': page,
             'status': 'configured_unverified' if configured else 'not_configured'})
     return {'generated_at': now.isoformat() + 'Z', 'timezone': 'America/Chicago', 'read_only': True,
-        'members': {'profiles': len(members), 'paid_profiles': len(paid_members), 'expiring_seven_days': len(expiring),
+        'members': {'profiles': len(members), 'recorded':roster['members'], 'active':roster['active'], 'expired':roster['expired'], 'inactive':roster['inactive'], 'contacts':roster['contact'], 'membership_review':roster['review'], 'paid_profiles': len(paid_members), 'expiring_seven_days': len(expiring),
                     'missing_email': missing_email, 'shared_contact_profiles': shared, 'awaiting_activation': needs_activation},
         'tickets': {'paid_orders': len(paid_orders), 'pending_checkouts': pending, 'paid_orders_missing_tickets': len(missing),
                     'failed_deliveries': delivery_failed, 'unreconciled_paper_admissions': offline},

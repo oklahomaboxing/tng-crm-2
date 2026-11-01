@@ -29,6 +29,14 @@ def find_checkin_member(db, value):
             and_(number.like('TNG%'), func.ltrim(func.substr(number, 4), '0') == short),
         ])
     members = db.query(Member).filter(or_(*matches)).limit(2).all()
+    from app.services.contact_consolidation import ConsolidatedContact
+    alias_matches = [normalized(column) == code for column in (ConsolidatedContact.member_number, ConsolidatedContact.barcode, ConsolidatedContact.qr_code)]
+    if re.fullmatch(r'[0-9]+', code):
+        number = normalized(ConsolidatedContact.member_number)
+        alias_matches.extend([func.ltrim(number,'0') == short,
+            and_(number.like('TNG%'),func.ltrim(func.substr(number,4),'0') == short)])
+    alias_ids = {row.member_id for row in db.query(ConsolidatedContact).filter(or_(*alias_matches)).all()}
+    members = list({member.id:member for member in members + db.query(Member).filter(Member.id.in_(alias_ids)).all()}.values())
     if len(members) > 1:
         raise HTTPException(status_code=409, detail='This number matches more than one member. Please ask the front desk to verify your full member number.')
     return members[0] if members else None

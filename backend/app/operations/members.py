@@ -80,12 +80,25 @@ def list_members(
     from app.services.member_profiles import phone_key
     emails = Counter((m.email or "").strip().lower() for m in members if (m.email or "").strip())
     phones = Counter(phone_key(m.phone) for m in members if phone_key(m.phone))
+    from app.services.member_reporting import membership_evidence, membership_report
+    from app.services.contact_consolidation import ConsolidatedContact, name_key
+    import json
+    paid_ids=membership_evidence(db); now=datetime.utcnow()
+    aliases={}
+    for alias in db.query(ConsolidatedContact).all():
+        saved=json.loads(alias.source_snapshot)
+        aliases.setdefault(alias.member_id,[]).extend(filter(None,[saved.get('email'),saved.get('phone'),alias.member_number]))
     results = []
 
     for member in members:
         shared_contact = emails.get((member.email or "").strip().lower(), 0) > 1 or phones.get(phone_key(member.phone), 0) > 1
         results.append({
             "id": member.id,
+            **membership_report(member,paid_ids,now),
+            "contact_aliases": aliases.get(member.id,[]),
+            "same_name_contact_review": any(other.id != member.id and name_key(member) and name_key(other)==name_key(member)
+                and (((member.email or '').strip() and (member.email or '').strip().casefold()==(other.email or '').strip().casefold())
+                or (phone_key(member.phone) and phone_key(member.phone)==phone_key(other.phone))) for other in members),
             "member_type": member.member_type,
             "profile_source": "clover" if member.clover_customer_id else "tngos",
             "shared_contact_needs_review": shared_contact,
@@ -157,13 +170,21 @@ def get_member(
     )
 
     if not member:
+        from app.services.contact_consolidation import ConsolidatedContact
+        alias=db.query(ConsolidatedContact).filter_by(source_member_id=member_id).first()
+        if alias: member=db.get(Member,alias.member_id)
+
+    if not member:
         raise HTTPException(
             status_code=404,
             detail="Member not found",
         )
 
+    from app.services.member_reporting import membership_evidence, membership_report
+    reporting=membership_report(member,membership_evidence(db))
     return {
         "id": member.id,
+        **reporting,
         "first_name": member.first_name,
         "last_name": member.last_name,
         "email": member.email,

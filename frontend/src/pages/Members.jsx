@@ -28,35 +28,33 @@ import {
 } from "@mui/material";
 import { API, authHeaders } from "../services/api";
 import MemberProfile from "./MemberProfile.jsx";
+import { memberDate, membershipCategory, rosterTotals } from "../utils/membershipStatus";
 import AddMemberDialog from "../components/members/AddMemberDialog.jsx";
 
 function formatDate(value) {
   if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
+  const date = memberDate(value);
+  return date ? date.toLocaleDateString() : "—";
 }
 
 function daysRemaining(value) {
   if (!value) return null;
-  const end = new Date(value);
-  if (Number.isNaN(end.getTime())) return null;
+  const end = memberDate(value);
+  if (!end) return null;
   return Math.ceil((end.getTime() - Date.now()) / 86400000);
 }
 
-function statusFor(member) {
-  const days = daysRemaining(member.membership_end);
-  if (member.membership_status === "inactive" || (days !== null && days < 0)) return "inactive";
-  if (days !== null && days <= 7) return "expiring";
-  return member.membership_status === "active" ? "active" : "pending";
-}
+function statusFor(member) { return membershipCategory(member); }
 
 function statusChip(member) {
   const status = statusFor(member);
   const map = {
     active: { label: "Active", color: "success" },
     expiring: { label: "Expiring Soon", color: "warning" },
-    inactive: { label: "Inactive", color: "error" },
-    pending: { label: "Pending", color: "default" },
+    expired: { label: "Expired", color: "error" },
+    inactive: { label: "Inactive", color: "default" },
+    contact: { label: "Contact", color: "default" },
+    review: { label: "Membership review", color: "warning" },
   };
   return map[status];
 }
@@ -177,6 +175,7 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
         member.member_number,
         simpleMemberNumber(member.member_number),
         member.membership_type,
+        ...(member.contact_aliases || []),
       ]
         .filter(Boolean)
         .join(" ")
@@ -184,7 +183,7 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
 
       const matchesSearch = !query || searchable.includes(query);
       const status = statusFor(member);
-      const matchesFilter = filter === "all" || filter === status;
+      const matchesFilter = filter === "profiles" || (filter === "all" && status !== "contact") || (filter === "active" && ["active","expiring"].includes(status)) || filter === status;
       return matchesSearch && matchesFilter;
     });
 
@@ -201,12 +200,19 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
     });
   }, [members, search, filter, sort]);
 
-  const totals = useMemo(() => ({
-    all: members.length,
-    active: members.filter((m) => statusFor(m) === "active").length,
-    expiring: members.filter((m) => statusFor(m) === "expiring").length,
-    inactive: members.filter((m) => statusFor(m) === "inactive").length,
-  }), [members]);
+  const totals = useMemo(() => rosterTotals(members), [members]);
+
+  async function consolidateContacts() {
+    if (syncing) return;
+    setSyncing(true);setError('');setNotice('');
+    try {
+      const response=await fetch(`${API}/api/duplicates/contacts/consolidate`,{method:'POST',headers:authHeaders()});
+      const data=await response.json();
+      if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Could not consolidate contacts.');
+      await loadMembers();setNotice(`${data.merged} confirmed duplicate contacts consolidated. Original identifiers and linked histories retained. Conflicting profiles remain in Duplicate Review.`);
+    }catch(err){setError(err.message);}finally{setSyncing(false);}
+  }
+
 
   if (selectedMember) {
     return (
@@ -226,11 +232,12 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={2} mb={3}>
         <Box>
           <Typography variant="h4" fontWeight={900}>Members</Typography>
-          <Typography color="text.secondary">Member and Clover customer profiles, membership, and portal access</Typography>
+          <Typography color="text.secondary">Membership totals and one contact directory, with customer-only contacts kept separate</Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
           {role === "admin" && <>
             <Button variant="contained" color="error" onClick={() => setAddOpen(true)}>Add Member</Button>
+            <Button variant="outlined" onClick={consolidateContacts} disabled={syncing}>Consolidate Contacts</Button>
             <Button variant="outlined" onClick={syncCloverCustomers} disabled={syncing}>{syncing ? "Syncing Clover…" : "Sync Clover Customers"}</Button>
           </>}
           {role === "admin" && <Button
@@ -245,13 +252,16 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
           </Button>}
           <Chip label={`${totals.active} Active`} color="success" />
           <Chip label={`${totals.expiring} Expiring`} color="warning" />
-          <Chip label={`${totals.inactive} Inactive`} color="error" />
+          <Chip label={`${totals.expired} Expired`} color="error" />
+          <Chip label={`${totals.inactive} Inactive`} />
+          <Chip label={`${totals.contact} Contacts`} />
         </Stack>
       </Stack>
 
       <AddMemberDialog open={addOpen} onClose={() => setAddOpen(false)} onCreated={async (_member, message) => { setAddOpen(false); await loadMembers(); setNotice(message); }} />
+      {members.some(member => member.same_name_contact_review) && <Alert severity="warning" sx={{mb:2}} action={role === 'admin' ? <Button component="a" href="#/duplicate-review" color="inherit">Review duplicates</Button> : undefined}>Some profiles have matching names and contact details. They remain separate until identity is confirmed.</Alert>}
       {notice && <Alert severity="info" sx={{ mb: 2 }}>{notice}</Alert>}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Clover customer-directory imports require both an email address and phone number and refresh automatically every ten minutes. Existing profiles are retained. Open a profile to send portal access or record membership. Customer profiles can exist before a membership payment.</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Clover customer-directory imports require both an email address and phone number and refresh automatically every ten minutes. Existing profiles are retained. Open a profile to send portal access or record membership. Customer-only contacts are excluded from membership totals. Expiring means an active membership ending within seven days and is included in Active. Expired means its recorded end time has passed. No pending contacts are counted as active members.</Typography>
       <Card sx={{ borderRadius: 4, mb: 3 }}>
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
@@ -264,11 +274,14 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
             <FormControl sx={{ minWidth: 170 }}>
               <InputLabel>Status</InputLabel>
               <Select value={filter} label="Status" onChange={(event) => setFilter(event.target.value)}>
-                <MenuItem value="all">All ({totals.all})</MenuItem>
+                <MenuItem value="all">All Members ({totals.all})</MenuItem>
                 <MenuItem value="active">Active ({totals.active})</MenuItem>
                 <MenuItem value="expiring">Expiring ({totals.expiring})</MenuItem>
+                <MenuItem value="expired">Expired ({totals.expired})</MenuItem>
                 <MenuItem value="inactive">Inactive ({totals.inactive})</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="contact">Contacts ({totals.contact})</MenuItem>
+                <MenuItem value="review">Membership review ({totals.review})</MenuItem>
+                <MenuItem value="profiles">All Contacts & Members ({totals.profiles})</MenuItem>
               </Select>
             </FormControl>
             <FormControl sx={{ minWidth: 170 }}>
@@ -291,7 +304,7 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
         <Stack spacing={2}>
           {visibleMembers.map((member) => {
             const chip = statusChip(member);
-            const days = daysRemaining(member.membership_end);
+            const days = member.membership_days_remaining ?? daysRemaining(member.membership_end);
             const name = `${member.first_name || ""} ${member.last_name || ""}`.trim();
             return (
               <Card key={member.id} sx={{ borderRadius: 4 }}>
@@ -340,7 +353,7 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
               <TableBody>
                 {visibleMembers.map((member) => {
                   const chip = statusChip(member);
-                  const days = daysRemaining(member.membership_end);
+                  const days = member.membership_days_remaining ?? daysRemaining(member.membership_end);
                   const name = `${member.first_name || ""} ${member.last_name || ""}`.trim();
                   return (
                     <TableRow key={member.id} hover onClick={() => openMember(member)} sx={{ cursor: "pointer" }}>

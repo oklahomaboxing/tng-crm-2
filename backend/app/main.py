@@ -3095,13 +3095,8 @@ def sync_clover_sales(
         member = None
 
         if customer_id:
-            member = (
-                db.query(Member)
-                .filter(
-                    Member.clover_customer_id == customer_id
-                )
-                .first()
-            )
+            from app.services.contact_consolidation import clover_member
+            member = clover_member(db, customer_id)
 
         if not member and email:
             member = (
@@ -3144,15 +3139,16 @@ def sync_clover_sales(
             missing_customer += 1
             continue
 
+        alias_customer = bool(customer_id and member.clover_customer_id and member.clover_customer_id != customer_id)
         if customer_id and not member.clover_customer_id:
             member.clover_customer_id = customer_id
-        if first_name:
+        if first_name and (not alias_customer or not member.first_name):
             member.first_name = first_name
-        if last_name:
+        if last_name and (not alias_customer or not member.last_name):
             member.last_name = last_name
-        if email:
+        if email and (not alias_customer or not member.email):
             member.email = email
-        if phone:
+        if phone and (not alias_customer or not member.phone):
             member.phone = phone
 
         created_time = (

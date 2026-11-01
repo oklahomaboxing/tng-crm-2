@@ -26,50 +26,13 @@ def dashboard(
     now = datetime.utcnow()
     period = reporting_periods(now)
 
-    paid_membership_member_ids = (
-        db.query(Sale.member_id)
-        .join(
-            MembershipProduct,
-            MembershipProduct.id == Sale.product_id,
-        )
-        .filter(
-            Sale.payment_status == "paid",
-            Sale.member_id.isnot(None),
-            MembershipProduct.is_membership == True,
-            MembershipProduct.category == "membership",
-            Sale.refunded.isnot(True),
-        )
-        .distinct()
-        .subquery()
-    )
-
-    dashboard_members = (
-        db.query(Member)
-        .filter(
-            Member.id.in_(
-                db.query(paid_membership_member_ids.c.member_id)
-            ),
-            Member.member_type == "MEMBER",
-        )
-        .all()
-    )
-
-    total_members = 0
-    active_members = 0
-    active_member_ids = set()
-
-    for member in dashboard_members:
-        total_members += 1
-
-        if (
-            effective_membership_status(member, now) == "active"
-            and (
-                member.membership_end is None
-                or member.membership_end >= now
-            )
-        ):
-            active_members += 1
-            active_member_ids.add(member.id)
+    from app.services.member_reporting import membership_evidence, membership_report, membership_totals
+    dashboard_members = db.query(Member).all()
+    paid_ids=membership_evidence(db)
+    roster=membership_totals(dashboard_members,paid_ids,now)
+    total_members=roster['members']
+    active_members=roster['active']
+    active_member_ids={m.id for m in dashboard_members if membership_report(m,paid_ids,now)['is_current_member']}
 
     total_leads = db.query(Lead).count()
 
@@ -152,6 +115,11 @@ def dashboard(
     return {
         "total_members": total_members,
         "active_members": active_members,
+        "expiring_members": roster["expiring"],
+        "expired_members": roster["expired"],
+        "inactive_members": roster["inactive"],
+        "contacts": roster["contact"],
+        "membership_review": roster["review"],
         "total_leads": total_leads,
         "today_checkins": today_checkins,
         "sales_this_month": sum(1 for sale in month_sales if sale.payment_status == "paid" and not sale.refunded),

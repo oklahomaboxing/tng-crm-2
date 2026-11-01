@@ -1,3 +1,4 @@
+import { memberDate, membershipCategory } from "../utils/membershipStatus";
 import { simpleMemberNumber } from "../utils/memberNumber";
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -58,8 +59,9 @@ export default function MemberProfile({ member, onBack }) {
   if (!memberData) return null;
 
   const fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim();
-  const isActive = memberData.membership_status === "active" &&
-    (!memberData.membership_end || new Date(memberData.membership_end) >= new Date());
+  const category = membershipCategory(memberData);
+  const isActive = ['active','expiring'].includes(category);
+  const membershipLabel = ({active:'Active',expiring:'Expiring soon',expired:'Expired',inactive:'Inactive',contact:'Contact — no membership',review:'Membership review'})[category];
 
   function photoSrc() {
     if (!memberData.photo_url) return "";
@@ -410,7 +412,7 @@ export default function MemberProfile({ member, onBack }) {
               </Typography>
               <Chip sx={{ mt: 2, fontWeight: "bold" }}
                 color={isActive ? "success" : "warning"}
-                label={isActive ? "ACTIVE MEMBER" : "INACTIVE MEMBER"} />
+                label={membershipLabel} />
             </Grid>
 
             <Grid item xs={12} md={4}>
@@ -566,9 +568,9 @@ export default function MemberProfile({ member, onBack }) {
           <Grid item xs={12} md={6}>
             <InfoCard title="Membership">
               <Typography><b>Plan:</b> {memberData.membership_type || "-"}</Typography>
-              <Typography><b>Status:</b> {memberData.membership_status || "-"}</Typography>
-              <Typography><b>Starts:</b> {memberData.membership_start ? new Date(memberData.membership_start).toLocaleDateString() : "-"}</Typography>
-              <Typography><b>Expires:</b> {memberData.membership_end ? new Date(memberData.membership_end).toLocaleDateString() : "-"}</Typography>
+              <Typography><b>Status:</b> {membershipLabel}</Typography>
+              <Typography><b>Starts:</b> {memberData.membership_start ? memberDate(memberData.membership_start)?.toLocaleDateString() : "-"}</Typography>
+              <Typography><b>Expires:</b> {memberData.membership_end ? memberDate(memberData.membership_end)?.toLocaleDateString() : "-"}</Typography>
             </InfoCard>
           </Grid>
         </Grid>

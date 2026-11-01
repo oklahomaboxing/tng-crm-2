@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from ..core.dependencies import current_user
 from ..core.permissions import require_admin
 from ..database import get_db
 from ..models import Attendance, Member, Sale, User
+
+from app.services.contact_consolidation import ConsolidatedContact
 
 router = APIRouter()
 
@@ -179,99 +182,30 @@ def merge_duplicate_members(
 ):
     require_admin(user)
 
-    keep_id = data.get("keep_id")
-    merge_id = data.get("merge_id")
+    from app.services.contact_consolidation import merge_profiles
+    keep_id,source_id=data.get('keep_id'),data.get('merge_id')
+    if type(keep_id) is not int or type(source_id) is not int or keep_id<=0 or source_id<=0:
+        raise HTTPException(400, 'Choose two valid profile IDs.')
+    try:
+        result=merge_profiles(db,user,keep_id,source_id,allow_linked=True)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, 'Linked records conflict. Review these profiles individually before merging.')
+    return {'message':'Profiles consolidated; history and original card identifiers retained.',
+        'kept_member_id':result['member_id'],'deleted_member_id':result['source_id']}
 
-    if (
-        not keep_id
-        or not merge_id
-        or keep_id == merge_id
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid merge request",
-        )
 
-    keep = (
-        db.query(Member)
-        .filter(Member.id == keep_id)
-        .first()
-    )
+@router.get('/api/duplicates/contacts/preview')
+def preview_contact_consolidation(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+    from app.services.contact_consolidation import confirmed_plan
+    plan = confirmed_plan(db)
+    return {'confirmed_duplicates':len(plan), 'profiles':plan}
 
-    merge = (
-        db.query(Member)
-        .filter(Member.id == merge_id)
-        .first()
-    )
 
-    if not keep or not merge:
-        raise HTTPException(
-            status_code=404,
-            detail="Member not found",
-        )
-
-    db.query(Attendance).filter(
-        Attendance.member_id == merge.id
-    ).update(
-        {"member_id": keep.id},
-        synchronize_session=False,
-    )
-
-    db.query(Sale).filter(
-        Sale.member_id == merge.id
-    ).update(
-        {"member_id": keep.id},
-        synchronize_session=False,
-    )
-
-    fields = [
-        "email",
-        "phone",
-        "photo_url",
-        "clover_customer_id",
-        "membership_type",
-        "membership_status",
-        "membership_start",
-        "membership_end",
-        "billing_cycle",
-        "monthly_rate",
-        "next_billing_date",
-        "autopay_enabled",
-        "billing_status",
-        "last_payment_date",
-        "past_due_amount",
-        "notes",
-    ]
-
-    for field in fields:
-        keep_value = getattr(keep, field, None)
-        merge_value = getattr(merge, field, None)
-
-        if not keep_value and merge_value:
-            setattr(keep, field, merge_value)
-
-    keep.total_checkins = (
-        (keep.total_checkins or 0)
-        + (merge.total_checkins or 0)
-    )
-
-    keep.checkins = (
-        (keep.checkins or 0)
-        + (merge.checkins or 0)
-    )
-
-    if merge.last_checkin and (
-        not keep.last_checkin
-        or merge.last_checkin > keep.last_checkin
-    ):
-        keep.last_checkin = merge.last_checkin
-
-    db.delete(merge)
-    db.commit()
-    db.refresh(keep)
-
-    return {
-        "message": "Members merged successfully",
-        "kept_member_id": keep.id,
-        "deleted_member_id": merge_id,
-    }
+@router.post('/api/duplicates/contacts/consolidate')
+def consolidate_contacts(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+    from app.services.contact_consolidation import consolidate
+    return consolidate(db, user)

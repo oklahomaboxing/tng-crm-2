@@ -28,7 +28,7 @@ export default function DuplicateReview() {
   }
 
   async function mergeMembers(keepId, mergeId) {
-    if (!window.confirm("Merge these members? This cannot be undone.")) return;
+    if (!window.confirm("Merge only if these profiles belong to the same person. Payment and attendance history, portal access, original identifiers and profile snapshots will be retained. Conflicting portal accounts must be reviewed first.")) return;
 
     const res = await fetch(`${API}/api/duplicates/members/merge`, {
       method: "POST",
