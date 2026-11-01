@@ -49,10 +49,8 @@ def operations_overview(response: Response, db: Session = Depends(get_db), user=
     invited = {a.member_id for a in db.query(MemberInvite).filter(MemberInvite.used_at.is_(None), MemberInvite.expires_at > now).all()}
     emails = Counter((m.email or '').strip().lower() for m in members if (m.email or '').strip())
     phones = Counter(phone_key(m.phone) for m in members if phone_key(m.phone))
-    paid_members = {member_id for (member_id,) in db.query(Sale.member_id).join(MembershipProduct,
-        MembershipProduct.id == Sale.product_id).filter(Sale.payment_status == 'paid', Sale.refunded.isnot(True),
-        MembershipProduct.is_membership.is_(True), MembershipProduct.category == 'membership').distinct().all()}
-    from app.services.member_reporting import membership_report, membership_totals
+    from app.services.member_reporting import membership_evidence, membership_report, membership_totals
+    paid_members=membership_evidence(db)
     roster = membership_totals(members, paid_members, now)
     expiring = [m for m in members if membership_report(m,paid_members,now)['membership_category']=='expiring']
     missing_email = sum(1 for m in members if not (m.email or '').strip())

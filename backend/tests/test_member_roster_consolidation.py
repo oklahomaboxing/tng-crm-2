@@ -142,3 +142,25 @@ class RosterConsolidationTests(unittest.TestCase):
         self.assertEqual(confirmed_plan(self.db),[])
         r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
         self.assertEqual(r.status_code,409,r.text);self.assertEqual(self.db.query(Member).count(),2)
+
+
+    def test_membership_purchase_promotes_customer_but_retail_purchase_does_not(self):
+        from app.services.memberships import apply_membership
+        from app.models import MembershipProduct
+        customer=self.source()
+        retail=MembershipProduct(name='Gloves',category='retail',is_membership=False,price=50)
+        apply_membership(customer,retail)
+        self.assertEqual(customer.member_type,'CUSTOMER')
+        apply_membership(customer,self.product)
+        self.assertEqual(customer.member_type,'MEMBER')
+        self.assertEqual(customer.membership_status,'active')
+
+    def test_customer_generic_order_without_receipt_or_term_is_not_membership_evidence(self):
+        from app.services.member_reporting import membership_evidence
+        customer=self.source()
+        self.db.add(Sale(member_id=customer.id,product_id=self.product.id,sales_rep_id=self.rep.id,
+            amount=434.4,payment_status='paid',payment_method='clover',clover_order_id='generic-order'))
+        self.db.commit()
+        evidence=membership_evidence(self.db)
+        self.assertNotIn(customer.id,evidence)
+        self.assertEqual(membership_report(customer,evidence)['membership_category'],'contact')

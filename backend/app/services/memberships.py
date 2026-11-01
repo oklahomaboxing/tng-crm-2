@@ -106,6 +106,7 @@ def apply_membership(member, product, purchase_date=None):
         monthly_rate = product_price
         next_billing_date = membership_end
 
+    member.member_type = "MEMBER"
     member.status = "active"
     member.membership_status = "active"
     member.membership_type = product.name

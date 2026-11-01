@@ -1,15 +1,21 @@
 """One reporting definition for contacts, current memberships and expiration."""
 from datetime import datetime, timedelta
 import math
+import re
 from app.models import Member, Sale, MembershipProduct
 from app.services.memberships import effective_membership_status
 
 
 def membership_evidence(db):
-    return {identity for (identity,) in db.query(Sale.member_id).join(MembershipProduct,
-        MembershipProduct.id == Sale.product_id).filter(Sale.payment_status == 'paid',
-        Sale.refunded.isnot(True), MembershipProduct.is_membership.is_(True),
-        MembershipProduct.category == 'membership').distinct().all()}
+    from app.services.memberships import is_membership_product
+    rows=db.query(Sale,MembershipProduct,Member).join(MembershipProduct,MembershipProduct.id==Sale.product_id).join(Member,Member.id==Sale.member_id).filter(
+        Sale.payment_status=='paid',Sale.refunded.isnot(True),MembershipProduct.is_membership.is_(True),
+        MembershipProduct.category=='membership').all()
+    return {member.id for sale,product,member in rows if is_membership_product(product) and (
+        member.member_type=='MEMBER' or (member.membership_start and member.membership_end)
+        or (sale.payment_method or '').strip().casefold() in ('cash','check','manual','offline')
+        or re.fullmatch(r'[A-Z0-9]{13}',sale.clover_payment_id or ''))}
+
 
 
 def membership_report(member, paid_ids, now=None):
