@@ -28,6 +28,10 @@ export default function CheckinKiosk() {
     } finally { clearTimeout(timeout); }
   }
   function reset() { setResult(null); setNumber(''); setSeconds(0); }
+  function clearCrmSession() {
+    for (const key of ['token', 'role', 'name']) localStorage.removeItem(key);
+    for (const key of ['fighterPreviewToken', 'memberPreviewToken']) sessionStorage.removeItem(key);
+  }
   useEffect(() => {
     mounted.current = true;
     const manifest = document.createElement('link'); manifest.rel = 'manifest'; manifest.href = '/kiosk/checkin.webmanifest'; document.head.appendChild(manifest);
@@ -41,6 +45,7 @@ export default function CheckinKiosk() {
   }, []);
   useEffect(() => {
     if (!credential) return;
+    clearCrmSession();
     let active = true;
     async function ping() {
       try { const data = await request('heartbeat'); if (active) {setSettings(data); setConnection('Connected');} }
@@ -67,7 +72,7 @@ export default function CheckinKiosk() {
   }, [number, busy, result]);
   async function pair(event) {
     event.preventDefault(); if (lock.current) return; lock.current = true; setBusy(true);
-    try {const data = await request('pair', {code: pairCode.trim()}, ''); localStorage.setItem(KEY, data.credential); setCredential(data.credential); setPairCode(''); reset();}
+    try {const data = await request('pair', {code: pairCode.trim()}, ''); localStorage.setItem(KEY, data.credential); clearCrmSession(); setCredential(data.credential); setPairCode(''); reset();}
     catch (error) {setResult({success: false, message: error.message || 'Pairing failed.'});}
     finally {lock.current = false; if (mounted.current) setBusy(false);}
   }
@@ -87,7 +92,7 @@ export default function CheckinKiosk() {
       <h1>{result.success ? (result.duplicate ? 'ALREADY CHECKED IN' : 'CHECK-IN SUCCESSFUL') : 'PLEASE TRY AGAIN'}</h1>
       {result.success && <><h2>WELCOME BACK, {result.first_name}!</h2><p className="kiosk-status">Membership: Active</p></>}
       <p>{result.message}</p><button className="kiosk-submit" onClick={reset}>Next Member</button><p className="kiosk-countdown">Clearing in {seconds} seconds</p>
-    </section> : !credential ? <section className="kiosk-pair"><h1>TNG BOXING CHECK-IN</h1><p>Staff: pair this device using the code from TNGOS → Check-In Kiosk. No admin sign-in is needed on this screen.</p><form onSubmit={pair}><label htmlFor="pair-code">Device pairing code</label><input id="pair-code" autoComplete="off" autoCapitalize="characters" value={pairCode} onChange={e => setPairCode(e.target.value)} maxLength={32}/><button className="kiosk-submit" disabled={busy || pairCode.trim().length < 8}>{busy ? 'Pairing…' : 'Pair device'}</button></form></section>
+    </section> : !credential ? <section className="kiosk-pair"><h1>TNG BOXING CHECK-IN</h1><p>Staff: pair this device using the code from TNGOS → Check-In Kiosk. Pairing signs this browser out of TNGOS administration. No admin sign-in is needed on this screen.</p><form onSubmit={pair}><label htmlFor="pair-code">Device pairing code</label><input id="pair-code" autoComplete="off" autoCapitalize="characters" value={pairCode} onChange={e => setPairCode(e.target.value)} maxLength={32}/><button className="kiosk-submit" disabled={busy || pairCode.trim().length < 8}>{busy ? 'Pairing…' : 'Pair device'}</button></form></section>
     : !settings?.enabled ? <section aria-live="polite"><h1>{settings ? 'CHECK-IN UNAVAILABLE' : 'CONNECTING TO TNG BOXING'}</h1><p>{settings ? 'Please visit the front desk.' : connection}</p></section>
     : <section><h1>WELCOME TO TNG BOXING<span>MEMBER CHECK-IN</span></h1><form onSubmit={checkin}>
       <label htmlFor="member-number">Enter your membership number</label>
