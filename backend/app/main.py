@@ -3856,22 +3856,14 @@ def checkin(data: dict, db: Session = Depends(get_db), user: User = Depends(staf
     if effective_membership_status(member) != "active":
         raise HTTPException(status_code=403, detail="Membership is inactive or expired. Please renew at the front desk.")
 
-    attendance = Attendance(
-        member_id=member.id,
-        method="barcode",
-        location="Front Desk"
-    )
-
-    db.add(attendance)
-
-    member.last_checkin = datetime.utcnow()
-    member.checkins = (member.checkins or 0) + 1
-    member.total_checkins = (member.total_checkins or 0) + 1
+    from app.services.attendance import record_attendance
+    recorded, member = record_attendance(db, member)
 
     db.commit()
 
     return {
         "success": True,
+        "duplicate": not recorded,
         "member": {
             "id": member.id,
             "name": f"{member.first_name} {member.last_name}",

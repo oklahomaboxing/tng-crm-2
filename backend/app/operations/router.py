@@ -19,3 +19,6 @@ router.include_router(duplicates_router)
 
 from .overview import router as overview_router
 router.include_router(overview_router)
+
+from app.kiosk.routes import router as kiosk_router
+router.include_router(kiosk_router)

@@ -1,0 +1,28 @@
+import React, {useEffect, useRef, useState} from 'react';
+import {Alert, Button, Card, CardContent, Stack, TextField, Typography, Switch, FormControlLabel, Table, TableHead, TableRow, TableCell, TableBody, TableContainer} from '@mui/material';
+const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const defaults = {name: 'InBody Touch — Entrance', enabled: true, confirmation_seconds: 8, duplicate_seconds: 120};
+function Device({device, act, busy}) {
+  const [form, setForm] = useState(device);
+  useEffect(() => {setForm(device);}, [device.id, device.name, device.enabled, device.confirmation_seconds, device.duplicate_seconds]);
+  const settings = {name:form.name, enabled:form.enabled, confirmation_seconds:Number(form.confirmation_seconds), duplicate_seconds:Number(form.duplicate_seconds)};
+  return <Card><CardContent><Stack spacing={2}>
+    <Typography variant="h5">{device.name}</Typography>
+    <Alert severity={device.online ? 'success' : 'warning'}>{device.online ? 'Online · heartbeat received within 90 seconds' : 'Offline / not yet connected'} · {device.paired ? 'Paired' : 'Not paired'}{device.last_seen && ` · Last seen ${new Date(device.last_seen + 'Z').toLocaleString()}`}</Alert>
+    <TextField label="Device name" value={form.name} onChange={e => setForm({...form,name:e.target.value})}/>
+    <FormControlLabel label="Enable member check-in" control={<Switch checked={form.enabled} onChange={e => setForm({...form,enabled:e.target.checked})}/>}/>
+    <Stack direction={{xs:'column',sm:'row'}} spacing={2}><TextField label="Success display (seconds)" type="number" value={form.confirmation_seconds} onChange={e => setForm({...form,confirmation_seconds:e.target.value})} inputProps={{min:3,max:30}}/><TextField label="Duplicate window (seconds)" type="number" value={form.duplicate_seconds} onChange={e => setForm({...form,duplicate_seconds:e.target.value})} inputProps={{min:30,max:3600}}/></Stack>
+    <Stack direction="row" spacing={1} useFlexGap sx={{flexWrap:'wrap'}}><Button disabled={busy} variant="contained" onClick={() => act(`devices/${device.id}`, 'PUT', settings)}>Save settings</Button><Button disabled={busy} onClick={() => act(`devices/${device.id}/pairing`, 'POST')}>Generate pairing code</Button><Button color="error" disabled={busy} onClick={() => {if (window.confirm('Disconnect this kiosk? Staff will need a new pairing code to reconnect it.')) act(`devices/${device.id}/revoke`, 'POST');}}>Revoke device access</Button></Stack>
+    <Typography>Today (Central Time): {Object.entries(device.today).map(([key,value])=>`${key}: ${value}`).join(' · ')}</Typography>
+    <TableContainer sx={{maxHeight:320}}><Table size="small"><TableHead><TableRow><TableCell>Time</TableCell><TableCell>Outcome</TableCell><TableCell>Member profile</TableCell></TableRow></TableHead><TableBody>{device.recent_attempts.map(a=><TableRow key={a.id}><TableCell>{new Date(a.at+'Z').toLocaleTimeString()}</TableCell><TableCell>{a.outcome}</TableCell><TableCell>{a.member_id ? <a href={`#/members?member=${a.member_id}`}>#{a.member_id}</a> : 'Not identified'}</TableCell></TableRow>)}</TableBody></Table></TableContainer>
+  </Stack></CardContent></Card>;
+}
+export default function CheckinKioskAdmin(){
+  const [devices,setDevices]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[code,setCode]=useState(null); const lock=useRef(false);
+  async function request(path, method='GET', body){const r=await fetch(`${API}/api/kiosk/${path}`,{method,cache:'no-store',headers:{Authorization:`Bearer ${localStorage.getItem('token')}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await r.json();if(!r.ok)throw new Error(typeof data.detail==='string'?data.detail:'Unable to save kiosk settings.');return data;}
+  async function refresh(){try{const data=await request('devices');setDevices(data.devices);}catch(e){setError(e.message);}}
+  useEffect(()=>{refresh();const timer=setInterval(refresh,30000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{if(!code)return;const timer=setTimeout(()=>setCode(null),600000);return()=>clearTimeout(timer);},[code]);
+  async function act(path,method,body){if(lock.current)return;lock.current=true;setBusy(true);setError('');try{const data=await request(path,method,body);if(data.code)setCode(data.code);await refresh();}catch(e){setError(e.message);}finally{lock.current=false;setBusy(false);}}
+  return <Stack spacing={3}><Typography variant="h4">Check-In Kiosk</Typography><Typography>Pair the entrance screen without signing it into an administrator account. Device access is limited to member-number check-in.</Typography><Alert severity="info">Kiosk URL: <a href="/kiosk/checkin" target="_blank" rel="noreferrer">{window.location.origin}/kiosk/checkin</a> · Default success display: 8 seconds · Errors: 5 seconds. Attendance is stored in the existing member records.</Alert>{error&&<Alert severity="error">{error}</Alert>}{code&&<Alert severity="warning" onClose={()=>setCode(null)}>Staff pairing code: <strong>{code}</strong> · Single use, expires in 10 minutes. Enter only on the physical kiosk. A successful new pairing replaces the old device credential.</Alert>}<Stack direction="row" spacing={2} useFlexGap sx={{flexWrap:"wrap"}}><Button variant="contained" disabled={busy} onClick={()=>act('devices','POST',defaults)}>Add check-in device</Button><Button component="a" href="/kiosk/tng-checkin-1.0.0.apk" download>Download Android kiosk APK</Button><Button component="a" href="/kiosk/setup.html" target="_blank" rel="noreferrer">Installation & restart instructions</Button></Stack>{devices.map(device=><Device key={device.id} {...{device,act,busy}}/>)}</Stack>;
+}

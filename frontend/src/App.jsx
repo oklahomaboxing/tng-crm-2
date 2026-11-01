@@ -33,6 +33,8 @@ const Sales = lazy(() => import("./pages/Sales.jsx"));
 const SalesRepDashboard = lazy(() => import("./pages/SalesRepDashboard.jsx"));
 const JoinPage = lazy(() => import("./pages/JoinPage.jsx"));
 const Leads = lazy(() => import("./pages/Leads.jsx"));
+const CheckinKiosk = lazy(() => import("./pages/CheckinKiosk.jsx"));
+const CheckinKioskAdmin = lazy(() => import("./pages/CheckinKioskAdmin.jsx"));
 const FrontDesk = lazy(() => import("./pages/FrontDesk.jsx"));
 const EventCheckIn = lazy(() => import('./pages/EventCheckIn.jsx'));
 const Products = lazy(() => import("./pages/Products.jsx"));
@@ -148,6 +150,7 @@ function PaymentMessage({ status }) {
 }
 
 function RootEntry() {
+  if (/^\/kiosk\/checkin\/?$/.test(window.location.pathname)) return <CheckinKiosk />;
   const isFighterPreview =
     window.location.pathname === "/fighter/preview";
 
@@ -832,6 +835,7 @@ return (
       )}
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
       {page === "Members" && ["admin", "staff"].includes(role) && <Members role={role} initialMemberId={navigationTarget.memberId} onOpenMember={id => navigate("Members", { memberId: id })} onCloseMember={() => navigate("Members")} />}
+      {page === "Check-In Kiosk" && ["admin", "staff"].includes(role) && <CheckinKioskAdmin />}
       {page === "Front Desk" && role !== "rep" && <FrontDesk />}
       {page === 'Event Check-In' && ['admin','staff'].includes(role) && <EventCheckIn />}
 

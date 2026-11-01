@@ -9,6 +9,7 @@ export const ROLE_MENUS = {
     "Fight Calendar",
     "Products",
     "Front Desk",
+    "Check-In Kiosk",
     "Event Check-In",
     "Sales",
     "Leads",
@@ -23,6 +24,7 @@ export const ROLE_MENUS = {
   ],
   staff: [
     "Front Desk",
+    "Check-In Kiosk",
     "Event Check-In",
     "TNG BOXING EVENTS",
     "Fight Calendar",
@@ -45,12 +47,13 @@ export const ROLE_MENUS = {
 
 export const WORKSPACE_GROUPS = [
   { label: "COMMAND", pages: ["Dashboard", "System Overview"] },
-  { label: "GYM OPERATIONS", pages: ["Members", "Front Desk", "Sales", "Products", "TNGTrainer"] },
+  { label: "GYM OPERATIONS", pages: ["Members", "Front Desk", "Check-In Kiosk", "Sales", "Products", "TNGTrainer"] },
   { label: "TNG PROMOTIONS", pages: ["TNG BOXING EVENTS", "Event Check-In", "Promoter", "Fight Calendar", "Fighter Portal Videos"] },
   { label: "GROWTH", pages: ["Leads", "QR Referrals", "Marketing Center", "My Sales"] },
   { label: "ADMINISTRATION", pages: ["Clover", "Duplicate Review", "Reports", "User Management", "Security Center", "Manager Portal"] },
 ];
 export const WORKSPACE_HINTS = {
+  "Check-In Kiosk": "Entrance touchscreen pairing, attendance, device status and settings",
   Members: "Profiles, portal access, memberships and renewals",
   "Front Desk": "Gym member QR scanner and member-number check-in",
   "Event Check-In": "Fight-night ticket scanner and paper ticket activation",
