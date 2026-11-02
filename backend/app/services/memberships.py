@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 from app.models import Sale
 
 
+def is_ticket_purchase_name(name):
+    return bool(re.search(r'\b(?:tickets?|general\s+admission|ringside|table\s+seats?|fight\s+night|event\s+admission)\b',name or '',re.I))
+
+
 def is_membership_product(product):
     """
     Membership activation must be explicit.
@@ -18,6 +22,7 @@ def is_membership_product(product):
         return False
 
     name = (product.name or "").strip().lower()
+    if is_ticket_purchase_name(name):return False
     category = (getattr(product, "category", "") or "").strip().lower()
 
     blocked_words = {

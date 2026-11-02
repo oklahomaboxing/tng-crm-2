@@ -3,7 +3,13 @@ from datetime import datetime, timedelta
 import math
 import re
 from app.models import Member, Sale, MembershipProduct
-from app.services.memberships import effective_membership_status
+from app.services.memberships import effective_membership_status,is_ticket_purchase_name
+
+
+def has_member_identity(member):
+    name=' '.join(((member.first_name or '')+' '+(member.last_name or '')).split())
+    return bool(name and any(c.isalpha() for c in name) and name.casefold() not in ('unknown','customer','unknown customer','clover customer','guest','walk in','walk-in')
+        and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',(member.email or '').strip()))
 
 
 def membership_evidence(db):
@@ -23,8 +29,8 @@ def membership_report(member, paid_ids, now=None):
     end = member.membership_end
     status = effective_membership_status(member, now)
     # Directory imports and bare legacy active defaults do not prove a membership.
-    recorded = member.id in paid_ids or bool(member.member_type == 'MEMBER'
-        and member.membership_start and (end or member.membership_type))
+    recorded = has_member_identity(member) and (member.id in paid_ids or bool(member.member_type == 'MEMBER'
+        and member.membership_start and (end or member.membership_type) and not is_ticket_purchase_name(member.membership_type)))
     if not recorded:
         category = 'contact'
     elif end and end <= now:
@@ -38,7 +44,8 @@ def membership_report(member, paid_ids, now=None):
     delta = (end - now).total_seconds() / 86400 if end else None
     days = (math.ceil(delta) if delta >= 0 else math.floor(delta)) if delta is not None else None
     return {'membership_category': category, 'is_current_member': category in ('active','expiring'),
-        'membership_days_remaining': days, 'membership_recorded': recorded}
+        'membership_days_remaining': days, 'membership_recorded': recorded,
+        'member_identity_complete':has_member_identity(member)}
 
 
 def membership_totals(members, paid_ids, now=None):

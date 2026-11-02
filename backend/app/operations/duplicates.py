@@ -19,7 +19,9 @@ def find_duplicate_members(
 ):
     require_admin(user)
 
-    members = db.query(Member).all()
+    members = db.query(Member).order_by(Member.id).all()
+    from app.services.member_profiles import phone_key
+    summaries={}
     results = []
 
     def member_summary(member: Member):
@@ -111,8 +113,8 @@ def find_duplicate_members(
             if (
                 member_a.email
                 and member_b.email
-                and member_a.email.lower()
-                == member_b.email.lower()
+                and member_a.email.strip().casefold()
+                == member_b.email.strip().casefold()
             ):
                 reasons.append("Same email")
                 confidence = max(confidence, 100)
@@ -120,7 +122,8 @@ def find_duplicate_members(
             if (
                 member_a.phone
                 and member_b.phone
-                and member_a.phone == member_b.phone
+                and phone_key(member_a.phone)
+                and phone_key(member_a.phone) == phone_key(member_b.phone)
             ):
                 reasons.append("Same phone")
                 confidence = max(confidence, 100)
@@ -150,8 +153,10 @@ def find_duplicate_members(
             if not reasons:
                 continue
 
-            summary_a = member_summary(member_a)
-            summary_b = member_summary(member_b)
+            if member_a.id not in summaries:summaries[member_a.id]=member_summary(member_a)
+            if member_b.id not in summaries:summaries[member_b.id]=member_summary(member_b)
+            summary_a = summaries[member_a.id]
+            summary_b = summaries[member_b.id]
 
             if summary_a["score"] >= summary_b["score"]:
                 recommended_keep_id = member_a.id
@@ -166,6 +171,7 @@ def find_duplicate_members(
                     "member_b": summary_b,
                     "reasons": reasons,
                     "confidence": confidence,
+                    "contact_match": any(reason in reasons for reason in ('Same email','Same phone','Same Clover Customer ID')),
                     "recommended_keep_id": recommended_keep_id,
                     "recommended_merge_id": recommended_merge_id,
                 }
@@ -187,11 +193,14 @@ def merge_duplicate_members(
     if type(keep_id) is not int or type(source_id) is not int or keep_id<=0 or source_id<=0:
         raise HTTPException(400, 'Choose two valid profile IDs.')
     try:
-        result=merge_profiles(db,user,keep_id,source_id,allow_linked=True)
+        result=merge_profiles(db,user,keep_id,source_id,allow_linked=True,reviewed_contact=True)
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except IntegrityError:
         db.rollback()
-        raise HTTPException(409, 'Linked records conflict. Review these profiles individually before merging.')
+        raise HTTPException(409, 'Merge could not be saved because linked records conflict. No records were changed.')
     return {'message':'Profiles consolidated; history and original card identifiers retained.',
         'kept_member_id':result['member_id'],'deleted_member_id':result['source_id']}
 

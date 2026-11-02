@@ -16,6 +16,11 @@ test('active includes expiring and contacts are excluded from members',()=>{
 });
 test('end time already passed is expired even less than one day ago',()=>{
  const now=Date.parse('2026-11-01T12:00:00Z');
- const row={member_type:'MEMBER',membership_status:'active',membership_start:'2026-10-01T12:00:00',membership_end:'2026-11-01T11:59:59'};
+ const row={first_name:'Gym',email:'gym@example.com',member_type:'MEMBER',membership_status:'active',membership_start:'2026-10-01T12:00:00',membership_end:'2026-11-01T11:59:59'};
  assert.equal(membershipCategory(row,now),'expired');
+});
+test('missing name or email does not qualify as a member in fallback',()=>{
+ for(const identity of [{first_name:'A'},{email:'a@example.com'},{first_name:'A',email:'bad'}]){
+  assert.equal(membershipCategory({...identity,member_type:'MEMBER',membership_status:'active',membership_start:'2026-11-01'}),'contact');
+ }
 });

@@ -2840,18 +2840,8 @@ def sync_clover_sales(
 
     default_rep = get_or_create_front_desk_rep(db)
 
-    default_product = (
-        db.query(MembershipProduct)
-        .filter(MembershipProduct.active == True)
-        .order_by(
-            MembershipProduct.is_membership.desc(),
-            MembershipProduct.id.asc(),
-        )
-        .first()
-    )
-
-    if not default_product:
-        default_product = get_or_create_clover_fallback_product(db)
+    # Unrecognized orders remain sales/customers, never gym enrollments.
+    default_product = get_or_create_clover_fallback_product(db)
 
     db.commit()
 
@@ -3228,62 +3218,9 @@ def sync_clover_sales(
                 2,
             )
 
-            safe_price_membership = None
-
-            # Recovery path for real Clover membership charges whose
-            # Clover item name does not exactly match TNGOS.
-            # Only use an already-configured active membership product.
-            if (
-                not is_manual_transaction
-                and order_amount in (150.0, 300.0)
-            ):
-                blocked_line_item = False
-
-                for line_item in line_items:
-                    item_name = (
-                        line_item.get("name") or ""
-                    ).strip().lower()
-
-                    if any(
-                        word in item_name
-                        for word in (
-                            "ticket",
-                            "general admission",
-                            "ringside",
-                            "fight night",
-                            "event",
-                            "test",
-                            "testing",
-                            "manual",
-                            "custom",
-                            "uncategorized",
-                            "clover sale",
-                        )
-                    ):
-                        blocked_line_item = True
-                        break
-
-                if not blocked_line_item:
-                    safe_price_membership = (
-                        db.query(MembershipProduct)
-                        .filter(
-                            MembershipProduct.active == True,
-                            MembershipProduct.is_membership == True,
-                            func.lower(MembershipProduct.category)
-                            == "membership",
-                            MembershipProduct.price
-                            == order_amount,
-                        )
-                        .order_by(
-                            MembershipProduct.id.asc()
-                        )
-                        .first()
-                    )
-
-            if safe_price_membership:
-                product = safe_price_membership
-
-            elif first_clover_item_name:
+            # An amount alone cannot identify a gym membership: fight tickets
+            # and retail orders may cost exactly the same as a gym plan.
+            if first_clover_item_name:
                 category = categorize_clover_product(
                     first_clover_item_name
                 )
@@ -3298,34 +3235,8 @@ def sync_clover_sales(
                 db.add(product)
                 db.flush()
 
-        product_name = (
-            product.name or ""
-        ).strip().lower()
-
-        blocked_membership_sale = (
-            is_manual_transaction
-            or any(
-                word in product_name
-                for word in (
-                    "test",
-                    "testing",
-                    "manual",
-                    "custom",
-                    "uncategorized",
-                    "clover sale",
-                )
-            )
-        )
-
         membership_purchase = bool(
-            not blocked_membership_sale
-            and product.is_membership
-            and (
-                (product.category or "")
-                .strip()
-                .lower()
-                == "membership"
-            )
+            not is_manual_transaction and is_membership_product(product)
         )
 
         sale = Sale(

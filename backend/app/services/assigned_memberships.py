@@ -11,6 +11,8 @@ def assign_membership(db, member, name, rate, months, *, activate, user_id):
     db.execute(select(type(member).id).where(type(member).id==member.id).with_for_update())
     rate=round(rate,2);name=name.strip()
     if not name:raise HTTPException(422,'Enter a membership name.')
+    from app.services.memberships import is_ticket_purchase_name
+    if is_ticket_purchase_name(name):raise HTTPException(422,'Event tickets are not gym memberships. Choose a gym membership plan.')
     candidates=db.query(MembershipProduct).filter(func.lower(MembershipProduct.name)==name.lower(),
         MembershipProduct.price==rate,MembershipProduct.default_membership_months==months,
         MembershipProduct.is_membership.is_(True),MembershipProduct.category=='membership',MembershipProduct.active.is_(True)).order_by(MembershipProduct.id).all()

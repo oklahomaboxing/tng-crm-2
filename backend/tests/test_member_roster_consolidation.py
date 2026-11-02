@@ -3,7 +3,7 @@ from datetime import datetime,timedelta
 import test_stabilization as support
 from app.models import Member,Sale,Attendance,SecurityLog,User
 from app.member_portal.models import MemberAccount,MemberInvite,InBodyScan,MemberProfilePhoto
-from app.services.contact_consolidation import ConsolidatedContact,confirmed_plan,merge_profiles
+from app.services.contact_consolidation import ConsolidatedContact,MergedMemberLogin,MergedRecordSnapshot,confirmed_plan,merge_profiles
 from app.services.member_reporting import membership_report,membership_totals
 from app.services.member_profiles import import_customer
 
@@ -73,21 +73,35 @@ class RosterConsolidationTests(unittest.TestCase):
         self.assertGreater(self.member.membership_end,datetime.utcnow()+timedelta(days=89))
         self.assertTrue(json.loads(self.db.query(ConsolidatedContact).one().moved_records)['sales.member_id'])
 
-    def test_two_portal_accounts_or_different_birthdates_refuse_without_changes(self):
+    def test_reviewed_merge_preserves_both_logins_and_passwords(self):
         source=self.source()
         user=User(name='Other portal',email='other-portal@example.com',role='member',active=True,password_hash='fixture')
-        self.db.add(user);self.db.flush();self.db.add(MemberAccount(member_id=source.id,user_id=user.id));self.db.commit()
+        self.db.add(user);self.db.flush();self.db.add(MemberAccount(member_id=source.id,user_id=user.id));self.db.commit();source_id=source.id
         r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
-        self.assertEqual(r.status_code,409,r.text);self.assertEqual(self.db.query(MemberAccount).count(),2);self.assertEqual(self.db.query(Member).count(),2)
-        self.assertEqual(self.db.query(ConsolidatedContact).count(),0)
+        self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+        self.assertEqual(self.db.query(MemberAccount).count(),1);self.assertEqual(self.db.query(Member).count(),1)
+        self.assertEqual(self.db.query(MergedMemberLogin).one().user_id,user.id)
+        self.assertEqual(self.db.get(User,user.id).password_hash,'fixture')
+        from app.auth import create_token
+        secondary={'Authorization':'Bearer '+create_token({'sub':str(user.id)})}
+        self.assertEqual(self.client.get('/api/member/me',headers=secondary).status_code,200)
+        self.assertEqual(self.client.get('/api/member/me',headers=self.headers('member')).status_code,200)
+        self.users['member'].active=False;self.db.commit()
+        self.assertEqual(self.client.get('/api/member/me',headers=secondary).status_code,403)
+        self.users['member'].active=True;self.db.commit()
+        self.assertEqual(self.client.get('/api/member/me',headers=secondary).status_code,200)
+        repeat=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source_id})
+        self.assertEqual(repeat.status_code,200,repeat.text)
+        self.assertEqual(self.db.query(ConsolidatedContact).count(),1)
 
     def test_classification_excludes_contacts_and_expiring_is_subset_of_active(self):
         now=datetime(2026,11,1,12)
-        active=Member(id=1,member_type='MEMBER',membership_status='active',membership_start=now-timedelta(days=30),membership_end=now+timedelta(days=20))
-        soon=Member(id=2,member_type='MEMBER',membership_status='active',membership_end=now+timedelta(days=3))
-        expired=Member(id=3,member_type='MEMBER',membership_status='active',membership_end=now-timedelta(seconds=1))
-        pending=Member(id=4,member_type='CUSTOMER',membership_status='pending')
-        bare=Member(id=5,member_type='MEMBER',membership_status='active')
+        identity=dict(first_name='Gym',last_name='Member',email='gym@example.com')
+        active=Member(id=1,**identity,member_type='MEMBER',membership_status='active',membership_start=now-timedelta(days=30),membership_end=now+timedelta(days=20))
+        soon=Member(id=2,**identity,member_type='MEMBER',membership_status='active',membership_end=now+timedelta(days=3))
+        expired=Member(id=3,**identity,member_type='MEMBER',membership_status='active',membership_end=now-timedelta(seconds=1))
+        pending=Member(id=4,**identity,member_type='CUSTOMER',membership_status='pending')
+        bare=Member(id=5,**identity,member_type='MEMBER',membership_status='active')
         totals=membership_totals([active,soon,expired,pending,bare],{1,2,3},now)
         self.assertEqual({k:totals[k] for k in ('active','expiring','expired','contact','members')},{'active':2,'expiring':1,'expired':1,'contact':2,'members':3})
         self.assertEqual(membership_report(expired,{3},now)['membership_days_remaining'],-1)
@@ -126,22 +140,93 @@ class RosterConsolidationTests(unittest.TestCase):
         self.assertEqual(self.db.query(Sale).one().member_id,target_id)
         self.assertIsNone(self.db.get(Member,source_id))
 
-    def test_conflicting_photos_are_retained_and_merge_is_rejected(self):
+    def test_conflicting_photos_are_retained_in_merge_archive(self):
         source=self.source()
         for member,data in [(self.member,b'target'),(source,b'source')]:
             self.db.add(MemberProfilePhoto(member_id=member.id,file_name='fixture.png',content_type='image/png',file_size=len(data),file_data=data))
         self.db.commit()
         r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
-        self.assertEqual(r.status_code,409,r.text)
-        self.assertEqual({row.file_data for row in self.db.query(MemberProfilePhoto)}, {b'target',b'source'})
-        self.assertEqual(self.db.query(Member).count(),2)
+        self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+        self.assertEqual(self.db.query(MemberProfilePhoto).one().file_data,b'target')
+        archived=json.loads(self.db.query(MergedRecordSnapshot).filter_by(table_name='member_profile_photos').one().record_json)
+        import base64
+        self.assertEqual(base64.b64decode(archived['file_data']['base64']),b'source')
+        self.assertEqual(self.db.query(Member).count(),1)
 
-    def test_conflicting_birthdates_cannot_merge(self):
+    def test_reviewed_matching_contact_can_merge_without_correcting_birthdates(self):
         source=self.source(date_of_birth=datetime(2000,1,1))
         self.member.date_of_birth=datetime(1999,1,1);self.db.commit()
         self.assertEqual(confirmed_plan(self.db),[])
         r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
+        self.assertEqual(r.status_code,200,r.text);self.assertEqual(self.db.query(Member).count(),1)
+
+    def test_same_phone_formatted_differently_allows_different_names_and_emails(self):
+        source=self.source(first_name='Misspelled',email='other@example.com',phone='(405) 555-0100')
+        pairs=self.client.get('/api/duplicates/members',headers=self.headers()).json()
+        self.assertIn('Same phone',pairs[0]['reasons']);self.assertTrue(pairs[0]['contact_match'])
+        r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
+        self.assertEqual(r.status_code,200,r.text)
+        self.db.expire_all();self.assertEqual(self.member.email,'member@example.com')
+        self.assertEqual(json.loads(self.db.query(ConsolidatedContact).one().source_snapshot)['email'],'other@example.com')
+
+    def test_latest_membership_retains_its_assigned_rate_and_source_invites_expire(self):
+        from app.services.assigned_memberships import assign_membership
+        from app.member_portal.models import AssignedMembership
+        source=self.source(member_type='MEMBER',membership_status='active',membership_start=datetime.utcnow(),membership_end=datetime.utcnow()+timedelta(days=90),membership_type='Custom')
+        assign_membership(self.db,self.member,'Monthly',125,1,activate=False,user_id=self.users['admin'].id)
+        assign_membership(self.db,source,'Custom',225,1,activate=False,user_id=self.users['admin'].id)
+        self.db.add(MemberInvite(member_id=source.id,token_hash='source-invite',expires_at=datetime.utcnow()+timedelta(days=1)))
+        self.db.commit()
+        r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
+        self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+        self.assertEqual(self.db.query(AssignedMembership).one().rate,225)
+        self.assertEqual(self.member.monthly_rate,225)
+        self.assertIsNotNone(self.db.query(MemberInvite).one().used_at)
+        self.assertEqual(self.db.query(Sale).count(),1)
+
+    def test_member_cannot_merge_and_unrelated_profiles_still_require_match(self):
+        source=self.source(first_name='Other',phone='5055550101',email='other@example.com')
+        for role in ('staff','member','rep'):
+            self.assertEqual(self.client.post('/api/duplicates/members/merge',headers=self.headers(role),json={'keep_id':self.member.id,'merge_id':source.id}).status_code,403)
+        r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
         self.assertEqual(r.status_code,409,r.text);self.assertEqual(self.db.query(Member).count(),2)
+        self.assertEqual(self.db.query(ConsolidatedContact).count(),0)
+
+    def test_later_standard_term_does_not_inherit_older_discount_assignment(self):
+        from app.services.assigned_memberships import assign_membership
+        from app.member_portal.models import AssignedMembership
+        source=self.source(member_type='MEMBER',membership_status='active',membership_type='Monthly',monthly_rate=150,billing_cycle='30_day',membership_start=datetime.utcnow(),membership_end=datetime.utcnow()+timedelta(days=90))
+        assign_membership(self.db,self.member,'Monthly',125,1,activate=False,user_id=self.users['admin'].id);self.db.commit()
+        r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
+        self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+        self.assertEqual(self.member.monthly_rate,150);self.assertEqual(self.db.query(AssignedMembership).count(),0)
+        self.assertEqual(json.loads(self.db.query(MergedRecordSnapshot).one().record_json)['rate'],125)
+
+    def test_prepared_source_account_keeps_secondary_login_without_claiming_primary(self):
+        from app.member_portal.models import PortalAccountSetup
+        from app.services.portal_accounts import fingerprint
+        source=self.source(email='secondary@example.com')
+        second=User(name='Secondary',email=source.email,role='member',active=True,password_hash='source-password')
+        self.db.add(second);self.db.flush()
+        self.db.add(MemberAccount(member_id=source.id,user_id=second.id))
+        for member,user in [(source,second),(self.member,self.users['member'])]:
+            self.db.add(PortalAccountSetup(member_id=member.id,user_id=user.id,password_fingerprint=fingerprint(user)))
+        self.db.commit()
+        r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
+        self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+        self.assertEqual(self.db.query(PortalAccountSetup).one().user_id,self.users['member'].id)
+        self.assertEqual(self.db.query(MergedMemberLogin).one().user_id,second.id)
+        self.assertEqual(self.db.get(User,second.id).password_hash,'source-password')
+
+    def test_kept_standard_term_does_not_inherit_source_discount_assignment(self):
+        from app.services.assigned_memberships import assign_membership
+        from app.member_portal.models import AssignedMembership
+        source=self.source(member_type='MEMBER',membership_status='active',membership_type='Discount',membership_start=datetime.utcnow(),membership_end=datetime.utcnow()+timedelta(days=5))
+        assign_membership(self.db,source,'Discount',125,1,activate=False,user_id=self.users['admin'].id);self.db.commit()
+        r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
+        self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+        self.assertEqual(self.db.query(AssignedMembership).count(),0)
+        self.assertEqual(json.loads(self.db.query(MergedRecordSnapshot).one().record_json)['rate'],125)
 
 
     def test_membership_purchase_promotes_customer_but_retail_purchase_does_not(self):
@@ -164,3 +249,25 @@ class RosterConsolidationTests(unittest.TestCase):
         evidence=membership_evidence(self.db)
         self.assertNotIn(customer.id,evidence)
         self.assertEqual(membership_report(customer,evidence)['membership_category'],'contact')
+
+    def test_missing_name_or_email_excluded_even_with_saved_active_term(self):
+        for name,email in [('', 'valid@example.com'),('Named',''),('Named','invalid'),('Clover Customer','valid@example.com')]:
+            member=Member(id=99,first_name=name,email=email,member_type='MEMBER',membership_status='active',membership_start=datetime.utcnow(),membership_end=datetime.utcnow()+timedelta(days=30))
+            report=membership_report(member,{99})
+            self.assertEqual(report['membership_category'],'contact');self.assertFalse(report['is_current_member'])
+
+    def test_fight_tickets_never_activate_gym_even_if_product_mistagged(self):
+        from app.services.memberships import is_membership_product,apply_membership
+        from app.models import MembershipProduct
+        for name in ('Fall Brawl Fight Ticket','General Admission','Table Seat','Ringside'):
+            ticket=MembershipProduct(name=name,price=150,category='membership',is_membership=True)
+            member=Member(first_name='Ticket',email='ticket@example.com',member_type='CUSTOMER',membership_status='pending')
+            self.assertFalse(is_membership_product(ticket));apply_membership(member,ticket)
+            self.assertEqual(member.member_type,'CUSTOMER');self.assertIsNone(member.membership_end)
+
+    def test_merging_ticket_profile_cannot_extend_gym_term(self):
+        source=self.source(member_type='MEMBER',membership_type='Fight Ticket',membership_start=datetime.utcnow(),membership_end=datetime.utcnow()+timedelta(days=365))
+        expected=self.member.membership_end
+        r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
+        self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+        self.assertEqual(self.member.membership_end,expected);self.assertEqual(self.member.membership_type,'Monthly')

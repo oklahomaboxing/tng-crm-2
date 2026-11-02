@@ -8,6 +8,7 @@ export function memberDate(value) {
 export function membershipCategory(member, now = Date.now()) {
   if (member.membership_category) return member.membership_category;
   // Fallback while rolling deployments finish. The server is authoritative.
+  if (!`${member.first_name||''} ${member.last_name||''}`.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((member.email||'').trim())) return 'contact';
   if (member.member_type === 'CUSTOMER' || !member.membership_start) return 'contact';
   const end = memberDate(member.membership_end);
   if (end && end.getTime() <= now) return 'expired';

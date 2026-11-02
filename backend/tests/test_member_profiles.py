@@ -202,6 +202,21 @@ class MemberProfilesTests(unittest.TestCase):
         member = self.db.query(Member).filter_by(clover_customer_id='clover-new').one()
         self.assertEqual(member.member_number, 'TNG-000003')
 
+    def test_unnamed_and_ticket_orders_matching_gym_price_remain_customers(self):
+        from app.models import MembershipProduct
+        ticket=MembershipProduct(name='Fight Ticket',price=150,category='membership',is_membership=True,active=True)
+        self.db.add(ticket);self.db.commit()
+        for index,items in enumerate(([],[{'name':'Fight Ticket','price':15000}],[{'name':'Unknown purchase','price':15000}])):
+            cid=f'event-customer-{index}'
+            person=customer(cid,firstName='Event',lastName=str(index),emailAddresses={'elements':[{'emailAddress':f'event{index}@example.com'}]},phoneNumbers={'elements':[{'phoneNumber':f'40555502{index:02d}'}]})
+            order={'id':f'event-order-{index}','total':15000,'paymentState':'PAID','payments':{'elements':[{'id':f'event-payment-{index}','result':'SUCCESS'}]},'customers':{'elements':[person]},'lineItems':{'elements':items}}
+            with patch.dict(os.environ,{'CLOVER_API_TOKEN':'test','CLOVER_MERCHANT_ID':'test'}),patch('requests.get',return_value=response([order])):
+                r=self.client.post('/api/clover/sync-sales',headers=self.headers())
+            self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+            member=self.db.query(Member).filter_by(clover_customer_id=cid).one()
+            self.assertEqual(member.member_type,'CUSTOMER');self.assertIsNone(member.membership_end)
+            self.assertEqual(r.json()['membership_sales'],0)
+
     def test_customer_profile_with_legacy_active_default_cannot_check_in(self):
         legacy = Member(first_name='Retail', last_name='Customer', member_type='CUSTOMER',
                         membership_status='active', clover_customer_id='retail', member_number='TNG-000099')

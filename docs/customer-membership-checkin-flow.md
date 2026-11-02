@@ -2,11 +2,17 @@
 
 ## Accounts
 
-Members opens the combined customer/member directory by default. Contacts with a name, usable email and telephone number receive a restricted, active member-portal account. Account access is separate from gym membership eligibility. Existing passwords, disabled accounts and non-member staff/fighter/admin roles are preserved. Shared emails and matching names/phones across different profiles require ownership review. A unique contact must not take over another person's login.
+Members opens gym memberships by default. The Contacts and All Contacts & Members filters retain the combined directory. Profiles without a name and usable email are excluded from gym membership totals even if they have a saved active flag. Fight-ticket purchases never create a gym membership, including miscategorized ticket products. Clover sales sync requires a recognized, explicitly configured gym product; unknown orders and amounts matching membership prices are not sufficient. Existing sales and ticket records remain available.
+
+Contacts with a name, usable email and telephone number receive a restricted, active member-portal account. Account access is separate from gym membership eligibility. Existing passwords, disabled accounts and non-member staff/fighter/admin roles are preserved. Shared emails and matching names/phones across different profiles require ownership review. A unique contact must not take over another person's login.
 
 New prepared accounts have a random unusable password. Customers choose their own password via **First time here or forgot your password?** on the login page, or the staff **Send Password Setup** action. Bulk account preparation does not send bulk emails. Admin creation has an explicit password-setup email checkbox. Existing valid invitation links continue to work for unclaimed prepared accounts; claimed accounts and password changes invalidate the claim path. No default passwords are distributed.
 
 Customer-directory reconciliation prepares accounts automatically in small committed batches. **Connect Customer Accounts** prepares existing profiles immediately and honors existing recorded nonstandard monthly rates. Account creation never marks a customer as a paid gym member.
+
+**Members → Merge Duplicates** shows matching profiles after sync. Email matching ignores spaces/case; telephone matching ignores formatting and the US country prefix. Review the two cards and press **Merge** once, with no confirmation popup. Matching email, telephone or Clover identity permits the administrator's explicit merge even when names or birthdates differ. Sync does not silently merge shared-family contact details. Alternate buttons choose which profile's contact details to keep.
+
+Merges retain sales, attendance, Clover purchase details, old member numbers and Clover customer aliases. The later recorded membership term and its applicable agreed rate survive without creating sales or adding time. Both member login identities retain their passwords and reach the combined profile. Disabling the primary portal account also blocks alternate login access. Superseded photos, setup markers and rates are retained in database audit snapshots. Unused invitations from the former profile are invalidated to prevent them claiming the kept login; customers can use password reset. The merge is transactional and retrying the same completed pair does not merge twice. Only administrators can merge profiles.
 
 ## Admin-created memberships and agreed rates
 

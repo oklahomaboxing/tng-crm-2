@@ -39,6 +39,13 @@ def require_admin(user: User):
 def member_account_for_user(db: Session, user: User) -> MemberAccount:
     account = db.query(MemberAccount).filter(MemberAccount.user_id == user.id).first()
     if not account:
+        from app.services.contact_consolidation import MergedMemberLogin
+        alias=db.query(MergedMemberLogin).filter_by(user_id=user.id).first()
+        account=db.query(MemberAccount).filter_by(member_id=alias.member_id).first() if alias else None
+        if account:
+            owner=db.get(User,account.user_id)
+            if not owner or not owner.active:raise HTTPException(403,'Member portal access is disabled')
+    if not account:
         raise HTTPException(status_code=403, detail="Member account not linked")
     return account
 
@@ -543,6 +550,9 @@ def activate_member(data: ActivateMemberIn, db: Session = Depends(get_db)):
         )
 
     linked=db.query(MemberAccount).filter_by(user_id=user.id).first() if user else None
+    from app.services.contact_consolidation import MergedMemberLogin
+    if user and db.query(MergedMemberLogin).filter_by(user_id=user.id).first():
+        raise HTTPException(409,'That email already has member access. Use password reset to sign in.')
     prepared=bool(linked and linked.member_id==member.id and needs_password_setup(db,linked,user))
     if linked and not prepared:
         raise HTTPException(status_code=409, detail="That email is already linked to a member account")
