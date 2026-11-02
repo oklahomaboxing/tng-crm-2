@@ -174,7 +174,7 @@ def merge_profiles(db, user, keep_id, source_id, *, allow_linked=False, reviewed
         for field in ('member_type','status','membership_type','membership_status','membership_start','membership_end',
             'billing_cycle','monthly_rate','next_billing_date','autopay_enabled','billing_status','last_payment_date','past_due_amount'):
             setattr(target,field,getattr(source,field))
-    for field in ('email','phone','photo_url','address','city','state','zip_code','emergency_contact','emergency_phone','date_of_birth','clover_customer_id'):
+    for field in ('first_name','last_name','email','phone','photo_url','address','city','state','zip_code','emergency_contact','emergency_phone','date_of_birth','clover_customer_id'):
         if not getattr(target,field) and getattr(source,field):setattr(target,field,getattr(source,field))
     if source.notes and source.notes not in (target.notes or ''):target.notes='\n'.join(filter(None,[target.notes,source.notes]))
     if allow_linked: target.waiver_signed=bool(target.waiver_signed or source.waiver_signed)

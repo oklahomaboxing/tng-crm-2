@@ -271,3 +271,13 @@ class RosterConsolidationTests(unittest.TestCase):
         r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
         self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
         self.assertEqual(self.member.membership_end,expected);self.assertEqual(self.member.membership_type,'Monthly')
+
+    def test_merge_fills_missing_identity_and_prepares_account_in_one_action(self):
+        source=self.source(first_name='Complete',last_name='Identity',email='fresh@example.com')
+        self.db.query(MemberAccount).delete();self.member.first_name='';self.member.last_name='';self.member.email='';self.db.commit()
+        r=self.client.post('/api/duplicates/members/merge',headers=self.headers(),json={'keep_id':self.member.id,'merge_id':source.id})
+        self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
+        self.assertEqual(self.member.first_name,'Complete');self.assertEqual(self.member.email,'fresh@example.com')
+        account=self.db.query(MemberAccount).one();self.assertEqual(account.member_id,self.member.id)
+        self.assertTrue(self.db.get(User,account.user_id).active)
+        self.assertEqual(self.db.query(Sale).count(),1)

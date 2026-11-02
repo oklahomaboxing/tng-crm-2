@@ -194,6 +194,8 @@ def merge_duplicate_members(
         raise HTTPException(400, 'Choose two valid profile IDs.')
     try:
         result=merge_profiles(db,user,keep_id,source_id,allow_linked=True,reviewed_contact=True)
+        from app.services.portal_accounts import prepare_accounts
+        prepare_accounts(db,{result['member_id']})
         db.commit()
     except HTTPException:
         db.rollback()

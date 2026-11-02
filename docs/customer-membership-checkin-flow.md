@@ -14,6 +14,8 @@ Customer-directory reconciliation prepares accounts automatically in small commi
 
 Merges retain sales, attendance, Clover purchase details, old member numbers and Clover customer aliases. The later recorded membership term and its applicable agreed rate survive without creating sales or adding time. Both member login identities retain their passwords and reach the combined profile. Disabling the primary portal account also blocks alternate login access. Superseded photos, setup markers and rates are retained in database audit snapshots. Unused invitations from the former profile are invalidated to prevent them claiming the kept login; customers can use password reset. The merge is transactional and retrying the same completed pair does not merge twice. Only administrators can merge profiles.
 
+Blank names and contact fields are filled from the other profile without replacing the selected profile's existing details. The same merge prepares restricted account access if the resulting profile becomes eligible; it sends no email or text.
+
 ## Admin-created memberships and agreed rates
 
 **Add Member → Create Active Member** creates the profile, member number, account access and active term in one action. Staff enter plan, agreed rate and months. Default is $150 for 30 days; other amounts and multi-month terms are supported. This administrative assignment records no sale and charges no card. Money received is recorded separately in Sales. Recording the first payment for a newly admin-activated term covers that term rather than adding a free extra month; later renewals extend normally.
