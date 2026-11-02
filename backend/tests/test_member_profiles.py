@@ -1,4 +1,4 @@
-"""Profile creation/import cannot manufacture a paid membership or login."""
+"""Admin membership assignment and customer account preparation preserve payment history."""
 import os
 import unittest
 from unittest.mock import Mock, patch
@@ -34,12 +34,13 @@ class MemberProfilesTests(unittest.TestCase):
             self.assertEqual(get.call_args.kwargs['headers']['Authorization'], 'Bearer test-api')
         return result
 
-    def test_admin_create_is_visible_pending_and_has_unique_card_without_sale_or_login(self):
+    def test_admin_create_assigns_active_membership_without_fabricating_payment(self):
         users = self.db.query(User).count(); sales = self.db.query(Sale).count()
         r = self.client.post('/api/members', headers=self.headers(), json={'first_name': 'Admin Added', 'email': ' NEW@EXAMPLE.COM '})
         self.assertEqual(r.status_code, 201, r.text)
         member = self.db.get(Member, r.json()['id'])
-        self.assertEqual(member.email, 'new@example.com'); self.assertEqual(member.membership_status, 'pending')
+        self.assertEqual(member.email, 'new@example.com'); self.assertEqual(member.membership_status, 'active')
+        self.assertIsNotNone(member.membership_end)
         self.assertTrue(member.qr_code.startswith('member:TNG-')); self.assertNotEqual(member.member_number, self.member.member_number)
         listed = self.client.get('/api/members', headers=self.headers()).json()
         self.assertEqual(next(m['portal_status'] for m in listed if m['id'] == member.id), 'not_invited')
@@ -55,7 +56,7 @@ class MemberProfilesTests(unittest.TestCase):
 
     def test_manual_duplicate_email_or_normalized_phone_rejected(self):
         self.member.phone = '(405) 555-0100'; self.db.commit()
-        for data in ({'email': self.member.email.upper()}, {'phone': '+1 405 555 0100'}):
+        for data in ({'email': self.member.email.upper()}, {'first_name':'Test','last_name':'Member','phone': '+1 405 555 0100'}):
             r = self.client.post('/api/members', headers=self.headers(), json={'first_name': 'Duplicate', **data})
             self.assertEqual(r.status_code, 409, r.text)
         self.assertEqual(self.db.query(Member).count(), 1)
@@ -71,7 +72,7 @@ class MemberProfilesTests(unittest.TestCase):
         for person in people:
             self.assertEqual(person.member_type, 'CUSTOMER'); self.assertEqual(person.membership_status, 'pending')
             self.assertIsNone(person.membership_end); self.assertTrue(person.member_number)
-        self.assertEqual(self.db.query(Sale).count(), before_sales); self.assertEqual(self.db.query(MemberAccount).count(), 1)
+        self.assertEqual(self.db.query(Sale).count(), before_sales); self.assertEqual(self.db.query(MemberAccount).count(), 2)
         listed = self.client.get('/api/members', headers=self.headers()).json()
         self.assertEqual(len(listed), 2)
         self.assertFalse(any(m['clover_customer_id'] == 'name-only' for m in listed))

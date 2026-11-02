@@ -71,7 +71,7 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
   const [notice, setNotice] = useState("");
   const [members, setMembers] = useState([]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("profiles");
   const [sort, setSort] = useState("name");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -202,6 +202,11 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
 
   const totals = useMemo(() => rosterTotals(members), [members]);
 
+  async function prepareAccountAccess() {
+    if(syncing)return;setSyncing(true);setError('');
+    try{const response=await fetch(`${API}/api/members/prepare-accounts`,{method:'POST',headers:authHeaders()});const data=await response.json();if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Could not connect accounts.');await loadMembers();setNotice(`${data.created} accounts connected, ${data.already_active} already active, ${data.shared_email_review} need contact ownership review. Members can use password setup/reset to sign in.`);}catch(e){setError(e.message);}finally{setSyncing(false);}
+  }
+
   async function consolidateContacts() {
     if (syncing) return;
     setSyncing(true);setError('');setNotice('');
@@ -237,6 +242,7 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
         <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
           {role === "admin" && <>
             <Button variant="contained" color="error" onClick={() => setAddOpen(true)}>Add Member</Button>
+            <Button variant="outlined" onClick={prepareAccountAccess} disabled={syncing}>Connect Customer Accounts</Button>
             <Button variant="outlined" onClick={consolidateContacts} disabled={syncing}>Consolidate Contacts</Button>
             <Button variant="outlined" onClick={syncCloverCustomers} disabled={syncing}>{syncing ? "Syncing Clover…" : "Sync Clover Customers"}</Button>
           </>}
@@ -261,7 +267,7 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
       <AddMemberDialog open={addOpen} onClose={() => setAddOpen(false)} onCreated={async (_member, message) => { setAddOpen(false); await loadMembers(); setNotice(message); }} />
       {members.some(member => member.same_name_contact_review) && <Alert severity="warning" sx={{mb:2}} action={role === 'admin' ? <Button component="a" href="#/duplicate-review" color="inherit">Review duplicates</Button> : undefined}>Some profiles have matching names and contact details. They remain separate until identity is confirmed.</Alert>}
       {notice && <Alert severity="info" sx={{ mb: 2 }}>{notice}</Alert>}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Clover customer-directory imports require both an email address and phone number and refresh automatically every ten minutes. Existing profiles are retained. Open a profile to send portal access or record membership. Customer-only contacts are excluded from membership totals. Expiring means an active membership ending within seven days and is included in Active. Expired means its recorded end time has passed. No pending contacts are counted as active members.</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Clover customer-directory imports require both an email address and phone number and refresh automatically every ten minutes. Existing profiles are retained. Open a profile to send portal access or record membership. Customer-only contacts are excluded from membership totals. Expiring means an active membership ending within seven days and is included in Active. Expired means its recorded end time has passed. Account access and gym membership are shown separately. Admin-created members start active with their assigned plan and rate.</Typography>
       <Card sx={{ borderRadius: 4, mb: 3 }}>
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>

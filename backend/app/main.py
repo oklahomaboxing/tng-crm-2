@@ -2895,6 +2895,10 @@ def sync_clover_sales(
         )
 
         if existing_sale:
+            from app.services.purchase_history import save_details
+            save_details(db,existing_sale.member_id,order)
+
+        if existing_sale:
             if is_manual_transaction:
                 existing_sale.sale_type = "nexgen_nutrition"
                 db.commit()
@@ -3484,6 +3488,7 @@ def member_payments(member_id: int, db: Session = Depends(get_db), user: User = 
         .all()
     )
 
+    from app.services.purchase_history import purchase_details
     return {
         "member_id": member.id,
         "member_name": f"{member.first_name} {member.last_name}",
@@ -3492,6 +3497,7 @@ def member_payments(member_id: int, db: Session = Depends(get_db), user: User = 
         "payments": [
             {
                 "id": s.id,
+                **purchase_details(db,s),
                 "amount": s.amount,
                 "payment_status": s.payment_status,
                 "transaction_status": s.transaction_status,
@@ -3849,11 +3855,14 @@ def checkin(data: dict, db: Session = Depends(get_db), user: User = Depends(staf
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    if effective_membership_status(member) != "active":
-        raise HTTPException(status_code=403, detail="Membership is inactive or expired. Please renew at the front desk.")
+    status=effective_membership_status(member)
+    if status != 'active':
+        detail='Membership is inactive or expired. Please visit the front desk.' if status in ('inactive','expired') else 'Please visit the front desk to verify your membership.'
+        raise HTTPException(status_code=403,detail=detail)
 
     from app.services.attendance import record_attendance
-    recorded, member = record_attendance(db, member)
+    numbered=data.get('entry_method')=='member_number'
+    recorded, member = record_attendance(db, member,method='member_number' if numbered else 'barcode',location='Member Check-In (staff)' if numbered else 'Front Desk')
 
     db.commit()
 
@@ -3863,6 +3872,7 @@ def checkin(data: dict, db: Session = Depends(get_db), user: User = Depends(staf
         "member": {
             "id": member.id,
             "name": f"{member.first_name} {member.last_name}",
+            "first_name": member.first_name,
             "member_number": member.member_number,
             "membership": member.membership_type,
             "status": member.membership_status,

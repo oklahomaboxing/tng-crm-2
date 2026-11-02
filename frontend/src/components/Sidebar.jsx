@@ -44,7 +44,7 @@ const ICONS = {
   "Fight Calendar": <EventRoundedIcon />,
   "TNG BOXING EVENTS": <EventRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
-  "Front Desk": <QrCodeScannerRoundedIcon />,
+  "Member Check-In": <QrCodeScannerRoundedIcon />,
   "Event Check-In": <QrCode2RoundedIcon />,
   Sales: <PointOfSaleRoundedIcon />,
   "My Sales": <PointOfSaleRoundedIcon />,

@@ -645,13 +645,15 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                     <Typography variant="h4" fontWeight={900}>Welcome, {m.first_name}</Typography>
                     <Typography color="text.secondary">Your TNG Boxing member account</Typography>
                   </Box>
+                  <Chip label="Account active" color="success"/>
                   <Chip
-                    label={(m.membership_status || "unknown").toUpperCase()}
+                    label={(m.membership_status_label || m.membership_status || "Account active")}
                     color={m.membership_status === "active" ? "success" : "default"}
                     sx={{ fontWeight: 800 }}
                   />
                 </Stack>
                 <Divider sx={{ my: 3 }} />
+                {m.assigned_rate!=null && m.assigned_months && <Typography sx={{mb:2}}>Agreed rate: ${Number(m.assigned_rate).toFixed(2)} / {m.assigned_months} month(s)</Typography>}
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <Metric
@@ -722,7 +724,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                       label="Billing Status"
                       value={
                         m.billing_status ||
-                        m.membership_status ||
+                        m.membership_status_label || m.membership_status ||
                         "Unknown"
                       }
                     />
@@ -871,7 +873,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                         : "1px solid rgba(255,85,100,.55)",
                     }}
                   >
-                    {(m.membership_status || "UNKNOWN").toUpperCase()}
+                    {(m.membership_status_label || m.membership_status || "Account active")}
                   </Box>
                 </Stack>
 
@@ -1008,14 +1010,14 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                   variant="h5"
                   fontWeight={900}
                 >
-                  Recent Transactions
+                  Purchase History
                 </Typography>
 
                 <Typography
                   color="text.secondary"
                   sx={{ mt: 0.5, mb: 2.5 }}
                 >
-                  Payments connected to your TNG Boxing account.
+                  Your Clover and TNG Boxing purchases, item details and payment history.
                 </Typography>
 
                 {!memberTransactions.length ? (
@@ -1033,7 +1035,6 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                 ) : (
                   <Stack spacing={1.5}>
                     {memberTransactions
-                      .slice(0, 10)
                       .map((transaction) => {
                         const status = String(
                           transaction.payment_status ||
@@ -1067,10 +1068,11 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                                 <Typography
                                   fontWeight={900}
                                 >
-                                  {transaction.product ||
+                                  {transaction.purchase_description || transaction.product ||
                                     "TNG Payment"}
                                 </Typography>
 
+                                {transaction.clover_order_id && transaction.purchase_source!=='clover' && <Typography variant="caption">Saved product — Clover item details are not available yet.</Typography>}
                                 <Typography
                                   variant="body2"
                                   color="text.secondary"
@@ -1582,7 +1584,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                   letterSpacing: 1,
                 }}
               >
-                {(m.membership_status || "UNKNOWN").toUpperCase()}
+                {(m.membership_status_label || m.membership_status || "Account active")}
               </Typography>
 
               <Box
@@ -1624,7 +1626,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
                   fontWeight: 800,
                 }}
               >
-                Hold this screen in front of the check-in scanner
+                Enter your member number on the entrance check-in screen
               </Typography>
             </Box>
           </Box>

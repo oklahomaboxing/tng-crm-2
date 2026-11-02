@@ -1,3 +1,4 @@
+import AssignMembershipDialog from '../components/members/AssignMembershipDialog';
 import { memberDate, membershipCategory } from "../utils/membershipStatus";
 import { simpleMemberNumber } from "../utils/memberNumber";
 ﻿import React, { useEffect, useMemo, useState } from "react";
@@ -28,6 +29,7 @@ export default function MemberProfile({ member, onBack }) {
   const [payments, setPayments] = useState(null);
   const [error, setError] = useState("");
   const [showQr, setShowQr] = useState(false);
+  const [assignOpen,setAssignOpen]=useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [loginInviteLoading, setLoginInviteLoading] = useState(false);
@@ -370,6 +372,7 @@ export default function MemberProfile({ member, onBack }) {
 
   return (
     <Box>
+      {assignOpen && <AssignMembershipDialog member={memberData} onClose={()=>setAssignOpen(false)} onSaved={loadMember}/>}
       <Button variant="outlined" color="error" onClick={onBack} sx={{ mb: 2 }}>
         Back to Members
       </Button>
@@ -423,10 +426,12 @@ export default function MemberProfile({ member, onBack }) {
                 <Button variant="contained" color="error" onClick={() => setShowQr(true)}>
                   Show Check-In QR
                 </Button>
+                {localStorage.getItem("role") === "admin" && <Button variant="contained" onClick={()=>setAssignOpen(true)}>Membership & Rate</Button>}
                 <Button variant="outlined" color="error" onClick={startEdit}>
                   Edit Member
                 </Button>
 
+                {inviteStatus?.needs_password_setup && <Button onClick={activateMemberLogin} disabled={loginInviteLoading}>Send Password Setup</Button>}
                 {inviteStatus?.status === "active" ? (
                   <>
                     <Button
@@ -568,6 +573,7 @@ export default function MemberProfile({ member, onBack }) {
           <Grid item xs={12} md={6}>
             <InfoCard title="Membership">
               <Typography><b>Plan:</b> {memberData.membership_type || "-"}</Typography>
+              {memberData.assigned_rate!=null && <Typography><b>Agreed rate:</b> ${Number(memberData.assigned_rate).toFixed(2)}{memberData.assigned_months ? ` / ${memberData.assigned_months} month(s)` : ""}</Typography>}
               <Typography><b>Status:</b> {membershipLabel}</Typography>
               <Typography><b>Starts:</b> {memberData.membership_start ? memberDate(memberData.membership_start)?.toLocaleDateString() : "-"}</Typography>
               <Typography><b>Expires:</b> {memberData.membership_end ? memberDate(memberData.membership_end)?.toLocaleDateString() : "-"}</Typography>
@@ -603,8 +609,9 @@ export default function MemberProfile({ member, onBack }) {
                   ${Number(payment.amount || 0).toFixed(2)}
                 </Typography>
                 <Typography color="text.secondary">
-                  {payment.membership || "Membership"} â€¢ {payment.sale_date ? new Date(payment.sale_date).toLocaleString() : ""}
+                  {payment.purchase_description || payment.membership || "Purchase"} · {payment.sale_date ? new Date(payment.sale_date).toLocaleString() : ""}
                 </Typography>
+                {payment.clover_order_id && payment.purchase_source!=='clover' && <Typography variant="caption">Saved product — Clover item details are not available yet.</Typography>}
               </Card>
             ))}
           </Stack>
@@ -627,7 +634,7 @@ export default function MemberProfile({ member, onBack }) {
           </Box>
 
           <Typography sx={{ mt: 3, fontWeight: 700 }}>
-            Scan at the front desk tablet to check in.
+            Enter your member number on the entrance check-in screen.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>

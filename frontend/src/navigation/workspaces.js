@@ -8,7 +8,7 @@ export const ROLE_MENUS = {
     "TNG BOXING EVENTS",
     "Fight Calendar",
     "Products",
-    "Front Desk",
+    "Member Check-In",
     "Check-In Kiosk",
     "Event Check-In",
     "Sales",
@@ -23,7 +23,7 @@ export const ROLE_MENUS = {
     "User Management",
   ],
   staff: [
-    "Front Desk",
+    "Member Check-In",
     "Check-In Kiosk",
     "Event Check-In",
     "TNG BOXING EVENTS",
@@ -47,7 +47,7 @@ export const ROLE_MENUS = {
 
 export const WORKSPACE_GROUPS = [
   { label: "COMMAND", pages: ["Dashboard", "System Overview"] },
-  { label: "GYM OPERATIONS", pages: ["Members", "Front Desk", "Check-In Kiosk", "Sales", "Products", "TNGTrainer"] },
+  { label: "GYM OPERATIONS", pages: ["Members", "Member Check-In", "Check-In Kiosk", "Sales", "Products", "TNGTrainer"] },
   { label: "TNG PROMOTIONS", pages: ["TNG BOXING EVENTS", "Event Check-In", "Promoter", "Fight Calendar", "Fighter Portal Videos"] },
   { label: "GROWTH", pages: ["Leads", "QR Referrals", "Marketing Center", "My Sales"] },
   { label: "ADMINISTRATION", pages: ["Clover", "Duplicate Review", "Reports", "User Management", "Security Center", "Manager Portal"] },
@@ -55,7 +55,7 @@ export const WORKSPACE_GROUPS = [
 export const WORKSPACE_HINTS = {
   "Check-In Kiosk": "Entrance touchscreen pairing, attendance, device status and settings",
   Members: "Profiles, portal access, memberships and renewals",
-  "Front Desk": "Gym member QR scanner and member-number check-in",
+  "Member Check-In": "Entrance member-number keypad and new-member signup QR",
   "Event Check-In": "Fight-night ticket scanner and paper ticket activation",
   "TNG BOXING EVENTS": "Fight cards, contracts, ticket sales and printed tickets",
   Promoter: "Fighter scouting, opponents, managers and matchmaking",
@@ -71,7 +71,8 @@ export function workspaceHash(page, target = {}) {
   return `#/${workspaceSlug(page)}${params.size ? `?${params}` : ""}`;
 }
 export function readWorkspace(hash, role) {
-  const [slug, query = ""] = String(hash || "").replace(/^#\/?/, "").split("?");
+  let [slug, query = ""] = String(hash || "").replace(/^#\/?/, "").split("?");
+  if (slug === 'front-desk') slug='member-check-in';
   const page = (ROLE_MENUS[role] || []).find(p => workspaceSlug(p) === slug);
   if (!page) return null;
   const params = new URLSearchParams(query), target = {};

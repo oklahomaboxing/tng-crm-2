@@ -60,7 +60,11 @@ def reconcile_customers(db, customers, user_id=None):
     audit_profile(db, user_id, 'CLOVER_PROFILE_SYNC',
                   f"Received {len(customers)}; created {counts['members_created']}; linked {counts['members_linked']}; review {counts['needs_review']}")
     db.commit()
-    return {'message': 'Clover profiles synced for customers with an email and phone. Existing profiles, payments and portal passwords were unchanged.', **counts}
+    from .portal_accounts import prepare_all_accounts
+    portal_accounts=prepare_all_accounts(db)
+    from .purchase_history import sync_purchase_details
+    purchases=sync_purchase_details(db,limit=20)
+    return {'purchase_details':purchases,'message': 'Clover profiles synced for customers with an email and phone. Existing profiles, payments and portal passwords were unchanged.', **counts,'portal_accounts':portal_accounts}
 
 
 def sync_profiles():

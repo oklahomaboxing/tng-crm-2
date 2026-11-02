@@ -13,13 +13,16 @@ from app.member_portal.models import MemberAccount, MemberInvite
 
 def invite_paid_member(db, member_id):
     try:
+        from .portal_accounts import prepare_accounts, needs_password_setup
+        prepare_accounts(db,{member_id});db.commit()
         member = db.query(Member).filter_by(id=member_id).with_for_update().first()
         if not member or not (member.email or '').strip():
             db.rollback()
             return {'portal_invite_sent': False, 'portal_invite_status': 'member_has_no_email'}
         email = member.email.strip().lower()
         status = None
-        if db.query(MemberAccount).filter_by(member_id=member.id).first():
+        account=db.query(MemberAccount).filter_by(member_id=member.id).first()
+        if account and not needs_password_setup(db,account,db.get(User,account.user_id)):
             status = 'already_active'
         elif db.query(MemberInvite).filter(MemberInvite.member_id == member.id, MemberInvite.used_at.is_(None),
                                           MemberInvite.expires_at > datetime.utcnow()).first():
@@ -28,7 +31,7 @@ def invite_paid_member(db, member_id):
             status = 'email_not_configured'
         else:
             user = db.query(User).filter(func.lower(User.email) == email).first()
-            if user and (user.role != 'member' or db.query(MemberAccount).filter_by(user_id=user.id).first()):
+            if user and (user.role != 'member' or (not account and db.query(MemberAccount).filter_by(user_id=user.id).first())):
                 status = 'email_in_use'
         if status:
             db.rollback()

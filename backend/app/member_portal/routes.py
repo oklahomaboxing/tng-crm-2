@@ -1,4 +1,4 @@
-﻿import resend
+import resend
 import httpx
 import os
 import hashlib
@@ -15,6 +15,7 @@ from ..core.dependencies import current_user
 from ..auth import hash_password, decode_token, create_token
 from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto, MembershipRenewal
 from ..fighter_portal.models import FighterPortalVideo
+from ..services.portal_accounts import needs_password_setup
 from ..services.memberships import effective_membership_status, membership_months
 from .schemas import ActivateMemberIn, InviteMemberIn, LinkInBodyIn, ManualInBodyScanIn
 
@@ -147,6 +148,7 @@ def member_invite_status(
             "status": "active" if portal_enabled else "disabled",
             "activated": True,
             "portal_enabled": portal_enabled,
+            "needs_password_setup":needs_password_setup(db,account,member_user) if member_user else False,
             "invite_pending": False,
             "message": (
                 "Member login is active."
@@ -268,10 +270,12 @@ def create_member_invite(
 
     existing_account = db.query(MemberAccount).filter(MemberAccount.member_id == member.id).first()
     if existing_account:
-        raise HTTPException(status_code=409, detail="Member account already activated")
+        account_user=db.get(User,existing_account.user_id)
+        if not account_user or not needs_password_setup(db,existing_account,account_user):
+            raise HTTPException(status_code=409, detail="Member account already activated")
 
     email_user = db.query(User).filter(func.lower(User.email) == member.email.strip().lower()).first()
-    if email_user and (email_user.role != "member" or db.query(MemberAccount).filter_by(user_id=email_user.id).first()):
+    if email_user and (email_user.role != "member" or (not existing_account and db.query(MemberAccount).filter_by(user_id=email_user.id).first())):
         raise HTTPException(409, "This email is already used by another TNGOS account. Review the profile's email before sending access.")
 
     active_invite = (
@@ -451,7 +455,7 @@ def invite_all_members(
             .first()
         )
 
-        if existing_account:
+        if existing_account and not needs_password_setup(db,existing_account,db.get(User,existing_account.user_id)):
             results["already_active"] += 1
             continue
 
@@ -518,12 +522,12 @@ def activate_member(data: ActivateMemberIn, db: Session = Depends(get_db)):
     invite = (
         db.query(MemberInvite)
         .filter(MemberInvite.token_hash == _token_hash(data.token))
-        .first()
+        .with_for_update().first()
     )
     if not invite or invite.used_at is not None or invite.expires_at < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Activation link is invalid or expired")
 
-    member = db.query(Member).filter(Member.id == invite.member_id).first()
+    member = db.query(Member).filter(Member.id == invite.member_id).with_for_update().first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
@@ -531,14 +535,16 @@ def activate_member(data: ActivateMemberIn, db: Session = Depends(get_db)):
     if not email:
         raise HTTPException(status_code=400, detail="Member does not have an email address")
 
-    user = db.query(User).filter(func.lower(User.email) == email).first()
+    user = db.query(User).filter(func.lower(User.email) == email).with_for_update().first()
     if user and user.role != "member":
         raise HTTPException(
             status_code=409,
             detail="That email is already used by a non-member TNGOS account",
         )
 
-    if user and db.query(MemberAccount).filter(MemberAccount.user_id == user.id).first():
+    linked=db.query(MemberAccount).filter_by(user_id=user.id).first() if user else None
+    prepared=bool(linked and linked.member_id==member.id and needs_password_setup(db,linked,user))
+    if linked and not prepared:
         raise HTTPException(status_code=409, detail="That email is already linked to a member account")
 
     if not user:
@@ -555,11 +561,14 @@ def activate_member(data: ActivateMemberIn, db: Session = Depends(get_db)):
         user.role = "member"
 
     existing = db.query(MemberAccount).filter(MemberAccount.member_id == member.id).first()
-    if existing:
+    if existing and not prepared:
         raise HTTPException(status_code=409, detail="Member account already activated")
 
-    account = MemberAccount(member_id=member.id, user_id=user.id)
-    db.add(account)
+    if not existing: db.add(MemberAccount(member_id=member.id, user_id=user.id))
+    else:
+        from .models import PortalAccountSetup
+        setup=db.query(PortalAccountSetup).filter_by(member_id=member.id).one()
+        setup.claimed_at=datetime.utcnow()
     invite.used_at = datetime.utcnow()
     db.commit()
 
@@ -730,6 +739,13 @@ def member_renewal_options(
 ):
     member_account_for_user(db, user)
 
+    from .models import AssignedMembership
+    account=member_account_for_user(db,user)
+    assigned=db.query(AssignedMembership).filter_by(member_id=account.member_id).first()
+    if assigned:
+        product=db.get(MembershipProduct,assigned.product_id)
+        return {'options':[{'id':product.id,'name':product.name,'price':assigned.rate,'months':assigned.months}],'assigned':True}
+
     products = (
         db.query(MembershipProduct)
         .filter(
@@ -791,6 +807,13 @@ def create_member_renewal_checkout(
     data = data or {}
     selected_product_id = data.get("product_id")
 
+    from .models import AssignedMembership
+    assigned=db.query(AssignedMembership).filter_by(member_id=member.id).first()
+    if assigned:
+        if selected_product_id and str(selected_product_id)!=str(assigned.product_id):
+            raise HTTPException(400,'Use your assigned plan or contact the front desk to change it.')
+        selected_product_id=assigned.product_id
+
     product = None
 
     if selected_product_id:
@@ -815,7 +838,7 @@ def create_member_renewal_checkout(
         if (
             not product
             or round(float(product.price or 0), 2)
-            not in (150.0, 300.0, 999.0)
+            not in (150.0, 300.0, 999.0) and not (assigned and product.id==assigned.product_id)
         ):
             raise HTTPException(
                 status_code=400,
@@ -860,6 +883,10 @@ def create_member_renewal_checkout(
                     "to continue."
                 ),
             )
+
+    checkout_price=assigned.rate if assigned else float(product.price or 0)
+    if checkout_price<=0:
+        raise HTTPException(400,'This no-charge membership is managed at the front desk.')
 
     merchant_id = os.getenv(
         "CLOVER_MERCHANT_ID",
@@ -921,7 +948,7 @@ def create_member_renewal_checkout(
                 {
                     "name": product.name,
                     "price": int(
-                        float(product.price or 0) * 100
+                        round(checkout_price * 100)
                     ),
                     "unitQty": 1,
                 }
@@ -994,7 +1021,7 @@ def create_member_renewal_checkout(
 
     db.add(MembershipRenewal(
         member_id=member.id, product_id=product.id,
-        checkout_id=str(checkout_id), amount=float(product.price or 0),
+        checkout_id=str(checkout_id), amount=checkout_price,
     ))
     db.commit()
 
@@ -1005,7 +1032,7 @@ def create_member_renewal_checkout(
         "membership": {
             "id": product.id,
             "name": product.name,
-            "price": float(product.price or 0),
+            "price": checkout_price,
         },
     }
 
@@ -1029,10 +1056,12 @@ def member_transactions(
         .all()
     )
 
+    from ..services.purchase_history import purchase_details
     return {
         "transactions": [
             {
                 "id": sale.id,
+                **purchase_details(db,sale),
                 "amount": float(sale.amount or 0),
                 "sale_date": (
                     sale.sale_date.isoformat()
@@ -1120,6 +1149,12 @@ def member_me(
         .first()
     )
 
+    from ..services.member_reporting import membership_report,membership_evidence
+    from .models import AssignedMembership
+    category=membership_report(member,membership_evidence(db))['membership_category']
+    status_label={'active':'Active','expiring':'Active — expiring soon','expired':'Expired','inactive':'Inactive','contact':'No membership assigned','review':'Membership review'}[category]
+    assigned=db.query(AssignedMembership).filter_by(member_id=member.id).first()
+
     return {
         "user": {
             "id": user.id,
@@ -1143,7 +1178,11 @@ def member_me(
             "next_billing_date": member.next_billing_date,
             "autopay_enabled": member.autopay_enabled,
             "billing_status": member.billing_status,
-            "membership_status": effective_membership_status(member),
+            "membership_status": 'not_enrolled' if category=='contact' else 'needs_review' if category=='review' else effective_membership_status(member),
+            "membership_status_label":status_label,
+            "account_status":"active",
+            "assigned_rate":assigned.rate if assigned else member.monthly_rate,
+            "assigned_months":assigned.months if assigned else None,
             "membership_type": member.membership_type,
             "membership_level": member.membership_level,
             "waiver_signed": member.waiver_signed,

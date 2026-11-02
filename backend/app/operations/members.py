@@ -15,6 +15,9 @@ from ..services.memberships import (
     effective_membership_status,
 )
 
+from app.services.portal_accounts import prepare_accounts
+from app.services.purchase_history import CloverPurchaseDetail
+
 router = APIRouter(dependencies=[Depends(staff_user)])
 
 
@@ -32,6 +35,10 @@ class CreateMemberProfileIn(BaseModel):
     state: str = Field(default="", max_length=100)
     zip_code: str = Field(default="", max_length=20)
     notes: str = Field(default="", max_length=4000)
+    activate_membership: bool = True
+    membership_name: str = Field(default='Monthly Membership',min_length=1,max_length=120)
+    membership_rate: float = Field(default=150,ge=0,le=100000,allow_inf_nan=False)
+    membership_months: int = Field(default=1,ge=1,le=120)
 
 
 @router.post("/api/members", status_code=201)
@@ -48,7 +55,13 @@ def create_member_profile(data: CreateMemberProfileIn, db: Session = Depends(get
     if phone and not 10 <= len(re.sub(r"\D", "", phone)) <= 15:
         raise HTTPException(422, "Enter a phone number with area code.")
     lock_profiles(db)
-    existing = matching_profile(db, email=email, phone=phone)
+    from sqlalchemy import func
+    from app.services.member_profiles import phone_key
+    existing=db.query(Member).filter(func.lower(func.trim(Member.email))==email).first() if email else None
+    if not existing and phone_key(phone):
+        requested=' '.join((first+' '+last).casefold().split())
+        existing=next((m for m in db.query(Member).filter(Member.phone.isnot(None)).all()
+            if phone_key(m.phone)==phone_key(phone) and ' '.join(((m.first_name or '')+' '+(m.last_name or '')).casefold().split())==requested),None)
     if existing:
         raise HTTPException(409, f"Profile #{existing.id} already uses this email or phone. Search for the existing profile instead.")
     member = Member(first_name=first, last_name=last, email=email, phone=phone,
@@ -57,11 +70,15 @@ def create_member_profile(data: CreateMemberProfileIn, db: Session = Depends(get
                     member_type="MEMBER", status="pending", membership_status="pending", waiver_signed=False)
     db.add(member)
     ensure_profile_identity(db, member)
-    audit_profile(db, user.id, "MEMBER_PROFILE_CREATED", f"Created profile {member.id} without recording a payment or granting membership access")
+    if data.activate_membership:
+        from app.services.assigned_memberships import assign_membership
+        assign_membership(db,member,data.membership_name,data.membership_rate,data.membership_months,activate=True,user_id=user.id)
+    access=prepare_accounts(db,{member.id})
+    audit_profile(db, user.id, "MEMBER_PROFILE_CREATED", f"Created profile {member.id}; assigned membership={data.activate_membership}, rate={data.membership_rate}; no payment recorded")
     db.commit()
     return {"id": member.id, "first_name": member.first_name, "last_name": member.last_name,
             "email": member.email, "phone": member.phone, "member_number": member.member_number,
-            "membership_status": member.membership_status, "member_type": member.member_type}
+            "membership_status": member.membership_status, "member_type": member.member_type, "account_access":access}
 
 
 @router.get("/api/members")
@@ -84,6 +101,8 @@ def list_members(
     from app.services.contact_consolidation import ConsolidatedContact, name_key
     import json
     paid_ids=membership_evidence(db); now=datetime.utcnow()
+    from app.member_portal.models import AssignedMembership
+    assignments={a.member_id:a for a in db.query(AssignedMembership).all()}
     aliases={}
     for alias in db.query(ConsolidatedContact).all():
         saved=json.loads(alias.source_snapshot)
@@ -96,6 +115,8 @@ def list_members(
             "id": member.id,
             **membership_report(member,paid_ids,now),
             "contact_aliases": aliases.get(member.id,[]),
+            "assigned_rate":assignments[member.id].rate if member.id in assignments else member.monthly_rate,
+            "assigned_months":assignments[member.id].months if member.id in assignments else None,
             "same_name_contact_review": any(other.id != member.id and name_key(member) and name_key(other)==name_key(member)
                 and (((member.email or '').strip() and (member.email or '').strip().casefold()==(other.email or '').strip().casefold())
                 or (phone_key(member.phone) and phone_key(member.phone)==phone_key(other.phone))) for other in members),
@@ -182,6 +203,10 @@ def get_member(
 
     from app.services.member_reporting import membership_evidence, membership_report
     reporting=membership_report(member,membership_evidence(db))
+    from app.member_portal.models import AssignedMembership
+    assignment=db.query(AssignedMembership).filter_by(member_id=member.id).first()
+    reporting.update(assigned_rate=assignment.rate if assignment else member.monthly_rate,
+        assigned_months=assignment.months if assignment else None)
     return {
         "id": member.id,
         **reporting,
@@ -267,6 +292,15 @@ def update_member(
             detail="Member not found",
         )
 
+    changed_rate=False
+    if 'monthly_rate' in data:
+        import math
+        try: rate=float(data['monthly_rate'])
+        except (ValueError,TypeError):raise HTTPException(422,'Enter a valid monthly rate.')
+        if not math.isfinite(rate) or not 0<=rate<=100000:raise HTTPException(422,'Enter a valid monthly rate.')
+        changed_rate=round(rate,2)!=round(float(member.monthly_rate or 0),2)
+        if changed_rate:require_admin(user)
+
     allowed_fields = [
         "first_name",
         "last_name",
@@ -317,6 +351,10 @@ def update_member(
     for field in allowed_fields:
         if field in data:
             setattr(member, field, data[field])
+
+    if changed_rate and member.billing_cycle=='30_day':
+        from app.services.assigned_memberships import assign_membership
+        assign_membership(db,member,member.membership_type or 'Monthly Membership',rate,1,activate=False,user_id=user.id)
 
     db.commit()
     db.refresh(member)
@@ -618,3 +656,33 @@ def recalculate_all_memberships(
         "updated": updated,
         "skipped": skipped,
     }
+
+
+@router.post('/api/members/prepare-accounts')
+def prepare_customer_accounts(db: Session = Depends(get_db),user: User = Depends(current_user)):
+    require_admin(user)
+    from app.services.portal_accounts import prepare_all_accounts
+    from app.services.assigned_memberships import preserve_recorded_rates
+    rates=preserve_recorded_rates(db,user.id)
+    result=prepare_all_accounts(db)
+    result["agreed_rates_preserved"]=rates
+    return {'message':'Eligible customer accounts are ready. Members set their own password securely; no bulk messages sent.',**result}
+
+
+class AssignedMembershipIn(BaseModel):
+    name: str = Field(min_length=1,max_length=120)
+    rate: float = Field(ge=0,le=100000,allow_inf_nan=False)
+    months: int = Field(default=1,ge=1,le=120)
+    activate: bool = False
+
+
+@router.put('/api/members/{member_id}/assigned-membership')
+def set_assigned_membership(member_id: int,data: AssignedMembershipIn,db: Session=Depends(get_db),user: User=Depends(current_user)):
+    require_admin(user)
+    member=db.query(Member).filter_by(id=member_id).with_for_update().first()
+    if not member: raise HTTPException(404,'Member not found')
+    if not data.name.strip(): raise HTTPException(422,'Enter a membership name')
+    from app.services.assigned_memberships import assign_membership
+    assignment=assign_membership(db,member,data.name,data.rate,data.months,activate=data.activate,user_id=user.id)
+    db.commit()
+    return {'saved':True,'rate':assignment.rate,'months':assignment.months,'membership_status':effective_membership_status(member)}

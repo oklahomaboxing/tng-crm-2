@@ -95,3 +95,31 @@ class MemberProfilePhoto(Base):
         DateTime,
         default=datetime.utcnow,
     )
+
+
+class PortalAccountSetup(Base):
+    """One-time password setup for accounts prepared from verified CRM contacts."""
+    __tablename__ = 'member_portal_account_setups'
+    id = Column(Integer, primary_key=True)
+    member_id = Column(Integer, ForeignKey('members.id', ondelete='CASCADE'), unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), unique=True, nullable=False)
+    password_fingerprint = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    claimed_at = Column(DateTime, nullable=True)
+
+
+class AssignedMembership(Base):
+    __tablename__ = 'member_assigned_memberships'
+    id = Column(Integer, primary_key=True)
+    member_id = Column(Integer, ForeignKey('members.id', ondelete='CASCADE'), unique=True, nullable=False)
+    product_id = Column(Integer, ForeignKey('membership_products.id'), nullable=False)
+    rate = Column(Float, nullable=False)
+    months = Column(Integer, nullable=False)
+    unrecorded_activation = Column(Boolean,default=False,nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ConfiguredMembershipPlan(Base):
+    __tablename__='member_configured_membership_plans'
+    product_id=Column(Integer,ForeignKey('membership_products.id'),primary_key=True)
+    created_at=Column(DateTime,default=datetime.utcnow)

@@ -35,7 +35,6 @@ const JoinPage = lazy(() => import("./pages/JoinPage.jsx"));
 const Leads = lazy(() => import("./pages/Leads.jsx"));
 const CheckinKiosk = lazy(() => import("./pages/CheckinKiosk.jsx"));
 const CheckinKioskAdmin = lazy(() => import("./pages/CheckinKioskAdmin.jsx"));
-const FrontDesk = lazy(() => import("./pages/FrontDesk.jsx"));
 const EventCheckIn = lazy(() => import('./pages/EventCheckIn.jsx'));
 const Products = lazy(() => import("./pages/Products.jsx"));
 const DuplicateReview = lazy(() => import("./pages/DuplicateReview.jsx"));
@@ -95,7 +94,7 @@ const theme = createTheme({
 
 function landingPageForRole(role) {
   if (role === "rep") return "My Sales";
-  if (role === "staff") return "Front Desk";
+  if (role === "staff") return "Member Check-In";
   if (role === "matchmaker") return "Promoter";
   if (role === "manager") return "Manager Portal";
   return "Dashboard";
@@ -150,7 +149,7 @@ function PaymentMessage({ status }) {
 }
 
 function RootEntry() {
-  if (/^\/kiosk\/checkin\/?$/.test(window.location.pathname)) return <CheckinKiosk />;
+  if (/^\/(?:kiosk\/checkin|check-in)\/?$/.test(window.location.pathname)) return <CheckinKiosk />;
   const isFighterPreview =
     window.location.pathname === "/fighter/preview";
 
@@ -217,7 +216,7 @@ function App() {
   const isResetPasswordPage =
     window.location.pathname === "/reset-password" &&
     Boolean(passwordResetToken);
-  const [authView, setAuthView] = useState("login");
+  const [authView, setAuthView] = useState(() => params.get("account") === "setup" ? "forgot" : "login");
   const [resetEmail, setResetEmail] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -651,7 +650,7 @@ if (window.location.pathname === "/register") return <JoinPage />;
             setAuthError("");
           }}
         >
-          Forgot your password?
+          First time here or forgot your password?
         </Button>
       </Stack>
     </form>
@@ -661,12 +660,11 @@ if (window.location.pathname === "/register") return <JoinPage />;
 {authView === "forgot" && (
   <>
     <Typography variant="h4" fontWeight={900}>
-      Reset password
+      Set or reset your password
     </Typography>
 
     <Typography color="text.secondary" sx={{ mb: 3 }}>
-      Enter your account email and we will send you a secure
-      password reset link.
+      New and existing customers: enter your registered email to securely choose your password.
     </Typography>
 
     <form
@@ -808,8 +806,12 @@ if (window.location.pathname === "/register") return <JoinPage />;
     return <FighterPortal onLogout={logout} />;
   }
 
+if (page === "Member Check-In" && ["admin","staff"].includes(role)) {
+  return <CheckinKiosk staffMode onExit={() => navigate(role === 'admin' ? 'Dashboard' : 'Members')} />;
+}
+
 if (/^\/check-in\/?$/.test(window.location.pathname) && ["admin", "staff"].includes(role)) {
-  return <FrontDesk standalone />;
+  return <CheckinKiosk staffMode onExit={() => {window.location.href="/";}} />;
 }
 
 return (
@@ -836,7 +838,7 @@ return (
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
       {page === "Members" && ["admin", "staff"].includes(role) && <Members role={role} initialMemberId={navigationTarget.memberId} onOpenMember={id => navigate("Members", { memberId: id })} onCloseMember={() => navigate("Members")} />}
       {page === "Check-In Kiosk" && ["admin", "staff"].includes(role) && <CheckinKioskAdmin />}
-      {page === "Front Desk" && role !== "rep" && <FrontDesk />}
+
       {page === 'Event Check-In' && ['admin','staff'].includes(role) && <EventCheckIn />}
 
       {page === "My Sales" && role === "rep" && (

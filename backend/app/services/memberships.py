@@ -30,7 +30,10 @@ def is_membership_product(product):
     }
 
     if any(word in name for word in blocked_words):
-        return False
+        from sqlalchemy.orm import object_session
+        from app.member_portal.models import ConfiguredMembershipPlan
+        session=object_session(product) if hasattr(product,'_sa_instance_state') else None
+        if not session or not session.get(ConfiguredMembershipPlan,product.id): return False
 
     # Membership must be intentionally marked in TNG OS.
     return bool(
@@ -66,6 +69,10 @@ def is_event_product(product):
 
 def membership_months(product):
     months = int(getattr(product, "default_membership_months", None) or 1)
+    from sqlalchemy.orm import object_session
+    from app.member_portal.models import ConfiguredMembershipPlan
+    session=object_session(product) if hasattr(product,'_sa_instance_state') else None
+    if session and product.id and session.get(ConfiguredMembershipPlan,product.id):return max(1,months)
     # Older products were all created with a one-month schema default.
     if months == 1:
         name = (product.name or "").lower()
@@ -86,14 +93,35 @@ def effective_membership_status(member, now=None):
     return status
 
 
-def apply_membership(member, product, purchase_date=None):
+def apply_membership(member, product, purchase_date=None, *, rebuilding=False):
     if not is_membership_product(product):
         return member
 
+    from sqlalchemy.orm import object_session
+    from app.member_portal.models import AssignedMembership
+    session=object_session(member) if hasattr(member,'_sa_instance_state') else None
+    if session and member.id:
+        from sqlalchemy import select
+        session.flush([member])
+        session.execute(select(type(member).id).where(type(member).id==member.id).with_for_update())
+        session.expire(member,['membership_start','membership_end','membership_type','membership_status','monthly_rate','billing_cycle','last_payment_date'])
+    assigned=session.query(AssignedMembership).filter_by(member_id=member.id).first() if session and member.id else None
+    if not rebuilding and session and member.id and getattr(product,'id',None) and not assigned and round(float(product.price or 0),2) not in (150,300,999):
+        assigned=AssignedMembership(member_id=member.id,product_id=product.id,rate=round(float(product.price or 0),2),months=membership_months(product))
+        session.add(assigned);session.flush()
     purchase_date = purchase_date or datetime.utcnow()
-    product_price = round(float(product.price or 0), 2)
-    months = membership_months(product)
-    start = max(member.membership_end or purchase_date, purchase_date)
+    cover_assigned_term=bool(not rebuilding and assigned and assigned.unrecorded_activation
+        and member.membership_start and member.membership_end
+        and member.membership_start-timedelta(days=7)<=purchase_date<=member.membership_end)
+    if cover_assigned_term and assigned.months==membership_months(product):
+        product=session.get(type(product),assigned.product_id)
+    if not rebuilding and assigned and assigned.product_id!=product.id:
+        assigned.product_id=product.id;assigned.rate=round(float(product.price or 0),2);assigned.months=membership_months(product)
+    purchase_date = purchase_date or datetime.utcnow()
+    product_price = assigned.rate if not rebuilding and assigned and assigned.product_id==product.id else round(float(product.price or 0), 2)
+    months = assigned.months if not rebuilding and assigned and assigned.product_id==product.id else membership_months(product)
+    start = member.membership_start if cover_assigned_term else max(member.membership_end or purchase_date, purchase_date)
+    if assigned and not rebuilding:assigned.unrecorded_activation=False
 
     if months > 1:
         membership_end = start + relativedelta(months=months)
@@ -148,11 +176,19 @@ def recalculate_member_from_payments(member, db: Session):
     if not membership_sales:
         return member
 
+    from app.member_portal.models import AssignedMembership
+    assignment=db.query(AssignedMembership).filter_by(member_id=member.id).first()
+    grant=(member.membership_start,member.membership_end,member.membership_type,member.monthly_rate,member.billing_cycle) if assignment and assignment.unrecorded_activation and member.membership_end and member.membership_end>datetime.utcnow() else None
     # Only explicit repair actions call this rebuild. Reads never rewrite history.
     member.membership_start = None
     member.membership_end = None
     for sale in membership_sales:
-        apply_membership(member, sale.product, purchase_date=sale.sale_date)
+        apply_membership(member, sale.product, purchase_date=sale.sale_date,rebuilding=True)
+
+    if grant and (not member.membership_end or member.membership_end<grant[1]):
+        member.membership_start,member.membership_end,member.membership_type,member.monthly_rate,member.billing_cycle=grant
+    elif grant:
+        assignment.unrecorded_activation=False
 
     if member.membership_end and member.membership_end < datetime.utcnow():
         member.membership_status = "inactive"
