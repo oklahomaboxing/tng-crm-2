@@ -36,6 +36,8 @@ export default function CheckinKiosk({ staffMode = false, onExit }) {
   }
   function reset() { setResult(null); setNumber(''); setSeconds(0); }
   function clearCrmSession() {
+    const adminToken=localStorage.getItem('token');
+    if(adminToken)fetch(`${API}/api/auth/logout`,{method:'POST',headers:{Authorization:`Bearer ${adminToken}`},keepalive:true}).catch(()=>{});
     for (const key of ['token', 'role', 'name']) localStorage.removeItem(key);
     for (const key of ['fighterPreviewToken', 'memberPreviewToken']) sessionStorage.removeItem(key);
   }
