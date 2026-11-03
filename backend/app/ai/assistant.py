@@ -97,8 +97,13 @@ def resolve_topic(question,previous=None):
             reply=client.with_options(timeout=8,max_retries=0).chat.completions.create(model=os.getenv('OPENAI_ASSISTANT_MODEL','gpt-4.1-mini'),temperature=0,max_tokens=100,response_format={'type':'json_object'},messages=[{'role':'system','content':'Classify a gym owner question. Return only {"topic":"overview|members|tickets|card|updates|help"}. Questions about unrelated subjects, personal customer details or requests to perform actions must be help. You have no tools and must never supply business numbers.'},{'role':'user','content':question}])
             topic=json.loads(reply.choices[0].message.content).get('topic')
             if topic in ('overview','members','tickets','card','updates','help'):return topic,'ai_routed_live_reports'
-        except Exception:pass
-    return 'help','live_reports'
+        except Exception as exc:
+            body=getattr(exc,'body',{})
+            code=(body.get('code') or (body.get('error') or {}).get('code')) if isinstance(body,dict) else None
+            if code in ('credit_balance_exhausted','insufficient_quota'):return 'help','ai_credits_required'
+            return 'help','ai_unavailable'
+        return 'help','ai_unavailable'
+    return 'help','ai_not_configured'
 
 def answer(topic,data):
     m=data['members'];event=data['event'];tickets=data['tickets'];card=data['card']
@@ -136,4 +141,7 @@ def ask(data:Question,response:Response,db=Depends(get_db),user=Depends(current_
     if named:event_id=max(named,key=lambda e:len(e.name)).id
     topic,engine=resolve_topic(data.question,data.previous_topic)
     facts=snapshot(db,user,event_id)
-    return {'answer':answer(topic,facts),'topic':topic,'engine':engine,'facts':facts,'sources':['TNGOS membership report','Recorded ticket orders','Saved fight card','Operations work queue']}
+    notice={'ai_credits_required':'Live report questions still work. Broader AI language support needs credits in the connected OpenAI API account; ChatGPT Plus does not cover API usage.',
+        'ai_unavailable':'Live report questions still work. The AI language service is unavailable; try a suggested question.',
+        'ai_not_configured':'Live report questions still work. Connect an OpenAI API account to enable broader language interpretation.'}.get(engine)
+    return {'answer':answer(topic,facts),'topic':topic,'engine':engine,'ai_notice':notice,'facts':facts,'sources':['TNGOS membership report','Recorded ticket orders','Saved fight card','Operations work queue']}

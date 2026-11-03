@@ -14,6 +14,12 @@ Remembered sessions are signed, credential-bound JWTs with a 100-year technical 
 
 No existing production login is silently replaced. To retain an existing session, enable **Stay signed in** in Assistant & device settings. Next logins can use the checked login option. A device may still lose its session if browser storage is cleared.
 
+Session conversion preserves the credential binding validated on the incoming request, so a concurrent password change or session revocation cannot be bypassed by converting to remembered sign-in. MFA remains mandatory when enabled, including remembered-device password logins.
+
+## API funding
+
+Broader language routing requires a funded OpenAI API account. ChatGPT Plus does not include API credits. A provider `credit_balance_exhausted` or `insufficient_quota` response shows a clear in-app notice while standard live report questions continue to work. Add funding in the connected API organization's billing settings and retry an unfamiliar question; no application redeployment is required. Never paste API keys into chat.
+
 ## Validation
 
 Backend regressions cover admin-only access, correct membership reporting, paid versus pending/refunded/paper ticket separation, model output isolation, provider failures, rate limiting, remembered-session logout and credential revocation. Browser tests use synthetic microphone/speech services and fixture responses to verify wake handling, navigation, stop behavior and persistent-token timing without speaking private data or mutating real customer records. Actual microphone recognition depends on the chosen physical device and browser.

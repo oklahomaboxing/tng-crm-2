@@ -86,3 +86,33 @@ class TngAssistantTests(unittest.TestCase):
   self.assertFalse(decode_token(r.json()['token']).get('persistent',False))
   self.assertEqual(self.client.get('/api/me',headers={'Authorization':'Bearer '+first}).status_code,401)
   self.assertEqual(self.client.get('/api/me',headers={'Authorization':'Bearer '+r.json()['token']}).status_code,200)
+
+ def test_session_conversion_cannot_rebind_to_a_password_changed_during_request(self):
+  from app.auth import create_token
+  headers=self.headers()
+  def change_before_signing(data,minutes=30,**kwargs):
+   self.users['admin'].password_hash='concurrently-reset';self.db.commit()
+   return create_token(data,minutes,**kwargs)
+  with patch('app.auth_sessions.create_token',side_effect=change_before_signing):
+   r=self.client.post('/api/auth/remember-device',headers=headers)
+  self.assertEqual(r.status_code,200,r.text)
+  self.assertEqual(self.client.get('/api/me',headers={'Authorization':'Bearer '+r.json()['token']}).status_code,401)
+
+ def test_api_credit_failure_is_visible_without_leaking_provider_details(self):
+  class CreditError(Exception):body={'code':'credit_balance_exhausted'}
+  mock=Mock();mock.with_options.side_effect=CreditError('secret provider detail')
+  with patch('app.ai.assistant.client',mock):
+   r=self.client.post('/api/assistant/ask',headers=self.headers(),json={'question':'Tell me the box office pulse'})
+  self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['engine'],'ai_credits_required')
+  self.assertIn('ChatGPT Plus',r.json()['ai_notice']);self.assertNotIn('secret provider detail',r.text)
+
+ def test_password_login_can_remember_device_and_still_requires_mfa(self):
+  from app.auth import hash_password
+  from app.account_security import AccountSecurity
+  self.users['admin'].password_hash=hash_password('TestFixturePass12!');self.db.commit()
+  body={'email':self.users['admin'].email,'password':'TestFixturePass12!','remember_device':True}
+  r=self.client.post('/api/login',json=body);self.assertEqual(r.status_code,200,r.text)
+  self.assertTrue(decode_token(r.json()['token'])['persistent'])
+  self.db.add(AccountSecurity(user_id=self.users['admin'].id,generation='initial',mfa_enabled=True));self.db.commit()
+  mfa=self.client.post('/api/login',json=body);self.assertEqual(mfa.status_code,200,mfa.text)
+  self.assertTrue(mfa.json()['mfa_required']);self.assertNotIn('token',mfa.json())

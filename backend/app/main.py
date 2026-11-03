@@ -85,7 +85,7 @@ from .schemas import (
 
 from .auth import verify_password, hash_password, create_token, decode_token
 from .auth_sessions import router as device_sessions_router,persistent_token
-from .account_security import AccountSecurity, verify_second_factor, build_security_router
+from .account_security import AccountSecurity, verify_second_factor, build_security_router,session_marker
 from .core.dependencies import current_user, staff_user, sales_user
 from .core.permissions import require_admin, require_admin_or_staff
 from .services.clover_webhooks import verify_clover_webhook
@@ -603,6 +603,7 @@ def login(
             detail="Account is inactive",
         )
 
+    login_credential=session_marker(user,security_state)
     user.failed_login_attempts = 0
     user.locked_until = None
     user.last_login = now
@@ -621,11 +622,11 @@ def login(
     db.commit()
 
     return {
-        "token": persistent_token(db,user) if data.remember_device else create_token(
+        "token": persistent_token(db,user,credential=login_credential) if data.remember_device else create_token(
             {
                 "sub": str(user.id),
                 "role": user.role,
-            }
+            },credential=login_credential
         ),
         "user": {
             "id": user.id,
