@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import TrustedDevices from '../components/TrustedDevices';
 import AccountSecurityPanel from '../components/AccountSecurityPanel';
 import {
   Alert,
@@ -175,6 +176,7 @@ export default function SecurityCenter() {
       </Box>
 
       <AccountSecurityPanel enabled={data.mfa_enabled} />
+      <TrustedDevices/>
 
       <Card sx={{ mt: 3 }}>
         <CardContent>

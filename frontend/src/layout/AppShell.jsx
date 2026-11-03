@@ -3,6 +3,7 @@ import { Box, Drawer } from "@mui/material";
 import Sidebar from "../components/Sidebar.jsx";
 import TopBar from "./TopBar.jsx";
 import WorkspaceBoundary, { WorkspaceLoading } from "../components/workspace/WorkspaceBoundary";
+import './command.css';
 
 const DRAWER_WIDTH = 270;
 
@@ -29,7 +30,7 @@ export default function AppShell({
   );
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "#f5f6f8" }}>
+    <Box className="tng-shell" sx={{ minHeight: "100vh" }}>
       <Drawer
         variant="permanent"
         open
@@ -39,7 +40,7 @@ export default function AppShell({
           flexShrink: 0,
           "& .MuiDrawer-paper": {
             width: DRAWER_WIDTH,
-            border: 0,
+            border: 0,borderRight:'1px solid #ffffff08',
             boxSizing: "border-box",
           },
         }}
@@ -83,11 +84,13 @@ export default function AppShell({
 
         <Box
           component="main"
+          className="tng-main"
           sx={{
             width: "100%",
             maxWidth: 1600,
             mx: "auto",
-            p: { xs: 1.5, sm: 2, md: 3 },
+            p: { xs: 1.5, sm: 2.5, md: 3.5 },
+            pb: { xs: 12, md: 9 },
           }}
         >
           <WorkspaceBoundary workspace={page}><Suspense fallback={<WorkspaceLoading/>}>{children}</Suspense></WorkspaceBoundary>

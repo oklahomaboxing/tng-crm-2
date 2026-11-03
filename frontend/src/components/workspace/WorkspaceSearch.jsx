@@ -13,7 +13,7 @@ export default function WorkspaceSearch({ role, onNavigate }) {
   }, []);
   function choose(page) { onNavigate(page); setOpen(false); setQuery(""); }
   return <>
-    <Button color="inherit" startIcon={<SearchRoundedIcon/>} onClick={() => setOpen(true)} aria-label="Search workspaces" sx={{ color: 'text.secondary', minWidth: 0 }}><Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Search · Ctrl K</Box></Button>
+    <Button color="inherit" startIcon={<SearchRoundedIcon/>} onClick={() => setOpen(true)} aria-label="Search workspaces" sx={{ color: 'inherit',opacity:.8,border:'1px solid #ffffff20', minWidth: 0 }}><Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Search <Box component="kbd" sx={{ml:2,fontSize:11,opacity:.65}}>⌘ / Ctrl K</Box></Box></Button>
     <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
       <DialogTitle fontWeight={900}>Go to workspace</DialogTitle>
       <DialogContent>

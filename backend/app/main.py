@@ -622,7 +622,7 @@ def login(
     db.commit()
 
     return {
-        "token": persistent_token(db,user,credential=login_credential) if data.remember_device else create_token(
+        "token": persistent_token(db,user,credential=login_credential,agent=request.headers.get('user-agent','')) if data.remember_device else create_token(
             {
                 "sub": str(user.id),
                 "role": user.role,

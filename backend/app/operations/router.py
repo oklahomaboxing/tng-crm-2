@@ -24,3 +24,5 @@ from app.kiosk.routes import router as kiosk_router
 router.include_router(kiosk_router)
 from app.ai.assistant import router as assistant_router
 router.include_router(assistant_router)
+from .reconciliation import router as reconciliation_router
+router.include_router(reconciliation_router)

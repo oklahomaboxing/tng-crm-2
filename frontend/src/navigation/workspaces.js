@@ -61,7 +61,8 @@ export const WORKSPACE_HINTS = {
   "Event Check-In": "Fight-night ticket scanner and paper ticket activation",
   "TNG BOXING EVENTS": "Fight cards, contracts, ticket sales and printed tickets",
   Promoter: "Fighter scouting, opponents, managers and matchmaking",
-  "System Overview": "Work queue, delivery issues and connection configuration",
+  "System Overview": "Payment and access review, reconciliation, work queue and connection configuration",
+  "Security Center": "Trusted devices, remembered sign-ins, activity logs and account protection",
   "Marketing Center": "Member email, texts, campaign drafts and AI content",
   Clover: "Payment integration, products and explicit sales sync",
 };

@@ -30,12 +30,15 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import HealthAndSafetyRoundedIcon from "@mui/icons-material/HealthAndSafetyRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import VideoLibraryRoundedIcon from "@mui/icons-material/VideoLibraryRounded";
+import GraphicEqRoundedIcon from '@mui/icons-material/GraphicEqRounded';
+import DialpadRoundedIcon from '@mui/icons-material/DialpadRounded';
+import TabletMacRoundedIcon from '@mui/icons-material/TabletMacRounded';
 import { ROLE_MENUS, WORKSPACE_GROUPS } from "../navigation/workspaces";
 export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
-  "TNG Assistant": <CampaignRoundedIcon />,
+  "TNG Assistant": <GraphicEqRoundedIcon />,
   "System Overview": <HealthAndSafetyRoundedIcon />,
   "Security Center": <ShieldRoundedIcon />,
   Members: <PeopleAltRoundedIcon />,
@@ -45,7 +48,8 @@ const ICONS = {
   "Fight Calendar": <EventRoundedIcon />,
   "TNG BOXING EVENTS": <EventRoundedIcon />,
   Products: <Inventory2RoundedIcon />,
-  "Member Check-In": <QrCodeScannerRoundedIcon />,
+  "Member Check-In": <DialpadRoundedIcon />,
+  "Check-In Kiosk": <TabletMacRoundedIcon />,
   "Event Check-In": <QrCode2RoundedIcon />,
   Sales: <PointOfSaleRoundedIcon />,
   "My Sales": <PointOfSaleRoundedIcon />,
@@ -76,7 +80,7 @@ export default function Sidebar({
   }
 
   return (
-    <Box
+    <Box className="tng-sidebar"
       sx={{
         height: "100%",
         display: "flex",
@@ -85,12 +89,14 @@ export default function Sidebar({
         color: "white",
       }}
     >
-      <Box sx={{ px: 2.5, pt: 2.5, pb: 2 }}>
+      <Box sx={{ px: 2.5, pt: 3, pb: 2.5 }}>
+        <Box sx={{display:'flex',alignItems:'center',gap:1.5,mb:1}}><Box className="tng-brand-mark">TNG</Box><Box>
         <Typography variant="h5" letterSpacing={-0.6} sx={{fontWeight: 900}}>
           TNG <Box component="span" sx={{ color: "#e31b23" }}>OS</Box>
         </Typography>
+        </Box></Box>
         <Typography variant="caption" sx={{ color: "rgba(255,255,255,.55)" }}>
-          Earned Not Given
+          THE NEXT GENERATION · BOXING
         </Typography>
       </Box>
 
@@ -117,10 +123,10 @@ export default function Sidebar({
                 minHeight: 46,
                 borderRadius: 2.5,
                 color: active ? "white" : "rgba(255,255,255,.72)",
-                bgcolor: active ? "#d71920" : "transparent",
-                "&.Mui-selected, &.Mui-selected:hover": { bgcolor: "#d71920", color: "white" },
+                bgcolor: active ? "#d7193224" : "transparent",border:'1px solid transparent',
+                "&.Mui-selected, &.Mui-selected:hover": { bgcolor: "#d7193224", color: "white",borderColor:'#f6405a40',boxShadow:'inset 3px 0 0 #f6405a' },
                 "&:hover": {
-                  bgcolor: active ? "#d71920" : "rgba(255,255,255,.08)",
+                  bgcolor: active ? "#d7193224" : "rgba(255,255,255,.05)",
                   color: "white",
                 },
               }}
@@ -160,7 +166,7 @@ export default function Sidebar({
           }}
         >
           <Typography variant="caption" sx={{ color: "rgba(255,255,255,.55)" }}>
-            ACCESS LEVEL
+            <span className="tng-status-dot"/>WORKSPACE ACCESS
           </Typography>
           <Typography sx={{fontWeight: 800,  textTransform: "capitalize" }}>
             {role}

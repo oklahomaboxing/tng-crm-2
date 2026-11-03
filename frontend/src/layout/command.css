@@ -1,0 +1,18 @@
+.tng-shell {background-color:#eef1f6;background-image:radial-gradient(ellipse at 95% 0%,#20a9c30a,transparent 45%),linear-gradient(#94a3b808 1px,transparent 1px),linear-gradient(90deg,#94a3b808 1px,transparent 1px);background-size:auto,32px 32px,32px 32px;}
+.tng-main {isolation:isolate;}
+.tng-main > * {min-width:0;}
+.tng-sidebar {background:radial-gradient(ellipse at 0% 0%,#d7193212,transparent 40%),linear-gradient(175deg,#10151e,#080c13);}
+.tng-sidebar * {scrollbar-width:thin;scrollbar-color:#394354 transparent;}
+.tng-sidebar *::-webkit-scrollbar {width:5px;}
+.tng-sidebar *::-webkit-scrollbar-thumb {background:#394354;border-radius:5px;}
+.tng-brand-mark {width:40px;height:40px;border:1px solid #ef36534d;border-radius:12px;display:grid;place-items:center;background:linear-gradient(145deg,#d71932,#8a1024);box-shadow:0 5px 18px #d7193226;transform:rotate(-5deg);font-weight:950;font-size:17px;letter-spacing:-2px;color:white;}
+.tng-status-dot {display:inline-block;width:6px;height:6px;border-radius:50%;background:#48c5d7;box-shadow:0 0 10px #48c5d74d;margin-right:8px;}
+.tng-hero {position:relative;overflow:hidden;background:radial-gradient(ellipse at 100% 0%,#84203560,transparent 60%),linear-gradient(115deg,#111822,#0b1019);color:#f8fafc;border:1px solid #293342;border-radius:22px;}
+.tng-hero::before {content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(#ffffff06 1px,transparent 1px),linear-gradient(90deg,#ffffff06 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(90deg,transparent,#000);}
+.tng-hero > * {position:relative;}
+.tng-hero-orbit {position:absolute;right:-50px;top:-130px;width:370px;height:370px;border:1px solid #fa38582e;border-radius:50%;box-shadow:0 0 0 38px #fa385808,0 0 0 78px #fa385805;pointer-events:none;}
+.tng-metric {position:relative;overflow:hidden;}
+.tng-metric::before {content:'';position:absolute;top:0;left:22px;right:22px;height:2px;background:linear-gradient(90deg,#d71932,#d7193200);}
+.tng-shortcut {transition:transform .15s ease,border-color .15s ease;}
+.tng-shortcut:hover {transform:translateY(-2px);border-color:#94a3b8;}
+@media print {.tng-shell {background:white;} .tng-topbar {display:none !important;}}

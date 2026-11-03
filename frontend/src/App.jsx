@@ -15,11 +15,11 @@ import {
   TextField,
   ThemeProvider,
   Typography,
-  createTheme,
 } from "@mui/material";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 
 import AppShell from "./layout/AppShell.jsx";
+import tngTheme from "./theme/tngTheme";
 
 import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspaces";
 import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
@@ -58,40 +58,7 @@ const SystemOverview = lazy(() => import("./pages/SystemOverview"));
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-const theme = createTheme({
-  palette: {
-    mode: "light",
-    primary: { main: "#d71920" },
-    error: { main: "#d71920" },
-    background: {
-      default: "#f5f6f8",
-      paper: "#ffffff",
-    },
-  },
-  shape: { borderRadius: 14 },
-  typography: {
-    fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-    button: { textTransform: "none", fontWeight: 800 },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: { borderRadius: 10, minHeight: 44 },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          border: "1px solid #e8e9ed",
-          boxShadow: "0 8px 30px rgba(16,24,40,.05)",
-        },
-      },
-    },
-    MuiTextField: {
-      defaultProps: { size: "small" },
-    },
-  },
-});
+const theme = tngTheme;
 
 function landingPageForRole(role) {
   if (role === "admin" && localStorage.getItem('tng_assistant_open') !== 'false') return 'TNG Assistant';
@@ -506,8 +473,9 @@ async function submitPasswordReset() {
     const changed=()=>{setToken(localStorage.getItem('token')||'');setRememberDevice(localStorage.getItem('tng_remember_device')!=='false');};
     const storage=e=>{if(e.key===null||['token','role','name'].includes(e.key)){if(!localStorage.getItem('token')){setToken('');setRole('');setUserName('');setDash(null);setReps([]);setLeader([]);setQrCodes({});}else{changed();setRole(localStorage.getItem('role')||'');setUserName(localStorage.getItem('name')||'');}}};
     window.addEventListener('tng-token-updated',changed);
+    window.addEventListener('tng-session-revoked',logout);
     window.addEventListener('storage',storage);
-    return()=>{window.removeEventListener('tng-token-updated',changed);window.removeEventListener('storage',storage);};
+    return()=>{window.removeEventListener('tng-session-revoked',logout);window.removeEventListener('tng-token-updated',changed);window.removeEventListener('storage',storage);};
   },[]);
 
   useEffect(() => {

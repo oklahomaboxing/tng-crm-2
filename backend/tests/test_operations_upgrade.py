@@ -152,3 +152,72 @@ class OperationsUpgradeTests(unittest.TestCase):
             self.assertTrue(tickets.cancelled()); self.assertTrue(profiles.cancelled())
 
 if __name__ == '__main__': unittest.main()
+
+
+import hashlib,json,unittest
+from unittest.mock import patch
+import test_stabilization as support
+from app.auth import create_token
+from app.auth_sessions import RememberedDevice,RememberedDeviceDetails
+from app.models import Member,Sale,Attendance,User
+from app.matchmaker.models import BoxingEvent
+from app.ticketing.models import TicketOrder,IssuedTicket
+
+class CommandUpgradeTests(unittest.TestCase):
+ setUp=support.StabilizationTests.setUp
+ tearDown=support.StabilizationTests.tearDown
+ headers=support.StabilizationTests.headers
+
+ def test_reconciliation_is_read_only_and_unpaid_orders_are_not_issuance_issues(self):
+  event=BoxingEvent(name='Fight Night',slug='fight');self.db.add(event);self.db.flush()
+  for status in ('paid','pending'):
+   self.db.add(TicketOrder(event_id=event.id,buyer_name='Private Buyer',buyer_email='private@example.com',receipt_number=status,payment_status=status,total_cents=8000,items_json='[{"quantity":2}]'))
+  self.db.commit();before=(self.db.query(Member).count(),self.db.query(Sale).count(),self.db.query(Attendance).count())
+  r=self.client.get('/api/operations/reconciliation',headers=self.headers());self.assertEqual(r.status_code,200,r.text)
+  data=r.json();self.assertEqual(data['summary']['paid_ticket_orders'],1);self.assertEqual(data['summary']['pending_checkouts'],1)
+  ticket=[i for i in data['issues'] if i['kind']=='ticket_issuance'];self.assertEqual(len(ticket),1);self.assertEqual(ticket[0]['reference'],'paid')
+  self.assertEqual(ticket[0]['target'],{'eventId':event.id});self.assertTrue(data['read_only']);self.assertFalse(data['provider_checks_performed'])
+  self.assertNotIn('private@example.com',r.text)
+  self.assertEqual(before,(self.db.query(Member).count(),self.db.query(Sale).count(),self.db.query(Attendance).count()))
+  self.assertEqual(self.db.query(IssuedTicket).count(),0);self.assertIn('no-store',r.headers['cache-control'])
+
+ def test_reconciliation_identifies_incomplete_gym_records_and_is_admin_only(self):
+  self.member.email='';self.db.commit()
+  for role in ('staff','member','rep','fighter'):self.assertEqual(self.client.get('/api/operations/reconciliation',headers=self.headers(role)).status_code,403)
+  r=self.client.get('/api/operations/reconciliation',headers=self.headers());rows=r.json()['issues']
+  issue=next(i for i in rows if i['kind']=='member_identity');self.assertEqual(issue['target'],{'memberId':self.member.id})
+
+ def remembered(self,headers=None):
+  r=self.client.post('/api/auth/remember-device',headers={**(headers or self.headers()),'User-Agent':'Mozilla/5.0 Windows Chrome/131.0'});self.assertEqual(r.status_code,200,r.text)
+  return {'Authorization':'Bearer '+r.json()['token']}
+
+ def test_devices_are_self_scoped_and_a_single_device_can_be_revoked(self):
+  one=self.remembered();two=self.remembered()
+  r=self.client.get('/api/auth/devices',headers=two);self.assertEqual(r.status_code,200,r.text)
+  rows=r.json()['devices'];self.assertEqual(len(rows),2);current=next(d for d in rows if d['current']);other=next(d for d in rows if not d['current'])
+  self.assertEqual(current['status'],'current');self.assertEqual(other['status'],'remembered');self.assertEqual(current['label'],'Chrome · Windows')
+  for secret in ('token_hash','credential_fingerprint','password_hash'):self.assertNotIn(secret,r.text)
+  member=self.headers('member')
+  self.assertEqual(self.client.post(f"/api/auth/devices/{other['id']}/revoke",headers=member).status_code,404)
+  self.assertEqual(self.client.patch(f"/api/auth/devices/{other['id']}",headers=member,json={'label':'stolen'}).status_code,404)
+  renamed=self.client.patch(f"/api/auth/devices/{other['id']}",headers=two,json={'label':'Gym office computer'});self.assertEqual(renamed.status_code,200,renamed.text)
+  revoked=self.client.post(f"/api/auth/devices/{other['id']}/revoke",headers=two);self.assertFalse(revoked.json()['current'])
+  self.assertEqual(self.client.get('/api/me',headers=one).status_code,401);self.assertEqual(self.client.get('/api/me',headers=two).status_code,200)
+  self.assertEqual(self.client.post(f"/api/auth/devices/{current['id']}/revoke",headers=two).json()['current'],True)
+  self.assertEqual(self.client.get('/api/me',headers=two).status_code,401)
+
+ def test_legacy_device_status_is_not_invented_and_current_legacy_can_be_named(self):
+  for sid in ('current-fixture','other-fixture'):
+   self.db.add(RememberedDevice(user_id=self.users['admin'].id,token_hash=hashlib.sha256(sid.encode()).hexdigest(),revoked=False))
+  self.db.commit();token=create_token({'sub':str(self.users['admin'].id),'persistent':True,'sid':'current-fixture'})
+  headers={'Authorization':'Bearer '+token};rows=self.client.get('/api/auth/devices',headers=headers).json()['devices']
+  current=next(r for r in rows if r['current']);other=next(r for r in rows if not r['current'])
+  self.assertTrue(current['renamable']);self.assertEqual(other['status'],'unverified')
+  r=self.client.patch(f"/api/auth/devices/{current['id']}",headers=headers,json={'label':'Front desk tablet'});self.assertEqual(r.status_code,200,r.text)
+  self.assertEqual(self.client.patch(f"/api/auth/devices/{other['id']}",headers=headers,json={'label':'Unknown'}).status_code,409)
+  self.assertEqual(self.db.query(RememberedDeviceDetails).count(),1)
+
+ def test_password_changes_mark_known_device_metadata_invalidated(self):
+  self.remembered();self.users['admin'].password_hash='replacement';self.db.commit()
+  r=self.client.get('/api/auth/devices',headers=self.headers());self.assertEqual(r.status_code,200,r.text)
+  self.assertEqual(r.json()['devices'][0]['status'],'invalidated')
