@@ -4,11 +4,11 @@ import hmac
 import os
 import secrets
 import time
+import re
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import select, update,func,case
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.core.dependencies import staff_user
@@ -32,21 +32,14 @@ def throttle(db, key, limit):
     # Atomic database counters also apply across App Platform workers/restarts.
     key = hmac.new(os.environ.get('SECRET_KEY', 'kiosk-rate').encode(), key.encode(), hashlib.sha256).hexdigest()
     window = int(time.time() // 60)
-    db.execute(update(KioskRateBucket).where(KioskRateBucket.key == key, KioskRateBucket.window != window).values(window=window, count=0))
-    changed = db.execute(update(KioskRateBucket).where(KioskRateBucket.key == key, KioskRateBucket.count < limit).values(count=KioskRateBucket.count + 1)).rowcount
-    if not changed:
-        if db.get(KioskRateBucket, key):
-            db.commit()
-            raise HTTPException(429, 'Too many attempts. Please wait one minute or visit the front desk.', headers={'Retry-After': '60'})
-        try:
-            with db.begin_nested():
-                db.add(KioskRateBucket(key=key, window=window, count=1)); db.flush()
-        except IntegrityError:
-            changed = db.execute(update(KioskRateBucket).where(KioskRateBucket.key == key, KioskRateBucket.count < limit).values(count=KioskRateBucket.count + 1)).rowcount
-            if not changed:
-                db.commit()
-                raise HTTPException(429, 'Too many attempts. Please wait one minute.', headers={'Retry-After': '60'})
-    db.commit()
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    insert=pg_insert if db.get_bind().dialect.name=='postgresql' else sqlite_insert
+    statement=insert(KioskRateBucket).values(key=key,window=window,count=1)
+    statement=statement.on_conflict_do_update(index_elements=['key'],set_={'window':window,'count':case((KioskRateBucket.window==window,KioskRateBucket.count+1),else_=1)},where=(KioskRateBucket.window!=window)|(KioskRateBucket.count<limit)).returning(KioskRateBucket.count)
+    accepted=db.execute(statement).scalar();db.commit()
+    if accepted is None:
+        raise HTTPException(429,'Too many attempts. Please wait one minute or visit the front desk.',headers={'Retry-After':'60'})
 
 def device_auth(request: Request, response: Response, authorization: str = Header(default=''), db: Session = Depends(get_db)):
     private(response)
@@ -65,6 +58,11 @@ class Settings(BaseModel):
     enabled: bool = True
     confirmation_seconds: int = Field(default=8, ge=3, le=30)
     duplicate_seconds: int = Field(default=120, ge=30, le=3600)
+    @field_validator('name')
+    @classmethod
+    def nonblank_name(cls,value):
+        if not value.strip():raise ValueError('Enter a device name.')
+        return value.strip()
 
 class PairInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -81,7 +79,9 @@ def device_summary(db, device):
     return {'id': device.id, 'name': device.name, 'enabled': device.enabled,
         'confirmation_seconds': device.confirmation_seconds, 'duplicate_seconds': device.duplicate_seconds,
         'paired': bool(device.credential_hash), 'last_seen': device.last_seen,
-        'online': bool(device.last_seen and device.last_seen > datetime.utcnow() - timedelta(seconds=90)),
+        'online': bool(device.credential_hash and device.last_seen and device.last_seen > datetime.utcnow() - timedelta(seconds=90)),
+        'pairing_pending': bool(device.pairing_hash and device.pairing_expires and device.pairing_expires>datetime.utcnow()),
+        'pairing_expires_at':device.pairing_expires.isoformat()+'Z' if device.pairing_hash and device.pairing_expires else None,
         'today': {outcome: sum(a.outcome == outcome for a in attempts) for outcome in ('recorded', 'duplicate', 'invalid', 'inactive', 'ineligible', 'ambiguous', 'rate_limited')},
         'recent_attempts': [{'id': a.id, 'outcome': a.outcome, 'at': a.created_at,
             'member_id': a.member_id} for a in sorted(attempts, key=lambda a: a.id, reverse=True)[:50]]}
@@ -93,6 +93,9 @@ def devices(response: Response, db: Session = Depends(get_db), user=Depends(staf
 
 @router.post('/devices', status_code=201)
 def create_device(data: Settings, db: Session = Depends(get_db), user=Depends(staff_user)):
+    from app.services.member_profiles import lock_profiles
+    lock_profiles(db)
+    if db.query(KioskDevice).filter(func.lower(func.trim(KioskDevice.name))==data.name.casefold()).first():raise HTTPException(409,'A kiosk with this name already exists. Select it instead, or use a different name.')
     device = KioskDevice(**data.model_dump()); db.add(device); db.flush()
     db.add(SecurityLog(user_id=user.id, action='KIOSK_CREATED', description=f'Created check-in device #{device.id}'))
     db.commit()
@@ -111,11 +114,12 @@ def pairing(device_id: int, response: Response, db: Session = Depends(get_db), u
     private(response)
     device = db.get(KioskDevice, device_id)
     if not device: raise HTTPException(404, 'Kiosk not found')
+    if not device.enabled:raise HTTPException(409,'Enable this kiosk in its settings before creating a pairing code.')
     code = secrets.token_hex(6).upper()
     device.pairing_hash = digest(code); device.pairing_expires = datetime.utcnow() + timedelta(minutes=10)
     db.add(SecurityLog(user_id=user.id, action='KIOSK_PAIRING_ISSUED', description=f'Issued ten-minute pairing for device #{device.id}'))
     db.commit()
-    return {'code': code, 'expires_in_seconds': 600}
+    return {'code': code, 'device_id':device.id,'device_name':device.name,'expires_at':device.pairing_expires.isoformat()+'Z','expires_in_seconds': 600}
 
 @router.post('/devices/{device_id}/revoke')
 def revoke(device_id: int, db: Session = Depends(get_db), user=Depends(staff_user)):
@@ -129,7 +133,8 @@ def revoke(device_id: int, db: Session = Depends(get_db), user=Depends(staff_use
 def pair(data: PairInput, request: Request, response: Response, db: Session = Depends(get_db)):
     private(response)
     throttle(db, 'pair:' + (request.client.host if request.client else 'unknown'), 10)
-    device = db.execute(select(KioskDevice).where(KioskDevice.pairing_hash == digest(data.code.strip().upper())).with_for_update()).scalar_one_or_none()
+    normalized=re.sub(r'[\s-]','',data.code).upper()
+    device = db.execute(select(KioskDevice).where(KioskDevice.pairing_hash == digest(normalized)).with_for_update()).scalar_one_or_none()
     if not device or not device.pairing_expires or device.pairing_expires < datetime.utcnow() or not device.enabled:
         raise HTTPException(401, 'Invalid or expired pairing code. Ask staff for a new code.')
     token = secrets.token_urlsafe(48)

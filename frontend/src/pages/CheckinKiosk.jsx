@@ -6,7 +6,9 @@ const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const KEY = 'tng_checkin_kiosk_device';
 export default function CheckinKiosk({ staffMode = false, onExit }) {
   const [credential, setCredential] = useState(() => staffMode ? '' : localStorage.getItem(KEY) || '');
-  const [pairCode, setPairCode] = useState('');
+  const [setupCode]=useState(()=>new URLSearchParams(window.location.hash.slice(1)).get('pair')||'');
+  const [pairCode, setPairCode] = useState(setupCode);
+  const [enrollment,setEnrollment]=useState(!!setupCode);
   const [number, setNumber] = useState('');
   const [settings, setSettings] = useState(staffMode ? {enabled:true,confirmation_seconds:8} : null);
   const [result, setResult] = useState(null);
@@ -39,6 +41,7 @@ export default function CheckinKiosk({ staffMode = false, onExit }) {
   }
   useEffect(() => {
     mounted.current = true;
+    if(new URLSearchParams(window.location.hash.slice(1)).has('pair'))window.history.replaceState(null,'',window.location.pathname+window.location.search);
     const manifest = document.createElement('link'); manifest.rel = 'manifest'; manifest.href = '/kiosk/checkin.webmanifest'; document.head.appendChild(manifest);
     const meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = '#08090b'; document.head.appendChild(meta);
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/kiosk/sw.js', {scope: '/kiosk/'}).catch(() => {});
@@ -77,7 +80,7 @@ export default function CheckinKiosk({ staffMode = false, onExit }) {
   }, [number, busy, result]);
   async function pair(event) {
     event.preventDefault(); if (lock.current) return; lock.current = true; setBusy(true);
-    try {const data = await request('pair', {code: pairCode.trim()}, ''); localStorage.setItem(KEY, data.credential); clearCrmSession(); setCredential(data.credential); setPairCode(''); reset();}
+    try {const data = await request('pair', {code: pairCode.trim()}, ''); localStorage.setItem(KEY, data.credential); clearCrmSession(); setCredential(data.credential); setEnrollment(false); setPairCode(''); reset();}
     catch (error) {setResult({success: false, message: error.message || 'Pairing failed.'});}
     finally {lock.current = false; if (mounted.current) setBusy(false);}
   }
@@ -97,7 +100,7 @@ export default function CheckinKiosk({ staffMode = false, onExit }) {
       <h1>{result.success ? (result.duplicate ? 'ALREADY CHECKED IN' : 'CHECK-IN SUCCESSFUL') : result.code === 'membership_inactive' ? 'MEMBERSHIP INACTIVE' : 'PLEASE TRY AGAIN'}</h1>
       {result.success && <><h2>WELCOME BACK, {result.first_name}!</h2><p className="kiosk-status">Membership: Active</p></>}
       <p>{result.code === 'membership_inactive' ? 'Please visit the front desk.' : result.message}</p><button className="kiosk-submit" onClick={reset}>Next Member</button><p className="kiosk-countdown">Clearing in {seconds} seconds</p>
-    </section> : !credential && !staffMode ? <section className="kiosk-pair"><h1>TNG BOXING CHECK-IN</h1><p>Staff: pair this device using the code from TNGOS → Check-In Kiosk. Pairing signs this browser out of TNGOS administration. No admin sign-in is needed on this screen.</p><form onSubmit={pair}><label htmlFor="pair-code">Device pairing code</label><input id="pair-code" autoComplete="off" autoCapitalize="characters" value={pairCode} onChange={e => setPairCode(e.target.value)} maxLength={32}/><button className="kiosk-submit" disabled={busy || pairCode.trim().length < 8}>{busy ? 'Pairing…' : 'Pair device'}</button></form></section>
+    </section> : (!credential || enrollment) && !staffMode ? <section className="kiosk-pair"><h1>TNG BOXING CHECK-IN</h1><p>Staff: pair this device using the code from TNGOS → Check-In Kiosk. Pairing signs this browser out of TNGOS administration. No admin sign-in is needed on this screen.</p><form onSubmit={pair}><label htmlFor="pair-code">Device pairing code</label><input id="pair-code" autoComplete="off" autoCapitalize="characters" value={pairCode} onChange={e => setPairCode(e.target.value)} maxLength={32}/><button className="kiosk-submit" disabled={busy || pairCode.trim().length < 8}>{busy ? 'Connecting…' : 'Connect kiosk'}</button></form>{credential&&<button onClick={()=>{setEnrollment(false);setPairCode('');}}>Keep current connection</button>}</section>
     : !settings?.enabled ? <section aria-live="polite"><h1>{settings ? 'CHECK-IN UNAVAILABLE' : 'CONNECTING TO TNG BOXING'}</h1><p>{settings ? 'Please visit the front desk.' : connection}</p></section>
     : <section><h1>WELCOME TO TNG BOXING<span>MEMBER CHECK-IN</span></h1><form onSubmit={checkin}>
       <label htmlFor="member-number">Enter your membership number</label>

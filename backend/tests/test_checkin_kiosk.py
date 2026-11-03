@@ -168,3 +168,51 @@ class KioskTests(unittest.TestCase):
         self.db.query(Member).filter_by(id=identity).delete(synchronize_session=False);self.db.commit()
         attempt=self.db.query(KioskAttempt).one()
         self.assertIsNone(attempt.member_id);self.assertIsNone(attempt.attendance_id)
+
+class KioskPairingFlowTests(unittest.TestCase):
+    setUp=support.StabilizationTests.setUp
+    tearDown=support.StabilizationTests.tearDown
+    headers=support.StabilizationTests.headers
+    enroll=KioskTests.enroll
+
+    def test_disabled_device_cannot_issue_unusable_pairing_codes(self):
+        response=self.client.post('/api/kiosk/devices',headers=self.headers(),json={'name':'Paused entrance','enabled':False})
+        identity=response.json()['id']
+        result=self.client.post(f'/api/kiosk/devices/{identity}/pairing',headers=self.headers())
+        self.assertEqual(result.status_code,409,result.text);self.assertIn('Enable',result.json()['detail'])
+        self.assertIsNone(self.db.get(KioskDevice,identity).pairing_hash)
+
+    def test_pairing_metadata_and_grouped_lowercase_codes(self):
+        response=self.client.post('/api/kiosk/devices',headers=self.headers(),json={'name':'Entrance'})
+        identity=response.json()['id'];r=self.client.post(f'/api/kiosk/devices/{identity}/pairing',headers=self.headers())
+        data=r.json();self.assertEqual(data['device_id'],identity);self.assertEqual(data['device_name'],'Entrance');self.assertTrue(data['expires_at'].endswith('Z'))
+        summary=self.client.get('/api/kiosk/devices',headers=self.headers()).json()['devices'][0]
+        self.assertTrue(summary['pairing_pending']);self.assertNotIn(data['code'],str(summary))
+        code=data['code'].lower();grouped=f'{code[:4]} - {code[4:8]} {code[8:]}'
+        paired=self.client.post('/api/kiosk/pair',json={'code':grouped});self.assertEqual(paired.status_code,200,paired.text)
+        self.assertEqual(self.client.post('/api/kiosk/pair',json={'code':code}).status_code,401)
+
+    def test_replacement_keeps_existing_device_until_new_code_is_used(self):
+        identity,_,token=self.enroll()
+        new=self.client.post(f'/api/kiosk/devices/{identity}/pairing',headers=self.headers()).json()
+        headers={'Authorization':'Bearer '+token}
+        self.assertEqual(self.client.post('/api/kiosk/heartbeat',headers=headers).status_code,200)
+        summary=self.client.get('/api/kiosk/devices',headers=self.headers()).json()['devices'][0]
+        self.assertTrue(summary['pairing_pending']);self.assertTrue(summary['paired'])
+        paired=self.client.post('/api/kiosk/pair',json={'code':new['code']});self.assertEqual(paired.status_code,200,paired.text)
+        self.assertEqual(self.client.post('/api/kiosk/heartbeat',headers=headers).status_code,401)
+        self.assertEqual(self.client.post('/api/kiosk/heartbeat',headers={'Authorization':'Bearer '+paired.json()['credential']}).status_code,200)
+        summary=self.client.get('/api/kiosk/devices',headers=self.headers()).json()['devices'][0]
+        self.assertFalse(summary['pairing_pending']);self.assertTrue(summary['online'])
+
+    def test_revoked_device_does_not_show_connected_from_old_heartbeat(self):
+        identity,_,_=self.enroll()
+        self.client.post(f'/api/kiosk/devices/{identity}/revoke',headers=self.headers())
+        summary=self.client.get('/api/kiosk/devices',headers=self.headers()).json()['devices'][0]
+        self.assertFalse(summary['online']);self.assertFalse(summary['paired'])
+
+    def test_blank_names_and_accidental_duplicate_creation_are_rejected(self):
+        self.assertEqual(self.client.post('/api/kiosk/devices',headers=self.headers(),json={'name':'   '}).status_code,422)
+        self.assertEqual(self.client.post('/api/kiosk/devices',headers=self.headers(),json={'name':'Entrance'}).status_code,201)
+        self.assertEqual(self.client.post('/api/kiosk/devices',headers=self.headers(),json={'name':' entrance '}).status_code,409)
+        self.assertEqual(self.db.query(KioskDevice).count(),1)
