@@ -29,6 +29,7 @@ const SecurityCenter = lazy(() => import("./pages/SecurityCenter"));
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const AIDisplay = lazy(() => import("./pages/AIDisplay.jsx"));
 const Members = lazy(() => import("./pages/Members.jsx"));
+const TngAssistant = lazy(() => import("./pages/TngAssistant.jsx"));
 const Sales = lazy(() => import("./pages/Sales.jsx"));
 const SalesRepDashboard = lazy(() => import("./pages/SalesRepDashboard.jsx"));
 const JoinPage = lazy(() => import("./pages/JoinPage.jsx"));
@@ -93,6 +94,7 @@ const theme = createTheme({
 });
 
 function landingPageForRole(role) {
+  if (role === "admin" && localStorage.getItem('tng_assistant_open') !== 'false') return 'TNG Assistant';
   if (role === "rep") return "My Sales";
   if (role === "staff") return "Member Check-In";
   if (role === "matchmaker") return "Promoter";
@@ -258,6 +260,8 @@ function App() {
   const [msg, setMsg] = useState("");
   const [qrCodes, setQrCodes] = useState({});
   const [loginLoading, setLoginLoading] = useState(false);
+  const [rememberDevice,setRememberDevice]=useState(()=>localStorage.getItem('tng_remember_device')!=='false');
+  const [assistantListening,setAssistantListening]=useState(false);
 
   async function login() {
     setLoginLoading(true);
@@ -267,7 +271,7 @@ function App() {
       const response = await fetch(`${API}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, code: verificationCode.trim() }),
+        body: JSON.stringify({ email, password, code: verificationCode.trim(),remember_device:rememberDevice }),
       });
 
       const data = await response.json();
@@ -471,7 +475,12 @@ async function submitPasswordReset() {
   }
 
   function logout() {
+    const oldToken=localStorage.getItem('token');
+    if(oldToken)fetch(`${API}/api/auth/logout`,{method:'POST',headers:{Authorization:`Bearer ${oldToken}`},keepalive:true}).catch(()=>{});
+    const preferences=Object.fromEntries(['tng_assistant_open','tng_assistant_speak','tng_assistant_wake','tng_remember_device','tng_checkin_kiosk_device'].map(key=>[key,localStorage.getItem(key)]));
     localStorage.clear();
+    for(const [key,value] of Object.entries(preferences))if(value!==null)localStorage.setItem(key,value);
+    for(const key of ['fighterPreviewToken','memberPreviewToken'])sessionStorage.removeItem(key);
 
     setEmail("");
     setPassword("");
@@ -494,6 +503,14 @@ async function submitPasswordReset() {
   }, [token, role]);
 
   useEffect(() => {
+    const changed=()=>{setToken(localStorage.getItem('token')||'');setRememberDevice(localStorage.getItem('tng_remember_device')!=='false');};
+    const storage=e=>{if(e.key===null||['token','role','name'].includes(e.key)){if(!localStorage.getItem('token')){setToken('');setRole('');setUserName('');setDash(null);setReps([]);setLeader([]);setQrCodes({});}else{changed();setRole(localStorage.getItem('role')||'');setUserName(localStorage.getItem('name')||'');}}};
+    window.addEventListener('tng-token-updated',changed);
+    window.addEventListener('storage',storage);
+    return()=>{window.removeEventListener('tng-token-updated',changed);window.removeEventListener('storage',storage);};
+  },[]);
+
+  useEffect(() => {
     if (!token) return;
     try {
       const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
@@ -502,7 +519,11 @@ async function submitPasswordReset() {
         logout();
         return;
       }
-      const timeout = setTimeout(logout, remaining);
+      if(payload.persistent){
+        const check=setInterval(()=>fetch(`${API}/api/me`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>{if((r.status===401||r.status===403)&&localStorage.getItem('token')===token)logout();}).catch(()=>{}),300000);
+        return()=>clearInterval(check);
+      }
+      const timeout = setTimeout(logout, Math.min(remaining,2147483647));
       return () => clearTimeout(timeout);
     } catch {
       logout();
@@ -624,6 +645,7 @@ if (window.location.pathname === "/register") return <JoinPage />;
 
         {mfaRequired && <TextField label="Authenticator or recovery code" value={verificationCode}
           onChange={event => setVerificationCode(event.target.value)} autoComplete="one-time-code" fullWidth required />}
+        <label><input type="checkbox" checked={rememberDevice} onChange={e=>{setRememberDevice(e.target.checked);localStorage.setItem('tng_remember_device',String(e.target.checked));}}/> Stay signed in on this trusted device until I log out</label>
 
         <Button
           type="submit"
@@ -836,6 +858,7 @@ return (
         <Dashboard dash={dash} leader={leader} load={load} onNavigate={navigate} userName={userName} error={dashboardError} />
       )}
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
+      {role === 'admin' && <><Box sx={{display:page==='TNG Assistant'?'block':'none'}}><TngAssistant onWake={()=>navigate('TNG Assistant')} onListening={setAssistantListening}/></Box>{page!=='TNG Assistant'&&<Button variant="contained" onClick={()=>navigate('TNG Assistant')} sx={{position:'fixed',bottom:20,right:20,zIndex:1200}}>{assistantListening?'Hey TNG · Listening':'TNG Assistant'}</Button>}</>}
       {page === "Members" && ["admin", "staff"].includes(role) && <Members role={role} initialMemberId={navigationTarget.memberId} onOpenMember={id => navigate("Members", { memberId: id })} onCloseMember={() => navigate("Members")} />}
       {page === "Check-In Kiosk" && ["admin", "staff"].includes(role) && <CheckinKioskAdmin />}
 

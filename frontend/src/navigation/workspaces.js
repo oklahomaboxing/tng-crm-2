@@ -1,6 +1,7 @@
 export const ROLE_MENUS = {
   admin: [
     "Dashboard",
+    "TNG Assistant",
     "System Overview",
     "Members",
     "TNGTrainer",
@@ -46,13 +47,14 @@ export const ROLE_MENUS = {
 };
 
 export const WORKSPACE_GROUPS = [
-  { label: "COMMAND", pages: ["Dashboard", "System Overview"] },
+  { label: "COMMAND", pages: ["TNG Assistant", "Dashboard", "System Overview"] },
   { label: "GYM OPERATIONS", pages: ["Members", "Member Check-In", "Check-In Kiosk", "Sales", "Products", "TNGTrainer"] },
   { label: "TNG PROMOTIONS", pages: ["TNG BOXING EVENTS", "Event Check-In", "Promoter", "Fight Calendar", "Fighter Portal Videos"] },
   { label: "GROWTH", pages: ["Leads", "QR Referrals", "Marketing Center", "My Sales"] },
   { label: "ADMINISTRATION", pages: ["Clover", "Duplicate Review", "Reports", "User Management", "Security Center", "Manager Portal"] },
 ];
 export const WORKSPACE_HINTS = {
+  "TNG Assistant": "Hey TNG voice briefing, memberships, ticket sales and fight-card progress",
   "Check-In Kiosk": "Entrance touchscreen pairing, attendance, device status and settings",
   Members: "Profiles, portal access, memberships and renewals",
   "Member Check-In": "Entrance member-number keypad and new-member signup QR",

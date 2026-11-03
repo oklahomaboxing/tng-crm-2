@@ -39,6 +39,11 @@ def session_marker(user, state=None):
 
 
 def valid_session(payload, user, db):
+    if payload.get('persistent'):
+        from app.auth_sessions import RememberedDevice
+        sid=str(payload.get('sid') or '')
+        device=db.query(RememberedDevice).filter_by(user_id=user.id,token_hash=hashlib.sha256(sid.encode()).hexdigest(),revoked=False).first()
+        if not device:return False
     state = db.get(AccountSecurity, user.id)
     return hmac.compare_digest(str(payload.get('credential', '')), session_marker(user, state))
 

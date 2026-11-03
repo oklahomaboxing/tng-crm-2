@@ -84,6 +84,7 @@ from .schemas import (
 )
 
 from .auth import verify_password, hash_password, create_token, decode_token
+from .auth_sessions import router as device_sessions_router,persistent_token
 from .account_security import AccountSecurity, verify_second_factor, build_security_router
 from .core.dependencies import current_user, staff_user, sales_user
 from .core.permissions import require_admin, require_admin_or_staff
@@ -365,6 +366,7 @@ def health():
 
 
 app.include_router(operations_router)
+app.include_router(device_sessions_router)
 
 app.include_router(ai_router)
 app.include_router(ticketing_router)
@@ -619,7 +621,7 @@ def login(
     db.commit()
 
     return {
-        "token": create_token(
+        "token": persistent_token(db,user) if data.remember_device else create_token(
             {
                 "sub": str(user.id),
                 "role": user.role,
