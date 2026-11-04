@@ -26,3 +26,5 @@ from app.ai.assistant import router as assistant_router
 router.include_router(assistant_router)
 from .reconciliation import router as reconciliation_router
 router.include_router(reconciliation_router)
+from .renewal_reminders import router as renewal_reminders_router
+router.include_router(renewal_reminders_router)

@@ -231,6 +231,7 @@ export default function Members({ role, initialMemberId, onOpenMember, onCloseMe
         <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
           {role === "admin" && <>
             <Button variant="contained" color="error" onClick={() => setAddOpen(true)}>Add Member</Button>
+            <Button variant="outlined" component="a" href="#/renewal-reminders">Renewal reminders</Button>
             <Button variant="outlined" onClick={prepareAccountAccess} disabled={syncing}>Connect Customer Accounts</Button>
             <Button variant="outlined" component="a" href="#/duplicate-review" disabled={syncing}>Merge Duplicates</Button>
             <Button variant="outlined" onClick={syncCloverCustomers} disabled={syncing}>{syncing ? "Syncing Clover…" : "Sync Clover Customers"}</Button>

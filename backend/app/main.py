@@ -341,6 +341,22 @@ async def stop_ticket_delivery_worker():
 
 
 @app.on_event("startup")
+async def start_renewal_reminder_worker():
+    import asyncio
+    from app.operations.renewal_reminders import reminder_loop
+    if os.getenv("MEMBERSHIP_REMINDERS_WORKER_ENABLED", "1") == "1":
+        app.state.renewal_reminder_task=asyncio.create_task(reminder_loop())
+
+@app.on_event("shutdown")
+async def stop_renewal_reminder_worker():
+    import asyncio
+    task=getattr(app.state,'renewal_reminder_task',None)
+    if task:
+        task.cancel()
+        try:await task
+        except asyncio.CancelledError:pass
+
+@app.on_event("startup")
 async def start_clover_profile_worker():
     import asyncio
     from app.services.clover_customers import profile_sync_loop

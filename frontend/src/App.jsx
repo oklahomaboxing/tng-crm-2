@@ -25,6 +25,7 @@ import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspace
 import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
 const MemberPortal = lazy(() => import("./pages/MemberPortal.jsx"));
 const MemberActivate = lazy(() => import("./pages/MemberActivate.jsx"));
+const RenewalReminders = lazy(() => import("./pages/RenewalReminders.jsx"));
 const SecurityCenter = lazy(() => import("./pages/SecurityCenter"));
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const AIDisplay = lazy(() => import("./pages/AIDisplay.jsx"));
@@ -826,6 +827,7 @@ return (
         <Dashboard dash={dash} leader={leader} load={load} onNavigate={navigate} userName={userName} error={dashboardError} />
       )}
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
+      {page === "Renewal Reminders" && role === "admin" && <RenewalReminders/>}
       {role === 'admin' && <><Box sx={{display:page==='TNG Assistant'?'block':'none'}}><TngAssistant onWake={()=>navigate('TNG Assistant')} onListening={setAssistantListening}/></Box>{page!=='TNG Assistant'&&<Button variant="contained" onClick={()=>navigate('TNG Assistant')} sx={{position:'fixed',bottom:20,right:20,zIndex:1200}}>{assistantListening?'Hey TNG · Listening':'TNG Assistant'}</Button>}</>}
       {page === "Members" && ["admin", "staff"].includes(role) && <Members role={role} initialMemberId={navigationTarget.memberId} onOpenMember={id => navigate("Members", { memberId: id })} onCloseMember={() => navigate("Members")} />}
       {page === "Check-In Kiosk" && ["admin", "staff"].includes(role) && <CheckinKioskAdmin />}

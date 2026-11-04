@@ -24,7 +24,7 @@ if TEST_DATABASE_URL and not (TEST_DATABASE_URL.startswith("postgresql://")
 os.environ.update({
     "DATABASE_URL": TEST_DATABASE_URL or "sqlite:///" + Path(TEMP.name, "test.db").as_posix(),
     "SECRET_KEY": "test-only-signing-secret-not-used-in-production",
-    "OPENAI_API_KEY": "",
+    "OPENAI_API_KEY": "", "MEMBERSHIP_REMINDERS_WORKER_ENABLED": "0",
     "RESEND_API_KEY": "", "BOOTSTRAP_ADMIN_PASSWORD": "",
     "CLOVER_WEBHOOK_SECRET": "test-only-clover-secret",
     "CLOVER_MERCHANT_ID": "test-merchant",

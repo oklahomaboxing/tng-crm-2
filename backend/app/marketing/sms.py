@@ -148,6 +148,8 @@ async def inbound(request:Request,db:Session=Depends(get_db)):
     except ValueError:raise HTTPException(400,'Invalid sender')
     command=str(form.get('OptOutType') or form.get('Body') or '').strip().upper()
     if command in ('STOP','STOPALL','UNSUBSCRIBE','CANCEL','END','QUIT','START','UNSTOP'):
+        from app.operations.renewal_reminders import suppress_sms
+        suppress_sms(db,phone,stop=command not in ('START','UNSTOP'))
         for contact in db.query(MarketingContact).all():
             try:match=normalize_ticket_phone(contact.phone)==phone
             except ValueError:match=False
