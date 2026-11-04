@@ -283,8 +283,9 @@ def create_member_invite(
         if not data.replace_existing:raise HTTPException(400,'Use reset and resend to change an activation email.')
         if db.query(Member).filter(Member.id!=member.id,func.lower(func.trim(Member.email))==corrected).first():
             raise HTTPException(409,'This email belongs to another member profile.')
-        conflict=db.query(User).filter(func.lower(func.trim(User.email))==corrected).first()
-        if conflict and (not existing_account or conflict.id!=existing_account.user_id):
+        conflicts=db.query(User).filter(func.lower(func.trim(User.email))==corrected)
+        if existing_account:conflicts=conflicts.filter(User.id!=existing_account.user_id)
+        if conflicts.first():
             raise HTTPException(409,'This email is already assigned to another TNGOS account.')
         member.email=corrected
         if existing_account:account_user.email=corrected

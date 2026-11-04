@@ -37,3 +37,8 @@ class ActivationEmailResetTests(unittest.TestCase):
    r=self.client.post('/api/member/admin/invite',headers=self.headers(),json={'member_id':self.member.id,'email':'new@example.com','replace_existing':True});self.assertEqual(r.status_code,502)
   self.db.expire_all();self.assertEqual(self.db.get(Member,self.member.id).email,original)
   r=self.client.post('/api/member/activate',json={'token':old.json()['activation_token'],'password':'NewFixturePass123!'});self.assertEqual(r.status_code,200,r.text)
+
+ def test_other_login_with_case_variant_of_own_email_blocks_reset(self):
+  prepare_accounts(self.db,{self.member.id});self.db.commit()
+  self.db.add(User(name='Other account',email=self.member.email.upper(),role='member',active=True,password_hash='not-a-real-password'));self.db.commit()
+  self.assertEqual(self.invite(email=self.member.email,replace_existing=True).status_code,409)
