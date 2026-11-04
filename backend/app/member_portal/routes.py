@@ -439,6 +439,13 @@ def create_member_invite(
 
 
 
+@router.post('/admin/reset-activation')
+def reset_member_activation(data:InviteMemberIn,db:Session=Depends(get_db),user:User=Depends(current_user)):
+    require_admin(user)
+    if not data.replace_existing or data.email is None:raise HTTPException(400,'Provide the corrected email and request a fresh activation link.')
+    return create_member_invite(data,db,user)
+
+
 @router.post("/admin/invite-all")
 def invite_all_members(
     db: Session = Depends(get_db),

@@ -38,7 +38,7 @@ export default function MemberProfile({ member, onBack }) {
   const activationLock=useRef(false);
   async function resetActivationEmail(){
     if(activationLock.current)return;activationLock.current=true;setLoginInviteLoading(true);setActivationError('');
-    try{const r=await fetch(`${API}/api/member/admin/invite`,{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('token')}`,'Content-Type':'application/json'},body:JSON.stringify({member_id:memberData.id,email:activationEmail.trim(),replace_existing:true})});const d=await r.json();if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'Enter a valid, unique email address.');setMemberData(old=>({...old,email:d.email}));setActivationNotice('A fresh activation email was sent. Previous activation links are no longer valid.');setResetEmailOpen(false);await loadInviteStatus();}catch(e){setActivationError(e.message);}finally{activationLock.current=false;setLoginInviteLoading(false);}
+    try{const r=await fetch(`${API}/api/member/admin/reset-activation`,{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('token')}`,'Content-Type':'application/json'},body:JSON.stringify({member_id:memberData.id,email:activationEmail.trim(),replace_existing:true})});const d=await r.json();if(!r.ok || !d.email_sent)throw new Error(typeof d.detail==='string'?d.detail:'Enter a valid, unique email address.');setMemberData(old=>({...old,email:d.email}));setActivationNotice('A fresh activation email was sent. Previous activation links are no longer valid.');setResetEmailOpen(false);await loadInviteStatus();}catch(e){setActivationError(e.message);}finally{activationLock.current=false;setLoginInviteLoading(false);}
   }
 
   useEffect(() => {

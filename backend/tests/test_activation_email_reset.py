@@ -14,7 +14,7 @@ class ActivationEmailResetTests(unittest.TestCase):
  headers=support.StabilizationTests.headers
  def invite(self,**body):
   with patch.dict(os.environ,{'RESEND_API_KEY':'test-only'}),patch('app.member_portal.routes.httpx.post',return_value=Mock(status_code=200)):
-   return self.client.post('/api/member/admin/invite',headers=self.headers(),json={'member_id':self.member.id,**body})
+   return self.client.post('/api/member/admin/reset-activation' if body.get('replace_existing') else '/api/member/admin/invite',headers=self.headers(),json={'member_id':self.member.id,**body})
  def test_correct_email_resend_invalidates_old_link_and_updates_prepared_login(self):
   self.member.phone='4055550100';self.db.commit();prepare_accounts(self.db,{self.member.id});self.db.commit()
   old=self.invite();self.assertEqual(old.status_code,200,old.text)
