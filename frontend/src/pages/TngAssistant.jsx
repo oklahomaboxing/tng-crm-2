@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, FormControlLabel, MenuItem, Select, Stack, Switch, TextField, Typography } from '@mui/material';
 import { API, authHeaders } from '../services/api';
+import { saveStaySignedIn, staySignedIn } from '../services/deviceSession';
 function validFacts(data) {
   return data && data.members && Number.isInteger(data.members.active) && Array.isArray(data.events) && Array.isArray(data.updates);
 }
@@ -261,11 +262,15 @@ export default function TngAssistant({
       document.removeEventListener('visibilitychange', visibility);
     };
   }, []);
+  useEffect(()=>{const changed=()=>setRemember(persistent());window.addEventListener('tng-token-updated',changed);return()=>window.removeEventListener('tng-token-updated',changed);},[]);
   async function saveRemember(enabled) {
     if (settingsBusy) return;
     setSettingsBusy(true);
     setError('');
     const originalToken = localStorage.getItem('token');
+    const previousChoice=staySignedIn();
+    saveStaySignedIn(enabled);
+    window.dispatchEvent(new Event('tng-token-updated'));
     try {
       const r = await fetch(`${API}/api/auth/${enabled ? 'remember-device' : 'forget-device'}`, {
         method: 'POST',
@@ -283,10 +288,11 @@ export default function TngAssistant({
         return;
       }
       localStorage.setItem('token', data.token);
-      localStorage.setItem('tng_remember_device', String(enabled));
+      saveStaySignedIn(enabled);
       window.dispatchEvent(new Event('tng-token-updated'));
       setRemember(enabled);
     } catch (e) {
+      if(localStorage.getItem('token')===originalToken){saveStaySignedIn(previousChoice);window.dispatchEvent(new Event('tng-token-updated'));}
       setError(e.message);
     } finally {
       setSettingsBusy(false);

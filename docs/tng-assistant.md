@@ -23,3 +23,11 @@ Broader language routing requires a funded OpenAI API account. ChatGPT Plus does
 ## Validation
 
 Backend regressions cover admin-only access, correct membership reporting, paid versus pending/refunded/paper ticket separation, model output isolation, provider failures, rate limiting, remembered-session logout and credential revocation. Browser tests use synthetic microphone/speech services and fixture responses to verify wake handling, navigation, stop behavior and persistent-token timing without speaking private data or mutating real customer records. Actual microphone recognition depends on the chosen physical device and browser.
+
+## Stay-signed-in repair
+
+Password login now defaults to a revocable remembered-device session when the client omits the setting. An explicit `remember_device: false` still creates a timed session and MFA remains required where enabled.
+
+The browser versions its explicit stay-signed-in preference so an older cached value does not silently select a timed login. The default is on; a new explicit opt-out is preserved across logout. Valid existing timed sessions are upgraded through the authenticated remember-device API when enabled. Expired or revoked credentials cannot be upgraded. Requests time out and retry while the original session remains valid. Concurrent effects share one upgrade request; delayed responses cannot restore a logged-out account or overwrite an account switch/opt-out. Any unused returned device credential is revoked. An old expiry callback cannot revoke a replacement token.
+
+Remembered sessions continue to obey password/role changes, MFA/session-generation revocation, administrator account deactivation, device revocation and explicit logout. The public kiosk remains a separate restricted device flow. After deploying, refresh an existing browser once; if its timed session has already expired, sign in once with Stay signed in checked.

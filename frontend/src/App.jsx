@@ -19,6 +19,7 @@ import {
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 
 import AppShell from "./layout/AppShell.jsx";
+import { staySignedIn, saveStaySignedIn, rememberValidSession } from "./services/deviceSession";
 import tngTheme from "./theme/tngTheme";
 
 import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspaces";
@@ -228,7 +229,7 @@ function App() {
   const [msg, setMsg] = useState("");
   const [qrCodes, setQrCodes] = useState({});
   const [loginLoading, setLoginLoading] = useState(false);
-  const [rememberDevice,setRememberDevice]=useState(()=>localStorage.getItem('tng_remember_device')!=='false');
+  const [rememberDevice,setRememberDevice]=useState(()=>staySignedIn());
   const [assistantListening,setAssistantListening]=useState(false);
 
   async function login() {
@@ -262,6 +263,7 @@ function App() {
       localStorage.setItem("role", loggedInRole);
       localStorage.setItem("name", loggedInName);
 
+      saveStaySignedIn(rememberDevice);
       setToken(data.token);
       setRole(loggedInRole);
       setUserName(loggedInName);
@@ -445,7 +447,7 @@ async function submitPasswordReset() {
   function logout() {
     const oldToken=localStorage.getItem('token');
     if(oldToken)fetch(`${API}/api/auth/logout`,{method:'POST',headers:{Authorization:`Bearer ${oldToken}`},keepalive:true}).catch(()=>{});
-    const preferences=Object.fromEntries(['tng_assistant_open','tng_assistant_speak','tng_assistant_wake','tng_remember_device','tng_checkin_kiosk_device'].map(key=>[key,localStorage.getItem(key)]));
+    const preferences=Object.fromEntries(['tng_assistant_open','tng_assistant_speak','tng_assistant_wake','tng_remember_device','tng_session_preference_version','tng_checkin_kiosk_device'].map(key=>[key,localStorage.getItem(key)]));
     localStorage.clear();
     for(const [key,value] of Object.entries(preferences))if(value!==null)localStorage.setItem(key,value);
     for(const key of ['fighterPreviewToken','memberPreviewToken'])sessionStorage.removeItem(key);
@@ -471,7 +473,7 @@ async function submitPasswordReset() {
   }, [token, role]);
 
   useEffect(() => {
-    const changed=()=>{setToken(localStorage.getItem('token')||'');setRememberDevice(localStorage.getItem('tng_remember_device')!=='false');};
+    const changed=()=>{setToken(localStorage.getItem('token')||'');setRememberDevice(staySignedIn());};
     const storage=e=>{if(e.key===null||['token','role','name'].includes(e.key)){if(!localStorage.getItem('token')){setToken('');setRole('');setUserName('');setDash(null);setReps([]);setLeader([]);setQrCodes({});}else{changed();setRole(localStorage.getItem('role')||'');setUserName(localStorage.getItem('name')||'');}}};
     window.addEventListener('tng-token-updated',changed);
     window.addEventListener('tng-session-revoked',logout);
@@ -492,12 +494,18 @@ async function submitPasswordReset() {
         const check=setInterval(()=>fetch(`${API}/api/me`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>{if((r.status===401||r.status===403)&&localStorage.getItem('token')===token)logout();}).catch(()=>{}),300000);
         return()=>clearInterval(check);
       }
-      const timeout = setTimeout(logout, Math.min(remaining,2147483647));
-      return () => clearTimeout(timeout);
+      const expire=()=>{if(localStorage.getItem('token')===token)logout();};
+      const timeout = setTimeout(expire, Math.min(remaining,2147483647));
+      let retry;
+      if(rememberDevice){
+        const upgrade=()=>{if(localStorage.getItem('token')===token && staySignedIn())rememberValidSession(token,{api:API});};
+        upgrade();retry=setInterval(upgrade,60000);
+      }
+      return () => {clearTimeout(timeout);clearInterval(retry);};
     } catch {
       logout();
     }
-  }, [token]);
+  }, [token, rememberDevice]);
 
   useEffect(() => {
     if (isResetPasswordPage) {
@@ -614,7 +622,7 @@ if (window.location.pathname === "/register") return <JoinPage />;
 
         {mfaRequired && <TextField label="Authenticator or recovery code" value={verificationCode}
           onChange={event => setVerificationCode(event.target.value)} autoComplete="one-time-code" fullWidth required />}
-        <label><input type="checkbox" checked={rememberDevice} onChange={e=>{setRememberDevice(e.target.checked);localStorage.setItem('tng_remember_device',String(e.target.checked));}}/> Stay signed in on this trusted device until I log out</label>
+        <label><input type="checkbox" checked={rememberDevice} onChange={e=>{setRememberDevice(e.target.checked);saveStaySignedIn(e.target.checked);}}/> Stay signed in on this trusted device until I log out</label>
 
         <Button
           type="submit"

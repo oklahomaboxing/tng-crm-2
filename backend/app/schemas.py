@@ -7,7 +7,7 @@ class LoginIn(BaseModel):
     email: EmailStr
     password: str
     code: str = ''
-    remember_device: bool = False
+    remember_device: bool = True
 
 
 class RepCreate(BaseModel):

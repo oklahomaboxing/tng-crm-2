@@ -116,3 +116,12 @@ class TngAssistantTests(unittest.TestCase):
   self.db.add(AccountSecurity(user_id=self.users['admin'].id,generation='initial',mfa_enabled=True));self.db.commit()
   mfa=self.client.post('/api/login',json=body);self.assertEqual(mfa.status_code,200,mfa.text)
   self.assertTrue(mfa.json()['mfa_required']);self.assertNotIn('token',mfa.json())
+
+ def test_login_defaults_to_remembered_but_explicit_timed_login_is_respected(self):
+  from app.auth import hash_password
+  self.users['admin'].password_hash=hash_password('TestFixturePass12!');self.db.commit()
+  body={'email':self.users['admin'].email,'password':'TestFixturePass12!'}
+  response=self.client.post('/api/login',json=body);self.assertEqual(response.status_code,200,response.text)
+  self.assertTrue(decode_token(response.json()['token'])['persistent'])
+  timed=self.client.post('/api/login',json={**body,'remember_device':False});self.assertEqual(timed.status_code,200,timed.text)
+  self.assertFalse(decode_token(timed.json()['token']).get('persistent',False))
