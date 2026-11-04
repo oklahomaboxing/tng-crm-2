@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from ..database import Base, engine, get_db
-from ..models import User, Member, MembershipProduct, Sale
+from ..models import User, Member, MembershipProduct, Sale, SecurityLog
 from ..core.dependencies import current_user
 from ..auth import hash_password, decode_token, create_token
 from .models import MemberAccount, MemberInvite, InBodyScan, MemberProfilePhoto, MembershipRenewal
@@ -272,14 +272,27 @@ def create_member_invite(
     member = db.query(Member).filter(Member.id == data.member_id).with_for_update().first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
-    if not (member.email or "").strip():
-        raise HTTPException(status_code=400, detail="Member needs an email address")
-
     existing_account = db.query(MemberAccount).filter(MemberAccount.member_id == member.id).first()
     if existing_account:
         account_user=db.get(User,existing_account.user_id)
         if not account_user or not needs_password_setup(db,existing_account,account_user):
             raise HTTPException(status_code=409, detail="Member account already activated")
+
+    if data.email is not None:
+        corrected=str(data.email).strip().lower()
+        if not data.replace_existing:raise HTTPException(400,'Use reset and resend to change an activation email.')
+        if db.query(Member).filter(Member.id!=member.id,func.lower(func.trim(Member.email))==corrected).first():
+            raise HTTPException(409,'This email belongs to another member profile.')
+        conflict=db.query(User).filter(func.lower(func.trim(User.email))==corrected).first()
+        if conflict and (not existing_account or conflict.id!=existing_account.user_id):
+            raise HTTPException(409,'This email is already assigned to another TNGOS account.')
+        member.email=corrected
+        if existing_account:account_user.email=corrected
+    if not (member.email or '').strip():raise HTTPException(400,'Member needs an email address')
+    if data.replace_existing:
+        db.query(MemberInvite).filter(MemberInvite.member_id==member.id,MemberInvite.used_at.is_(None)).update({'expires_at':datetime.utcnow()-timedelta(seconds=1)},synchronize_session=False)
+        db.add(SecurityLog(user_id=user.id,action='MEMBER_ACTIVATION_RESET',description=f'Corrected/resubmitted activation for member #{member.id}',success=True))
+        db.flush()
 
     email_user = db.query(User).filter(func.lower(User.email) == member.email.strip().lower()).first()
     if email_user and (email_user.role != "member" or (not existing_account and db.query(MemberAccount).filter_by(user_id=email_user.id).first())):
@@ -526,17 +539,13 @@ def invite_all_members(
 
 @router.post("/activate")
 def activate_member(data: ActivateMemberIn, db: Session = Depends(get_db)):
-    invite = (
-        db.query(MemberInvite)
-        .filter(MemberInvite.token_hash == _token_hash(data.token))
-        .with_for_update().first()
-    )
-    if not invite or invite.used_at is not None or invite.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="Activation link is invalid or expired")
-
-    member = db.query(Member).filter(Member.id == invite.member_id).with_for_update().first()
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
+    hint=db.query(MemberInvite.member_id).filter(MemberInvite.token_hash==_token_hash(data.token)).first()
+    if not hint:raise HTTPException(400,'Activation link is invalid or expired')
+    member=db.query(Member).filter(Member.id==hint[0]).with_for_update().first()
+    if not member:raise HTTPException(404,'Member not found')
+    invite=db.query(MemberInvite).filter(MemberInvite.token_hash==_token_hash(data.token)).with_for_update().populate_existing().first()
+    if not invite or invite.used_at is not None or invite.expires_at<datetime.utcnow():
+        raise HTTPException(400,'Activation link is invalid or expired')
 
     email = (member.email or "").strip().lower()
     if not email:

@@ -105,7 +105,7 @@ export default function TrustedDevices() {
           }}><TextField size="small" fullWidth label="Device name" value={label} onChange={e => setLabel(e.target.value)} inputProps={{
               maxLength: 80
             }} /><Button variant="contained" disabled={busy !== null || !label.trim()} onClick={() => action(d, true)}>Save</Button><Button onClick={() => setEditing(null)}>Cancel</Button></Stack>}</Box>)}</Stack>
- {data && !data.devices.length && <Typography color="text.secondary">No remembered device sessions yet. You can enable remembered sign-in in TNG Assistant settings.</Typography>}
+ {data && !data.devices.length && <Typography color="text.secondary">No remembered device sessions yet. Choose Stay signed in when you log in.</Typography>}
  {data?.total > data?.limit && <Typography variant="caption">Showing the most recent {data.limit} sessions.</Typography>}
  </CardContent></Card>;
 }

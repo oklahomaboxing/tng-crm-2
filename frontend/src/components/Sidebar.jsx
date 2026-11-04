@@ -38,7 +38,6 @@ export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
-  "TNG Assistant": <GraphicEqRoundedIcon />,
   "System Overview": <HealthAndSafetyRoundedIcon />,
   "Renewal Reminders": <CampaignRoundedIcon />,
   "Security Center": <ShieldRoundedIcon />,

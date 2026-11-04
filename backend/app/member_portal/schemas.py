@@ -10,6 +10,8 @@ class ActivateMemberIn(BaseModel):
 
 class InviteMemberIn(BaseModel):
     member_id: int
+    email: Optional[EmailStr] = None
+    replace_existing: bool = False
 
 
 class LinkInBodyIn(BaseModel):

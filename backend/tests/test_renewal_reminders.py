@@ -139,3 +139,23 @@ class RenewalReminderTests(unittest.TestCase):
   with patch.dict(os.environ,{'RESEND_API_KEY':'test'}),patch('resend.Emails.send',return_value={'id':'accepted-once'}) as email:
    with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(run,range(2)))
   self.assertEqual(email.call_count,1);self.assertEqual(sum(r['submitted'] for r in results),1)
+
+ def test_expired_notice_sms_only_once_and_no_old_expired_blast(self):
+  self.due();self.member.membership_end=self.now-timedelta(hours=1);self.db.commit()
+  rows=plan(self.db,self.now);self.assertEqual([(r['channel'],r['lead_days']) for r in rows],[('sms',0)])
+  result,email,twilio=self.send();self.assertEqual(result['submitted'],1);email.assert_not_called()
+  self.assertIn('membership period ended',twilio.return_value.messages.create.call_args.kwargs['body'])
+  self.assertEqual(self.send()[0]['submitted'],0)
+  self.member.membership_end=self.now-timedelta(days=30);self.db.commit();self.assertEqual(plan(self.db,self.now),[])
+
+ def test_expired_notice_cancelled_on_renewal_and_inactive_excluded(self):
+  self.due();self.member.membership_end=self.now-timedelta(hours=1);self.db.commit();self.assertEqual(enqueue(self.db,self.now),1)
+  self.member.membership_end=self.now+timedelta(days=30);self.db.commit();result,email,twilio=self.send();self.assertEqual(result['submitted'],0)
+  self.assertEqual(self.db.query(RenewalReminder).one().status,'cancelled')
+  self.member.membership_end=self.now-timedelta(hours=1);self.member.membership_status='inactive';self.db.commit();self.assertEqual(plan(self.db,self.now),[])
+
+ def test_expired_settings_can_be_disabled_and_persisted(self):
+  self.due();self.member.membership_end=self.now-timedelta(hours=1);self.db.commit()
+  r=self.client.put('/api/renewal-reminders',headers=self.headers(),json={'expired_sms':False});self.assertEqual(r.status_code,200,r.text)
+  self.assertEqual(plan(self.db,self.now),[])
+  overview=self.client.get('/api/renewal-reminders',headers=self.headers());self.assertFalse(overview.json()['settings']['expired_sms'])

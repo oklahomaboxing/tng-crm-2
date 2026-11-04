@@ -31,7 +31,6 @@ const SecurityCenter = lazy(() => import("./pages/SecurityCenter"));
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const AIDisplay = lazy(() => import("./pages/AIDisplay.jsx"));
 const Members = lazy(() => import("./pages/Members.jsx"));
-const TngAssistant = lazy(() => import("./pages/TngAssistant.jsx"));
 const Sales = lazy(() => import("./pages/Sales.jsx"));
 const SalesRepDashboard = lazy(() => import("./pages/SalesRepDashboard.jsx"));
 const JoinPage = lazy(() => import("./pages/JoinPage.jsx"));
@@ -63,7 +62,6 @@ const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const theme = tngTheme;
 
 function landingPageForRole(role) {
-  if (role === "admin" && localStorage.getItem('tng_assistant_open') !== 'false') return 'TNG Assistant';
   if (role === "rep") return "My Sales";
   if (role === "staff") return "Member Check-In";
   if (role === "matchmaker") return "Promoter";
@@ -230,7 +228,6 @@ function App() {
   const [qrCodes, setQrCodes] = useState({});
   const [loginLoading, setLoginLoading] = useState(false);
   const [rememberDevice,setRememberDevice]=useState(()=>staySignedIn());
-  const [assistantListening,setAssistantListening]=useState(false);
 
   async function login() {
     setLoginLoading(true);
@@ -836,7 +833,6 @@ return (
       )}
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
       {page === "Renewal Reminders" && role === "admin" && <RenewalReminders/>}
-      {role === 'admin' && <><Box sx={{display:page==='TNG Assistant'?'block':'none'}}><TngAssistant onWake={()=>navigate('TNG Assistant')} onListening={setAssistantListening}/></Box>{page!=='TNG Assistant'&&<Button variant="contained" onClick={()=>navigate('TNG Assistant')} sx={{position:'fixed',bottom:20,right:20,zIndex:1200}}>{assistantListening?'Hey TNG · Listening':'TNG Assistant'}</Button>}</>}
       {page === "Members" && ["admin", "staff"].includes(role) && <Members role={role} initialMemberId={navigationTarget.memberId} onOpenMember={id => navigate("Members", { memberId: id })} onCloseMember={() => navigate("Members")} />}
       {page === "Check-In Kiosk" && ["admin", "staff"].includes(role) && <CheckinKioskAdmin />}
 

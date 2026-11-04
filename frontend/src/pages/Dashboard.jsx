@@ -40,7 +40,7 @@ export default function Dashboard({
     });
     return () => abort.abort();
   }, [dash]);
-  const launch = [['TNG Assistant', 'Ask TNG', 'Your voice command center', GraphicEqRoundedIcon], ['Member Check-In', 'Member check-in', 'Number keypad & signup QR', QrCodeScannerRoundedIcon], ['Members', 'Customer profiles', 'Gym members & customer history', PeopleAltRoundedIcon], ['TNG BOXING EVENTS', 'TNG Boxing Events', 'Fight cards, contracts & tickets', EventRoundedIcon], ['Event Check-In', 'Fight-night door', 'Scan tickets & manage entry', QrCodeScannerRoundedIcon], ['Marketing Center', 'Marketing & growth', 'Member communications', CampaignRoundedIcon]];
+  const launch = [['Member Check-In', 'Member check-in', 'Number keypad & signup QR', QrCodeScannerRoundedIcon], ['Members', 'Customer profiles', 'Gym members & customer history', PeopleAltRoundedIcon], ['TNG BOXING EVENTS', 'TNG Boxing Events', 'Fight cards, contracts & tickets', EventRoundedIcon], ['Event Check-In', 'Fight-night door', 'Scan tickets & manage entry', QrCodeScannerRoundedIcon], ['Marketing Center', 'Marketing & growth', 'Member communications', CampaignRoundedIcon]];
   const stats = [['Active members', 'active_members'], ['Expiring in 7 days', 'expiring_members'], ['Expired memberships', 'expired_members'], ['Today’s gym check-ins', 'today_checkins'], ['Revenue this month', 'revenue_this_month', true], ['Sales this month', 'sales_this_month']];
   return <Stack spacing={3}>
   <Box className="tng-hero" sx={{
@@ -90,7 +90,7 @@ export default function Dashboard({
               border: '1px solid #ffffff14'
             }} /></Stack></Box><Stack spacing={1.5} sx={{
           alignItems: "flex-start"
-        }}><Button variant="contained" startIcon={<GraphicEqRoundedIcon />} onClick={() => onNavigate('TNG Assistant')}>Talk to TNG</Button><Button onClick={() => onNavigate('System Overview')} endIcon={<ArrowForwardRoundedIcon />} sx={{
+        }}><Button variant="contained" startIcon={<CampaignRoundedIcon />} onClick={() => onNavigate('Renewal Reminders')}>Member reminders</Button><Button onClick={() => onNavigate('System Overview')} endIcon={<ArrowForwardRoundedIcon />} sx={{
             color: '#e1e9f5'
           }}>Review your priorities</Button></Stack></Stack></Box>
   {error && <Alert severity="error">{error}</Alert>}

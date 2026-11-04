@@ -35,3 +35,7 @@ Models are registered with the existing SQLAlchemy metadata and created by the e
 Existing secrets/configuration are reused: `RESEND_API_KEY`, optional `RESEND_FROM_EMAIL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `TNG_APP_URL` and `TNG_BACKEND_URL`. No credentials belong in source control. `MEMBERSHIP_REMINDERS_WORKER_ENABLED=0` disables the background worker; default is `1`. Tests always disable it and mock providers; never run the test database fixtures against production.
 
 API: admin-only GET/PUT `/api/renewal-reminders`; signed Twilio POST `/api/renewal-reminders/sms-status?delivery_id=...`.
+
+## Expired membership text notices
+
+SMS-only expired notices are enabled by default in the same admin workspace (Text when membership expires). One notice per expiration date is sent after the recorded term ends, with up to three Central calendar days of catch-up. Older expired records are not bulk-texted. Expired notices reuse the same consent, opt-out, shared-contact, quiet-hour and submission safeguards. Manual inactive, suspended and cancelled accounts are excluded. Renewing before submission cancels an outdated expiration notice. This setting is stored in a separate additive table; existing reminder settings and recipient history are retained.

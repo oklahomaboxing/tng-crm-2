@@ -25,6 +25,11 @@ class ReminderSettings(Base):
     five_day=Column(Boolean,default=True,nullable=False)
     one_day=Column(Boolean,default=False,nullable=False)
 
+class ExpiryNoticeSettings(Base):
+    __tablename__='membership_expiry_notice_settings'
+    id=Column(Integer,primary_key=True)
+    enabled=Column(Boolean,default=True,nullable=False)
+
 class RenewalReminder(Base):
     __tablename__='renewal_reminders'
     __table_args__=(UniqueConstraint('recipient','expiry_date','lead_days','channel',name='uq_renewal_recipient_term_channel'),)
@@ -56,7 +61,10 @@ def utcnow():return datetime.utcnow()
 def localnow(now):return now.replace(tzinfo=timezone.utc).astimezone(CT)
 def expiry(member):return localnow(member.membership_end).date().isoformat() if member.membership_end else None
 def settings(db):
-    return db.get(ReminderSettings,1) or ReminderSettings(id=1,enabled=True,email_enabled=True,sms_enabled=True,five_day=True,one_day=False)
+    cfg=db.get(ReminderSettings,1) or ReminderSettings(id=1,enabled=True,email_enabled=True,sms_enabled=True,five_day=True,one_day=False)
+    expired=db.get(ExpiryNoticeSettings,1)
+    cfg.expired_sms=expired.enabled if expired else True
+    return cfg
 def phone(value):
     try:return normalize_ticket_phone(value)
     except ValueError:return ''
@@ -89,12 +97,14 @@ def plan(db,now=None):
     now=now or utcnow();cfg=settings(db);members=db.query(Member).all();contacts=db.query(MarketingContact).all();paid=membership_evidence(db);today=localnow(now).date();rows=[]
     if not cfg.enabled:return []
     for member in members:
-        if not member.membership_end or not membership_report(member,paid,now)['is_current_member']:continue
+        report=membership_report(member,paid,now)
+        if str(member.membership_status or '').lower() in ('inactive','cancelled','canceled','suspended'):continue
+        if not member.membership_end or not (report['is_current_member'] or report['membership_category']=='expired'):continue
         end=expiry(member);days=(datetime.fromisoformat(end).date()-today).days
-        stage=1 if cfg.one_day and days==1 else 5 if cfg.five_day and 1<=days<=5 else None
+        stage=0 if cfg.expired_sms and report['membership_category']=='expired' and -3<=days<=0 else 1 if report['is_current_member'] and cfg.one_day and days==1 else 5 if report['is_current_member'] and cfg.five_day and 1<=days<=5 else None
         if stage is None:continue
         for channel,enabled in [('email',cfg.email_enabled),('sms',cfg.sms_enabled)]:
-            if not enabled:continue
+            if not enabled or (stage==0 and channel!='sms'):continue
             recipient,reason=eligibility(db,member,channel,members,contacts)
             existing=db.query(RenewalReminder).filter_by(member_id=member.id,expiry_date=end,lead_days=stage,channel=channel).order_by(RenewalReminder.id.desc()).first()
             resume=bool(existing and existing.status=='cancelled' and existing.reason in ('contact_changed','renewed_inactive_or_settings_changed') and not existing.provider_id and existing.attempts<3)
@@ -119,10 +129,11 @@ def enqueue(db,now=None):
         except IntegrityError:db.rollback()
     return count
 
-def content(member,date):
+def content(member,date,expired=False):
     end=datetime.fromisoformat(date).strftime('%B %d, %Y')
     url=os.getenv('TNG_APP_URL','https://tngos.tngboxinggym.com').rstrip('/')+'/'
     text=f"TNG Boxing: Hi {member.first_name or 'member'}, your current membership period ends {end}. View membership details and renewal options: {url} If renewal is already arranged, check with the front desk. Help: 405-959-5823."
+    if expired:text=f"TNG Boxing: Hi {member.first_name or 'member'}, your membership period ended {end}. View your account and renewal options: {url} If you have already renewed, please contact the front desk at 405-959-5823 so we can update your record."
     return text,text+' Reply STOP to opt out.'
 
 def process(db,now=None,limit=25):
@@ -153,8 +164,11 @@ def process(db,now=None,limit=25):
         if row.status not in ('queued','blocked') or row.next_attempt>now:db.rollback();continue
         cfg=settings(db)
         paid=membership_evidence(db)
-        valid=bool(member and member.membership_end and expiry(member)==row.expiry_date and membership_report(member,paid,now)['is_current_member'])
-        allowed=cfg.enabled and (cfg.email_enabled if row.channel=='email' else cfg.sms_enabled) and (cfg.five_day if row.lead_days==5 else cfg.one_day)
+        valid=bool(member and member.membership_end and expiry(member)==row.expiry_date and (membership_report(member,paid,now)['membership_category']=='expired' if row.lead_days==0 else membership_report(member,paid,now)['is_current_member']))
+        if row.lead_days==0 and member:
+            days=(datetime.fromisoformat(row.expiry_date).date()-local.date()).days
+            valid=valid and -3<=days<=0 and str(member.membership_status or '').lower() not in ('inactive','cancelled','canceled','suspended')
+        allowed=cfg.enabled and (cfg.email_enabled if row.channel=='email' else cfg.sms_enabled) and (cfg.expired_sms if row.lead_days==0 else cfg.five_day if row.lead_days==5 else cfg.one_day)
         if not valid or not allowed:row.status='cancelled';row.reason='renewed_inactive_or_settings_changed';db.commit();continue
         recipient,reason=eligibility(db,member,row.channel,db.query(Member).all(),db.query(MarketingContact).all())
         if reason or recipient!=row.recipient:row.status='cancelled';row.reason=reason or 'contact_changed';db.commit();continue
@@ -169,7 +183,7 @@ def process(db,now=None,limit=25):
                 if not service:raise RuntimeError('sms_notification_route_unavailable')
         except Exception:
             row.status='blocked';row.reason='provider_configuration_unavailable';row.next_attempt=now+timedelta(minutes=30);db.commit();continue
-        text,sms=content(member,row.expiry_date)
+        text,sms=content(member,row.expiry_date,expired=row.lead_days==0)
         claimed=db.query(RenewalReminder).filter(RenewalReminder.id==identity,RenewalReminder.status.in_(['queued','blocked'])).update({'status':'submitting','reason':None,'attempts':RenewalReminder.attempts+1,'sent_date':local.date().isoformat(),'next_attempt':now},synchronize_session=False)
         db.commit()
         if not claimed:continue
@@ -226,6 +240,7 @@ class SettingsInput(BaseModel):
     sms_enabled:bool=True
     five_day:bool=True
     one_day:bool=False
+    expired_sms:bool=True
 
 @router.get('')
 def overview(response:Response,db=Depends(get_db),user=Depends(current_user)):
@@ -244,6 +259,8 @@ def configure(data:SettingsInput,db=Depends(get_db),user=Depends(current_user)):
     from sqlalchemy.dialects.sqlite import insert as sqlite_insert
     insert=pg_insert if db.get_bind().dialect.name=='postgresql' else sqlite_insert
     values=data.model_dump()
+    expired=values.pop('expired_sms')
+    db.execute(insert(ExpiryNoticeSettings).values(id=1,enabled=expired).on_conflict_do_update(index_elements=['id'],set_={'enabled':expired}))
     db.execute(insert(ReminderSettings).values(id=1,**values).on_conflict_do_update(index_elements=['id'],set_=values))
     db.add(SecurityLog(user_id=user.id,action='RENEWAL_REMINDERS_CONFIGURED',description='Updated membership reminder channels and timing.'))
     db.commit();return {'saved':True}

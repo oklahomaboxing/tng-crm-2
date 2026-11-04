@@ -1,7 +1,7 @@
 import AssignMembershipDialog from '../components/members/AssignMembershipDialog';
 import { memberDate, membershipCategory } from "../utils/membershipStatus";
 import { simpleMemberNumber } from "../utils/memberNumber";
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -34,6 +34,12 @@ export default function MemberProfile({ member, onBack }) {
   const [editForm, setEditForm] = useState({});
   const [loginInviteLoading, setLoginInviteLoading] = useState(false);
   const [inviteStatus, setInviteStatus] = useState(null);
+  const [resetEmailOpen,setResetEmailOpen]=useState(false),[activationEmail,setActivationEmail]=useState(''),[activationError,setActivationError]=useState(''),[activationNotice,setActivationNotice]=useState('');
+  const activationLock=useRef(false);
+  async function resetActivationEmail(){
+    if(activationLock.current)return;activationLock.current=true;setLoginInviteLoading(true);setActivationError('');
+    try{const r=await fetch(`${API}/api/member/admin/invite`,{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('token')}`,'Content-Type':'application/json'},body:JSON.stringify({member_id:memberData.id,email:activationEmail.trim(),replace_existing:true})});const d=await r.json();if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'Enter a valid, unique email address.');setMemberData(old=>({...old,email:d.email}));setActivationNotice('A fresh activation email was sent. Previous activation links are no longer valid.');setResetEmailOpen(false);await loadInviteStatus();}catch(e){setActivationError(e.message);}finally{activationLock.current=false;setLoginInviteLoading(false);}
+  }
 
   useEffect(() => {
     setMemberData(member);
@@ -372,6 +378,8 @@ export default function MemberProfile({ member, onBack }) {
 
   return (
     <Box>
+      <Dialog open={resetEmailOpen} onClose={()=>{if(!loginInviteLoading)setResetEmailOpen(false);}} fullWidth maxWidth="sm"><DialogTitle>Reset activation email</DialogTitle><DialogContent><Typography sx={{mb:2}}>Correct the email address and send a fresh activation link. You can keep the same address to resend. This does not change membership or payment status.</Typography><TextField autoFocus fullWidth type="email" label="Member email" value={activationEmail} disabled={loginInviteLoading} onChange={e=>setActivationEmail(e.target.value)}/>{activationError&&<Typography color="error" sx={{mt:2}}>{activationError}</Typography>}</DialogContent><DialogActions><Button disabled={loginInviteLoading} onClick={()=>setResetEmailOpen(false)}>Cancel</Button><Button variant="contained" disabled={loginInviteLoading||!activationEmail.trim()} onClick={resetActivationEmail}>{loginInviteLoading?'Sending…':'Save email & send activation'}</Button></DialogActions></Dialog>
+      {activationNotice&&<Typography color="success.main" role="status">{activationNotice}</Typography>}
       {assignOpen && <AssignMembershipDialog member={memberData} onClose={()=>setAssignOpen(false)} onSaved={loadMember}/>}
       <Button variant="outlined" color="error" onClick={onBack} sx={{ mb: 2 }}>
         Back to Members
@@ -431,6 +439,7 @@ export default function MemberProfile({ member, onBack }) {
                   Edit Member
                 </Button>
 
+                {inviteStatus && (!inviteStatus.activated || inviteStatus.needs_password_setup) && <Button onClick={()=>{setActivationEmail(memberData.email||'');setActivationError('');setResetEmailOpen(true);}} disabled={loginInviteLoading}>Reset email & resend activation</Button>}
                 {inviteStatus?.needs_password_setup && <Button onClick={activateMemberLogin} disabled={loginInviteLoading}>Send Password Setup</Button>}
                 {inviteStatus?.status === "active" ? (
                   <>

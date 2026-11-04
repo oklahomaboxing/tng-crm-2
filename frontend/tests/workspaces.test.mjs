@@ -22,3 +22,5 @@ test('untrusted or mismatched targets are rejected', () => {
   assert.equal(readWorkspace('#/not-a-workspace', 'admin'), null);
   assert.equal(readWorkspace('#/members', 'rep'), null);
 });
+
+test('assistant is removed from navigation and old links cannot open it',()=>{assert.ok(!ROLE_MENUS.admin.includes('TNG Assistant'));assert.equal(readWorkspace('#/tng-assistant','admin'),null);});
