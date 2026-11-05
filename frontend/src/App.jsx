@@ -26,6 +26,8 @@ import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspace
 import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
 const MemberPortal = lazy(() => import("./pages/MemberPortal.jsx"));
 const MemberActivate = lazy(() => import("./pages/MemberActivate.jsx"));
+const ApparelStore = lazy(() => import("./pages/ApparelStore.jsx"));
+const ApparelAdmin = lazy(() => import("./pages/ApparelAdmin.jsx"));
 const RenewalReminders = lazy(() => import("./pages/RenewalReminders.jsx"));
 const SecurityCenter = lazy(() => import("./pages/SecurityCenter"));
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
@@ -156,6 +158,7 @@ function RootEntry() {
   }
 
   const path = window.location.pathname;
+  if (/^\/apparel\/?$/.test(path)) return <ApparelStore/>;
 
   if (/^\/ticket-(privacy|terms)\/?$/.test(path)) {
     return <TicketPolicies privacy={path.startsWith("/ticket-privacy")} />;
@@ -832,6 +835,7 @@ return (
         <Dashboard dash={dash} leader={leader} load={load} onNavigate={navigate} userName={userName} error={dashboardError} />
       )}
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
+      {page === "TNG Apparel" && role === "admin" && <ApparelAdmin/>}
       {page === "Renewal Reminders" && role === "admin" && <RenewalReminders/>}
       {page === "Members" && ["admin", "staff"].includes(role) && <Members role={role} initialMemberId={navigationTarget.memberId} onOpenMember={id => navigate("Members", { memberId: id })} onCloseMember={() => navigate("Members")} />}
       {page === "Check-In Kiosk" && ["admin", "staff"].includes(role) && <CheckinKioskAdmin />}

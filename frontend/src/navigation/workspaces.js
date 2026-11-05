@@ -3,6 +3,7 @@ export const ROLE_MENUS = {
     "Dashboard",
     "System Overview",
     "Renewal Reminders",
+    "TNG Apparel",
     "Members",
     "TNGTrainer",
     "Promoter",
@@ -48,7 +49,7 @@ export const ROLE_MENUS = {
 
 export const WORKSPACE_GROUPS = [
   { label: "COMMAND", pages: ["Dashboard", "System Overview"] },
-  { label: "GYM OPERATIONS", pages: ["Members", "Member Check-In", "Check-In Kiosk", "Renewal Reminders", "Sales", "Products", "TNGTrainer"] },
+  { label: "GYM OPERATIONS", pages: ["TNG Apparel", "Members", "Member Check-In", "Check-In Kiosk", "Renewal Reminders", "Sales", "Products", "TNGTrainer"] },
   { label: "TNG PROMOTIONS", pages: ["TNG BOXING EVENTS", "Event Check-In", "Promoter", "Fight Calendar", "Fighter Portal Videos"] },
   { label: "GROWTH", pages: ["Leads", "QR Referrals", "Marketing Center", "My Sales"] },
   { label: "ADMINISTRATION", pages: ["Clover", "Duplicate Review", "Reports", "User Management", "Security Center", "Manager Portal"] },

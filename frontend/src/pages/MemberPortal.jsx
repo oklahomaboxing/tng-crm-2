@@ -21,6 +21,7 @@ import FitnessCenterRoundedIcon from "@mui/icons-material/FitnessCenterRounded";
 import QrCode2RoundedIcon from "@mui/icons-material/QrCode2Rounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
+import ApparelStore from "./ApparelStore.jsx";
 import MemberHomeTrainer from "./MemberHomeTrainer.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -535,6 +536,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f6f7f9", pb: 8 }}>
+      <Box sx={{px:{xs:2,md:4},py:2,bgcolor:"#151519",color:"white"}}><Stack direction="row" sx={{alignItems:"center",justifyContent:"space-between"}}><Typography variant="h6">TNG APPAREL</Typography><Button variant="contained" color="error" component="a" href="#member-apparel">Shop the TNG collection</Button></Stack></Box>
       <Box sx={{ bgcolor: "#09090b", color: "white", py: 2 }}>
         <Container maxWidth="lg">
           <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -1632,6 +1634,7 @@ export default function MemberPortal({ onLogout, previewToken = null }) {
           </Box>
         </Box>
       )}
+      <Box id="member-apparel"><ApparelStore embedded/></Box>
     </Box>
   );
 }

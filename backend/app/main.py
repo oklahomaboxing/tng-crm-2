@@ -1423,8 +1423,22 @@ def finalize_merchandise_checkout(
     order_id: str,
     db: Session,
 ):
+    checkout=db.query(MerchandiseCheckout).filter_by(id=checkout.id).with_for_update().populate_existing().one()
+    if checkout.clover_payment_id and checkout.clover_payment_id!=payment_id:raise HTTPException(409,'Checkout already has a different payment')
     if checkout.status == "paid":
         return checkout
+    if not payment_id:raise HTTPException(400,'Payment ID is required')
+    from app.apparel.routes import ApparelOrder,clover
+    apparel=db.query(ApparelOrder).filter_by(checkout_id=checkout.id).first()
+    if apparel:
+        from urllib.parse import quote
+        base,merchant,headers=clover()
+        try:
+            proof=requests.get(f'{base}/v3/merchants/{merchant}/payments/{quote(payment_id,safe="")}',headers=headers,timeout=15)
+            proof.raise_for_status();proof=proof.json()
+            if proof.get('amount')!=round(checkout.total_amount*100) or proof.get('result')!='SUCCESS':raise ValueError()
+            order_id=order_id or (proof.get('order') or {}).get('id','')
+        except Exception:raise HTTPException(503,'Apparel payment needs Clover verification; retry the callback')
 
     cart = json.loads(checkout.cart_json or "[]")
     if not cart:
@@ -1455,10 +1469,10 @@ def finalize_merchandise_checkout(
         db.add(member)
         db.flush()
 
-    for item in cart:
+    for item in sorted(cart,key=lambda i:int(i["product_id"])):
         product = db.query(MembershipProduct).filter(
             MembershipProduct.id == int(item["product_id"])
-        ).first()
+        ).with_for_update().first()
         quantity = max(1, int(item.get("quantity") or 1))
 
         if not product or product.category != "merchandise":
@@ -1473,7 +1487,7 @@ def finalize_merchandise_checkout(
                 )
             product.stock_quantity = available - quantity
 
-        unit_price = float(product.price or 0)
+        unit_price = int(item["unit_price_cents"])/100 if "unit_price_cents" in item else float(product.price or 0)
         sale = Sale(
             member_id=member.id,
             sales_rep_id=checkout.sales_rep_id,
@@ -1492,6 +1506,7 @@ def finalize_merchandise_checkout(
         )
         db.add(sale)
 
+    if apparel:apparel.collection_status="paid"
     checkout.status = "paid"
     checkout.clover_payment_id = payment_id or ""
     checkout.clover_order_id = order_id or ""
@@ -1552,7 +1567,7 @@ def create_merchandise_checkout(
             )
 
         unit_price = float(product.price or 0)
-        clean_cart.append({"product_id": product.id, "quantity": quantity})
+        clean_cart.append({"product_id": product.id, "quantity": quantity,"unit_price_cents":int(round(unit_price*100))})
         line_items.append({
             "name": product.name,
             "note": product.sku or "TNG merchandise",

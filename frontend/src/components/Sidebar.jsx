@@ -40,6 +40,7 @@ const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
   "System Overview": <HealthAndSafetyRoundedIcon />,
   "Renewal Reminders": <CampaignRoundedIcon />,
+  "TNG Apparel": <CampaignRoundedIcon />,
   "Security Center": <ShieldRoundedIcon />,
   Members: <PeopleAltRoundedIcon />,
   "TNGTrainer": <SportsMmaRoundedIcon />,
