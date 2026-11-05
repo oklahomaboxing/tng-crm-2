@@ -5,8 +5,8 @@ const empty={id:0,slug:'earned-not-given-shirt',title:'TNG Earned Not Given Tee'
 export default function ApparelAdmin(){
  const [data,setData]=useState({products:[],orders:[]}),[form,setForm]=useState(empty),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
  async function request(path,method='GET',body){const r=await fetch(API+'/api/apparel/'+path,{method,headers:{...authHeaders(),...(body instanceof FormData?{}:{'Content-Type':'application/json'})},body:body?(body instanceof FormData?body:JSON.stringify(body)):undefined});const d=await r.json();if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:'Check product details and try again.');return d;}
- async function load(){const d=await request('admin');setData(d);}
- useEffect(()=>{load().catch(e=>setError(e.message));},[]);
+ async function load(initial=false){const d=await request('admin');setData(d);if(initial&&d.products.length)edit(d.products[0]);}
+ useEffect(()=>{load(true).catch(e=>setError(e.message));},[]);
  function edit(p){setForm({...p,sizes:p.variants.map(v=>v.size),event_date:p.event_date||''});setError('');setNotice('');}
  async function act(fn){if(busy)return;setBusy(true);setError('');setNotice('');try{await fn();await load();}catch(e){setError(e.message);}finally{setBusy(false);}}
  return <Stack spacing={3}><Box className="tng-hero" sx={{p:4}}><Typography variant="overline">TNG BOXING / RETAIL</Typography><Typography variant="h3">TNG APPAREL</Typography><Typography>Launch the drop. Share the link. Collect paid orders.</Typography><Button component="a" href="/apparel" target="_blank" sx={{mt:2}} variant="contained">Open public store</Button></Box>{error&&<Alert severity="error">{error}</Alert>}{notice&&<Alert severity="success">{notice}</Alert>}
