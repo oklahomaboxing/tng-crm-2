@@ -2201,6 +2201,9 @@ def categorize_clover_product(name):
     if any(word in product_name for word in blocked_words):
         return "other"
 
+    if re.search(r'\b(t-?shirts?|tees?|hoodies?|apparel|sweatshirts?|caps?|gloves?)\b',product_name):
+        return 'merchandise'
+
     event_keywords = [
         "ticket",
         "general admission",
@@ -2259,7 +2262,7 @@ def sync_clover_products(db: Session = Depends(get_db), user: User = Depends(cur
     for item in items:
         name = item.get("name")
         price_cents = item.get("price", 0)
-        category = categorize_clover_product(name)
+        category = "merchandise" if str(item.get("sku") or "").startswith("TNG-APP-") else categorize_clover_product(name)
 
         if not name:
             continue

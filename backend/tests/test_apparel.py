@@ -87,3 +87,7 @@ class ApparelTests(unittest.TestCase):
   with patch('app.apparel.routes.price',return_value=2500),patch('app.apparel.routes.requests.post') as post:
    r=self.client.post('/api/apparel/checkout',json={'request_key':'c'*32,'expected_price_cents':2000,'name':'Buyer','email':'buyer@example.com','variant_id':self.variant.id})
   self.assertEqual(r.status_code,409,r.text);post.assert_not_called();self.assertEqual(self.db.query(ApparelOrder).count(),0)
+
+ def test_event_shirt_is_merchandise_not_a_fight_ticket(self):
+  self.assertEqual(main.categorize_clover_product('TNG Earned Not Given Tee / S / EVENT'),'merchandise')
+  self.assertEqual(main.categorize_clover_product('General Admission Event Ticket'),'event_ticket')
