@@ -1706,7 +1706,7 @@ function MatchmakerContent() {
         <nav className="promotion-nav" aria-label="Promoter navigation">
           {[["home", "Overview"], ["finder", "Regional finder"], ["scouting", "Boxer database"], ["events", "Events"], ["fighter-pool", "Fighter pool"], ["matchmaking", "Matchmaking"], ["managers", "Managers"]].map(([key, label]) => <Button key={key} aria-current={promoterPage === key ? "page" : undefined} onClick={() => navigatePromoter(key)}>{label}</Button>)}
         </nav>
-        <Stack direction="row" sx={{justifyContent:"flex-end"}}><SignedContractLibrary eventId={eventId?Number(eventId):null}/></Stack>
+        <Stack direction="row" sx={{justifyContent:"flex-end"}}><SignedContractLibrary eventId={eventId?Number(eventId):null} onOpenEventContracts={id=>openWorkspace(id,2)}/></Stack>
         {addedCardBout&&<Alert severity="success" action={<Button color="inherit" onClick={()=>openWorkspace(addedCardBout.eventId,1)}>Open fight card</Button>}>Draft bout #{addedCardBout.id} is on the card. Fighter agreement and contract signing remain separate.</Alert>}
         {promoterPage === "home" && <PromoterOverview events={events} fighters={fighters} eligible={eligible} onNavigate={navigatePromoter} onCreate={() => setEventOpen(true)} onOpen={openWorkspace} onCopyRegistration={copyFighterRegistrationLink} />}
 

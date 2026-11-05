@@ -1,3 +1,4 @@
+import { openContractFile } from "../utils/contractFiles";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -883,83 +884,10 @@ export default function EventWorkspace({
   }
 
 
-  async function viewOfficialContractPdf(
-    contractId
-  ) {
-    if (!contractId) {
-      window.alert(
-        "Generate the contract first."
-      );
-      return;
-    }
-
-    const pdfWindow = window.open(
-      "",
-      "_blank"
-    );
-
-    if (!pdfWindow) {
-      window.alert(
-        "Please allow popups for TNGOS."
-      );
-      return;
-    }
-
-    pdfWindow.document.write(
-      "<p style='font-family:Arial;padding:30px'>Loading official contract...</p>"
-    );
-
-    try {
-      const token =
-        localStorage.getItem("token");
-
-      const response = await fetch(
-        `${API}/api/boxing/contracts/${contractId}/official-pdf`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        let detail =
-          "Could not load official contract PDF.";
-
-        try {
-          const body = await response.json();
-          detail = body.detail || detail;
-        } catch (_) {}
-
-        throw new Error(detail);
-      }
-
-      const blob = await response.blob();
-
-      const url =
-        window.URL.createObjectURL(blob);
-
-      pdfWindow.location.href = url;
-
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 60000);
-
-    } catch (error) {
-      try {
-        pdfWindow.close();
-      } catch (_) {}
-
-      const notice =
-        error.message ||
-        "Could not load official contract PDF.";
-
-      setMessage(notice);
-      window.alert(notice);
-    }
+  async function viewOfficialContractPdf(contractId) {
+    try { await openContractFile(contractId); }
+    catch(error){const notice=error.message||'Could not load official contract PDF.';setMessage(notice);window.alert(notice);}
   }
-
 
   async function generateContract(bout, corner) {
     const printWindow = window.open(
