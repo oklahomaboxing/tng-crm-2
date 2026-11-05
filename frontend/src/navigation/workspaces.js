@@ -74,7 +74,7 @@ export const WORKSPACE_HINTS = {
   Products: 'Membership plans, prices and merchandise inventory',
   Reports: 'Revenue, sales, commissions and business reports',
   'My Sales': 'Your sales and commissions',
-  'Marketing Center': 'Member email, texts, campaigns and content',
+  'Marketing Center': 'Email, text messages and campaigns for gym members',
   Leads: 'Prospective customers, follow-ups and contact details',
   'QR Referrals': 'Referral QR codes and signup links',
   Clover: 'Payment connection, catalog and customer synchronization',
@@ -87,9 +87,10 @@ const ALIASES = {
  'Event Check-In':'door scanner fight night scan tickets checkin check in',
  'TNG Apparel':'shirts tee tshirt clothing shop store preorder',
  'Promoter':'matchmaker matchmaking pro boxers scouting signed pdf download contracts',
- 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch',
+ 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget expenses',
+ 'Marketing Center':'sms txt text email members marketing campaigns',
  'Members':'activate activation reset email resend customer profile',
- 'Renewal Reminders':'sms text expired expiring membership reminders renew',
+ 'Renewal Reminders':'sms txt text expired expiring membership reminders renew',
 };
 export function workspaceGroup(page) { return WORKSPACE_GROUPS.find(group=>group.pages.includes(page)); }
 export function searchWorkspaces(role, query='') {

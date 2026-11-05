@@ -31,6 +31,8 @@ test('each workspace has exactly one organizational home',()=>{
 });
 test('task search finds apparel, contracts and renewal tools',()=>{
  assert.ok(searchWorkspaces('admin','shirts').includes('TNG Apparel'));
+ assert.ok(searchWorkspaces('admin','text members').includes('Marketing Center'));
+ assert.ok(searchWorkspaces('admin','sponsors').includes('TNG BOXING EVENTS'));
  assert.ok(searchWorkspaces('admin','signed contracts').includes('Promoter'));
  assert.ok(searchWorkspaces('admin','sms expired').includes('Renewal Reminders'));
  assert.ok(searchWorkspaces('staff','front desk').includes('Member Check-In'));
