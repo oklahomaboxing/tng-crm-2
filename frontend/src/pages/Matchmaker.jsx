@@ -2109,32 +2109,6 @@ function MatchmakerContent() {
                 </Card>
               </Grid>
 
-            <Card
-              sx={{
-                mb: 3,
-                borderRadius: 3.5,
-                border: "1px solid",
-                borderColor: "divider",
-                overflow: "hidden",
-              }}
-            >
-              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-                <Stack spacing={0.75} sx={{ mb: 2 }}>
-                  <Typography variant="h5" fontWeight={950}>
-                    Auto Match
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Generate proposed matchups for an event, review the card,
-                    and move approved matchups into the fight workflow.
-                  </Typography>
-                </Stack>
-
-                <AutoMatchPlanner
-                  events={events}
-                />
-              </CardContent>
-            </Card>
-
               <Grid item xs={12} sm={4}>
                 <Card sx={{ borderRadius: 3 }}>
                   <CardContent>
@@ -2566,6 +2540,35 @@ function MatchmakerContent() {
             </TableContainer>
           </>
         )}
+            <Card
+              id="promoter-auto-match"
+              component="section"
+              aria-label="Auto-Match tracker"
+              sx={{
+                mt: 3,
+                mb: 0,
+                borderRadius: 3.5,
+                border: "1px solid",
+                borderColor: "divider",
+                overflow: "hidden",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+                <Stack spacing={0.75} sx={{ mb: 2 }}>
+                  <Typography variant="h5" fontWeight={950}>
+                    Auto-Match Tracker
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Generate proposed matchups for an event, review the card,
+                    and move approved matchups into the fight workflow.
+                  </Typography>
+                </Stack>
+
+                <AutoMatchPlanner
+                  events={events}
+                />
+              </CardContent>
+            </Card>
             </Box>
           </Box>
         )}
