@@ -94,20 +94,35 @@ def save_product(product_id:int,data:ProductInput,db=Depends(get_db),user=Depend
   raise HTTPException(409,'This link belongs to an existing product. Select that product to edit it, or choose another link.')
  if data.published and (not sizes or not data.fulfillment.strip() or not p.image or not data.event_date):raise HTTPException(400,'Add the shirt image, sizes, fulfillment instructions and event date before publishing')
  variants=db.query(ApparelVariant).filter_by(apparel_id=product_id).order_by(ApparelVariant.id).all() if product_id else []
- if data.published and (not variants or not all(v.clover_presale_id and v.clover_event_id for v in variants)):raise HTTPException(400,'Create or match Clover POS items before publishing')
+ needs_sync=bool(data.published and (not variants or not all(v.clover_presale_id and v.clover_event_id for v in variants)))
  # Keep catalog variants stable so saved purchases and Clover links retain their identity.
  if variants and sizes!=[v.size for v in variants]:raise HTTPException(409,'Sizes are locked after creation; create another product to offer different sizes')
  if variants and any(v.clover_presale_id or v.clover_event_id for v in variants) and (data.title!=p.title or data.presale_cents!=p.presale_cents or data.event_cents!=p.event_cents):raise HTTPException(409,'Clover items already exist. Keep their names/prices or create a new product version')
  for key,value in data.model_dump(exclude={'sizes','event_date'}).items():setattr(p,key,value)
  p.event_date=data.event_date.isoformat() if data.event_date else None
- if data.published:p.ever_published=True
+ if needs_sync:p.published=False
+ elif data.published:p.ever_published=True
  db.add(p);db.flush()
  if not variants:
   for size in sizes:
    item=MembershipProduct(name=f'{p.title} / {size}',price=p.presale_cents/100,category='merchandise',is_membership=False,active=False,track_inventory=False,sku=f'TNG-APP-{p.id}-{size}')
    db.add(item);db.flush();db.add(ApparelVariant(apparel_id=p.id,size=size,product_id=item.id))
+ for variant in variants:
+  ledger_product=db.get(MembershipProduct,variant.product_id)
+  ledger_product.name=f'{p.title} / {variant.size}';ledger_product.price=p.presale_cents/100
  db.add(SecurityLog(user_id=user.id,action='APPAREL_PRODUCT_SAVED',description=f'Apparel #{p.id}'))
- db.commit();return product_json(db,p)
+ db.commit()
+ if needs_sync:
+  # Save the owner's size variants before contacting Clover. A partial failure
+  # leaves a durable draft; publication happens only after all item IDs exist.
+  sync_clover(p.id,db,user)
+  p=db.query(ApparelProduct).filter_by(id=p.id).with_for_update().populate_existing().one()
+  linked=db.query(ApparelVariant).filter_by(apparel_id=p.id).all()
+  if not linked or not all(v.clover_presale_id and v.clover_event_id for v in linked):raise HTTPException(503,'Draft saved, but Clover items are not all confirmed. Retry Save & Publish.')
+  p.published=True;p.ever_published=True
+  db.add(SecurityLog(user_id=user.id,action='APPAREL_PUBLISHED',description=f'Published apparel #{p.id} after verified Clover item synchronization'))
+  db.commit()
+ return product_json(db,p)
 @router.post('/admin/{product_id}/image')
 async def image_upload(product_id:int,file:UploadFile=File(...),db=Depends(get_db),user=Depends(current_user)):
  require_admin(user);p=db.get(ApparelProduct,product_id)
@@ -138,24 +153,32 @@ def clover():
 def sync_clover(product_id:int,db=Depends(get_db),user=Depends(current_user)):
  require_admin(user);p=db.query(ApparelProduct).filter_by(id=product_id).with_for_update().first()
  if not p:raise HTTPException(404,'Apparel product not found')
+ variants=db.query(ApparelVariant).filter_by(apparel_id=p.id).order_by(ApparelVariant.id).all()
+ if not variants:raise HTTPException(409,'Save at least one shirt size before synchronizing Clover. No POS items were created.')
  base,merchant,headers=clover()
  # Match deterministic SKU before creating so a timeout cannot cause duplicate POS items.
  try:
   response=requests.get(f'{base}/v3/merchants/{merchant}/items',headers=headers,params={'limit':1000},timeout=15);response.raise_for_status();items=response.json().get('elements',[])
   if len(items)>=1000:raise HTTPException(409,'Clover catalog needs a paginated review before synchronizing apparel')
-  for v in db.query(ApparelVariant).filter_by(apparel_id=p.id):
+  for v in variants:
    for phase,amount,attr in [('PRESALE',p.presale_cents,'clover_presale_id'),('EVENT',p.event_cents,'clover_event_id')]:
     sku=f'TNG-APP-{p.id}-{v.size}-{phase}';matches=[i for i in items if i.get('sku')==sku]
     if len(matches)>1:raise HTTPException(409,'Duplicate Clover apparel SKU needs review')
-    if getattr(v,attr):continue
+    expected_name=f'{p.title} / {v.size} / {phase}'
+    linked_id=getattr(v,attr)
+    if linked_id:
+     linked=next((i for i in items if i.get('id')==linked_id),None)
+     if not linked or linked.get('sku')!=sku or linked.get('price')!=amount or linked.get('name')!=expected_name:raise HTTPException(409,'A linked Clover item is missing or changed. Review the merchant catalog before publishing.')
+     continue
     if matches:
-     if matches[0].get('price')!=amount:raise HTTPException(409,'Existing Clover price differs; review before linking')
+     if matches[0].get('price')!=amount or matches[0].get('name')!=expected_name:raise HTTPException(409,'Existing Clover item name or price differs; review before linking')
      identity=matches[0]['id']
     else:
-     r=requests.post(f'{base}/v3/merchants/{merchant}/items',headers=headers,json={'name':f'{p.title} / {v.size} / {phase}','price':amount,'priceType':'FIXED','sku':sku,'isRevenue':True},timeout=15);r.raise_for_status();identity=r.json()['id']
+     r=requests.post(f'{base}/v3/merchants/{merchant}/items',headers=headers,json={'name':f'{p.title} / {v.size} / {phase}','price':amount,'priceType':'FIXED','sku':sku,'isRevenue':True,'available':True},timeout=15);r.raise_for_status();identity=r.json()['id']
+    if not identity:raise ValueError('Clover item ID was not confirmed')
     setattr(v,attr,identity);db.flush()
   db.commit()
-  return {'synced':True,'notice':'Separate presale and event-day items are available on Clover POS. Select the correct phase at the register.'}
+  return {'synced':True,'variants_synced':len(variants),'notice':f'{len(variants)*2} Clover POS items are ready for {len(variants)} saved size(s). Select PRESALE or EVENT at the register.'}
  except HTTPException:raise
  except Exception:db.rollback();raise HTTPException(503,'Clover synchronization could not finish. Retry safely to match existing SKUs; do not create duplicate items manually.')
 

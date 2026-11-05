@@ -100,3 +100,21 @@ class ApparelTests(unittest.TestCase):
  def test_new_product_cannot_overwrite_published_link(self):
   p=self.make_product()
   r=self.client.put('/api/apparel/admin/0',headers=self.headers(),json={'slug':p.slug,'title':'Another shirt'});self.assertEqual(r.status_code,409,r.text)
+
+ def test_sync_with_no_saved_sizes_cannot_claim_success(self):
+  r=self.client.put('/api/apparel/admin/0',headers=self.headers(),json={'slug':'empty-tee','title':'Empty tee'});identity=r.json()['id']
+  with patch('app.apparel.routes.requests.get') as get,patch('app.apparel.routes.requests.post') as post:
+   r=self.client.post(f'/api/apparel/admin/{identity}/clover',headers=self.headers())
+  self.assertEqual(r.status_code,409,r.text);get.assert_not_called();post.assert_not_called()
+ def test_publish_saves_sizes_syncs_actual_items_and_then_publishes(self):
+  r=self.client.put('/api/apparel/admin/0',headers=self.headers(),json={'slug':'ready-tee','title':'Ready Tee'});identity=r.json()['id'];p=self.db.get(ApparelProduct,identity);p.image=b'fixture';p.image_type='image/png';self.db.commit();items=[]
+  def create(url,**kwargs):
+   item={**kwargs['json'],'id':'id-'+str(len(items)+1)};items.append(item);return Mock(json=lambda:item)
+  with patch.dict(os.environ,{'CLOVER_API_TOKEN':'test','CLOVER_MERCHANT_ID':'test'}),patch('app.apparel.routes.requests.get',return_value=Mock(json=lambda:{'elements':[]})),patch('app.apparel.routes.requests.post',side_effect=create):
+   r=self.client.put(f'/api/apparel/admin/{identity}',headers=self.headers(),json={'slug':'ready-tee','title':'Ready Tee','sizes':['M','L'],'fulfillment':'Pickup at the gym','event_date':'2026-11-14','published':True})
+  self.assertEqual(r.status_code,200,r.text);self.assertTrue(r.json()['published']);self.assertEqual(len(items),4);self.assertTrue(all(v['clover_synced'] for v in r.json()['variants']))
+ def test_failed_auto_sync_keeps_saved_sizes_in_draft(self):
+  r=self.client.put('/api/apparel/admin/0',headers=self.headers(),json={'slug':'failed-tee','title':'Failed Tee'});identity=r.json()['id'];p=self.db.get(ApparelProduct,identity);p.image=b'fixture';p.image_type='image/png';self.db.commit()
+  with patch.dict(os.environ,{'CLOVER_API_TOKEN':'test','CLOVER_MERCHANT_ID':'test'}),patch('app.apparel.routes.requests.get',side_effect=TimeoutError()):
+   r=self.client.put(f'/api/apparel/admin/{identity}',headers=self.headers(),json={'slug':'failed-tee','title':'Failed Tee','sizes':['M'],'fulfillment':'Pickup at the gym','event_date':'2026-11-14','published':True})
+  self.assertEqual(r.status_code,503,r.text);self.db.expire_all();self.assertFalse(self.db.get(ApparelProduct,identity).published);self.assertEqual(self.db.query(ApparelVariant).filter_by(apparel_id=identity).count(),1)
