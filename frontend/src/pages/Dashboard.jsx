@@ -1,11 +1,8 @@
+import WorkspaceDirectory from '../components/workspace/WorkspaceDirectory';
 import React, { useEffect, useState } from 'react';
-import { Alert, Avatar, Box, Button, Card, CardActionArea, CardContent, Chip, Skeleton, Stack, Typography } from '@mui/material';
+import { Alert, Avatar, Box, Button, Card, CardContent, Chip, Skeleton, Stack, Typography } from '@mui/material';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
-import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
-import EventRoundedIcon from '@mui/icons-material/EventRounded';
-import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded';
 import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
-import GraphicEqRoundedIcon from '@mui/icons-material/GraphicEqRounded';
 import useOperationsOverview from '../hooks/useOperationsOverview';
 import { WorkQueue, UpcomingEvents } from '../components/workspace/OperationsPanels';
 import { API, authHeaders } from '../services/api';
@@ -40,7 +37,6 @@ export default function Dashboard({
     });
     return () => abort.abort();
   }, [dash]);
-  const launch = [['Member Check-In', 'Member check-in', 'Number keypad & signup QR', QrCodeScannerRoundedIcon], ['Members', 'Customer profiles', 'Gym members & customer history', PeopleAltRoundedIcon], ['TNG BOXING EVENTS', 'TNG Boxing Events', 'Fight cards, contracts & tickets', EventRoundedIcon], ['Event Check-In', 'Fight-night door', 'Scan tickets & manage entry', QrCodeScannerRoundedIcon], ['Marketing Center', 'Marketing & growth', 'Member communications', CampaignRoundedIcon]];
   const stats = [['Active members', 'active_members'], ['Expiring in 7 days', 'expiring_members'], ['Expired memberships', 'expired_members'], ['Today’s gym check-ins', 'today_checkins'], ['Revenue this month', 'revenue_this_month', true], ['Sales this month', 'sales_this_month']];
   return <Stack spacing={3}>
   <Box className="tng-hero" sx={{
@@ -61,18 +57,18 @@ export default function Dashboard({
           maxWidth: 680
         }}><Typography variant="overline" sx={{
             color: '#80cfdb'
-          }}>TNGOS / OPERATIONS INTELLIGENCE</Typography><Typography variant="h3" sx={{
+          }}>TNGOS / YOUR DAILY WORKSPACE</Typography><Typography variant="h3" sx={{
             mt: 1,
             fontSize: {
               xs: 31,
               md: 46
             },
             lineHeight: 1.13
-          }}>Your operation.<br />One command center.</Typography><Typography sx={{
+          }}>Your TNG workspace.</Typography><Typography sx={{
             color: '#a9b8cb',
             mt: 2,
             fontSize: 15
-          }}>Welcome{userName ? `, ${userName.split(' ')[0]}` : ''}. Your gym, your promotion, your next move.</Typography><Stack direction="row" sx={{
+          }}>Welcome{userName ? `, ${userName.split(' ')[0]}` : ''}. Start with your priorities, then jump into the right workspace.</Typography><Stack direction="row" sx={{
             alignItems: "center",
             gap: 1,
             mt: 2
@@ -162,33 +158,7 @@ export default function Dashboard({
           }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography variant="h4" sx={{
               mt: .5
             }}>{value}</Typography><Typography variant="caption" color="text.secondary">{note}</Typography></Box>)}</Box></CardContent></Card>}
-  <Typography variant="overline" color="text.secondary">QUICK ACCESS / YOUR WORKSPACES</Typography>
-  <Box sx={{
-      display: 'grid',
-      gridTemplateColumns: {
-        xs: '1fr',
-        sm: 'repeat(2,1fr)',
-        xl: 'repeat(3,1fr)'
-      },
-      gap: 1.5
-    }}>{launch.map(([page, label, hint, Icon]) => <Card className="tng-shortcut" key={page}><CardActionArea onClick={() => onNavigate(page)}><CardContent><Stack direction="row" sx={{
-              alignItems: "center",
-              gap: 1.5
-            }}><Avatar variant="rounded" sx={{
-                bgcolor: '#111b2b',
-                color: '#eef6ff',
-                width: 46,
-                height: 46
-              }}><Icon /></Avatar><Box sx={{
-                flex: 1
-              }}><Typography sx={{
-                  fontWeight: 800
-                }}>{label}</Typography><Typography variant="body2" color="text.secondary" sx={{
-                  fontSize: 12
-                }}>{hint}</Typography></Box><ArrowForwardRoundedIcon sx={{
-                fontSize: 17,
-                color: '#8b99aa'
-              }} /></Stack></CardContent></CardActionArea></Card>)}</Box>
+
   <Box sx={{
       display: 'grid',
       gridTemplateColumns: {
@@ -197,6 +167,7 @@ export default function Dashboard({
       },
       gap: 3
     }}><WorkQueue data={operations.data} loading={operations.loading} error={operations.error} onNavigate={onNavigate} limit={4} /><UpcomingEvents data={operations.data} loading={operations.loading} onNavigate={onNavigate} /></Box>
+  <WorkspaceDirectory onNavigate={onNavigate}/>
   <Box sx={{
       display: 'grid',
       gridTemplateColumns: {

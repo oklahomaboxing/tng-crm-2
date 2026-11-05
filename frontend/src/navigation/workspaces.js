@@ -48,25 +48,60 @@ export const ROLE_MENUS = {
 };
 
 export const WORKSPACE_GROUPS = [
-  { label: "COMMAND", pages: ["Dashboard", "System Overview"] },
-  { label: "GYM OPERATIONS", pages: ["TNG Apparel", "Members", "Member Check-In", "Check-In Kiosk", "Renewal Reminders", "Sales", "Products", "TNGTrainer"] },
-  { label: "TNG PROMOTIONS", pages: ["TNG BOXING EVENTS", "Event Check-In", "Promoter", "Fight Calendar", "Fighter Portal Videos"] },
-  { label: "GROWTH", pages: ["Leads", "QR Referrals", "Marketing Center", "My Sales"] },
-  { label: "ADMINISTRATION", pages: ["Clover", "Duplicate Review", "Reports", "User Management", "Security Center", "Manager Portal"] },
+  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview'] },
+  { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer'] },
+  { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
+  { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
+  { id: 'growth', label: 'MARKETING', description: 'Leads, member communication and referral links.', accent: '#8f83d8', pages: ['Marketing Center', 'Leads', 'QR Referrals'] },
+  { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
 ];
 export const WORKSPACE_HINTS = {
-  "Renewal Reminders": "Five-day membership expiration email and SMS notices, consent and delivery history",
-  "Check-In Kiosk": "Entrance touchscreen pairing, attendance, device status and settings",
-  Members: "Profiles, portal access, memberships and renewals",
-  "Member Check-In": "Entrance member-number keypad and new-member signup QR",
-  "Event Check-In": "Fight-night ticket scanner and paper ticket activation",
-  "TNG BOXING EVENTS": "Fight cards, contracts, ticket sales and printed tickets",
-  Promoter: "Fighter scouting, opponents, managers and matchmaking",
-  "System Overview": "Payment and access review, reconciliation, work queue and connection configuration",
-  "Security Center": "Trusted devices, remembered sign-ins, activity logs and account protection",
-  "Marketing Center": "Member email, texts, campaign drafts and AI content",
-  Clover: "Payment integration, products and explicit sales sync",
+  Dashboard: 'Daily membership, attendance, sales and event overview',
+  'System Overview': 'Work queue, payment reconciliation and connection status',
+  Members: 'Gym member profiles, account activation, memberships and renewals',
+  'Member Check-In': 'Front desk member-number keypad and new-member signup QR',
+  'Check-In Kiosk': 'Entrance tablet pairing, attendance and device settings',
+  'Renewal Reminders': 'Membership renewal and expiration email/text notices and delivery history',
+  TNGTrainer: 'Training sessions, coaches and member development',
+  'TNG BOXING EVENTS': 'Open an event: fight card, tickets, contracts, printing and event operations',
+  Promoter: 'Find fighters, scout opponents, manage matchups and view signed contracts',
+  'Event Check-In': 'Fight-night ticket QR scanner and printed ticket activation',
+  'Fight Calendar': 'Upcoming fight dates and event planning',
+  'Fighter Portal Videos': 'Review fighter submissions and footage',
+  'Manager Portal': 'Manager agreements and fighter representation',
+  'TNG Apparel': 'Shirt designs, presales, Clover items, public shop links and pickup orders',
+  Sales: 'Record purchases and review the sales ledger',
+  Products: 'Membership plans, prices and merchandise inventory',
+  Reports: 'Revenue, sales, commissions and business reports',
+  'My Sales': 'Your sales and commissions',
+  'Marketing Center': 'Member email, texts, campaigns and content',
+  Leads: 'Prospective customers, follow-ups and contact details',
+  'QR Referrals': 'Referral QR codes and signup links',
+  Clover: 'Payment connection, catalog and customer synchronization',
+  'Duplicate Review': 'Find and merge duplicate contacts',
+  'User Management': 'Staff accounts, roles and access',
+  'Security Center': 'Trusted devices, sign-ins, account protection and activity',
 };
+const ALIASES = {
+ 'Member Check-In':'front desk attendance number scanner checkin check in',
+ 'Event Check-In':'door scanner fight night scan tickets checkin check in',
+ 'TNG Apparel':'shirts tee tshirt clothing shop store preorder',
+ 'Promoter':'matchmaker matchmaking pro boxers scouting signed pdf download contracts',
+ 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch',
+ 'Members':'activate activation reset email resend customer profile',
+ 'Renewal Reminders':'sms text expired expiring membership reminders renew',
+};
+export function workspaceGroup(page) { return WORKSPACE_GROUPS.find(group=>group.pages.includes(page)); }
+export function searchWorkspaces(role, query='') {
+ const words=query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+ return (ROLE_MENUS[role]||[]).filter(page=>words.every(word=>`${page} ${WORKSPACE_HINTS[page]||''} ${ALIASES[page]||''} ${workspaceGroup(page)?.label||''}`.toLowerCase().includes(word)));
+}
+export function dailyWorkspaces(role) {
+ const allowed=ROLE_MENUS[role]||[];
+ const preferred=role==='matchmaker'?['Promoter','TNG BOXING EVENTS','Fight Calendar']:role==='staff'?['Member Check-In','Members','Event Check-In','TNG BOXING EVENTS']:['Member Check-In','Members','TNG BOXING EVENTS','Promoter','TNG Apparel','Event Check-In'];
+ const chosen=preferred.filter(page=>allowed.includes(page));
+ return chosen.length?chosen:allowed.slice(0,4);
+}
 export function workspaceSlug(page) { return page.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 export function workspaceHash(page, target = {}) {
   const params = new URLSearchParams();

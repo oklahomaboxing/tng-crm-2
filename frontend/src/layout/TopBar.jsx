@@ -1,3 +1,4 @@
+import { workspaceGroup } from '../navigation/workspaces';
 import React from "react";
 import WorkspaceSearch from "../components/workspace/WorkspaceSearch";
 import {
@@ -69,7 +70,7 @@ export default function TopBar({
             {page}
           </Typography>
           <Typography variant="caption" sx={{color:'#8f9caf',letterSpacing:'.07em'}} noWrap>
-            TNGOS / {role === 'admin' ? 'COMMAND' : 'WORKSPACE'}
+            TNGOS / {workspaceGroup(page)?.label || 'WORKSPACE'}
           </Typography>
         </Box>
 
@@ -81,8 +82,8 @@ export default function TopBar({
           }}
         >
           <WorkspaceSearch role={role} onNavigate={onNavigate}/>
-          <Tooltip title="Refresh command-center metrics">
-            <IconButton onClick={onRefresh} aria-label="Refresh command-center metrics" sx={{color:'#aebdd1'}}>
+          <Tooltip title="Refresh overview metrics">
+            <IconButton onClick={onRefresh} aria-label="Refresh overview metrics" sx={{color:'#aebdd1'}}>
               <RefreshRoundedIcon />
             </IconButton>
           </Tooltip>
