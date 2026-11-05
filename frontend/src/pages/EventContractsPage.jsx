@@ -1,3 +1,4 @@
+import SignedContractLibrary from "../components/contracts/SignedContractLibrary.jsx";
 import React from "react";
 import DocuSignConnectionPanel from "../components/DocuSignConnectionPanel.jsx";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@mui/material";
 
 export default function EventContractsPage({
+  eventId,
   activeBouts,
   expandedBouts,
   setExpandedBouts,
@@ -40,6 +42,7 @@ export default function EventContractsPage({
 }) {
   return (
           <Stack spacing={2}>
+            <Box><SignedContractLibrary eventId={eventId}/></Box>
             <DocuSignConnectionPanel />
             {activeBouts.map((bout, index) => (
               <Card key={bout.id}>

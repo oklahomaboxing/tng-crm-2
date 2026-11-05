@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import SignedContractLibrary from "../components/contracts/SignedContractLibrary.jsx";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -7,6 +8,7 @@ import {
   CardContent,
   Chip,
   Collapse,
+  Dialog, DialogTitle, DialogContent, DialogActions,
   Divider,
   FormControlLabel,
   Grid,
@@ -112,6 +114,13 @@ export default function EventFightCardBuilder({
   onRefresh,
 }) {
   const [fighters, setFighters] = useState([]);
+  const [cardProposal,setCardProposal]=useState(null),[cardTerms,setCardTerms]=useState({rounds:4,weight:'',red_purse:0,blue_purse:0});
+  const cardLock=useRef(false);
+  useEffect(()=>{setCardProposal(null);},[eventId]);
+  async function addProposalToCard(){
+    if(cardLock.current||!cardProposal)return;cardLock.current=true;setWorking(true);setError('');
+    try{const weight=Number(cardTerms.weight);if(![4,6,8,10,12].includes(Number(cardTerms.rounds))||!Number.isFinite(weight)||weight<=0||Number(cardTerms.red_purse)<0||Number(cardTerms.blue_purse)<0)throw Error('Review the weight, rounds and purse amounts.');const d=await request('/api/boxing/bouts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event_id:Number(eventId),red_fighter_id:cardProposal.red_fighter_id,blue_fighter_id:cardProposal.blue_fighter_id,weight_agreed:weight,rounds:Number(cardTerms.rounds),bout_type:'pro',red_purse:Number(cardTerms.red_purse),blue_purse:Number(cardTerms.blue_purse),match_score:cardProposal.match_score,notes:'Added from matchmaking proposal; draft pending fighter agreement and commission review.'})});setCardProposal(null);setMessage(`Draft bout #${d.id} added to this event's fight card.`);await load();await onRefresh?.();}catch(e){setError(e.message);}finally{cardLock.current=false;setWorking(false);}
+  }
   const [offers, setOffers] = useState([]);
 
   const [loading, setLoading] = useState(false);
@@ -622,6 +631,8 @@ export default function EventFightCardBuilder({
 
   return (
     <Stack spacing={2} sx={{ mb: 3 }}>
+      <Stack direction="row" spacing={1} sx={{justifyContent:'flex-end'}}><SignedContractLibrary eventId={eventId}/></Stack>
+      <Dialog open={!!cardProposal} onClose={()=>{if(!working)setCardProposal(null);}} fullWidth maxWidth="sm"><DialogTitle>Add proposed match to the fight card</DialogTitle><DialogContent><Stack spacing={2} sx={{pt:1}}><Typography variant="h6">{fighterName(cardProposal?.red_fighter)} vs {fighterName(cardProposal?.blue_fighter)}</Typography><Alert severity="info">Creates a draft on this event's card. Fighter acceptance, contracts and commission approval remain separate.</Alert><TextField select label="Rounds" value={cardTerms.rounds} onChange={e=>setCardTerms({...cardTerms,rounds:e.target.value})}>{[4,6,8,10,12].map(r=><MenuItem key={r} value={r}>{r}</MenuItem>)}</TextField>{[['weight','Agreed weight (lb)'],['red_purse','Red corner purse ($)'],['blue_purse','Blue corner purse ($)']].map(([key,label])=><TextField key={key} label={label} type="number" value={cardTerms[key]} onChange={e=>setCardTerms({...cardTerms,[key]:e.target.value})}/>)}{error&&<Alert severity="error">{error}</Alert>}</Stack></DialogContent><DialogActions><Button disabled={working} onClick={()=>setCardProposal(null)}>Cancel</Button><Button variant="contained" disabled={working} onClick={addProposalToCard}>Add draft to card</Button></DialogActions></Dialog>
       <Card
         sx={{
           borderRadius: 3,
@@ -1221,8 +1232,9 @@ export default function EventFightCardBuilder({
                                       40,
                                   }}
                                 >
-                                  Send
+                                  Send offer
                                 </Button>
+                                <Button fullWidth variant="outlined" disabled={working || bouts.some(b=>!['void','cancelled','canceled'].includes(b.status)&&[b.red_fighter_id,b.blue_fighter_id,b.red?.id,b.blue?.id].some(id=>[proposal.red_fighter_id,proposal.blue_fighter_id].includes(id)))} onClick={()=>{const terms=termsFor(proposal);setCardTerms({rounds:terms.rounds,weight:terms.weight,red_purse:Number(terms.purse||0),blue_purse:0});setCardProposal(proposal);setError('');}}>Add to card</Button>
                               </Grid>
                             </Grid>
                           </CardContent>
@@ -1905,8 +1917,7 @@ export default function EventFightCardBuilder({
                                   )
                                 }
                               >
-                                Create Bout +
-                                Contract
+                                Add accepted match to card
                               </Button>
                             )}
 

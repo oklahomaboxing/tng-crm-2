@@ -30,3 +30,5 @@ from .renewal_reminders import router as renewal_reminders_router
 router.include_router(renewal_reminders_router)
 from app.apparel.routes import router as apparel_router
 router.include_router(apparel_router)
+from app.matchmaker.contract_library import router as signed_contract_library_router
+router.include_router(signed_contract_library_router)

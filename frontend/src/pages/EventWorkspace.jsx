@@ -1658,6 +1658,7 @@ export default function EventWorkspace({
         {/* BOUT SHEETS */}
         {tab === 2 && (
           <EventContractsPage
+            eventId={eventId}
             activeBouts={activeBouts}
             expandedBouts={expandedBouts}
             setExpandedBouts={setExpandedBouts}

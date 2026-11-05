@@ -7505,6 +7505,10 @@ Do not add fake ticket information.
             raise HTTPException(status_code=400, detail="Pick two different fighters")
 
         if data.event_id:
+            event_row=db.query(BoxingEvent).filter_by(id=data.event_id).with_for_update().first()
+            if not event_row:raise HTTPException(404,'Event not found')
+            fighters=db.query(BoxingFighter).filter(BoxingFighter.id.in_([data.red_fighter_id,data.blue_fighter_id])).order_by(BoxingFighter.id).with_for_update().all()
+            if len(fighters)!=2:raise HTTPException(404,'One of the selected fighters no longer exists')
             conflict = db.query(BoxingBout).filter(
                 BoxingBout.event_id == data.event_id,
                 BoxingBout.status.notin_(["void", "cancelled"]),
@@ -10206,7 +10210,7 @@ Do not add fake ticket information.
         event = (
             db.query(BoxingEvent)
             .filter(BoxingEvent.id == offer.event_id)
-            .first()
+            .with_for_update().first()
         )
 
         fighter = (

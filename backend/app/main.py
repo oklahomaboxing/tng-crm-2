@@ -3272,6 +3272,13 @@ def sync_clover_sales(
                 db.add(product)
                 db.flush()
 
+        # Public apparel checkouts own their ledger through verified callbacks.
+        # Their internal variant products are not POS catalog items (phase-labeled
+        # POS products import normally). Do not race the callback with a second sale.
+        from app.apparel.routes import ApparelVariant
+        if db.query(ApparelVariant.id).filter_by(product_id=product.id).first():
+            continue
+
         membership_purchase = bool(
             not is_manual_transaction and is_membership_product(product)
         )

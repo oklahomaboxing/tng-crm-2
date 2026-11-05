@@ -1,3 +1,4 @@
+import SignedContractLibrary from "../components/contracts/SignedContractLibrary.jsx";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog,
@@ -182,6 +183,8 @@ function MatchmakerContent() {
   const [events, setEvents] = useState([]);
   const [fighterId, setFighterId] = useState("");
   const [eventId, setEventId] = useState("");
+  const [addedCardBout,setAddedCardBout]=useState(null);
+  const bookingInProgress=useRef(false);
   const [eventWorkspaceId, setEventWorkspaceId] = useState("");
   const [workspaceInitialTab, setWorkspaceInitialTab] = useState(0);
   function openWorkspace(id, initialTab = 0) { setWorkspaceInitialTab(initialTab); setEventWorkspaceId(id); window.scrollTo({ top: 0 }); }
@@ -1626,12 +1629,14 @@ function MatchmakerContent() {
   }
 
   async function buildBout(match) {
+    if(bookingInProgress.current)return;
     if (!eventId) {
       setMsgType("warning");
       setMsg("Choose an event before building a bout.");
       return;
     }
 
+    bookingInProgress.current=true;
     setWorking(true);
     try {
       const payload = {
@@ -1657,13 +1662,14 @@ function MatchmakerContent() {
       if (!r.ok) throw new Error(d.detail || "Could not build bout");
 
       setMsgType("success");
-      setMsg(`Bout #${d.id} created as a draft.`);
+      setMsg(`Bout #${d.id} added to the selected event as a draft.`);
+      setAddedCardBout({id:d.id,eventId:Number(eventId)});
       await findMatches();
     } catch (e) {
       setMsgType("error");
       setMsg(e.message || "Could not build bout");
     } finally {
-      setWorking(false);
+      bookingInProgress.current=false;setWorking(false);
     }
   }
 
@@ -1700,6 +1706,8 @@ function MatchmakerContent() {
         <nav className="promotion-nav" aria-label="Promoter navigation">
           {[["home", "Overview"], ["finder", "Regional finder"], ["scouting", "Boxer database"], ["events", "Events"], ["fighter-pool", "Fighter pool"], ["matchmaking", "Matchmaking"], ["managers", "Managers"]].map(([key, label]) => <Button key={key} aria-current={promoterPage === key ? "page" : undefined} onClick={() => navigatePromoter(key)}>{label}</Button>)}
         </nav>
+        <Stack direction="row" sx={{justifyContent:"flex-end"}}><SignedContractLibrary eventId={eventId?Number(eventId):null}/></Stack>
+        {addedCardBout&&<Alert severity="success" action={<Button color="inherit" onClick={()=>openWorkspace(addedCardBout.eventId,1)}>Open fight card</Button>}>Draft bout #{addedCardBout.id} is on the card. Fighter agreement and contract signing remain separate.</Alert>}
         {promoterPage === "home" && <PromoterOverview events={events} fighters={fighters} eligible={eligible} onNavigate={navigatePromoter} onCreate={() => setEventOpen(true)} onOpen={openWorkspace} onCopyRegistration={copyFighterRegistrationLink} />}
 
         {promoterPage === "finder" && <RegionalFinder />}
@@ -2540,7 +2548,7 @@ function MatchmakerContent() {
                           onClick={() => buildBout(m)}
                           sx={{ bgcolor: "#e31b23" }}
                         >
-                          Build Bout
+                          Add to fight card
                         </Button>
                       </TableCell>
                     </TableRow>

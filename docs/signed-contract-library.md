@@ -1,0 +1,11 @@
+# Signed contract library and proposal-to-card shortcut
+
+**View signed contracts** is available on the promoter/matchmaker screen and each event’s Matchmaking and Contracts screens. Search by fighter, opponent, event or contract number. The All events switch expands an event’s view to the full private library.
+
+The library includes stored signed PDFs, validated TNG electronic signature records, and completed-provider records needing synchronization or evidence review. Accepting an offer does not by itself appear as a completed signature. Archived/void contracts retain their evidence and status. View PDF opens a private blob in a new tab; Download saves the same staff-only signed-file response. Original signed PDF retrieval and legacy signature snapshot validation remain authoritative; no current clauses are substituted into old signatures. A completed DocuSign/Adobe record without its PDF can be synchronized through the existing provider sync action. Syncing does not send a new signing request.
+
+APIs: GET `/api/boxing/events/{id}/signed-contracts` and GET `/api/boxing/signed-contracts`, using the existing boxing-operations permissions and private/no-store responses. No documents become public. Index responses do not include bank, address, ID or contract-term snapshots.
+
+Generated event proposals now have an Add to card action: review weight, rounds and corner purses, then add a draft without retyping fighters. It does not mark a proposal accepted or send a contract. The global Matchmaker’s Add to fight card action gives an Open fight card shortcut after creation. Accepted offers keep their existing accepted-offer conversion flow. Event booking is locked during draft creation and offer conversion so competing attempts cannot book the same fighter twice on that event.
+
+Tests use isolated databases and mocked PDFs/providers. No live match, contract or signing message is created during verification.
