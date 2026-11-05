@@ -87,8 +87,11 @@ def save_product(product_id:int,data:ProductInput,db=Depends(get_db),user=Depend
  if p.ever_published and data.slug!=p.slug:raise HTTPException(409,'Published product links are permanent; create a new product for another link')
  sizes=list(dict.fromkeys(x.strip().upper() for x in data.sizes if x.strip()))
  if any(not re.fullmatch(r'[A-Z0-9 -]{1,15}',x) for x in sizes):raise HTTPException(400,'Use short sizes such as S, M, L or 2XL')
- existing=db.query(ApparelProduct).filter(ApparelProduct.slug==data.slug,ApparelProduct.id!=product_id).first()
- if existing:raise HTTPException(409,'Choose a unique product link')
+ existing=db.query(ApparelProduct).filter(ApparelProduct.slug==data.slug,ApparelProduct.id!=product_id).with_for_update().first()
+ if existing:
+  if not product_id and not existing.published and not existing.ever_published:
+   return save_product(existing.id,data,db,user)
+  raise HTTPException(409,'This link belongs to an existing product. Select that product to edit it, or choose another link.')
  if data.published and (not sizes or not data.fulfillment.strip() or not p.image or not data.event_date):raise HTTPException(400,'Add the shirt image, sizes, fulfillment instructions and event date before publishing')
  variants=db.query(ApparelVariant).filter_by(apparel_id=product_id).order_by(ApparelVariant.id).all() if product_id else []
  if data.published and (not variants or not all(v.clover_presale_id and v.clover_event_id for v in variants)):raise HTTPException(400,'Create or match Clover POS items before publishing')

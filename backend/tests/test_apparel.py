@@ -91,3 +91,12 @@ class ApparelTests(unittest.TestCase):
  def test_event_shirt_is_merchandise_not_a_fight_ticket(self):
   self.assertEqual(main.categorize_clover_product('TNG Earned Not Given Tee / S / EVENT'),'merchandise')
   self.assertEqual(main.categorize_clover_product('General Admission Event Ticket'),'event_ticket')
+
+ def test_saving_seeded_draft_reuses_same_link_without_second_product(self):
+  body={'slug':'first-shirt','title':'TNG First Shirt','sizes':[],'published':False}
+  first=self.client.put('/api/apparel/admin/0',headers=self.headers(),json=body);self.assertEqual(first.status_code,200,first.text)
+  second=self.client.put('/api/apparel/admin/0',headers=self.headers(),json={**body,'description':'Updated presale draft','sizes':['S','M']});self.assertEqual(second.status_code,200,second.text)
+  self.assertEqual(first.json()['id'],second.json()['id']);self.assertEqual(self.db.query(ApparelProduct).count(),1)
+ def test_new_product_cannot_overwrite_published_link(self):
+  p=self.make_product()
+  r=self.client.put('/api/apparel/admin/0',headers=self.headers(),json={'slug':p.slug,'title':'Another shirt'});self.assertEqual(r.status_code,409,r.text)
