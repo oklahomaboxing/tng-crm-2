@@ -1,3 +1,4 @@
+import PhoneAssistantSettings from "../components/PhoneAssistantSettings";
 import MicrosoftMailSettings from "../components/MicrosoftMailSettings";
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, Skeleton, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
@@ -16,6 +17,7 @@ export default function SystemOverview({ onNavigate }) {
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.35fr 1fr' }, gap: 3 }}><WorkQueue {...{ data, loading, error, onNavigate }}/><UpcomingEvents {...{ data, loading, onNavigate }}/></Box>
     {!!data?.paid_ticket_issues?.length && <Card><CardContent><Typography variant="h6" sx={{fontWeight: 900}}>Paid ticket fulfillment review</Typography><TableContainer><Table><TableHead><TableRow><TableCell>Receipt</TableCell><TableCell>Tickets expected</TableCell><TableCell>Issued</TableCell><TableCell>Review</TableCell></TableRow></TableHead><TableBody>{data.paid_ticket_issues.map(item => <TableRow key={item.order_id}><TableCell>{item.receipt_number || `Order ${item.order_id}`}</TableCell><TableCell>{item.expected ?? 'Order items need review'}</TableCell><TableCell>{item.issued}</TableCell><TableCell><Button onClick={() => onNavigate('TNG BOXING EVENTS', { eventId: item.event_id })}>Open event</Button></TableCell></TableRow>)}</TableBody></Table></TableContainer></CardContent></Card>}
     {localStorage.getItem("role") === "admin" && <MicrosoftMailSettings />}
+    {localStorage.getItem("role") === "admin" && <PhoneAssistantSettings onNavigate={onNavigate} />}
     <ReconciliationPanel onNavigate={onNavigate}/>
     {data && <IntegrationCards {...{ data, onNavigate }}/>}<Typography variant="caption" color="text.secondary">{data ? `Snapshot: ${new Date(data.generated_at).toLocaleString()} · Business timezone: Central Time` : ''}</Typography>
   </Stack>;

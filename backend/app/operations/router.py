@@ -36,3 +36,5 @@ from app.matchmaker.welcome_letter import router as fighter_welcome_router
 router.include_router(fighter_welcome_router)
 from app.mail.microsoft365 import router as microsoft_mail_router
 router.include_router(microsoft_mail_router)
+from app.phone.routes import router as phone_assistant_router
+router.include_router(phone_assistant_router)
