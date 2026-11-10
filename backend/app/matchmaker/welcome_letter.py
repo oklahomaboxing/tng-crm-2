@@ -141,7 +141,8 @@ def get_letter(event_id:int,db:Session=Depends(get_db),user=Depends(current_user
     access(user)
     event,settings,paragraphs,text,ch,ph,recipients,missing,required=draft(db,event_id)
     deliveries=db.query(FighterWelcomeDelivery).filter_by(event_id=event_id,content_hash=ch).all()
-    return JSONResponse({'event_id':event_id,'settings':settings.model_dump(),'text':text,'preview_hash':ph,'content_hash':ch,
+    from app.mail.microsoft365 import selected_provider
+    return JSONResponse({'email_provider':selected_provider(db),'event_id':event_id,'settings':settings.model_dump(),'text':text,'preview_hash':ph,'content_hash':ch,
             'recipients':[{'email':e,'fighters':names} for e,names in recipients.items()],
             'missing_email_fighters':missing,'missing_fields':required,
             'accepted':sum(r.status=='accepted' and r.recipient in recipients for r in deliveries),
@@ -174,17 +175,21 @@ def send_letter(event_id:int,body:SendLetter,db:Session=Depends(get_db),user=Dep
     if body.preview_hash!=ph:raise HTTPException(409,'Event details or recipients changed. Refresh and review the letter before sending.')
     if required:raise HTTPException(409,'Complete these details before sending: '+', '.join(required))
     if not recipients:raise HTTPException(409,'No booked fighters have a valid email address')
-    if not os.getenv('RESEND_API_KEY'):raise HTTPException(503,'Email service is not configured')
+    from app.mail.microsoft365 import selected_provider, send_welcome, MailSubmissionError
+    provider=selected_provider(db)
+    if provider=='resend' and not os.getenv('RESEND_API_KEY'):raise HTTPException(503,'Email service is not configured')
     import resend
-    resend.api_key=os.environ['RESEND_API_KEY']
+    resend.api_key=os.getenv('RESEND_API_KEY')
     attachment=base64.b64encode(pdf_bytes(paragraphs,False)).decode()
     result={'accepted':0,'already_submitted':0,'needs_review':0,'missing_email_fighters':missing,'issues':[]}
     for email in recipients:
+        legacy_retry=False
         row=FighterWelcomeDelivery(event_id=event_id,content_hash=ch,recipient=email,status='submitting')
         db.add(row)
         try:db.commit()
         except IntegrityError:
             db.rollback()
+            legacy_retry=True
             row=db.query(FighterWelcomeDelivery).filter_by(event_id=event_id,content_hash=ch,recipient=email).one()
             if row.status=='accepted':
                 result['already_submitted']+=1;continue
@@ -203,13 +208,15 @@ def send_letter(event_id:int,body:SendLetter,db:Session=Depends(get_db),user=Dep
                 'subject':f'{event.name} — Fighter Welcome & Event Information','text':text,
                 'html':'<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto">'+''.join('<p>'+escape(p).replace('\n','<br/>')+'</p>' for p in paragraphs)+'</div>',
                 'attachments':[{'filename':f'TNG_{event_id}_Fighter_Welcome.pdf','content':attachment}]}
+            payload['_tng_provider']='resend' if legacy_retry else provider
             snapshot=FighterWelcomeSubmission(delivery_id=row.id,payload_json=json.dumps(payload))
             db.add(snapshot);db.commit()
         payload=json.loads(snapshot.payload_json)
+        route=payload.pop('_tng_provider','resend')
         # Resend's default API rate is two requests/second; pace the individual emails.
         time.sleep(0.65)
         try:
-            sent=resend.Emails.send(payload,options={'idempotency_key':f'tng-fighter-welcome-{row.id}'})
+            sent=(send_welcome(db,payload,f'tng-fighter-welcome-{row.id}') if route=='microsoft365' else resend.Emails.send(payload,options={'idempotency_key':f'tng-fighter-welcome-{row.id}'}))
             provider_id=sent.get('id') if isinstance(sent,dict) else None
             if not provider_id:raise RuntimeError('Missing provider acknowledgment')
             row.status='accepted';row.provider_id=str(provider_id);snapshot.error_code=None;result['accepted']+=1
@@ -218,7 +225,7 @@ def send_letter(event_id:int,body:SendLetter,db:Session=Depends(get_db),user=Dep
             snapshot.error_code=code if code.isdigit() else type(exc).__name__[:60]
             row.status='rejected' if code in ('400','401','403','422','429') else 'unknown'
             result['needs_review']+=1
-            issue=('Email provider rate limit: retry the unconfirmed emails shortly.' if code=='429' else
+            issue=(str(exc) if isinstance(exc,MailSubmissionError) else 'Email provider rate limit: retry the unconfirmed emails shortly.' if code=='429' else
                    'Email provider rejected the request. Check the configured sending address and provider settings.' if row.status=='rejected' else
                    'An email submission is unconfirmed. Accepted emails are skipped on retry; conflicting or expired submissions need review.')
             if issue not in result['issues']:result['issues'].append(issue)

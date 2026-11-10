@@ -45,7 +45,7 @@ export default function FighterWelcomeLetter({ eventId }) {
       <DialogTitle>Fighter welcome letter</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
-          <Typography>Emails are sent from marketing@tngboxinggym.com. Download a PDF for teams, or email it individually to fighters booked on this event’s card. Cancelled bouts are excluded and shared email addresses receive one copy.</Typography>
+          <Typography>Emails use {data?.email_provider === 'microsoft365' ? 'Microsoft 365 / Outlook' : 'Resend'} and are sent from marketing@tngboxinggym.com. Download a PDF for teams, or email it individually to fighters booked on this event’s card. Cancelled bouts are excluded and shared email addresses receive one copy.</Typography>
           {message && <Alert severity="info">{message}</Alert>}
           {!data && busy && <Typography>Loading letter…</Typography>}
           {data && <>

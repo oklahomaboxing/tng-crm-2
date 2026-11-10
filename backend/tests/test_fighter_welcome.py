@@ -110,3 +110,16 @@ class FighterWelcomeTests(unittest.TestCase):
             retry=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash'],'retry_unconfirmed':True})
             self.assertEqual(retry.json()['needs_review'],1)
             provider.assert_not_called()
+
+    def test_connected_microsoft_routes_new_welcome_without_resend(self):
+        from app.mail.microsoft365 import MicrosoftMailbox,encrypt
+        from datetime import datetime,timedelta
+        path=self.card()
+        self.db.add(MicrosoftMailbox(id=1,tenant_id='11111111-1111-1111-1111-111111111111',client_id='22222222-2222-2222-2222-222222222222',client_secret=encrypt('secret'),refresh_token=encrypt('refresh'),access_token=encrypt('access'),expires_at=datetime.utcnow()+timedelta(hours=1),mailbox='marketing@tngboxinggym.com',enabled=True,generation=1));self.db.commit()
+        data=self.client.put(path,headers=self.headers(),json=self.settings()).json()
+        self.assertEqual(data['email_provider'],'microsoft365')
+        with patch.dict('os.environ',{'RESEND_API_KEY':''}),patch('app.matchmaker.welcome_letter.time.sleep'),patch('app.mail.microsoft365.send_welcome',return_value={'id':'microsoft365:test-request'}) as microsoft,patch('resend.Emails.send') as resend:
+            result=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash']})
+            self.assertEqual(result.status_code,200,result.text)
+            self.assertEqual(result.json()['accepted'],1)
+            microsoft.assert_called_once();resend.assert_not_called()

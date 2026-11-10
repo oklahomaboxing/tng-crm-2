@@ -34,3 +34,5 @@ from app.matchmaker.contract_library import router as signed_contract_library_ro
 router.include_router(signed_contract_library_router)
 from app.matchmaker.welcome_letter import router as fighter_welcome_router
 router.include_router(fighter_welcome_router)
+from app.mail.microsoft365 import router as microsoft_mail_router
+router.include_router(microsoft_mail_router)
