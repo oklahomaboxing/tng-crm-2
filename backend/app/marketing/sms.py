@@ -1,5 +1,7 @@
-import os,json,time,re
+import os,json,time,re,hashlib
 from datetime import datetime
+from pydantic import BaseModel, Field
+from app.services.sms_service import ensure_stop_footer
 from fastapi import APIRouter,Depends,HTTPException,Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -32,6 +34,55 @@ def approved_routes():
     except Exception:
         raise HTTPException(503,'Could not verify the approved Twilio sending service. Check provider access before sending.')
 
+
+
+def blocked_sms_numbers(db):
+    from app.operations.renewal_reminders import ReminderSmsSuppression
+    numbers=set()
+    for c in db.query(MarketingContact).filter(MarketingContact.sms_unsubscribed==True):
+        try:
+            number=normalize_ticket_phone(c.phone)
+            if number:numbers.add(number)
+        except ValueError:
+            pass
+    return numbers,{row[0] for row in db.query(ReminderSmsSuppression.phone_hash).all()}
+
+
+def number_blocked(number, blocked):
+    return number in blocked[0] or hashlib.sha256(number.encode()).hexdigest() in blocked[1]
+
+
+class BulkSmsConsent(BaseModel):
+    contact_ids: list[int] = Field(min_length=1,max_length=5000)
+    evidence: str = Field(min_length=10,max_length=500)
+    opt_in: bool
+
+
+@router.post('/contacts/consent/bulk')
+def bulk_consent(body:BulkSmsConsent,db:Session=Depends(get_db),user=Depends(staff_user)):
+    note=body.evidence.strip()
+    if body.opt_in is not True or len(note)<10:
+        raise HTTPException(400,'Document existing SMS permission for the selected contacts')
+    ids=sorted(set(body.contact_ids))
+    rows=db.query(MarketingContact).filter(MarketingContact.id.in_(ids)).order_by(MarketingContact.id).with_for_update().all()
+    blocked=blocked_sms_numbers(db)
+    counts={'recorded':0,'already_recorded':0,'skipped_opted_out':0,'skipped_invalid_phone':0,'skipped_inactive':0,'not_found':len(ids)-len(rows)}
+    changed=[]
+    for c in rows:
+        if not c.active:counts['skipped_inactive']+=1;continue
+        try:
+            number=normalize_ticket_phone(c.phone)
+            if not number:raise ValueError()
+        except ValueError:
+            counts['skipped_invalid_phone']+=1;continue
+        if c.sms_unsubscribed or number_blocked(number,blocked):counts['skipped_opted_out']+=1;continue
+        if c.sms_opt_in:counts['already_recorded']+=1;continue
+        c.sms_opt_in=True;c.updated_at=datetime.utcnow();changed.append(c.id);counts['recorded']+=1
+    if changed:
+        db.add(SecurityLog(user_id=user.id,action='SMS_BULK_CONSENT_RECORDED',description=json.dumps({'contact_ids':changed,'evidence':note,'counts':counts}),endpoint='/api/marketing/sms/contacts/consent/bulk',success=True))
+    db.commit()
+    return counts
+
 @router.get('/readiness')
 def readiness(user=Depends(staff_user)):
     routes=approved_routes()
@@ -40,6 +91,7 @@ def readiness(user=Depends(staff_user)):
 
 def eligible_contacts(db,ids):
     selected=db.query(MarketingContact).filter(MarketingContact.id.in_(ids)).all();good=[];skips={'no_consent':0,'unsubscribed':0,'invalid_phone':0,'inactive':0,'duplicate_phone':0};seen=set()
+    blocked=blocked_sms_numbers(db)
     for c in selected:
         if not c.active:skips['inactive']+=1;continue
         if c.sms_unsubscribed:skips['unsubscribed']+=1;continue
@@ -48,6 +100,7 @@ def eligible_contacts(db,ids):
             phone=normalize_ticket_phone(c.phone)
             if not phone:raise ValueError()
         except ValueError:skips['invalid_phone']+=1;continue
+        if number_blocked(phone,blocked):skips['unsubscribed']+=1;continue
         if phone in seen:skips['duplicate_phone']+=1;continue
         seen.add(phone);good.append((c,phone))
     return good,skips
@@ -76,6 +129,9 @@ def consent(contact_id:int,data:dict,db:Session=Depends(get_db),user=Depends(sta
     try:
         if not normalize_ticket_phone(contact.phone):raise ValueError()
     except ValueError:raise HTTPException(400,'A valid mobile number is required')
+    number=normalize_ticket_phone(contact.phone)
+    if number_blocked(number,blocked_sms_numbers(db)):
+        raise HTTPException(409,'This number opted out. The member must text START before staff can record new permission.')
     contact.sms_opt_in=True;contact.updated_at=datetime.utcnow()
     db.add(SecurityLog(user_id=user.id,action='SMS_CONSENT_RECORDED',description=f'Contact #{contact.id}; staff-supplied evidence: {note}',endpoint='/api/marketing/sms/contacts/consent',success=True));db.commit()
     return {'recorded':True}
@@ -99,7 +155,7 @@ def send_campaign(db,campaign):
         db.query(SmsDelivery).filter_by(id=record.id).update({SmsDelivery.status:SmsDelivery.status},synchronize_session=False)
         body=campaign.message.replace('{{first_name}}',contact.first_name or 'member').strip()
         if not body.lower().startswith('tng'):body='TNG Boxing: '+body
-        if 'reply stop' not in body.lower():body+=' Reply STOP to opt out.'
+        body=ensure_stop_footer(body)
         callback=os.getenv('TNG_BACKEND_URL','https://sea-lion-app-2-gxyfr.ondigitalocean.app').rstrip('/')+f'/api/marketing/sms/status?delivery_id={record.id}'
         try:
             sent=client.messages.create(to=phone,from_=os.environ['TWILIO_PHONE_NUMBER'],messaging_service_sid=routes[purpose],body=body,status_callback=callback)
@@ -159,7 +215,7 @@ async def inbound(request:Request,db:Session=Depends(get_db)):
                 contact.updated_at=datetime.utcnow()
         db.commit()
     if command=='HELP':
-        return Response('<Response><Message>TNG Boxing member texts. Help: 405-959-5823 or marketing@tngboxinggym.com. Reply STOP to opt out.</Message></Response>',media_type='application/xml')
+        return Response('<Response><Message>TNG Boxing member texts. Help: 405-959-5823 or marketing@tngboxinggym.com. Reply STOP to unsubscribe.</Message></Response>',media_type='application/xml')
     return Response('<Response/>',media_type='application/xml')
 
 @router.get('/member-audience')

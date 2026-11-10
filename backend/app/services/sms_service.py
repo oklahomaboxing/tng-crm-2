@@ -1,5 +1,15 @@
 import os
+import re
 from twilio.rest import Client
+
+
+STOP_FOOTER = "Reply STOP to unsubscribe."
+
+
+def ensure_stop_footer(message: str) -> str:
+    """Use one consistent opt-out line on every application-generated SMS."""
+    text = re.sub(r"\s*(?:reply|text)\s+stop\s+to\s+(?:opt[ -]out|unsubscribe|stop receiving messages)[.!]?", "", str(message or "").strip(), flags=re.IGNORECASE).strip()
+    return f"{text} {STOP_FOOTER}".strip()
 
 
 def send_sms(to_phone: str, message: str, status_callback: str | None = None):
@@ -14,7 +24,7 @@ def send_sms(to_phone: str, message: str, status_callback: str | None = None):
 
     options = {"status_callback": status_callback} if status_callback else {}
     message = client.messages.create(
-        body=message,
+        body=ensure_stop_footer(message),
         from_=twilio_number,
         to=to_phone,
         **options,

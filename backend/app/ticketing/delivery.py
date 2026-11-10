@@ -77,7 +77,7 @@ def deliver_order(db, order, force=True):
         try:
             if delivery.channel == "sms":
                 provider_id = send_sms(normalize_ticket_phone(order.buyer_phone),
-                    f"Your TNG tickets for {event.name} are ready. View your QR tickets: {ticket_page_url(order)} Reply STOP to opt out.",
+                    f"Your TNG tickets for {event.name} are ready. View your QR tickets: {ticket_page_url(order)} Reply STOP to unsubscribe.",
                     status_callback=sms_status_url(delivery.id))
             else:
                 result = send_ticket_email(order.buyer_email, event.name, order.receipt_number,

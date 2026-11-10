@@ -13,6 +13,7 @@ from app.core.dependencies import current_user
 from app.core.permissions import require_admin
 from app.services.member_reporting import membership_evidence,membership_report
 from app.ticketing.delivery import normalize_ticket_phone
+from app.services.sms_service import ensure_stop_footer
 
 CT=ZoneInfo('America/Chicago')
 router=APIRouter(prefix='/api/renewal-reminders',tags=['Renewal reminders'])
@@ -134,7 +135,7 @@ def content(member,date,expired=False):
     url=os.getenv('TNG_APP_URL','https://tngos.tngboxinggym.com').rstrip('/')+'/'
     text=f"TNG Boxing: Hi {member.first_name or 'member'}, your current membership period ends {end}. View membership details and renewal options: {url} If renewal is already arranged, check with the front desk. Help: 405-959-5823."
     if expired:text=f"TNG Boxing: Hi {member.first_name or 'member'}, your membership period ended {end}. View your account and renewal options: {url} If you have already renewed, please contact the front desk at 405-959-5823 so we can update your record."
-    return text,text+' Reply STOP to opt out.'
+    return text,ensure_stop_footer(text)
 
 def process(db,now=None,limit=25):
     fixed_now=now
