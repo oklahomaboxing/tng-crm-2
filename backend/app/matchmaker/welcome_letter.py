@@ -4,13 +4,14 @@ import hashlib
 import io
 import json
 import os
+import re
 import time
 from datetime import datetime, timedelta
 from html import escape
 from email_validator import validate_email, EmailNotValidError
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -71,6 +72,21 @@ class LetterSettings(BaseModel):
     contact_phone: str=Field(default='405-959-5823',max_length=80)
     contact_email: str=Field(default='marketing@tngboxinggym.com',max_length=255)
     additional_notes: str=Field(default='',max_length=6000)
+    additional_emails: list[str]=Field(default_factory=list,max_length=100)
+
+    @field_validator('additional_emails',mode='before')
+    @classmethod
+    def validate_additional_emails(cls,value):
+        if isinstance(value,str):value=re.split(r'[;,\s]+',value)
+        if not isinstance(value,list):raise ValueError('Enter email addresses separated by commas or new lines')
+        normalized=[]
+        for item in value:
+            if not isinstance(item,str):raise ValueError('Each additional recipient must be an email address')
+            if not item.strip():continue
+            try:email=validate_email(item.strip(),check_deliverability=False).normalized.lower()
+            except EmailNotValidError:raise ValueError('An additional email address is invalid. Correct it before saving.')
+            if email not in normalized:normalized.append(email)
+        return normalized
 
 class SendLetter(BaseModel):
     preview_hash: str=Field(min_length=64,max_length=64)
@@ -108,6 +124,8 @@ def draft(db,event_id):
             recipients.setdefault(email,[]).append(f.legal_name or f'Fighter {f.id}')
         except EmailNotValidError:
             missing.append(f.legal_name or f'Fighter {f.id}')
+    for email in settings.additional_emails:
+        recipients.setdefault(email,["Additional recipient"])
     missing_fields=[]
     for key,label in [('weigh_in_datetime','Weigh-in date and time'),('weigh_in_location','Weigh-in location'),('fighter_arrival','Fight-day fighter arrival')]:
         if not getattr(settings,key).strip():missing_fields.append(label)

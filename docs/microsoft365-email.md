@@ -32,3 +32,9 @@ No Microsoft credentials, consent or live email sends are fabricated during test
 ## Explicit recovery of rejected Resend attempts
 
 When Microsoft is connected and the unchanged letter has rejected Resend submissions, the welcome-letter dialog offers **Send N rejected emails through Microsoft**. This is an explicit staff-selected provider change, not automatic fallback. Accepted entries, unknown/in-flight entries and recipients never attempted are excluded. The previous Resend payload and rejection are archived with the acting user before switching the selected submission to Microsoft. The three-state distinction matters: a later rejection cannot prove an earlier unconfirmed attempt never arrived, so the screen warns that another copy is possible. The standard send button is disabled when every recipient already has an accepted or review submission, preventing misleading zero-send results.
+
+## Additional welcome-letter recipients
+
+The letter dialog includes **Additional email recipients**. Enter up to 100 addresses separated by commas, semicolons or new lines, click **Save & update preview**, then **Send welcome emails**. The saved addresses are combined with the booked fighters' addresses and deduplicated case-insensitively. Invalid addresses reject the save so staff can correct them. Each recipient gets an individual email; the roster is not exposed to other recipients.
+
+Adding or removing addresses changes the recipient preview hash but not the letter content hash. Already accepted copies of the unchanged letter are skipped, so adding a coach after the fighters have received it sends only to the new address. Removing an address stops future targeting without deleting delivery history. Additional addresses are stored in the existing event welcome settings, not as gym member profiles, and never appear in the letter body or PDF. Saving addresses itself does not send email.

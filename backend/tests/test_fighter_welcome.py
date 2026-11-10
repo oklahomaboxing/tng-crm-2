@@ -165,3 +165,49 @@ class FighterWelcomeTests(unittest.TestCase):
             unknown=self.client.post(path+'/send',headers=self.headers(),json=request)
             self.assertEqual(unknown.json()['needs_review'],1)
             microsoft.assert_not_called();resend.assert_not_called()
+
+    def test_additional_recipients_normalize_deduplicate_and_preserve_letter_hash(self):
+        path=self.card()
+        initial=self.client.put(path,headers=self.headers(),json=self.settings()).json()
+        body={**self.settings(),'additional_emails':'Coach@Example.com; TEAM@example.com\ncoach@example.com, manager@example.com'}
+        r=self.client.put(path,headers=self.headers(),json=body)
+        self.assertEqual(r.status_code,200,r.text)
+        data=r.json()
+        self.assertEqual(data['settings']['additional_emails'],['coach@example.com','team@example.com','manager@example.com'])
+        self.assertEqual(len(data['recipients']),3)
+        self.assertEqual(data['content_hash'],initial['content_hash'])
+        self.assertNotEqual(data['preview_hash'],initial['preview_hash'])
+        self.assertNotIn('coach@example.com',data['text'])
+        with patch.dict('os.environ',{'RESEND_API_KEY':'test-only'}),patch('app.matchmaker.welcome_letter.time.sleep'),patch('resend.Emails.send',return_value={'id':'provider-test'}) as provider:
+            stale=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':initial['preview_hash']})
+            self.assertEqual(stale.status_code,409)
+            provider.assert_not_called()
+            sent=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash']})
+            self.assertEqual(sent.json()['accepted'],3,sent.text)
+            recipients=[c.args[0]['to'] for c in provider.call_args_list]
+            self.assertCountEqual(recipients,[['team@example.com'],['coach@example.com'],['manager@example.com']])
+            self.assertTrue(all(len(addresses)==1 for addresses in recipients))
+
+    def test_adding_email_sends_only_the_new_recipient_and_removal_updates_preview(self):
+        path=self.card()
+        data=self.client.put(path,headers=self.headers(),json=self.settings()).json()
+        with patch.dict('os.environ',{'RESEND_API_KEY':'test-only'}),patch('app.matchmaker.welcome_letter.time.sleep'),patch('resend.Emails.send',return_value={'id':'provider-test'}) as provider:
+            self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash']})
+            provider.reset_mock()
+            updated=self.client.put(path,headers=self.headers(),json={**self.settings(),'additional_emails':['coach@example.com']}).json()
+            sent=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':updated['preview_hash']})
+            self.assertEqual(sent.json()['accepted'],1)
+            self.assertEqual(sent.json()['already_submitted'],1)
+            self.assertEqual(provider.call_args.args[0]['to'],['coach@example.com'])
+            self.assertEqual(provider.call_count,1)
+        removed=self.client.put(path,headers=self.headers(),json={**self.settings(),'additional_emails':[]}).json()
+        self.assertEqual(len(removed['recipients']),1)
+        self.assertEqual(removed['accepted'],1)
+
+    def test_invalid_or_excess_additional_addresses_do_not_change_saved_settings(self):
+        path=self.card()
+        self.client.put(path,headers=self.headers(),json=self.settings())
+        for addresses in ('not-an-email',['coach@example.com\r\nBcc: another@example.com'],[None],[f'coach{i}@example.com' for i in range(101)]):
+            bad=self.client.put(path,headers=self.headers(),json={**self.settings(),'additional_emails':addresses})
+            self.assertEqual(bad.status_code,422,bad.text)
+        self.assertEqual(self.client.get(path,headers=self.headers()).json()['settings']['additional_emails'],[])
