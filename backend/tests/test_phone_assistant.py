@@ -42,7 +42,7 @@ class PhoneAssistantTests(unittest.TestCase):
     def test_private_member_questions_route_to_staff_without_profile_lookup(self):
         before=self.db.query(Member).count()
         root=self.root(self.webhook('menu',SpeechResult='What is my membership balance?'))
-        self.assertEqual(root.find('Dial/Number').text,'+14059895843')
+        self.assertEqual(root.find('Dial/Number').text,'+14059895823')
         self.assertEqual(self.db.query(Member).count(),before)
         self.assertNotIn(self.member.email,''.join(root.itertext()))
 
@@ -71,7 +71,7 @@ class PhoneAssistantTests(unittest.TestCase):
         self.assertIn('first and last name',self.webhook('transfer-result',DialCallStatus='no-answer').text)
         saved=self.client.put('/api/phone/admin',headers=self.headers(),json=PhoneConfig(enabled=False).model_dump())
         self.assertEqual(saved.status_code,200,saved.text)
-        self.assertEqual(self.root(self.webhook('incoming')).find('Dial/Number').text,'+14059895843')
+        self.assertEqual(self.root(self.webhook('incoming')).find('Dial/Number').text,'+14059895823')
 
     def test_silent_callback_prompts_stop_after_three_attempts(self):
         self.webhook('menu',Digits='4')
@@ -123,7 +123,7 @@ class PhoneAssistantTests(unittest.TestCase):
 
     def test_callback_can_transfer_to_staff_and_disabled_menu_still_saves_callback(self):
         self.webhook('menu',Digits='4')
-        self.assertEqual(self.root(self.webhook('callback/name',Digits='0')).find('Dial/Number').text,'+14059895843')
+        self.assertEqual(self.root(self.webhook('callback/name',Digits='0')).find('Dial/Number').text,'+14059895823')
         self.client.put('/api/phone/admin',headers=self.headers(),json=PhoneConfig(enabled=False).model_dump())
         self.webhook('incoming')
         self.webhook('transfer-result',DialCallStatus='no-answer')

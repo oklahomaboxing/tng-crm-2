@@ -20,7 +20,7 @@ from app.services.business_time import reporting_periods
 
 router=APIRouter(prefix='/api/phone',tags=['Phone assistant'])
 PUBLIC_NUMBER='+14058644496'
-STAFF_NUMBER='+14059895843'
+STAFF_NUMBER='+14059895823'
 MENU='For hours and location, say location or press 1. For memberships, say membership or press 2. For boxing events and tickets, say events or press 3. To request a callback or gym visit, say callback or press 4. To speak to staff, say staff or press 0.'
 
 class PhoneSettings(Base):
@@ -77,7 +77,7 @@ def gather(text,path,input='speech dtmf',digits=1):
     return xml(response)
 def transfer(cfg):
     response=VoiceResponse();say(response,'Please hold while I connect you with TNG Boxing staff.')
-    dial=response.dial(timeout=20,action=url('transfer-result'),method='POST')
+    dial=response.dial(timeout=35,action=url('transfer-result'),method='POST')
     dial.number(cfg.staff_number)
     return xml(response)
 def callback_prompt(call):

@@ -1,6 +1,6 @@
 # TNG Boxing phone assistant — speech/keypad version
 
-Public NumberBarn number: **(405) 864-4496 / 405-TNG-4GYM**. Direct staff transfer: **(405) 989-5843**.
+Public NumberBarn number: **(405) 864-4496 / 405-TNG-4GYM**. Direct staff transfer: **(405) 989-5823**.
 
 This version uses Twilio speech recognition, keypad choices and approved text-to-speech answers. It makes no AI-model API requests. Voice, speech recognition and transfer legs incur the provider's normal charges. No call recordings are enabled by TNGOS.
 
@@ -33,3 +33,5 @@ Turning the speech/keypad menu off forwards connected calls directly to staff. A
 Voice webhooks require a valid Twilio signature, matching account SID, matching assigned called number and a valid call SID. The signed callback URL uses TNG_BACKEND_URL, falling back to the production backend URL. There is no public member-profile lookup and no automated account/payment change. Call handling uses the existing Leads architecture and does not send SMS or email.
 
 Provider credentials reuse the configured Twilio account. Read-only readiness checks confirmed the assigned number supports voice. The setup does not overwrite a foreign voice integration. NumberBarn forwarding and real inbound test calls are not fabricated during automated tests.
+
+Staff transfers ring 35 seconds so the staff phone can answer or accept its normal voicemail. Voicemail left on that phone is managed by the staff phone carrier, not recorded or copied into TNGOS. Preserve original caller ID in NumberBarn forwarding where supported, then verify it using a test call; TNGOS only receives the caller ID the carrier passes through.
