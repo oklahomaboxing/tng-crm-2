@@ -96,7 +96,9 @@ class SellerSalesTests(unittest.TestCase):
         self.db.add(fighter);self.db.flush()
         self.seller.seller_ref_id=fighter.id
         self.seller.active=False
-        self.db.add(BoxingBout(event_id=self.event.id,red_fighter_id=fighter.id,status='draft'))
+        opponent=BoxingFighter(legal_name='Example Opponent')
+        self.db.add(opponent);self.db.flush()
+        self.db.add(BoxingBout(event_id=self.event.id,red_fighter_id=fighter.id,blue_fighter_id=opponent.id,status='draft'))
         self.db.commit()
         r=self.client.post(f'/api/ticketing/events/{self.event.id}/enable-all-fighter-ticket-sales',headers=self.headers())
         self.assertEqual(r.status_code,200,r.text)
