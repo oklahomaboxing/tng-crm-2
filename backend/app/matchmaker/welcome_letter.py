@@ -48,6 +48,21 @@ class FighterWelcomeSubmission(Base):
     error_code=Column(String(60),nullable=True)
 
 
+class FighterWelcomeProviderHistory(Base):
+    __tablename__='boxing_fighter_welcome_provider_history'
+    id=Column(Integer,primary_key=True)
+    delivery_id=Column(Integer,ForeignKey('boxing_fighter_welcome_deliveries.id'),nullable=False,index=True)
+    previous_payload_json=Column(Text,nullable=False)
+    previous_error_code=Column(String(60),nullable=True)
+    changed_by=Column(Integer,ForeignKey('users.id'),nullable=False)
+    created_at=Column(DateTime,default=datetime.utcnow,nullable=False)
+
+
+def submission_provider(db,delivery_id):
+    snapshot=db.get(FighterWelcomeSubmission,delivery_id)
+    return json.loads(snapshot.payload_json).get('_tng_provider','resend') if snapshot else 'resend'
+
+
 class LetterSettings(BaseModel):
     weigh_in_datetime: str=Field(default='',max_length=120)
     weigh_in_location: str=Field(default='',max_length=500)
@@ -60,6 +75,7 @@ class LetterSettings(BaseModel):
 class SendLetter(BaseModel):
     preview_hash: str=Field(min_length=64,max_length=64)
     retry_unconfirmed: bool=False
+    use_microsoft_for_rejected: bool=False
 
 
 def access(user):
@@ -145,6 +161,7 @@ def get_letter(event_id:int,db:Session=Depends(get_db),user=Depends(current_user
     return JSONResponse({'email_provider':selected_provider(db),'event_id':event_id,'settings':settings.model_dump(),'text':text,'preview_hash':ph,'content_hash':ch,
             'recipients':[{'email':e,'fighters':names} for e,names in recipients.items()],
             'missing_email_fighters':missing,'missing_fields':required,
+            'rejected_resend':sum(r.status=='rejected' and not r.provider_id and r.recipient in recipients and submission_provider(db,r.id)=='resend' for r in deliveries),
             'accepted':sum(r.status=='accepted' and r.recipient in recipients for r in deliveries),
             'needs_review':sum(r.status in ('submitting','unknown','rejected') and r.recipient in recipients for r in deliveries)},headers={'Cache-Control':'private, no-store'})
 
@@ -177,6 +194,7 @@ def send_letter(event_id:int,body:SendLetter,db:Session=Depends(get_db),user=Dep
     if not recipients:raise HTTPException(409,'No booked fighters have a valid email address')
     from app.mail.microsoft365 import selected_provider, send_welcome, MailSubmissionError
     provider=selected_provider(db)
+    if body.use_microsoft_for_rejected and provider!='microsoft365':raise HTTPException(409,'Connect Microsoft 365 before moving rejected emails')
     if provider=='resend' and not os.getenv('RESEND_API_KEY'):raise HTTPException(503,'Email service is not configured')
     import resend
     resend.api_key=os.getenv('RESEND_API_KEY')
@@ -184,6 +202,9 @@ def send_letter(event_id:int,body:SendLetter,db:Session=Depends(get_db),user=Dep
     result={'accepted':0,'already_submitted':0,'needs_review':0,'missing_email_fighters':missing,'issues':[]}
     for email in recipients:
         legacy_retry=False
+        previous_status=None
+        if body.use_microsoft_for_rejected and not db.query(FighterWelcomeDelivery).filter_by(event_id=event_id,content_hash=ch,recipient=email).first():
+            continue
         row=FighterWelcomeDelivery(event_id=event_id,content_hash=ch,recipient=email,status='submitting')
         db.add(row)
         try:db.commit()
@@ -193,8 +214,11 @@ def send_letter(event_id:int,body:SendLetter,db:Session=Depends(get_db),user=Dep
             row=db.query(FighterWelcomeDelivery).filter_by(event_id=event_id,content_hash=ch,recipient=email).one()
             if row.status=='accepted':
                 result['already_submitted']+=1;continue
+            previous_status=row.status
+            if body.use_microsoft_for_rejected and (previous_status!='rejected' or row.provider_id or submission_provider(db,row.id)!='resend'):
+                result['needs_review']+=1;continue
             # Provider idempotency keys expire after 24h. Never replay after that window.
-            if not body.retry_unconfirmed or row.status not in ('unknown','rejected') or row.created_at < datetime.utcnow()-timedelta(hours=23):
+            if not (body.retry_unconfirmed or body.use_microsoft_for_rejected) or row.status not in ('unknown','rejected') or (not body.use_microsoft_for_rejected and row.created_at < datetime.utcnow()-timedelta(hours=23)):
                 result['needs_review']+=1;continue
             claimed=db.query(FighterWelcomeDelivery).filter_by(id=row.id,status=row.status).update({'status':'submitting'},synchronize_session=False)
             db.commit()
@@ -213,6 +237,14 @@ def send_letter(event_id:int,body:SendLetter,db:Session=Depends(get_db),user=Dep
             db.add(snapshot);db.commit()
         payload=json.loads(snapshot.payload_json)
         route=payload.pop('_tng_provider','resend')
+        if body.use_microsoft_for_rejected and previous_status=='rejected' and route=='resend' and not row.provider_id:
+            # Explicit staff action only. Retain the old payload and failure for audit.
+            db.add(FighterWelcomeProviderHistory(delivery_id=row.id,previous_payload_json=snapshot.payload_json,
+                previous_error_code=snapshot.error_code,changed_by=user.id))
+            payload['_tng_provider']='microsoft365'
+            snapshot.payload_json=json.dumps(payload);snapshot.error_code=None
+            db.commit()
+            payload.pop('_tng_provider');route='microsoft365'
         # Resend's default API rate is two requests/second; pace the individual emails.
         time.sleep(0.65)
         try:

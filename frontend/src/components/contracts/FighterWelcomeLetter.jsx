@@ -31,10 +31,10 @@ export default function FighterWelcomeLetter({ eventId }) {
       const url = URL.createObjectURL(await r.blob()); const a = document.createElement('a'); a.href = url; a.download = `TNG_${eventId}_Fighter_Welcome.pdf`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) { setMessage(e.message); } finally { setBusy(false); }
   }
-  async function send(retryUnconfirmed = false) {
+  async function send(retryUnconfirmed = false, useMicrosoftForRejected = false) {
     setBusy(true); setMessage('');
     try {
-      const body = await request('/send', { method: 'POST', body: JSON.stringify({ preview_hash: data.preview_hash, retry_unconfirmed: retryUnconfirmed }) });
+      const body = await request('/send', { method: 'POST', body: JSON.stringify({ preview_hash: data.preview_hash, retry_unconfirmed: retryUnconfirmed, use_microsoft_for_rejected: useMicrosoftForRejected }) });
       setData(await request());
       setMessage(`${body.accepted} email(s) accepted by the provider; ${body.already_submitted} previously submitted; ${body.needs_review} need review. Provider acceptance does not confirm inbox delivery. ${(body.issues || []).join(' ')}`);
     } catch (e) { setMessage(e.message); } finally { setBusy(false); }
@@ -53,6 +53,7 @@ export default function FighterWelcomeLetter({ eventId }) {
             {[['weigh_in_datetime','Weigh-in date and time (Oklahoma time)'],['weigh_in_location','Weigh-in venue and street address'],['fighter_arrival','Fight-day fighter / team arrival time'],['contact_name','Promoter contact'],['contact_phone','Contact phone'],['contact_email','Contact email'],['additional_notes','Additional event instructions']].map(([key,label]) => <TextField key={key} label={label} value={settings[key] || ''} disabled={busy} multiline={key === 'additional_notes'} minRows={key === 'additional_notes' ? 3 : undefined} onChange={e => { setSettings(old => ({ ...old, [key]: e.target.value })); setDirty(true); }} />)}
             <Button variant="outlined" disabled={busy || !dirty} onClick={save}>Save & update preview</Button>
             {dirty && <Alert severity="warning">Save your changes to update the preview and PDF.</Alert>}
+            {data.email_provider === 'microsoft365' && !!data.rejected_resend && <Alert severity="warning">{data.rejected_resend} earlier Resend submissions were rejected. Use the Microsoft button below to send only those entries; accepted emails are skipped. An earlier unconfirmed attempt may still have arrived, so sending through another provider can produce another copy.</Alert>}
             <Typography variant="subtitle2">Recipients: {data.recipients.length} unique email addresses · Previously accepted: {data.accepted} · Submission status needs review: {data.needs_review}</Typography>
             <Box sx={{ maxHeight: 120, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>{data.recipients.map(r => <Typography key={r.email} variant="body2">{r.fighters.join(', ')} — {r.email}</Typography>)}</Box>
             {!!data.missing_email_fighters.length && <Alert severity="warning">Missing or invalid email: {data.missing_email_fighters.join(', ')}. Update their fighter profiles to include them.</Alert>}
@@ -64,8 +65,9 @@ export default function FighterWelcomeLetter({ eventId }) {
       <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
         <Button disabled={busy} onClick={() => setOpen(false)}>Close</Button>
         <Button disabled={busy || dirty || !data} onClick={download}>Download PDF</Button>
-        {!!data?.needs_review && <Button disabled={busy || dirty || !!data.missing_fields.length} onClick={() => send(true)}>Retry unconfirmed emails safely</Button>}
-        <Button variant="contained" disabled={busy || dirty || !data || !!data.missing_fields.length || !data.recipients.length} onClick={() => send(false)}>Email letter to booked fighters</Button>
+        {data?.email_provider === 'microsoft365' && !!data?.rejected_resend && <Button variant="contained" disabled={busy || dirty || !!data.missing_fields.length} onClick={() => send(false, true)}>Send {data.rejected_resend} rejected emails through Microsoft</Button>}
+        {!!data?.needs_review && !(data.email_provider === 'microsoft365' && data.rejected_resend === data.needs_review) && <Button disabled={busy || dirty || !!data.missing_fields.length} onClick={() => send(true)}>Retry unconfirmed emails safely</Button>}
+        <Button variant="contained" disabled={busy || dirty || !data || !!data.missing_fields.length || !data.recipients.length || data.accepted + data.needs_review >= data.recipients.length} onClick={() => send(false)}>Email letter to booked fighters</Button>
       </DialogActions>
     </Dialog>
   </>;

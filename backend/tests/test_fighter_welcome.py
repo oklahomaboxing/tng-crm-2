@@ -123,3 +123,45 @@ class FighterWelcomeTests(unittest.TestCase):
             self.assertEqual(result.status_code,200,result.text)
             self.assertEqual(result.json()['accepted'],1)
             microsoft.assert_called_once();resend.assert_not_called()
+
+    def connect_microsoft(self):
+        from app.mail.microsoft365 import MicrosoftMailbox,encrypt
+        from datetime import datetime,timedelta
+        self.db.add(MicrosoftMailbox(id=1,tenant_id='11111111-1111-1111-1111-111111111111',client_id='22222222-2222-2222-2222-222222222222',client_secret=encrypt('secret'),refresh_token=encrypt('refresh'),access_token=encrypt('access'),expires_at=datetime.utcnow()+timedelta(hours=1),mailbox='marketing@tngboxinggym.com',enabled=True,generation=1));self.db.commit()
+
+    def test_explicit_move_of_rejected_resend_to_microsoft_preserves_history(self):
+        from app.matchmaker.welcome_letter import FighterWelcomeProviderHistory,FighterWelcomeSubmission
+        import json
+        path=self.card();data=self.client.put(path,headers=self.headers(),json=self.settings()).json()
+        failure=RuntimeError('Rate limit');failure.code='429'
+        with patch.dict('os.environ',{'RESEND_API_KEY':'test-only'}),patch('app.matchmaker.welcome_letter.time.sleep'),patch('resend.Emails.send',side_effect=failure):
+            rejected=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash']})
+            self.assertEqual(rejected.json()['needs_review'],1)
+        self.connect_microsoft()
+        preview=self.client.get(path,headers=self.headers()).json()
+        self.assertEqual(preview['rejected_resend'],1)
+        with patch('app.matchmaker.welcome_letter.time.sleep'),patch('app.mail.microsoft365.send_welcome',return_value={'id':'microsoft365:confirmed'}) as microsoft,patch('resend.Emails.send') as resend:
+            moved=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':preview['preview_hash'],'use_microsoft_for_rejected':True})
+            self.assertEqual(moved.json()['accepted'],1,moved.text)
+            microsoft.assert_called_once();resend.assert_not_called()
+            repeated=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':preview['preview_hash'],'use_microsoft_for_rejected':True})
+            self.assertEqual(repeated.json()['already_submitted'],1)
+            self.assertEqual(microsoft.call_count,1)
+        self.assertEqual(self.db.query(FighterWelcomeProviderHistory).count(),1)
+        history=self.db.query(FighterWelcomeProviderHistory).one()
+        self.assertEqual(history.previous_error_code,'429')
+        self.assertEqual(json.loads(history.previous_payload_json)['_tng_provider'],'resend')
+        self.assertEqual(json.loads(self.db.query(FighterWelcomeSubmission).one().payload_json)['_tng_provider'],'microsoft365')
+
+    def test_microsoft_move_does_not_send_unknown_or_never_attempted_emails(self):
+        path=self.card();data=self.client.put(path,headers=self.headers(),json=self.settings()).json()
+        self.connect_microsoft()
+        with patch('app.mail.microsoft365.send_welcome') as microsoft,patch('resend.Emails.send') as resend:
+            request={'preview_hash':data['preview_hash'],'use_microsoft_for_rejected':True}
+            new=self.client.post(path+'/send',headers=self.headers(),json=request)
+            self.assertEqual(new.json()['accepted'],0)
+            self.assertEqual(self.db.query(FighterWelcomeDelivery).count(),0)
+            self.db.add(FighterWelcomeDelivery(event_id=self.event.id,content_hash=data['content_hash'],recipient='team@example.com',status='unknown'));self.db.commit()
+            unknown=self.client.post(path+'/send',headers=self.headers(),json=request)
+            self.assertEqual(unknown.json()['needs_review'],1)
+            microsoft.assert_not_called();resend.assert_not_called()

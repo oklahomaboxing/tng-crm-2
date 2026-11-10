@@ -28,3 +28,7 @@ Microsoft does not provide Resend-style send idempotency. Therefore uncertain Gr
 **Disconnect Microsoft — use Resend for new welcome emails** clears stored Microsoft access and refresh tokens. It preserves historical submission routes and does not recall sent mail. Microsoft app permissions can also be revoked in the Microsoft administrator portal.
 
 No Microsoft credentials, consent or live email sends are fabricated during testing. Tests mock the provider, verify encrypted storage, admin authorization, PKCE/callback replay protection, exact mailbox matching, PDF attachment construction, provider routing and uncertain-send protection.
+
+## Explicit recovery of rejected Resend attempts
+
+When Microsoft is connected and the unchanged letter has rejected Resend submissions, the welcome-letter dialog offers **Send N rejected emails through Microsoft**. This is an explicit staff-selected provider change, not automatic fallback. Accepted entries, unknown/in-flight entries and recipients never attempted are excluded. The previous Resend payload and rejection are archived with the acting user before switching the selected submission to Microsoft. The three-state distinction matters: a later rejection cannot prove an earlier unconfirmed attempt never arrived, so the screen warns that another copy is possible. The standard send button is disabled when every recipient already has an accepted or review submission, preventing misleading zero-send results.
