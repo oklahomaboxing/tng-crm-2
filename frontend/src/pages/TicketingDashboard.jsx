@@ -275,11 +275,14 @@ const [ticketTypes, setTicketTypes] = useState([]);
     }
   }
 
-  async function downloadReport(path, filename) {
+  async function downloadReport(path, filename, preview = false) {
+    const previewWindow = preview ? window.open("about:blank", "_blank") : null;
+    if (previewWindow) previewWindow.opener = null;
     try {
       setBusy(true);
       setMessage("");
 
+      if (preview && !previewWindow) throw new Error("Allow popups to view and print the PDF.");
       const response = await fetch(`${API}${path}`, {
         headers: authHeaders(),
       });
@@ -292,15 +295,20 @@ const [ticketTypes, setTicketTypes] = useState([]);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
 
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      if (previewWindow) {
+        previewWindow.location.href = url;
+      } else {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
 
-      window.URL.revokeObjectURL(url);
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
     } catch (error) {
+      previewWindow?.close();
       setMessage(error.message);
     } finally {
       setBusy(false);
@@ -598,26 +606,26 @@ const [ticketTypes, setTicketTypes] = useState([]);
           disabled={!eventId || busy}
           onClick={() =>
             downloadReport(
-              `${API_BASE}/api/ticketing/events/${eventId}/report.pdf`,
+              `/api/ticketing/events/${eventId}/report.pdf`,
               `tng_event_${eventId}_master_report.pdf`
             )
           }
           style={{ padding: "12px 18px" }}
         >
-          Master PDF
+          Export all sales PDF
         </button>
 
         <button
           disabled={!eventId || busy}
           onClick={() =>
             downloadReport(
-              `${API_BASE}/api/ticketing/events/${eventId}/report.csv`,
+              `/api/ticketing/events/${eventId}/report.csv`,
               `tng_event_${eventId}_ticket_report.csv`
             )
           }
           style={{ padding: "12px 18px" }}
         >
-          Master CSV
+          Export all sales CSV
         </button>
 
         <button
@@ -628,6 +636,23 @@ const [ticketTypes, setTicketTypes] = useState([]);
           Email Seller Reports
         </button>
       </div>
+
+      {eventId && summary?.state_athletic_commission && <section aria-label="Oklahoma State Athletic Commission" style={{ marginTop: 24, padding: 22, border: '1px solid #d71920', borderRadius: 12, background: '#fff8f8' }}>
+        <h2 style={{ marginTop: 0 }}>Oklahoma State Athletic Commission — 5%</h2>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32 }}>
+          <div>Recorded paid ticket gross<strong style={{ display: 'block', fontSize: 24 }}>{money(summary.state_athletic_commission.paid_ticket_gross_cents)}</strong></div>
+          <div>Calculated commission amount<strong style={{ display: 'block', fontSize: 32, color: '#c91c28' }}>{money(summary.state_athletic_commission.state_commission_cents)}</strong></div>
+          <div>Paid tickets<strong style={{ display: 'block', fontSize: 24 }}>{summary.state_athletic_commission.paid_ticket_quantity}</strong></div>
+        </div>
+        <p>{summary.state_athletic_commission.basis}</p>
+        <p>Unpaid orders: {summary.state_athletic_commission.unpaid_orders} · Paper tickets awaiting sales reconciliation: {summary.state_athletic_commission.unreconciled_paper_tickets} · Partial refund orders to review: {summary.state_athletic_commission.partial_refund_orders} · Paid orders with ticket issuance mismatch: {summary.state_athletic_commission.paid_orders_missing_tickets}</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button disabled={busy} onClick={() => downloadReport(`/api/ticketing/events/${eventId}/report.pdf`, `tng_event_${eventId}_master_report.pdf`, true)}>View / print PDF</button>
+          <button disabled={busy} onClick={() => downloadReport(`/api/ticketing/events/${eventId}/report.pdf`, `tng_event_${eventId}_master_report.pdf`)}>Download PDF</button>
+          <button disabled={busy} onClick={() => downloadReport(`/api/ticketing/events/${eventId}/report.csv`, `tng_event_${eventId}_ticket_report.csv`)}>Download CSV</button>
+        </div>
+        <p style={{ color: '#666', fontSize: 13 }}>Exports include event totals, seller totals, order records, ticket ledger and unrecorded paper stock. Attach the downloaded file to your commission email. No payment or email is sent by these buttons.</p>
+      </section>}
 
       {eventId && (
         <div

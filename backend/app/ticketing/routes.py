@@ -556,6 +556,7 @@ def scan(body: ScanRequest, db: Session = Depends(get_db), user=Depends(staff_us
 @router.get("/events/{event_id}/report")
 def event_report(event_id: int, db: Session = Depends(get_db), user=Depends(staff_user)):
     from .offline_paper import offline_admissions
+    from .sales_reports import commission_summary
     unrecorded=offline_admissions(db,event_id)
     sellers = seller_totals(db, event_id)
     tickets = db.query(IssuedTicket).filter(IssuedTicket.event_id == event_id).all()
@@ -567,6 +568,7 @@ def event_report(event_id: int, db: Session = Depends(get_db), user=Depends(staf
         "gross_sales_cents": sum(t.price_cents for t in tickets if t.status in ("valid", "used")),
         "commission_cents": sum(t.commission_cents for t in tickets if t.status in ("valid", "used")),
         "sellers": sellers,
+        "state_athletic_commission": commission_summary(db, event_id),
     }
 
 @router.post("/events/{event_id}/email-seller-reports")
@@ -627,47 +629,9 @@ def download_event_report_csv(
     db: Session = Depends(get_db),
     user=Depends(staff_user),
 ):
-    from app.matchmaker.models import BoxingEvent
+    from .sales_reports import export_csv
+    return export_csv(db, event_id)
 
-    event = db.query(BoxingEvent).filter(BoxingEvent.id == event_id).first()
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-
-    sellers = seller_totals(db, event_id)
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-
-    writer.writerow([
-        "Seller",
-        "Seller Type",
-        "Seller Code",
-        "Tickets Sold",
-        "Gross Sales",
-        "Commission Earned",
-    ])
-
-    for seller in sellers:
-        writer.writerow([
-            seller["display_name"],
-            seller["seller_type"],
-            seller["public_code"],
-            seller["tickets_sold"],
-            f"${seller['gross_sales_cents'] / 100:.2f}",
-            f"${seller['commission_cents'] / 100:.2f}",
-        ])
-
-    output.seek(0)
-
-    filename = f"tng_event_{event_id}_ticket_report.csv"
-
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        },
-    )
 @router.get("/events/{event_id}/sellers/{seller_id}/report.csv")
 def download_seller_report_csv(
     event_id: int,
@@ -837,139 +801,8 @@ def download_event_report_pdf(
     db: Session = Depends(get_db),
     user=Depends(staff_user),
 ):
-    from app.matchmaker.models import BoxingEvent
-
-    event = db.query(BoxingEvent).filter(BoxingEvent.id == event_id).first()
-
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-
-    sellers = seller_totals(db, event_id)
-
-    tickets = db.query(IssuedTicket).filter(
-        IssuedTicket.event_id == event_id
-    ).all()
-
-    tickets_sold = sum(
-        1 for t in tickets if t.status in ("valid", "used")
-    )
-
-    tickets_scanned = sum(
-        1 for t in tickets if t.status == "used"
-    )
-    from .offline_paper import offline_admissions
-    tickets_scanned += offline_admissions(db,event_id)
-
-    gross_sales_cents = sum(
-        t.price_cents for t in tickets if t.status in ("valid", "used")
-    )
-
-    commission_cents = sum(
-        t.commission_cents for t in tickets if t.status in ("valid", "used")
-    )
-
-    output = io.BytesIO()
-    pdf = canvas.Canvas(output)
-
-    pdf.setTitle(f"{event.name} - Master Ticket Sales Report")
-
-    pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawString(50, 800, "TNG Promotions")
-
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(50, 775, event.name)
-
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(
-        50, 750,
-        f"Event Date: {event.event_date}"
-    )
-    pdf.drawString(
-        50, 733,
-        f"Venue: {event.venue}"
-    )
-
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(50, 695, "Event Totals")
-
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(
-        50, 675,
-        f"Tickets Sold: {tickets_sold}"
-    )
-    pdf.drawString(
-        50, 658,
-        f"Tickets Scanned: {tickets_scanned}"
-    )
-    pdf.drawString(
-        50, 641,
-        f"Gross Ticket Sales: ${gross_sales_cents / 100:.2f}"
-    )
-    pdf.drawString(
-        50, 624,
-        f"Total Commission Earned: ${commission_cents / 100:.2f}"
-    )
-
-    y = 585
-
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(50, y, "Seller")
-    pdf.drawString(180, y, "Tickets")
-    pdf.drawString(240, y, "Gross")
-    pdf.drawString(330, y, "Commission")
-
-    y -= 20
-
-    pdf.setFont("Helvetica", 9)
-
-    for seller in sellers:
-        if y < 60:
-            pdf.showPage()
-            y = 800
-
-            pdf.setFont("Helvetica-Bold", 10)
-            pdf.drawString(50, y, "Seller")
-            pdf.drawString(180, y, "Tickets")
-            pdf.drawString(240, y, "Gross")
-            pdf.drawString(330, y, "Commission")
-
-            y -= 20
-            pdf.setFont("Helvetica", 9)
-
-        pdf.drawString(
-            50, y,
-            seller["display_name"][:24]
-        )
-
-        pdf.drawString(
-            180, y,
-            str(seller["tickets_sold"])
-        )
-
-        pdf.drawString(
-            240, y,
-            f"${seller['gross_sales_cents'] / 100:.2f}"
-        )
-
-        pdf.drawString(
-            330, y,
-            f"${seller['commission_cents'] / 100:.2f}"
-        )
-
-        y -= 18
-
-    pdf.save()
-    output.seek(0)
-
-    filename = f"tng_event_{event_id}_master_report.pdf"
-
-    return StreamingResponse(
-        output,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        },
-    )
+    from .sales_reports import export_pdf
+    return export_pdf(db, event_id)
 
 
 @router.get("/events/{event_id}/ticket-types")
