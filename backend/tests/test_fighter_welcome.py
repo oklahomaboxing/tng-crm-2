@@ -83,3 +83,30 @@ class FighterWelcomeTests(unittest.TestCase):
             again=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash']})
             self.assertEqual(again.json()['needs_review'],1)
             self.assertEqual(provider.call_count,1)
+
+    def test_marketing_sender_and_explicit_retry_reuse_exact_payload_and_key(self):
+        path=self.card()
+        data=self.client.put(path,headers=self.headers(),json=self.settings()).json()
+        with patch.dict('os.environ',{'RESEND_API_KEY':'test-only','RESEND_FROM_EMAIL':'Old <noreply@example.com>'}),patch('app.matchmaker.welcome_letter.time.sleep'),patch('resend.Emails.send',side_effect=[TimeoutError(),{'id':'recovered-provider-id'}]) as provider:
+            first=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash']})
+            self.assertEqual(first.json()['needs_review'],1)
+            payload=provider.call_args_list[0].args[0]
+            self.assertEqual(payload['from'],'TNG Promotions <marketing@tngboxinggym.com>')
+            self.assertEqual(payload['reply_to'],'marketing@tngboxinggym.com')
+            retry=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash'],'retry_unconfirmed':True})
+            self.assertEqual(retry.json()['accepted'],1,retry.text)
+            self.assertEqual(provider.call_args_list[0],provider.call_args_list[1])
+            final=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash'],'retry_unconfirmed':True})
+            self.assertEqual(final.json()['already_submitted'],1)
+            self.assertEqual(provider.call_count,2)
+
+    def test_expired_unknown_submission_is_never_replayed(self):
+        from datetime import datetime,timedelta
+        path=self.card()
+        data=self.client.put(path,headers=self.headers(),json=self.settings()).json()
+        self.db.add(FighterWelcomeDelivery(event_id=self.event.id,content_hash=data['content_hash'],recipient='team@example.com',status='unknown',created_at=datetime.utcnow()-timedelta(hours=25)))
+        self.db.commit()
+        with patch.dict('os.environ',{'RESEND_API_KEY':'test-only'}),patch('resend.Emails.send') as provider:
+            retry=self.client.post(path+'/send',headers=self.headers(),json={'preview_hash':data['preview_hash'],'retry_unconfirmed':True})
+            self.assertEqual(retry.json()['needs_review'],1)
+            provider.assert_not_called()

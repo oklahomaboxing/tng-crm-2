@@ -4,7 +4,8 @@ import hashlib
 import io
 import json
 import os
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from html import escape
 from email_validator import validate_email, EmailNotValidError
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -39,6 +40,14 @@ class FighterWelcomeDelivery(Base):
     provider_id=Column(String(255),nullable=True)
     created_at=Column(DateTime,default=datetime.utcnow)
 
+class FighterWelcomeSubmission(Base):
+    """Exact provider payload retained for safe, explicitly requested idempotent retries."""
+    __tablename__='boxing_fighter_welcome_submissions'
+    delivery_id=Column(Integer,ForeignKey('boxing_fighter_welcome_deliveries.id'),primary_key=True)
+    payload_json=Column(Text,nullable=False)
+    error_code=Column(String(60),nullable=True)
+
+
 class LetterSettings(BaseModel):
     weigh_in_datetime: str=Field(default='',max_length=120)
     weigh_in_location: str=Field(default='',max_length=500)
@@ -50,6 +59,7 @@ class LetterSettings(BaseModel):
 
 class SendLetter(BaseModel):
     preview_hash: str=Field(min_length=64,max_length=64)
+    retry_unconfirmed: bool=False
 
 
 def access(user):
@@ -122,7 +132,7 @@ def pdf_bytes(paragraphs,incomplete):
     if incomplete:story.append(Paragraph('DRAFT — SCHEDULE DETAILS TO BE CONFIRMED',styles['Heading2']))
     for p in paragraphs:
         story.extend([Spacer(1,8),Paragraph(escape(p).replace('\n','<br/>'),styles['BodyText'])])
-    SimpleDocTemplate(out,leftMargin=48,rightMargin=48,topMargin=36,bottomMargin=36,title='TNG Fighter Welcome Letter').build(story)
+    SimpleDocTemplate(out,leftMargin=48,rightMargin=48,topMargin=36,bottomMargin=36,title='TNG Fighter Welcome Letter',invariant=1).build(story)
     return out.getvalue()
 
 
@@ -135,7 +145,7 @@ def get_letter(event_id:int,db:Session=Depends(get_db),user=Depends(current_user
             'recipients':[{'email':e,'fighters':names} for e,names in recipients.items()],
             'missing_email_fighters':missing,'missing_fields':required,
             'accepted':sum(r.status=='accepted' and r.recipient in recipients for r in deliveries),
-            'needs_review':sum(r.status in ('submitting','unknown') and r.recipient in recipients for r in deliveries)},headers={'Cache-Control':'private, no-store'})
+            'needs_review':sum(r.status in ('submitting','unknown','rejected') and r.recipient in recipients for r in deliveries)},headers={'Cache-Control':'private, no-store'})
 
 
 @router.put('/{event_id}/fighter-welcome')
@@ -168,28 +178,49 @@ def send_letter(event_id:int,body:SendLetter,db:Session=Depends(get_db),user=Dep
     import resend
     resend.api_key=os.environ['RESEND_API_KEY']
     attachment=base64.b64encode(pdf_bytes(paragraphs,False)).decode()
-    result={'accepted':0,'already_submitted':0,'needs_review':0,'missing_email_fighters':missing}
+    result={'accepted':0,'already_submitted':0,'needs_review':0,'missing_email_fighters':missing,'issues':[]}
     for email in recipients:
         row=FighterWelcomeDelivery(event_id=event_id,content_hash=ch,recipient=email,status='submitting')
         db.add(row)
         try:db.commit()
         except IntegrityError:
             db.rollback()
-            existing=db.query(FighterWelcomeDelivery).filter_by(event_id=event_id,content_hash=ch,recipient=email).one()
-            if existing.status in ('submitting','unknown'):result['needs_review']+=1
-            else:result['already_submitted']+=1
-            continue
-        # Durable unique claim before provider I/O prevents double-clicks/concurrent sends.
-        try:
-            sent=resend.Emails.send({'from':os.getenv('RESEND_FROM_EMAIL','TNG Boxing <marketing@tngboxinggym.com>'),
-                'to':[email],'subject':f'{event.name} — Fighter Welcome & Event Information','text':text,
+            row=db.query(FighterWelcomeDelivery).filter_by(event_id=event_id,content_hash=ch,recipient=email).one()
+            if row.status=='accepted':
+                result['already_submitted']+=1;continue
+            # Provider idempotency keys expire after 24h. Never replay after that window.
+            if not body.retry_unconfirmed or row.status not in ('unknown','rejected') or row.created_at < datetime.utcnow()-timedelta(hours=23):
+                result['needs_review']+=1;continue
+            claimed=db.query(FighterWelcomeDelivery).filter_by(id=row.id,status=row.status).update({'status':'submitting'},synchronize_session=False)
+            db.commit()
+            if not claimed:
+                result['needs_review']+=1;continue
+            db.refresh(row)
+        snapshot=db.get(FighterWelcomeSubmission,row.id)
+        if not snapshot:
+            payload={'from':os.getenv('FIGHTER_WELCOME_FROM_EMAIL','TNG Promotions <marketing@tngboxinggym.com>'),
+                'reply_to':'marketing@tngboxinggym.com','to':[email],
+                'subject':f'{event.name} — Fighter Welcome & Event Information','text':text,
                 'html':'<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto">'+''.join('<p>'+escape(p).replace('\n','<br/>')+'</p>' for p in paragraphs)+'</div>',
-                'attachments':[{'filename':f'TNG_{event_id}_Fighter_Welcome.pdf','content':attachment}]},
-                options={'idempotency_key':f'tng-fighter-welcome-{row.id}'})
+                'attachments':[{'filename':f'TNG_{event_id}_Fighter_Welcome.pdf','content':attachment}]}
+            snapshot=FighterWelcomeSubmission(delivery_id=row.id,payload_json=json.dumps(payload))
+            db.add(snapshot);db.commit()
+        payload=json.loads(snapshot.payload_json)
+        # Resend's default API rate is two requests/second; pace the individual emails.
+        time.sleep(0.65)
+        try:
+            sent=resend.Emails.send(payload,options={'idempotency_key':f'tng-fighter-welcome-{row.id}'})
             provider_id=sent.get('id') if isinstance(sent,dict) else None
             if not provider_id:raise RuntimeError('Missing provider acknowledgment')
-            row.status='accepted';row.provider_id=str(provider_id);result['accepted']+=1
-        except Exception:
-            row.status='unknown';result['needs_review']+=1
+            row.status='accepted';row.provider_id=str(provider_id);snapshot.error_code=None;result['accepted']+=1
+        except Exception as exc:
+            code=str(getattr(exc,'code',''))
+            snapshot.error_code=code if code.isdigit() else type(exc).__name__[:60]
+            row.status='rejected' if code in ('400','401','403','422','429') else 'unknown'
+            result['needs_review']+=1
+            issue=('Email provider rate limit: retry the unconfirmed emails shortly.' if code=='429' else
+                   'Email provider rejected the request. Check the configured sending address and provider settings.' if row.status=='rejected' else
+                   'An email submission is unconfirmed. Accepted emails are skipped on retry; conflicting or expired submissions need review.')
+            if issue not in result['issues']:result['issues'].append(issue)
         db.commit()
     return result

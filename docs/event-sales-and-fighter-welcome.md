@@ -23,3 +23,9 @@ A preview hash binds sending to the reviewed content and current recipients. Dur
 Fall Brawl 6 details supplied by promoter: Friday November 13, 2026, 5 PM weigh-ins at TNG Boxing, 8416 NW Expressway, Oklahoma City, OK 73162. Saturday November 14 arrival 3:30 PM, no later than 4 PM. Existing event record: doors 5 PM, first bout 6 PM. All Oklahoma local time.
 
 No live fighter emails are sent during development or verification.
+
+### Welcome-email sender and explicit recovery
+
+Welcome emails now default to `TNG Promotions <marketing@tngboxinggym.com>`, with replies directed to `marketing@tngboxinggym.com`. A dedicated `FIGHTER_WELCOME_FROM_EMAIL` override is available; the general `RESEND_FROM_EMAIL` no longer controls this workflow.
+
+Submissions are paced below Resend's default two-per-second rate. The exact provider payload is saved before sending in an additive submission table, enabling identical idempotent recovery. **Retry unconfirmed emails safely** is an explicit staff action; accepted emails are skipped, concurrent in-flight submissions cannot be reclaimed, and the original delivery key is reused. Unknown submissions older than 23 hours cannot be replayed because provider keys expire. Legacy submissions lacking snapshots may conflict with an existing provider payload; those remain unconfirmed rather than being resent under a new key. Provider rejections are distinguished from uncertain outcomes and surfaced without exposing raw provider errors.

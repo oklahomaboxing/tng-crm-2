@@ -31,12 +31,12 @@ export default function FighterWelcomeLetter({ eventId }) {
       const url = URL.createObjectURL(await r.blob()); const a = document.createElement('a'); a.href = url; a.download = `TNG_${eventId}_Fighter_Welcome.pdf`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) { setMessage(e.message); } finally { setBusy(false); }
   }
-  async function send() {
+  async function send(retryUnconfirmed = false) {
     setBusy(true); setMessage('');
     try {
-      const body = await request('/send', { method: 'POST', body: JSON.stringify({ preview_hash: data.preview_hash }) });
+      const body = await request('/send', { method: 'POST', body: JSON.stringify({ preview_hash: data.preview_hash, retry_unconfirmed: retryUnconfirmed }) });
       setData(await request());
-      setMessage(`${body.accepted} email(s) accepted by the provider; ${body.already_submitted} previously submitted; ${body.needs_review} need review. Provider acceptance does not confirm inbox delivery.`);
+      setMessage(`${body.accepted} email(s) accepted by the provider; ${body.already_submitted} previously submitted; ${body.needs_review} need review. Provider acceptance does not confirm inbox delivery. ${(body.issues || []).join(' ')}`);
     } catch (e) { setMessage(e.message); } finally { setBusy(false); }
   }
   return <>
@@ -45,7 +45,7 @@ export default function FighterWelcomeLetter({ eventId }) {
       <DialogTitle>Fighter welcome letter</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
-          <Typography>Download a PDF for teams, or email it individually to fighters booked on this event’s card. Cancelled bouts are excluded and shared email addresses receive one copy.</Typography>
+          <Typography>Emails are sent from marketing@tngboxinggym.com. Download a PDF for teams, or email it individually to fighters booked on this event’s card. Cancelled bouts are excluded and shared email addresses receive one copy.</Typography>
           {message && <Alert severity="info">{message}</Alert>}
           {!data && busy && <Typography>Loading letter…</Typography>}
           {data && <>
@@ -64,7 +64,8 @@ export default function FighterWelcomeLetter({ eventId }) {
       <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
         <Button disabled={busy} onClick={() => setOpen(false)}>Close</Button>
         <Button disabled={busy || dirty || !data} onClick={download}>Download PDF</Button>
-        <Button variant="contained" disabled={busy || dirty || !data || !!data.missing_fields.length || !data.recipients.length} onClick={send}>Email letter to booked fighters</Button>
+        {!!data?.needs_review && <Button disabled={busy || dirty || !!data.missing_fields.length} onClick={() => send(true)}>Retry unconfirmed emails safely</Button>}
+        <Button variant="contained" disabled={busy || dirty || !data || !!data.missing_fields.length || !data.recipients.length} onClick={() => send(false)}>Email letter to booked fighters</Button>
       </DialogActions>
     </Dialog>
   </>;
