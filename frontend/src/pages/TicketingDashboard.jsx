@@ -1,3 +1,4 @@
+import SellerSalesControls from "../components/tickets/SellerSalesControls.jsx";
 import React, { useEffect, useState } from "react";
 import EventTicketSales from "./EventTicketSales.jsx";
 import PaperTicketPanel from "../components/tickets/PaperTicketPanel.jsx";
@@ -532,7 +533,7 @@ const [ticketTypes, setTicketTypes] = useState([]);
                 }}
               >
                 Personal ticket links are created automatically when a bout is made.
-                Configure event ticket prices below. Use repair for missing links or to reactivate sellers.
+                Configure event ticket prices below. Use repair for missing links. Paused sellers stay paused.
               </div>
             </div>
 
@@ -1089,6 +1090,8 @@ const [ticketTypes, setTicketTypes] = useState([]);
 
       {eventId && (
         <>
+          <SellerSalesControls key={`sales-${eventId}`} eventId={eventId} sellers={summary?.sellers || []} onChanged={() => loadSummary(eventId)} />
+
           <TicketRecoveryPanel key={eventId} eventId={eventId} onChanged={() => loadSummary(eventId)} />
 
           <PaperTicketPanel key={`paper-${eventId}`} eventId={eventId} event={selectedEvent} sellers={summary?.sellers || []} ticketTypes={ticketTypes} onChanged={() => loadSummary(eventId)} />

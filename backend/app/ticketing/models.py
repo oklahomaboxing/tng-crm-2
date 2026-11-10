@@ -154,3 +154,12 @@ class PaperTicket(Base):
     order_id = Column(Integer, ForeignKey("ticket_orders.id"), unique=True, nullable=True)
     sold_at = Column(DateTime, nullable=True)
     returned_at = Column(DateTime, nullable=True)
+
+
+class EventSalesWindow(Base):
+    """Event-scoped cutoff; explicit seller IDs are exempt, never display-name matches."""
+    __tablename__ = "event_ticket_sales_windows"
+    event_id = Column(Integer, ForeignKey("boxing_events.id", ondelete="CASCADE"), primary_key=True)
+    cutoff_at = Column(DateTime, nullable=True)  # naive UTC, like existing attendance/ticket timestamps
+    exempt_seller_ids_json = Column(Text, nullable=False, default="[]")
+    redirect_seller_id = Column(Integer, ForeignKey("event_sellers.id"), nullable=True)

@@ -3,7 +3,8 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.core.dependencies import current_user, staff_user
-from .models import EventSeller, EventTicketType, TicketOrder, IssuedTicket
+from .models import EventSeller, EventTicketType, TicketOrder, IssuedTicket, EventSalesWindow
+from .sales_access import require_sales_open, sales_access
 from .service import generate_public_code, generate_receipt_number, scan_ticket, seller_totals
 from datetime import datetime
 import io
@@ -59,11 +60,11 @@ def create_public_ticket_order(
         seller_record = db.query(EventSeller).filter(
             EventSeller.event_id == event_id,
             EventSeller.public_code == body.seller_code,
-            EventSeller.active == True,
         ).first()
 
     if body.seller_code and not seller_record:
         raise HTTPException(status_code=400, detail="Invalid or inactive fighter/seller link")
+    require_sales_open(db, event_id, seller_record)
     if not body.buyer_name.strip():
         raise HTTPException(status_code=400, detail="Customer name is required")
     from .delivery import normalize_ticket_phone
@@ -301,6 +302,7 @@ def enable_all_fighter_ticket_sales(
     activated = 0
     reactivated = 0
     already_active = 0
+    paused_preserved = 0
 
     for fighter_id in sorted(fighter_ids):
         fighter = fighters_by_id.get(fighter_id)
@@ -322,8 +324,8 @@ def enable_all_fighter_ticket_sales(
             if existing.active:
                 already_active += 1
             else:
-                existing.active = True
-                reactivated += 1
+                # A link repair must preserve a deliberate sales pause.
+                paused_preserved += 1
 
             # Keep existing code, history and commission settings.
             if not existing.display_name:
@@ -369,10 +371,11 @@ def enable_all_fighter_ticket_sales(
         "activated": activated,
         "reactivated": reactivated,
         "already_active": already_active,
+        "paused_preserved": paused_preserved,
         "message": (
             f"{activated} activated, "
             f"{reactivated} reactivated, "
-            f"{already_active} already active."
+            f"{already_active} already active; {paused_preserved} paused sellers preserved."
         ),
     }
 
@@ -500,8 +503,18 @@ def public_event_tickets(
         seller_record = db.query(EventSeller).filter(
             EventSeller.event_id == event_id,
             EventSeller.public_code == seller,
-            EventSeller.active == True,
         ).first()
+
+    if seller and not seller_record:
+        raise HTTPException(404, "Seller link not found")
+    access = sales_access(db, event_id, seller_record)
+    if access["cutoff_reached"]:
+        window = db.get(EventSalesWindow, event_id)
+        target = db.get(EventSeller, window.redirect_seller_id) if window and window.redirect_seller_id else None
+        if target and target.event_id == event_id and sales_access(db, event_id, target)["sales_open"]:
+            return {"sales_closed": True, "redirect_seller_code": target.public_code,
+                    "message": "Fighter ticket sales have closed. You can still buy tickets directly from TNG Promotions."}
+    require_sales_open(db, event_id, seller_record)
 
     ticket_types = db.query(EventTicketType).filter(
         EventTicketType.event_id == event_id,
@@ -1206,3 +1219,72 @@ def create_event_ticket_type(
         "commission_value": float(row.commission_value or 0),
         "active": row.active,
     }
+
+
+class SellerSalesUpdate(BaseModel):
+    active: bool
+
+
+class SalesWindowUpdate(BaseModel):
+    cutoff_local: str | None = None
+    exempt_seller_ids: list[int] = []
+    redirect_seller_id: int | None = None
+
+
+def sales_window_data(db, event_id):
+    import json
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+    row = db.get(EventSalesWindow, event_id)
+    cutoff = row.cutoff_at.replace(tzinfo=timezone.utc) if row and row.cutoff_at else None
+    return {"event_id": event_id, "timezone": "America/Chicago",
+            "cutoff_at": cutoff.isoformat() if cutoff else None,
+            "cutoff_local": cutoff.astimezone(ZoneInfo("America/Chicago")).strftime("%Y-%m-%dT%H:%M") if cutoff else "",
+            "exempt_seller_ids": json.loads(row.exempt_seller_ids_json or "[]") if row else [],
+            "redirect_seller_id": row.redirect_seller_id if row else None}
+
+
+@router.get("/events/{event_id}/sales-window")
+def get_sales_window(event_id: int, db: Session = Depends(get_db), user=Depends(staff_user)):
+    return sales_window_data(db, event_id)
+
+
+@router.put("/events/{event_id}/sales-window")
+def update_sales_window(event_id: int, body: SalesWindowUpdate, db: Session = Depends(get_db), user=Depends(staff_user)):
+    from app.matchmaker.models import BoxingEvent
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+    if not db.get(BoxingEvent, event_id):
+        raise HTTPException(404, "Event not found")
+    ids = sorted(set(body.exempt_seller_ids))
+    if ids and db.query(EventSeller).filter(EventSeller.event_id == event_id, EventSeller.id.in_(ids)).count() != len(ids):
+        raise HTTPException(400, "Exempt sellers must belong to this event")
+    if body.redirect_seller_id is not None and body.redirect_seller_id not in ids:
+        raise HTTPException(400, "Redirect seller must be exempt from the cutoff")
+    cutoff = None
+    if body.cutoff_local:
+        try:
+            local = datetime.strptime(body.cutoff_local, "%Y-%m-%dT%H:%M")
+            cutoff = local.replace(tzinfo=ZoneInfo("America/Chicago")).astimezone(timezone.utc).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(400, "Use a valid Oklahoma date and time")
+    row = db.get(EventSalesWindow, event_id)
+    if not row:
+        row = EventSalesWindow(event_id=event_id)
+        db.add(row)
+    row.cutoff_at = cutoff
+    row.exempt_seller_ids_json = json.dumps(ids)
+    row.redirect_seller_id = body.redirect_seller_id
+    db.commit()
+    return sales_window_data(db, event_id)
+
+
+@router.patch("/events/{event_id}/sellers/{seller_id}/sales")
+def update_seller_sales(event_id: int, seller_id: int, body: SellerSalesUpdate, db: Session = Depends(get_db), user=Depends(staff_user)):
+    row = db.query(EventSeller).filter_by(id=seller_id, event_id=event_id).first()
+    if not row:
+        raise HTTPException(404, "Seller not found")
+    row.active = body.active
+    db.commit()
+    from .sales_access import sales_access
+    return {"seller_id": row.id, **sales_access(db, event_id, row)}

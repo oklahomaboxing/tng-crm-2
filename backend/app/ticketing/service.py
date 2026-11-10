@@ -192,4 +192,6 @@ def seller_totals(db: Session, event_id: int):
         .order_by(func.coalesce(func.sum(IssuedTicket.price_cents), 0).desc())
         .all()
     )
-    return [dict(r._mapping) for r in rows]
+    from .sales_access import sales_access
+    sellers = {row.id: row for row in db.query(EventSeller).filter_by(event_id=event_id)}
+    return [{**dict(r._mapping), **sales_access(db, event_id, sellers[r.seller_id])} for r in rows]

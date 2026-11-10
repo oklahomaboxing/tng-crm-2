@@ -65,6 +65,12 @@ export default function PublicTicketCheckout() {
 
   useEffect(() => {
     if (!eventId) return;
+    // Paid-order retrieval remains available after seller sales close.
+    if (paymentStatus === "success" && returnedOrderId) {
+      setData({ ticket_types: [] });
+      setLoading(false);
+      return;
+    }
 
     async function load() {
       try {
@@ -94,6 +100,13 @@ export default function PublicTicketCheckout() {
           );
         }
 
+        if (body.sales_closed && body.redirect_seller_code) {
+          const next = new URL(`/events/${encodeURIComponent(eventId)}/tickets`, window.location.origin);
+          next.searchParams.set('seller', body.redirect_seller_code);
+          next.searchParams.set('sales_notice', 'cutoff');
+          window.location.replace(next.toString());
+          return;
+        }
         setData(body);
 
         const initial = {};
@@ -113,7 +126,23 @@ export default function PublicTicketCheckout() {
     }
 
     load();
-  }, [eventId, sellerCode]);
+  }, [eventId, sellerCode, paymentStatus, returnedOrderId]);
+
+  async function rerouteClosedSales(status) {
+    if (status !== 403) return false;
+    try {
+      const response = await fetch(`${API}/api/ticketing/public/events/${eventId}/tickets?seller=${encodeURIComponent(sellerCode)}`);
+      const body = await response.json();
+      if (response.ok && body.sales_closed && body.redirect_seller_code) {
+        const next = new URL(`/events/${encodeURIComponent(eventId)}/tickets`, window.location.origin);
+        next.searchParams.set('seller', body.redirect_seller_code);
+        next.searchParams.set('sales_notice', 'cutoff');
+        window.location.replace(next.toString());
+        return true;
+      }
+    } catch { /* Keep the original sales error if the availability refresh fails. */ }
+    return false;
+  }
 
   const total = useMemo(() => {
     if (!data) return 0;
@@ -301,6 +330,7 @@ export default function PublicTicketCheckout() {
         await orderResponse.json();
 
       if (!orderResponse.ok) {
+        if (await rerouteClosedSales(orderResponse.status)) return;
         throw new Error(
           order.detail ||
           "Could not create ticket order"
@@ -331,6 +361,7 @@ export default function PublicTicketCheckout() {
         await checkoutResponse.json();
 
       if (!checkoutResponse.ok) {
+        if (await rerouteClosedSales(checkoutResponse.status)) return;
         throw new Error(
           checkout.detail ||
           "Could not start Clover checkout"
@@ -488,6 +519,7 @@ export default function PublicTicketCheckout() {
             : ""}
         </div>
 
+        {params.get('sales_notice') === 'cutoff' && <div role="status" style={{ padding: 16, marginBottom: 16, border: '1px solid #d71920', borderRadius: 8 }}>Fighter ticket sales have closed. You can still buy tickets directly from TNG Promotions. This purchase will be credited to TNG Promotions.</div>}
         {data.seller && (
           <div style={styles.seller}>
             Supporting{" "}

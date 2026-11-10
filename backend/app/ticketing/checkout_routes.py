@@ -47,6 +47,9 @@ def create_ticket_clover_checkout(
 
     if order.payment_status != "pending":
         raise HTTPException(status_code=409, detail="Order cannot start another checkout")
+    from .sales_access import require_sales_open
+    from .models import EventSeller
+    require_sales_open(db, order.event_id, db.get(EventSeller, order.seller_id) if order.seller_id else None)
     saved = db.query(TicketCheckoutAttempt).filter_by(order_id=order.id).first()
     if saved:
         return {"success": True, "order_id": order.id, "status": order.payment_status,
