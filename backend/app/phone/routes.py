@@ -97,6 +97,8 @@ def transfer(cfg,department='staff'):
 def transfer_for(db,call,cfg,department='staff'):
     row=db.get(PhoneCallDepartment,call.call_sid)
     if not row:row=PhoneCallDepartment(call_sid=call.call_sid);db.add(row)
+    from .tracking import activity
+    activity(db,call,'transfer_requested',department)
     row.department=department;call.stage='marketing_transfer' if department=='marketing' else 'transfer';db.commit()
     return transfer(cfg,department)
 
@@ -201,6 +203,8 @@ def connect_voice(body:ConnectPhone,db:Session=Depends(get_db),user=Depends(curr
 async def incoming(request:Request,db:Session=Depends(get_db)):
     form=await verified(request);cfg=config(db)
     call=get_call(db,form)
+    from .tracking import activity,PhoneCallActivity
+    if not db.query(PhoneCallActivity).filter_by(call_sid=call.call_sid,action='received').first():activity(db,call,'received','Call reached TNGOS')
     if not cfg.enabled:
         call.stage='staff_direct';db.commit();return transfer(cfg)
     db.commit()
@@ -220,10 +224,14 @@ async def menu(request:Request,db:Session=Depends(get_db)):
     if digit=='0' or no_private_lookup(text) or re.search(r'\b(staff|person|operator|human|front desk|transfer|agent)\b',text):
         return transfer_for(db,call,cfg)
     if digit=='4' or re.search(r'\b(callback|call back|call me|tour|visit|join|sign up)\b',text):
+        from .tracking import activity
+        activity(db,call,'menu_choice','Callback request')
         call.stage='callback_name' if call.caller_phone else 'callback_phone';db.commit();return callback_prompt(call,cfg)
     from .facts import membership_answer,event_answer
     answer=None
     if contains_card_data(text) or digit=='5' or re.search(r'\b(buy|purchase|order|pay for)\b.*\btickets?\b',text):
+        from .tracking import activity
+        activity(db,call,'menu_choice','Buy tickets')
         db.commit()
         from .tickets import offer_events
         return offer_events(db,call,cfg)
@@ -233,6 +241,10 @@ async def menu(request:Request,db:Session=Depends(get_db)):
     elif digit=='1' or (not digit and re.search(r'\b(hours|location|address|directions|where|open|close|closing|schedule)\b',text)):answer=cfg.hours_answer
     elif digit=='2' or (not digit and re.search(r'\b(memberships?|member|price|prices|cost|rates|monthly|annual|family|registration|training|classes)\b',text)):
         answer=membership_answer(db,cfg.membership_answer) if cfg.use_live_membership_prices else cfg.membership_answer
+    if answer:
+        from .tracking import activity
+        topic='Events' if digit=='3' or re.search(r'\b(events?|fights?|tickets?|weigh.?in|fall brawl)\b',text) else ('Hours and location' if answer==cfg.hours_answer else 'Memberships')
+        activity(db,call,'menu_choice',topic)
     db.commit()
     return gather((answer+' '+FOLLOW_UP if answer else 'Sorry, I did not catch that. '+MENU),'menu',cfg=cfg)
 
@@ -289,12 +301,17 @@ async def callback_details(request:Request,db:Session=Depends(get_db)):
     department=db.get(PhoneCallDepartment,call.call_sid)
     prefix='Marketing inquiry. ' if department and department.department=='marketing' else ''
     lead=Lead(first_name=names[0],last_name=names[1] if len(names)>1 else '',email='',phone=call.caller_phone,status='new',conversion_source='phone_assistant',notes=prefix+'Caller requested a staff callback. '+details)
-    db.add(lead);db.flush();call.lead_id=lead.id;call.stage='callback_saved';db.commit()
+    db.add(lead);db.flush();call.lead_id=lead.id;call.stage='callback_saved'
+    from .tracking import activity
+    activity(db,call,'callback_saved','Staff follow-up requested');db.commit()
     response=VoiceResponse();say(response,'Thank you. Your request has been saved for the TNG Boxing team. Staff will follow up with you. Goodbye.',cfg);response.hangup();return xml(response)
 
 @router.post('/transfer-result')
 async def transfer_result(request:Request,db:Session=Depends(get_db)):
     form=await verified(request);cfg=config(db);call=get_call(db,form)
+    from .tracking import activity
+    transfer_status=str(form.get('DialCallStatus',''))
+    if transfer_status in ('completed','busy','failed','no-answer','canceled'):activity(db,call,'transfer_result',transfer_status)
     if form.get('DialCallStatus')=='completed':
         department=db.get(PhoneCallDepartment,call.call_sid)
         call.stage='marketing_connected' if department and department.department=='marketing' else 'staff_connected';db.commit();response=VoiceResponse();response.hangup();return xml(response)
@@ -308,5 +325,9 @@ async def status_callback(request:Request,db:Session=Depends(get_db)):
     if call:
         status=str(form.get('CallStatus',''))
         if status in ('queued','ringing','in-progress','completed','busy','failed','no-answer','canceled') and call.status not in ('completed','busy','failed','no-answer','canceled'):
+            from .tracking import activity
+            try:duration=max(0,min(int(form.get('CallDuration','')),86400))
+            except (ValueError,TypeError):duration=None
+            activity(db,call,'call_status',status,duration)
             call.status=status;db.commit()
     return Response(status_code=204)

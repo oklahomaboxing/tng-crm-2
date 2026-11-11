@@ -40,3 +40,5 @@ from app.phone.routes import router as phone_assistant_router
 router.include_router(phone_assistant_router)
 from app.phone.tickets import router as phone_ticket_router
 router.include_router(phone_ticket_router)
+from app.phone.tracking import router as phone_tracking_router
+router.include_router(phone_tracking_router)

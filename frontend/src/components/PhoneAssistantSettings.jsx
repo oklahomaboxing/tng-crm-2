@@ -21,6 +21,7 @@ export default function PhoneAssistantSettings({ onNavigate }) {
     {error && <Alert severity="error">{error}</Alert>}{message && <Alert severity="info">{message}</Alert>}
     {data && <>
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}><Chip label={data.connected ? 'Twilio voice connected' : 'Voice setup pending'} color={data.connected ? 'success' : 'default'} /><Chip label={`${data.today_calls || 0} calls today · Central Time`} /></Stack>
+      <Button variant="outlined" onClick={()=>onNavigate?.('Call Center')}>Open Call Center</Button>
       <Alert severity="info">Menu: 1 hours/location · 2 memberships · 3 events/tickets · 4 callback or gym visit · 5 buy tickets by text · 6 marketing · 0 staff. Callers can also say these choices. This version uses approved text, with no AI API credits or call recording.</Alert>
       <TextField label="NumberBarn public number" value={settings.public_number || ''} disabled={busy} onChange={e => update('public_number', e.target.value)} />
       <TextField label="Direct staff transfer number" value={settings.staff_number || ''} disabled={busy} onChange={e => update('staff_number', e.target.value)} helperText="Must ring staff directly and must not forward back to the NumberBarn or Twilio line." />
