@@ -45,3 +45,6 @@ router.include_router(phone_tracking_router)
 
 from app.messaging.inbox import router as text_inbox_router
 router.include_router(text_inbox_router)
+
+from app.phone.signup import router as phone_signup_router
+router.include_router(phone_signup_router)

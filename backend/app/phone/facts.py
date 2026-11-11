@@ -31,7 +31,7 @@ def membership_answer(db,fallback):
     answer='Our current public signup plans include: '+'. '.join(phrases[:5])+'. '
     fee=public_registration_fee(db)
     if fee and fee.price>0:answer+=f'New signups also have a {dollars(fee.price)} registration fee. '
-    answer+='Staff can confirm which plan and terms apply to you. To request a visit or callback, press 4.'
+    answer+='Staff can confirm which plan and terms apply to you. To sign up now and receive the registration and waiver link, press 7. To request a visit or callback, press 4.'
     return answer
 
 

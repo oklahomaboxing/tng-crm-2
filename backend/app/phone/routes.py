@@ -22,8 +22,8 @@ from app.services.business_time import reporting_periods
 router=APIRouter(prefix='/api/phone',tags=['Phone assistant'])
 PUBLIC_NUMBER='+14058644496'
 STAFF_NUMBER='+14059895823'
-MENU='Say hours, memberships, events, buy tickets, callback, marketing, or staff. You can also press 1 for hours, 2 for memberships, 3 for events, 4 for a callback, 5 to buy tickets, 6 for marketing, or 0 for staff.'
-FOLLOW_UP='What else can I help you with? Say a topic, press 5 for tickets, 6 for marketing, or 0 for staff.'
+MENU='Say hours, memberships, events, buy tickets, callback, marketing, sign up now, or staff. You can also press 1 for hours, 2 for memberships, 3 for events, 4 for a callback, 5 to buy tickets, 6 for marketing, 7 to sign up now, or 0 for staff.'
+FOLLOW_UP='What else can I help you with? Say a topic, press 5 for tickets, 6 for marketing, 7 to sign up now, or 0 for staff.'
 
 
 class PhoneSettings(Base):
@@ -59,6 +59,7 @@ class PhoneConfig(BaseModel):
     use_live_membership_prices:bool=True
     use_live_event_info:bool=True
     ticket_links_enabled:bool=True
+    signup_links_enabled:bool=True
     greeting:str=Field(default='Thank you for calling TNG Boxing, The Next Generation.',min_length=5,max_length=500)
     hours_answer:str=Field(default='TNG Boxing is located at 8416 Northwest Expressway in Oklahoma City, Oklahoma, 73162. For current opening hours and class times, please speak with our staff.',min_length=5,max_length=2000)
     membership_answer:str=Field(default='Our staff can help you choose a boxing membership and discuss current rates. To arrange a visit or request membership information, press 4. To speak with staff, press 0.',min_length=5,max_length=2000)
@@ -223,7 +224,10 @@ async def menu(request:Request,db:Session=Depends(get_db)):
         return transfer_for(db,call,cfg,'marketing')
     if digit=='0' or no_private_lookup(text) or re.search(r'\b(staff|person|operator|human|front desk|transfer|agent)\b',text):
         return transfer_for(db,call,cfg)
-    if digit=='4' or re.search(r'\b(callback|call back|call me|tour|visit|join|sign up)\b',text):
+    if digit=='7' or (not digit and re.search(r'\b(sign[ -]?up|sign me up|join|register|registration link|enroll(?:ment)?|enrol(?:ment)?)\b',text)):
+        from .signup import offer_signup
+        return offer_signup(db,call,cfg)
+    if digit=='4' or re.search(r'\b(callback|call back|call me|tour|visit)\b',text):
         from .tracking import activity
         activity(db,call,'menu_choice','Callback request')
         call.stage='callback_name' if call.caller_phone else 'callback_phone';db.commit();return callback_prompt(call,cfg)

@@ -59,6 +59,8 @@ def detail(call_sid:str,db:Session=Depends(get_db),user=Depends(current_user)):
     if not call:raise HTTPException(404,'Call not found')
     from .tickets import PhoneTicketDelivery
     events=db.query(PhoneCallActivity).filter_by(call_sid=call_sid).order_by(PhoneCallActivity.created_at,PhoneCallActivity.id).all()
+    from .signup import PhoneSignupLink
+    signup=db.get(PhoneSignupLink,call_sid)
     lead=db.get(Lead,call.lead_id) if call.lead_id else None
     duration=next((e.duration_seconds for e in reversed(events) if e.duration_seconds is not None),None)
-    return JSONResponse({'call_sid':call.call_sid,'caller_phone':call.caller_phone,'caller_name':call.caller_name,'status':call.status,'stage':call.stage,'created_at':stamp(call.created_at),'duration_seconds':duration,'lead_id':call.lead_id,'callback_notes':lead.notes if lead else None,'timeline':[{'id':e.id,'action':e.action,'detail':e.detail,'created_at':stamp(e.created_at)} for e in events],'ticket_links':[{'status':t.status,'created_at':stamp(t.created_at)} for t in db.query(PhoneTicketDelivery).filter_by(call_sid=call_sid).order_by(PhoneTicketDelivery.id)]},headers={'Cache-Control':'private, no-store'})
+    return JSONResponse({'call_sid':call.call_sid,'caller_phone':call.caller_phone,'caller_name':call.caller_name,'status':call.status,'stage':call.stage,'created_at':stamp(call.created_at),'duration_seconds':duration,'lead_id':call.lead_id,'callback_notes':lead.notes if lead else None,'timeline':[{'id':e.id,'action':e.action,'detail':e.detail,'created_at':stamp(e.created_at)} for e in events],'signup_links':([{'status':signup.status,'created_at':stamp(signup.submitted_at)}] if signup and signup.status else []),'ticket_links':[{'status':t.status,'created_at':stamp(t.created_at)} for t in db.query(PhoneTicketDelivery).filter_by(call_sid=call_sid).order_by(PhoneTicketDelivery.id)]},headers={'Cache-Control':'private, no-store'})
