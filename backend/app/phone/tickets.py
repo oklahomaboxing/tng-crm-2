@@ -172,7 +172,7 @@ async def confirm_link(request:Request,db:Session=Depends(get_db)):
         delivery.provider_id=delivery.provider_id or sent.sid
         if delivery.status not in ('delivered','failed','undelivered'):delivery.status='accepted'
         call.stage='ticket_link_submitted';db.commit()
-        return gather('Your ticket checkout link is on its way. Open it to choose your tickets and pay securely through Clover. Your tickets are issued after payment is confirmed. '+ 'Anything else? Say a topic or press 0 for staff.','menu',cfg=cfg)
+        return gather('Your ticket checkout link is on its way. Open it to choose your tickets and pay securely through Clover. Your tickets are issued after payment is confirmed. '+ 'For another option, press 9 for the menu or 0 for staff.','menu',cfg=cfg)
     except Exception as exc:
         delivery.status='failed' if getattr(exc,'code',None) else 'unknown'
         if str(getattr(exc,'code',''))=='21610':

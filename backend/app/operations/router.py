@@ -48,3 +48,5 @@ router.include_router(text_inbox_router)
 
 from app.phone.signup import router as phone_signup_router
 router.include_router(phone_signup_router)
+from app.phone.coaches import router as phone_coaches_router
+router.include_router(phone_coaches_router)

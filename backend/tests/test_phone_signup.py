@@ -17,7 +17,7 @@ class PhoneSignupTests(unittest.TestCase):
   self.setUpBase();self.db.add(PhoneTicketSmsRoute(id=1,account_sid='AC-test',from_number='+14055550199',service_sid='MGfixture'));self.db.commit()
  def provider(self):
   p=Mock();p.messages.create.return_value=Mock(sid='SM'+'9'*32);return p
- def test_digit_and_speech_offer_existing_registration_waiver_link_only_after_consent(self):
+ def test_keypad_offers_registration_waiver_link_only_after_consent(self):
   before=[self.db.query(m).count() for m in (Member,Lead,WaiverSubmission,Sale)]
   p=self.provider()
   with patch('app.phone.signup.Client',return_value=p):
@@ -31,7 +31,8 @@ class PhoneSignupTests(unittest.TestCase):
   self.assertEqual(before,[self.db.query(m).count() for m in (Member,Lead,WaiverSubmission,Sale)])
   row=self.db.query(PhoneSignupLink).one();self.assertEqual(row.status,'accepted');self.assertIn('pressed 1',row.consent_notice)
   r=self.client.get('/api/phone/admin/calls/'+'CA'+'1'*32,headers=self.headers());self.assertEqual(r.json()['signup_links'][0]['status'],'accepted')
-  self.assertIn('registration and waiver',self.webhook('menu',SpeechResult='I want to join the gym',CallSid='CA'+'2'*32).text)
+  self.assertEqual(self.root(self.webhook('menu',SpeechResult='I want to join the gym',CallSid='CA'+'2'*32)).find('Gather').attrib['input'],'dtmf')
+  self.assertEqual(self.db.query(PhoneSignupLink).count(),1)
  def test_alternate_mobile_and_anonymous_callers_are_supported(self):
   p=self.provider()
   with patch('app.phone.signup.Client',return_value=p):

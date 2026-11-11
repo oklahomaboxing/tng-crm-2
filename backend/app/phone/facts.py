@@ -62,7 +62,7 @@ def event_answer(db,fallback):
     if event.venue_address:answer+=f'{event.venue_address}. '
     if pub.doors_time:answer+=f'Doors open at {clock(pub.doors_time)}. '
     if pub.first_bout_time:answer+=f'The first bout starts at {clock(pub.first_bout_time)}. '
-    answer+='Times are Oklahoma local time. For a secure ticket checkout link, say buy tickets or press 5.'
+    answer+='Times are Oklahoma local time. For a secure ticket checkout link, press 5.'
     return answer
 
 

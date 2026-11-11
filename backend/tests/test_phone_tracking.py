@@ -26,7 +26,7 @@ class PhoneTrackingTests(unittest.TestCase):
 
     def test_timeline_tracks_choices_transfers_and_duration_without_speech(self):
         self.webhook('incoming')
-        self.webhook('menu',SpeechResult='I want membership prices please')
+        self.webhook('menu',Digits='2')
         self.webhook('menu',Digits='6')
         self.webhook('transfer-result',DialCallStatus='completed')
         self.webhook('status',CallStatus='completed',CallDuration='75')

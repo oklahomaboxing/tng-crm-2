@@ -92,7 +92,7 @@ async def confirm(request:Request,db:Session=Depends(get_db)):
         ctx=db.query(PhoneSignupLink).filter_by(call_sid=call.call_sid).with_for_update().populate_existing().one();ctx.provider_id=ctx.provider_id or sent.sid
         if ctx.status not in ('delivered','failed','undelivered'):ctx.status='accepted'
         call.stage='signup_link_submitted';activity(db,call,'signup_text','Provider accepted');db.commit()
-        return gather('Your signup link is on its way. Open it to choose a membership and complete the registration, waiver and secure checkout. Your membership is activated after payment is confirmed. For anything else, say a topic or press 0 for staff.','menu',cfg=cfg)
+        return gather('Your signup link is on its way. Open it to choose a membership and complete the registration, waiver and secure checkout. Your membership is activated after payment is confirmed. For another option, press 9 for the menu or 0 for staff.','menu',cfg=cfg)
     except Exception as exc:
         sid=call.call_sid;db.rollback();call=db.query(PhoneCall).filter_by(call_sid=sid).with_for_update().populate_existing().one();ctx=db.query(PhoneSignupLink).filter_by(call_sid=sid).with_for_update().populate_existing().one()
         if ctx.status not in ('delivered','failed','undelivered'):ctx.status='failed' if getattr(exc,'code',None) else 'unknown'

@@ -9,7 +9,7 @@ from app.database import Base,get_db
 from app.core.dependencies import current_user
 from app.core.permissions import require_admin
 from app.models import Lead
-from .routes import PhoneCall,PhoneCallDepartment,config
+from .routes import PhoneCall,PhoneCallDepartment,config,department_name
 
 router=APIRouter(prefix='/api/phone/admin/calls',tags=['Call Center'])
 class PhoneCallActivity(Base):
@@ -42,15 +42,15 @@ def calls(start:date|None=None,end:date|None=None,q:str=Query('',max_length=100)
         term='%'+escaped+'%'
         query=query.filter(or_(PhoneCall.caller_phone.ilike(term,escape='\\'),PhoneCall.caller_name.ilike(term,escape='\\')))
     # Summary uses the date/search scope before the outcome filter.
-    summary={'total':query.count(),'callbacks':query.filter(PhoneCall.lead_id.isnot(None)).count(),'transferred':query.filter(PhoneCall.stage.in_(['staff_connected','marketing_connected'])).count(),'in_progress':query.filter(PhoneCall.status.in_(['queued','ringing','in-progress'])).count()}
+    summary={'total':query.count(),'callbacks':query.filter(PhoneCall.lead_id.isnot(None)).count(),'transferred':query.filter(PhoneCall.stage.in_(['staff_connected','marketing_connected','coach_connected'])).count(),'in_progress':query.filter(PhoneCall.status.in_(['queued','ringing','in-progress'])).count()}
     if outcome=='callbacks':query=query.filter(PhoneCall.lead_id.isnot(None))
-    elif outcome=='transferred':query=query.filter(PhoneCall.stage.in_(['staff_connected','marketing_connected']))
+    elif outcome=='transferred':query=query.filter(PhoneCall.stage.in_(['staff_connected','marketing_connected','coach_connected']))
     elif outcome=='in_progress':query=query.filter(PhoneCall.status.in_(['queued','ringing','in-progress']))
     elif outcome!='all':raise HTTPException(400,'Unknown call filter')
     total=query.count();rows=query.order_by(PhoneCall.created_at.desc(),PhoneCall.call_sid.desc()).offset((page-1)*page_size).limit(page_size).all()
     departments={r.call_sid:r.department for r in db.query(PhoneCallDepartment).filter(PhoneCallDepartment.call_sid.in_([c.call_sid for c in rows]))} if rows else {}
     cfg=config(db)
-    return JSONResponse({'calls':[{'call_sid':c.call_sid,'caller_phone':c.caller_phone,'caller_name':c.caller_name,'status':c.status,'stage':c.stage,'department':departments.get(c.call_sid),'lead_id':c.lead_id,'created_at':stamp(c.created_at)} for c in rows],'total':total,'page':page,'page_size':page_size,'summary':summary,'public_number':cfg.public_number},headers={'Cache-Control':'private, no-store'})
+    return JSONResponse({'calls':[{'call_sid':c.call_sid,'caller_phone':c.caller_phone,'caller_name':c.caller_name,'status':c.status,'stage':c.stage,'department':departments.get(c.call_sid),'department_name':department_name(cfg,departments[c.call_sid]) if c.call_sid in departments else None,'lead_id':c.lead_id,'created_at':stamp(c.created_at)} for c in rows],'total':total,'page':page,'page_size':page_size,'summary':summary,'public_number':cfg.public_number},headers={'Cache-Control':'private, no-store'})
 
 @router.get('/{call_sid}')
 def detail(call_sid:str,db:Session=Depends(get_db),user=Depends(current_user)):

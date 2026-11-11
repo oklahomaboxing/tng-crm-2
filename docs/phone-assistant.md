@@ -1,18 +1,18 @@
-# TNG Boxing phone assistant — speech/keypad version
+# TNG Boxing phone assistant — keypad version
 
 Public NumberBarn number: **(405) 864-4496 / 405-TNG-4GYM**. Direct staff transfer: **(405) 989-5823**.
 
-This version uses Twilio speech recognition, keypad choices and approved text-to-speech answers. It makes no AI-model API requests. Voice, speech recognition and transfer legs incur the provider's normal charges. No call recordings are enabled by TNGOS.
+This version uses keypad choices and approved text-to-speech announcements. It makes no AI-model API requests. Voice and transfer legs incur the provider's normal charges. No call recordings are enabled by TNGOS.
 
 ## Caller flow
 
-- 1 or “hours/location”: approved hours/location answer.
-- 2 or “membership”: approved membership answer.
-- 3 or “events/tickets”: approved events answer.
-- 4 or “callback/tour/visit”: collect a name, callback number and inquiry for staff.
-- 0 or “staff”: dial the direct staff number. Account-specific/billing requests are routed to staff rather than looking up private records.
+- 1: approved hours/location answer.
+- 2: approved membership answer.
+- 3: approved events answer.
+- 4: request a callback, confirm the callback number, and press 1 to save it for staff.
+- 0: dial the direct staff number. Account-specific/billing requests are routed to staff rather than looking up private records.
 
-Callback requests create one **Lead** per call, with source `phone_assistant`, name, phone and caller-supplied notes. An unknown email remains blank; no email address, SMS consent, paid membership, attendance entry or payment is invented. Anonymous callers can enter a US callback number. Staff can review callback requests in the existing Leads screen. Duplicate callback webhooks do not create duplicate leads. Empty prompts are bounded, and staff can be reached with zero from callback prompts.
+Callback requests create one **Lead** per call, with source `phone_assistant`, confirmed phone and department notes. An unknown email remains blank; no email address, SMS consent, paid membership, attendance entry or payment is invented. Anonymous callers can enter a US callback number. Staff can review callback requests in the existing Leads screen. Duplicate callback webhooks do not create duplicate leads. Empty prompts are bounded, and staff can be reached with zero from callback prompts.
 
 Calls and their final statuses appear in the administrator's recent-call list. Caller numbers are masked in that list. Daily counts use America/Chicago boundaries. Callback details are stored only when a caller requests follow-up; general FAQ conversations are not transcribed into CRM notes.
 
@@ -26,7 +26,7 @@ Open **System Overview → TNG phone assistant**. Review approved greeting, loca
 4. In NumberBarn, select **405-TNG-4GYM**, use a plan that supports call forwarding, and set its forwarding destination to the Twilio number shown in TNGOS. The public number remains with NumberBarn; no porting is performed. This NumberBarn account action must be completed by its owner.
 5. Test the public NumberBarn number after forwarding.
 
-Turning the speech/keypad menu off forwards connected calls directly to staff. A failed/no-answer staff transfer offers a callback request. This is not a disconnection of the forwarding line. The NumberBarn forwarding destination is controlled in NumberBarn.
+Turning the keypad menu off forwards connected calls directly to staff. A failed/no-answer staff transfer offers a callback request. This is not a disconnection of the forwarding line. The NumberBarn forwarding destination is controlled in NumberBarn.
 
 ## Security and operation
 
@@ -60,6 +60,23 @@ Replies require a customer question in the last seven days and staff confirmatio
 
 ## Phone signup option
 
-Callers can **press 7 or say “sign up now”** for one requested SMS linking to `https://tngos.tngboxinggym.com/register?source=phone`. This opens the existing registration flow: member and emergency details, waiver and signature, membership selection, then Clover checkout. Option 4 remains callback/visit requests. No account, waiver acceptance, membership activation or payment is created merely by requesting a link.
+Callers can **press 7** for one requested SMS linking to `https://tngos.tngboxinggym.com/register?source=phone`. This opens the existing registration flow: member and emergency details, waiver and signature, membership selection, then Clover checkout. Option 4 remains callback/visit requests. No account, waiver acceptance, membership activation or payment is created merely by requesting a link.
 
 The caller confirms the mobile number and presses 1 to request the text; 2 allows a different number and 0 reaches staff. Anonymous callers and forwarded business caller IDs must enter a personal mobile number. Existing global STOP suppression applies. Ticket and signup links share the three-per-mobile-per-hour limit; signup links are submitted at most once per call, and uncertain submissions are not replayed. The approved account-notification sender is reused without changing NumberBarn or Twilio voice configuration. Administrators can disable signup links in phone settings. Call Center shows the signup action and SMS status, separately from enrollment or payment completion. No live test calls/texts are sent during deployment verification.
+
+
+## Coaches and keypad-only input
+
+All phone menus now use **DTMF keypad input only**. Background speech is not recognized or used to select routes. The spoken announcements remain, and callers can press a key while the menu plays. Press 9 repeats the main menu. Callback requests use a confirmed phone number and an explicit press of 1; spoken names/messages are not captured. Existing historical callback records are retained.
+
+Press **8 — Coaches**, then:
+
+| Key | Coach | Direct transfer |
+| --- | --- | --- |
+| 1 | Rodney Porter | (405) 209-0453 |
+| 2 | Maurice Williams | (651) 239-0916 |
+| 3 | Dora Williams | (405) 989-5453 |
+| 4 | Jose Iturinno | (405) 777-3615 |
+| 5 | Marlon Geddis | (405) 640-7542 |
+
+Zero reaches the front desk and nine returns to the main menu. A connected transfer may reach the coach’s native voicemail; TNGOS does not record or copy that voicemail. An unanswered/failed transfer offers a keypad-confirmed callback request labeled for that coach in Leads. Transfers are tracked in Call Center. Administrators can edit the five saved names/numbers or disable a coach in System Overview → TNG phone assistant. Coach destinations cannot equal the NumberBarn or Twilio forwarding line. Dora’s separate Marketing route remains available on option 6. Option 7 remains the registration-and-waiver text link. Setup does not place test calls or send texts.

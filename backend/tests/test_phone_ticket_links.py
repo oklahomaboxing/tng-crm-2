@@ -88,8 +88,8 @@ class PhoneTicketTests(unittest.TestCase):
         r=self.webhook('menu',Digits='6')
         self.assertEqual(self.root(r).find('Dial/Number').text,'+14059895453')
         self.webhook('transfer-result',DialCallStatus='no-answer')
-        self.webhook('callback/name',SpeechResult='Marketing Caller')
-        self.webhook('callback/details',SpeechResult='I want to sponsor an event')
+        self.webhook('callback/confirm',Digits='1')
+        self.webhook('callback/confirm',Digits='1')
         self.assertIn('Marketing inquiry',self.db.query(Lead).filter_by(conversion_source='phone_assistant').one().notes)
 
     def test_public_prices_and_event_times_are_live_and_private_rates_excluded(self):
@@ -97,10 +97,10 @@ class PhoneTicketTests(unittest.TestCase):
         row=self.db.get(PhoneSettings,1);cfg=PhoneConfig(**json.loads(row.settings_json));cfg.use_live_membership_prices=True;cfg.use_live_event_info=True;row.settings_json=json.dumps(cfg.model_dump())
         self.db.add(MembershipProduct(name='Private negotiated plan',price=37,active=True,is_membership=True))
         self.db.add(MembershipProduct(name='Registration Fee',price=100,active=True,is_membership=False));self.db.commit()
-        r=self.webhook('menu',SpeechResult='How much does membership cost?')
+        r=self.webhook('menu',Digits='2')
         self.assertIn('150 dollars',r.text);self.assertIn('100 dollars registration fee',r.text)
         self.assertNotIn('Private negotiated',r.text)
-        r=self.webhook('menu',SpeechResult='What time is the next fight?')
+        r=self.webhook('menu',Digits='3')
         self.assertIn('Public Fight',r.text);self.assertIn('5:00 PM',r.text)
         self.assertNotIn('150 dollars',r.text)
         self.assertEqual(self.root(r).find('Gather/Say').attrib['voice'],'Polly.Joanna')
@@ -111,7 +111,7 @@ class PhoneTicketTests(unittest.TestCase):
         self.webhook('menu',Digits='4')
         self.webhook('callback/name',SpeechResult='Example Caller')
         r=self.webhook('callback/details',SpeechResult='My credit card number is 4111111111111111 security code 123')
-        self.assertIn('secure ticket checkout',r.text)
+        self.assertEqual(self.root(r).find('Gather').attrib['input'],'dtmf')
         self.assertEqual(self.db.query(Lead).filter_by(conversion_source='phone_assistant').count(),0)
         self.assertNotIn('4111111111111111',r.text)
 

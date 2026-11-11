@@ -30,18 +30,18 @@ class PhoneAssistantTests(unittest.TestCase):
         self.assertEqual(self.webhook('incoming',To='+14055550999').status_code,403)
         self.assertEqual(self.db.query(PhoneCall).count(),0)
 
-    def test_speech_keypad_menu_and_approved_answers(self):
+    def test_keypad_menu_and_approved_answers(self):
         root=self.root(self.webhook('incoming'))
-        g=root.find('Gather');self.assertEqual(g.attrib['input'],'speech dtmf')
+        g=root.find('Gather');self.assertEqual(g.attrib['input'],'dtmf')
         self.assertIn('4 for a callback',''.join(root.itertext()))
-        for changes,answer in (({'Digits':'1'},'8416'),({'SpeechResult':'Membership rates'},'current rates'),({'Digits':'3'},'boxing events')):
+        for changes,answer in (({'Digits':'1'},'8416'),({'Digits':'2'},'current rates'),({'Digits':'3'},'boxing events')):
             response=self.webhook('menu',**changes);self.root(response);self.assertIn(answer,response.text)
             self.assertNotIn('<Record',response.text)
         self.assertEqual(self.db.query(PhoneCall).count(),1)
 
     def test_private_member_questions_route_to_staff_without_profile_lookup(self):
         before=self.db.query(Member).count()
-        root=self.root(self.webhook('menu',SpeechResult='What is my membership balance?'))
+        root=self.root(self.webhook('menu',Digits='0',SpeechResult='Background membership chatter'))
         self.assertEqual(root.find('Dial/Number').text,'+14059895823')
         self.assertEqual(self.db.query(Member).count(),before)
         self.assertNotIn(self.member.email,''.join(root.itertext()))
@@ -49,33 +49,33 @@ class PhoneAssistantTests(unittest.TestCase):
     def test_callback_creates_one_phone_lead_and_never_a_membership(self):
         before=self.db.query(Member).count();leads=self.db.query(Lead).count()
         self.root(self.webhook('menu',Digits='4'))
-        self.root(self.webhook('callback/name',SpeechResult='Example Caller'))
-        self.root(self.webhook('callback/details',SpeechResult='I would like a gym tour and membership information.'))
-        self.root(self.webhook('callback/details',SpeechResult='I would like a gym tour and membership information.'))
+        self.root(self.webhook('callback/confirm',Digits='1'))
+        self.root(self.webhook('callback/confirm',Digits='1'))
+        self.root(self.webhook('callback/confirm',Digits='1'))
         self.assertEqual(self.db.query(Lead).count(),leads+1)
         lead=self.db.query(Lead).filter_by(conversion_source='phone_assistant').one()
-        self.assertEqual((lead.first_name,lead.last_name,lead.phone),('Example','Caller','+14055550101'))
+        self.assertEqual((lead.first_name,lead.last_name,lead.phone),('Phone caller','','+14055550101'))
         self.assertEqual(lead.email,'')
         self.assertEqual(self.db.query(Member).count(),before)
-        self.assertIn('gym tour',lead.notes)
+        self.assertIn('Name and spoken message were not collected',lead.notes)
 
     def test_anonymous_caller_can_enter_callback_number(self):
         response=self.webhook('menu',Digits='4',From='anonymous');self.assertIn('ten digit',response.text)
         self.root(self.webhook('callback/phone',Digits='4055550102',From='anonymous'))
-        self.root(self.webhook('callback/name',SpeechResult='Example Anonymous',From='anonymous'))
-        self.root(self.webhook('callback/details',SpeechResult='Membership options please',From='anonymous'))
+        self.root(self.webhook('callback/confirm',Digits='1',From='anonymous'))
+        self.root(self.webhook('callback/confirm',Digits='1',From='anonymous'))
         self.assertEqual(self.db.query(Lead).filter_by(conversion_source='phone_assistant').one().phone,'+14055550102')
 
     def test_no_answer_offers_callback_and_disabled_menu_goes_to_staff(self):
         self.root(self.webhook('incoming'))
-        self.assertIn('first and last name',self.webhook('transfer-result',DialCallStatus='no-answer').text)
+        self.assertIn('press 1',self.webhook('transfer-result',DialCallStatus='no-answer').text)
         saved=self.client.put('/api/phone/admin',headers=self.headers(),json=PhoneConfig(enabled=False).model_dump())
         self.assertEqual(saved.status_code,200,saved.text)
         self.assertEqual(self.root(self.webhook('incoming')).find('Dial/Number').text,'+14059895823')
 
     def test_silent_callback_prompts_stop_after_three_attempts(self):
         self.webhook('menu',Digits='4')
-        for _ in range(3):r=self.webhook('callback/name',SpeechResult='')
+        for _ in range(3):r=self.webhook('callback/confirm')
         root=self.root(r)
         self.assertIsNotNone(root.find('Hangup'))
         self.assertIsNone(root.find('Gather'))
@@ -127,6 +127,6 @@ class PhoneAssistantTests(unittest.TestCase):
         self.client.put('/api/phone/admin',headers=self.headers(),json=PhoneConfig(enabled=False).model_dump())
         self.webhook('incoming')
         self.webhook('transfer-result',DialCallStatus='no-answer')
-        self.webhook('callback/name',SpeechResult='Example Caller')
-        self.webhook('callback/details',SpeechResult='Please call me about training')
+        self.webhook('callback/confirm',Digits='1')
+        self.webhook('callback/confirm',Digits='1')
         self.assertEqual(self.db.query(Lead).filter_by(conversion_source='phone_assistant').count(),1)
