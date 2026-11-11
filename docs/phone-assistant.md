@@ -30,8 +30,16 @@ Turning the speech/keypad menu off forwards connected calls directly to staff. A
 
 ## Security and operation
 
-Voice webhooks require a valid Twilio signature, matching account SID, matching assigned called number and a valid call SID. The signed callback URL uses TNG_BACKEND_URL, falling back to the production backend URL. There is no public member-profile lookup and no automated account/payment change. Call handling uses the existing Leads architecture and does not send SMS or email.
+Voice webhooks require a valid Twilio signature, matching account SID, matching assigned called number and a valid call SID. The signed callback URL uses TNG_BACKEND_URL, falling back to the production backend URL. There is no public member-profile lookup and no automated account/payment change. Callback handling uses the existing Leads architecture; requested ticket links use the approved notification SMS route. No email is sent by the phone menu.
 
 Provider credentials reuse the configured Twilio account. Read-only readiness checks confirmed the assigned number supports voice. The setup does not overwrite a foreign voice integration. NumberBarn forwarding and real inbound test calls are not fabricated during automated tests.
 
 Staff transfers ring 35 seconds so the staff phone can answer or accept its normal voicemail. Voicemail left on that phone is managed by the staff phone carrier, not recorded or copied into TNGOS. Preserve original caller ID in NumberBarn forwarding where supported, then verify it using a test call; TNGOS only receives the caller ID the carrier passes through.
+
+## Updated receptionist
+
+The menu also offers **5 — Buy tickets** and **6 — Marketing**, transferring marketing inquiries to **(405) 989-5453**. The selected natural voice is configurable. Confirmed gym hours are Monday–Thursday, 5–7 AM and 5–9 PM, Central; Friday/weekend questions go to staff. Live answers use only the public signup catalog and published upcoming events, including published doors and first-bout times. Negotiated member rates remain private.
+
+Ticket buyers choose an available published event and explicitly confirm a mobile number and permission for one requested checkout text. The link opens the existing Clover checkout flow and credits the available TNG Promotions seller. Payment confirmation and QR delivery continue through the existing verified payment workflow; sending a link does not create a sale. No card numbers are collected over the phone.
+
+Administrators connect the approved notification messaging service using **Connect approved ticket-text service**; setup sends no text. STOP suppression applies, with one submission per call/event and at most three links per mobile per hour. Unknown provider submissions are not automatically replayed. Ticket-text statuses appear in recent calls. Requested service texts do not grant marketing consent. These texts and voice services incur normal provider usage charges.

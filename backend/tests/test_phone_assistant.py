@@ -11,7 +11,7 @@ class PhoneAssistantTests(unittest.TestCase):
         support.StabilizationTests.setUp(self)
         self.env=patch.dict(os.environ,{'TWILIO_ACCOUNT_SID':'AC-test','TWILIO_AUTH_TOKEN':'test-voice-secret','TWILIO_PHONE_NUMBER':'+14055550199','TNG_BACKEND_URL':'https://voice.example.com'})
         self.env.start()
-        self.db.add(PhoneSettings(id=1,settings_json=json.dumps(PhoneConfig(enabled=True).model_dump()),connected=False));self.db.commit()
+        self.db.add(PhoneSettings(id=1,settings_json=json.dumps(PhoneConfig(enabled=True,use_live_membership_prices=False,use_live_event_info=False).model_dump()),connected=False));self.db.commit()
     def tearDown(self):
         self.env.stop();support.StabilizationTests.tearDown(self)
     headers=support.StabilizationTests.headers
@@ -33,7 +33,7 @@ class PhoneAssistantTests(unittest.TestCase):
     def test_speech_keypad_menu_and_approved_answers(self):
         root=self.root(self.webhook('incoming'))
         g=root.find('Gather');self.assertEqual(g.attrib['input'],'speech dtmf')
-        self.assertIn('press 4',''.join(root.itertext()))
+        self.assertIn('4 for a callback',''.join(root.itertext()))
         for changes,answer in (({'Digits':'1'},'8416'),({'SpeechResult':'Membership rates'},'current rates'),({'Digits':'3'},'boxing events')):
             response=self.webhook('menu',**changes);self.root(response);self.assertIn(answer,response.text)
             self.assertNotIn('<Record',response.text)

@@ -1,6 +1,7 @@
 """NumberBarn-forwarded Twilio speech/keypad receptionist; approved answers only."""
 import json,os,re
 from datetime import datetime
+from typing import Literal
 from fastapi import APIRouter,Depends,HTTPException,Request
 from fastapi.responses import Response,JSONResponse
 from pydantic import BaseModel,Field,field_validator
@@ -21,7 +22,9 @@ from app.services.business_time import reporting_periods
 router=APIRouter(prefix='/api/phone',tags=['Phone assistant'])
 PUBLIC_NUMBER='+14058644496'
 STAFF_NUMBER='+14059895823'
-MENU='For hours and location, say location or press 1. For memberships, say membership or press 2. For boxing events and tickets, say events or press 3. To request a callback or gym visit, say callback or press 4. To speak to staff, say staff or press 0.'
+MENU='Say hours, memberships, events, buy tickets, callback, marketing, or staff. You can also press 1 for hours, 2 for memberships, 3 for events, 4 for a callback, 5 to buy tickets, 6 for marketing, or 0 for staff.'
+FOLLOW_UP='What else can I help you with? Say a topic, press 5 for tickets, 6 for marketing, or 0 for staff.'
+
 
 class PhoneSettings(Base):
     __tablename__='phone_assistant_settings'
@@ -41,16 +44,27 @@ class PhoneCall(Base):
     lead_id=Column(Integer,ForeignKey('leads.id'),nullable=True)
     created_at=Column(DateTime,default=datetime.utcnow,nullable=False)
 
+class PhoneCallDepartment(Base):
+    __tablename__='phone_call_departments'
+    call_sid=Column(String(80),ForeignKey('phone_assistant_calls.call_sid'),primary_key=True)
+    department=Column(String(30),nullable=False,default='staff')
+
+
 class PhoneConfig(BaseModel):
     enabled:bool=False
     public_number:str=PUBLIC_NUMBER
     staff_number:str=STAFF_NUMBER
+    marketing_number:str='+14059895453'
+    voice:Literal['Polly.Joanna','Polly.Matthew','woman']='Polly.Joanna'
+    use_live_membership_prices:bool=True
+    use_live_event_info:bool=True
+    ticket_links_enabled:bool=True
     greeting:str=Field(default='Thank you for calling TNG Boxing, The Next Generation.',min_length=5,max_length=500)
     hours_answer:str=Field(default='TNG Boxing is located at 8416 Northwest Expressway in Oklahoma City, Oklahoma, 73162. For current opening hours and class times, please speak with our staff.',min_length=5,max_length=2000)
     membership_answer:str=Field(default='Our staff can help you choose a boxing membership and discuss current rates. To arrange a visit or request membership information, press 4. To speak with staff, press 0.',min_length=5,max_length=2000)
     events_answer:str=Field(default='For current TNG Promotions boxing events, ticket availability and fight night details, visit tngos.tngboxinggym.com or speak with staff by pressing 0.',min_length=5,max_length=2000)
 
-    @field_validator('public_number','staff_number')
+    @field_validator('public_number','staff_number','marketing_number')
     @classmethod
     def phone(cls,value):
         try:
@@ -68,23 +82,32 @@ def config(db):
     row=db.get(PhoneSettings,1)
     return PhoneConfig(**json.loads(row.settings_json)) if row else PhoneConfig()
 def xml(response):return Response(str(response),media_type='application/xml',headers={'Cache-Control':'no-store'})
-def say(response,text):response.say(text,language='en-US')
-def gather(text,path,input='speech dtmf',digits=1):
+def say(response,text,cfg=None):response.say(text,language='en-US',voice=cfg.voice if cfg else 'Polly.Joanna')
+def gather(text,path,input='speech dtmf',digits=1,cfg=None):
     response=VoiceResponse()
     g=response.gather(input=input,num_digits=digits,action=url(path),method='POST',timeout=6,speech_timeout='auto',action_on_empty_result=True,language='en-US')
-    say(g,text)
-    say(response,'Please call again if you need help. Goodbye.');response.hangup()
+    say(g,text,cfg)
+    say(response,'Please call again if you need help. Goodbye.',cfg);response.hangup()
     return xml(response)
-def transfer(cfg):
-    response=VoiceResponse();say(response,'Please hold while I connect you with TNG Boxing staff.')
+def transfer(cfg,department='staff'):
+    response=VoiceResponse();say(response,'One moment while I connect you with '+('TNG marketing.' if department=='marketing' else 'the TNG Boxing team.'),cfg)
     dial=response.dial(timeout=35,action=url('transfer-result'),method='POST')
-    dial.number(cfg.staff_number)
+    dial.number(cfg.marketing_number if department=='marketing' else cfg.staff_number)
     return xml(response)
-def callback_prompt(call):
+def transfer_for(db,call,cfg,department='staff'):
+    row=db.get(PhoneCallDepartment,call.call_sid)
+    if not row:row=PhoneCallDepartment(call_sid=call.call_sid);db.add(row)
+    row.department=department;call.stage='marketing_transfer' if department=='marketing' else 'transfer';db.commit()
+    return transfer(cfg,department)
+
+def callback_prompt(call,cfg=None):
     if call.empty_attempts>=3:
-        response=VoiceResponse();say(response,'We could not complete your request. Please call again or visit TNG Boxing. Goodbye.');response.hangup();return xml(response)
-    if not call.caller_phone:return gather('Please enter a ten digit callback number, including the area code.','callback/phone',input='dtmf',digits=10)
-    return gather('To request a callback from our team, please say your first and last name now, or press zero to speak with staff.','callback/name')
+        response=VoiceResponse();say(response,'We could not complete your request. Please call again or visit TNG Boxing. Goodbye.',cfg);response.hangup();return xml(response)
+    if not call.caller_phone:return gather('Please enter a ten digit callback number, including the area code.','callback/phone',input='dtmf',digits=10,cfg=cfg)
+    return gather('To request a callback from our team, please say your first and last name now, or press zero to speak with staff.','callback/name',cfg=cfg)
+
+def contains_card_data(text):
+    return bool(re.search(r'\b(credit card|card number|cvv|cvc|security code)\b|(?:\d[ -]?){13,19}',text,re.I))
 
 def no_private_lookup(text):
     return bool(re.search(r'\b(my account|my membership|my balance|payment status|refund|cancel|billing|password)\b',text))
@@ -117,8 +140,13 @@ def get_call(db,form):
 def view(db):
     cfg=config(db);row=db.get(PhoneSettings,1)
     periods=reporting_periods()
+    from .tickets import sms_route
+    from .facts import membership_answer,event_answer
     return {'settings':cfg.model_dump(),'connected':bool(row and row.connected),'forwarding_number':os.getenv('TWILIO_PHONE_NUMBER',''),
             'voice_url':url('incoming'),'voice_status_url':url('status'),
+            'ticket_links_ready':bool(sms_route(db)),
+            'membership_preview':membership_answer(db,cfg.membership_answer) if cfg.use_live_membership_prices else cfg.membership_answer,
+            'events_preview':event_answer(db,cfg.events_answer) if cfg.use_live_event_info else cfg.events_answer,
             'twilio_configured':all(os.getenv(k) for k in ('TWILIO_ACCOUNT_SID','TWILIO_AUTH_TOKEN','TWILIO_PHONE_NUMBER')),
             'today_calls':db.query(PhoneCall).filter(PhoneCall.created_at>=periods['day_start'],PhoneCall.created_at<periods['day_end']).count()}
 
@@ -126,14 +154,20 @@ def view(db):
 def admin_status(db:Session=Depends(get_db),user=Depends(current_user)):
     require_admin(user)
     data=view(db)
-    data['calls']=[{'call_sid':c.call_sid,'caller_last_four':(c.caller_phone or '')[-4:],'status':c.status,'stage':c.stage,'lead_id':c.lead_id,'created_at':c.created_at.isoformat()+'Z'} for c in db.query(PhoneCall).order_by(PhoneCall.created_at.desc()).limit(50)]
+    calls=db.query(PhoneCall).order_by(PhoneCall.created_at.desc()).limit(50).all()
+    from .tickets import PhoneTicketDelivery
+    link_status={}
+    if calls:
+        for delivery in db.query(PhoneTicketDelivery).filter(PhoneTicketDelivery.call_sid.in_([c.call_sid for c in calls])).order_by(PhoneTicketDelivery.id.desc()):
+            link_status.setdefault(delivery.call_sid,delivery.status)
+    data['calls']=[{'call_sid':c.call_sid,'caller_last_four':(c.caller_phone or '')[-4:],'status':c.status,'stage':c.stage,'lead_id':c.lead_id,'ticket_link_status':link_status.get(c.call_sid),'created_at':c.created_at.isoformat()+'Z'} for c in calls]
     return JSONResponse(data,headers={'Cache-Control':'private, no-store'})
 
 @router.put('/admin')
 def save_config(body:PhoneConfig,db:Session=Depends(get_db),user=Depends(current_user)):
     require_admin(user)
     assigned=normalize_ticket_phone(os.getenv('TWILIO_PHONE_NUMBER',''))
-    if body.staff_number in (body.public_number,assigned):raise HTTPException(400,'Staff transfer number must not forward back to the NumberBarn or Twilio line')
+    if body.staff_number in (body.public_number,assigned) or body.marketing_number in (body.public_number,assigned):raise HTTPException(400,'Transfer numbers must not route back to the NumberBarn or Twilio line')
     row=db.get(PhoneSettings,1)
     if not row:row=PhoneSettings(id=1);db.add(row)
     row.settings_json=json.dumps(body.model_dump())
@@ -145,7 +179,7 @@ def connect_voice(body:ConnectPhone,db:Session=Depends(get_db),user=Depends(curr
     require_admin(user)
     if not body.acknowledge_voice_charges:raise HTTPException(400,'Acknowledge voice-call charges before connecting')
     cfg=config(db)
-    if cfg.staff_number in (cfg.public_number,normalize_ticket_phone(os.getenv('TWILIO_PHONE_NUMBER',''))):raise HTTPException(400,'Staff transfer would create a routing loop')
+    if any(number in (cfg.public_number,normalize_ticket_phone(os.getenv('TWILIO_PHONE_NUMBER',''))) for number in (cfg.staff_number,cfg.marketing_number)):raise HTTPException(400,'Staff transfer would create a routing loop')
     if not all(os.getenv(k) for k in ('TWILIO_ACCOUNT_SID','TWILIO_AUTH_TOKEN','TWILIO_PHONE_NUMBER')):raise HTTPException(503,'Configure the existing Twilio account and phone number first')
     try:
         client=Client(os.environ['TWILIO_ACCOUNT_SID'],os.environ['TWILIO_AUTH_TOKEN'],http_client=TwilioHttpClient(timeout=10))
@@ -170,7 +204,7 @@ async def incoming(request:Request,db:Session=Depends(get_db)):
     if not cfg.enabled:
         call.stage='staff_direct';db.commit();return transfer(cfg)
     db.commit()
-    return gather(cfg.greeting+' '+MENU,'menu')
+    return gather(cfg.greeting+' '+MENU,'menu',cfg=cfg)
 
 @router.post('/menu')
 async def menu(request:Request,db:Session=Depends(get_db)):
@@ -181,74 +215,91 @@ async def menu(request:Request,db:Session=Depends(get_db)):
     if not text and not digit:call.empty_attempts+=1
     else:call.empty_attempts=0
     if call.turns>=12 or call.empty_attempts>=3:db.commit();return transfer(cfg)
+    if digit=='6' or (not digit and re.search(r'\b(marketing|sponsorship|sponsor|advertising|partnership)\b',text)):
+        return transfer_for(db,call,cfg,'marketing')
     if digit=='0' or no_private_lookup(text) or re.search(r'\b(staff|person|operator|human|front desk|transfer|agent)\b',text):
-        call.stage='transfer';db.commit();return transfer(cfg)
+        return transfer_for(db,call,cfg)
     if digit=='4' or re.search(r'\b(callback|call back|call me|tour|visit|join|sign up)\b',text):
-        call.stage='callback_name' if call.caller_phone else 'callback_phone';db.commit();return callback_prompt(call)
+        call.stage='callback_name' if call.caller_phone else 'callback_phone';db.commit();return callback_prompt(call,cfg)
+    from .facts import membership_answer,event_answer
     answer=None
-    if digit=='1' or re.search(r'\b(hours|location|address|directions|where|open|close|closing|schedule)\b',text):answer=cfg.hours_answer
-    elif digit=='2' or re.search(r'\b(membership|memberships|price|prices|cost|rates|training|classes)\b',text):answer=cfg.membership_answer
-    elif digit=='3' or re.search(r'\b(events|event|fight|tickets|ticket|weigh)\b',text):answer=cfg.events_answer
+    if contains_card_data(text) or digit=='5' or re.search(r'\b(buy|purchase|order|pay for)\b.*\btickets?\b',text):
+        db.commit()
+        from .tickets import offer_events
+        return offer_events(db,call,cfg)
+    # Event intent takes priority over generic words such as price or location.
+    if digit=='3' or (not digit and re.search(r'\b(events?|fights?|tickets?|weigh.?in|fall brawl)\b',text)):
+        answer=event_answer(db,cfg.events_answer) if cfg.use_live_event_info else cfg.events_answer
+    elif digit=='1' or (not digit and re.search(r'\b(hours|location|address|directions|where|open|close|closing|schedule)\b',text)):answer=cfg.hours_answer
+    elif digit=='2' or (not digit and re.search(r'\b(memberships?|member|price|prices|cost|rates|monthly|annual|family|registration|training|classes)\b',text)):
+        answer=membership_answer(db,cfg.membership_answer) if cfg.use_live_membership_prices else cfg.membership_answer
     db.commit()
-    return gather((answer+' ' if answer else 'Please choose an option. ')+MENU,'menu')
+    return gather((answer+' '+FOLLOW_UP if answer else 'Sorry, I did not catch that. '+MENU),'menu',cfg=cfg)
 
 @router.post('/callback/phone')
 async def callback_phone(request:Request,db:Session=Depends(get_db)):
     form=await verified(request);cfg=config(db)
     call=get_call(db,form)
     if form.get('Digits')=='0':
-        call.stage='transfer';db.commit();return transfer(cfg)
-    if call.stage!='callback_phone':db.commit();return callback_prompt(call)
+        return transfer_for(db,call,cfg)
+    if call.stage!='callback_phone':db.commit();return callback_prompt(call,cfg)
     try:
         phone=normalize_ticket_phone(form.get('Digits'))
         if not phone:raise ValueError()
     except ValueError:
-        call.empty_attempts+=1;db.commit();return callback_prompt(call)
+        call.empty_attempts+=1;db.commit();return callback_prompt(call,cfg)
     call.empty_attempts=0
-    call.caller_phone=phone;call.stage='callback_name';db.commit();return callback_prompt(call)
+    call.caller_phone=phone;call.stage='callback_name';db.commit();return callback_prompt(call,cfg)
 
 @router.post('/callback/name')
 async def callback_name(request:Request,db:Session=Depends(get_db)):
     form=await verified(request);cfg=config(db)
     call=get_call(db,form)
     if form.get('Digits')=='0':
-        call.stage='transfer';db.commit();return transfer(cfg)
-    if call.stage not in ('callback_name','callback_details'):db.commit();return callback_prompt(call)
+        return transfer_for(db,call,cfg)
+    if call.stage not in ('callback_name','callback_details'):db.commit();return callback_prompt(call,cfg)
     if call.stage=='callback_name':
         name=re.sub(r'[\x00-\x1f]','',str(form.get('SpeechResult','')))[:150].strip()
+        if contains_card_data(name):
+            db.commit();return gather('Please do not share payment card details. Say your name only, or press 0 for staff.','callback/name',cfg=cfg)
         if not name:
-            call.empty_attempts+=1;db.commit();return callback_prompt(call)
+            call.empty_attempts+=1;db.commit();return callback_prompt(call,cfg)
         call.empty_attempts=0
         call.caller_name=name;call.stage='callback_details';db.commit()
     else:db.commit()
-    return gather('Thank you. Briefly tell us what you would like to know, or what kind of gym visit you are interested in.','callback/details')
+    return gather('Thank you. Briefly tell us what you would like to know, or what kind of gym visit you are interested in.','callback/details',cfg=cfg)
 
 @router.post('/callback/details')
 async def callback_details(request:Request,db:Session=Depends(get_db)):
     form=await verified(request);cfg=config(db)
     call=get_call(db,form)
     if form.get('Digits')=='0':
-        call.stage='transfer';db.commit();return transfer(cfg)
+        return transfer_for(db,call,cfg)
     if call.lead_id:
-        db.commit();response=VoiceResponse();say(response,'Your callback request is already saved. Thank you for calling TNG Boxing.');response.hangup();return xml(response)
-    if call.stage!='callback_details' or not call.caller_name or not call.caller_phone:db.commit();return callback_prompt(call)
+        db.commit();response=VoiceResponse();say(response,'Your callback request is already saved. Thank you for calling TNG Boxing.',cfg);response.hangup();return xml(response)
+    if call.stage!='callback_details' or not call.caller_name or not call.caller_phone:db.commit();return callback_prompt(call,cfg)
     details=re.sub(r'[\x00-\x1f]',' ',str(form.get('SpeechResult','')))[:1500].strip()
+    if contains_card_data(details):
+        db.commit();return gather('Please do not share card details by phone. For a secure ticket checkout link, press 5. For staff, press 0.','menu',cfg=cfg)
     if not details:
         call.empty_attempts+=1;db.commit()
-        if call.empty_attempts>=3:return callback_prompt(call)
-        return gather('Please briefly tell us what you would like staff to call you about.','callback/details')
+        if call.empty_attempts>=3:return callback_prompt(call,cfg)
+        return gather('Please briefly tell us what you would like staff to call you about.','callback/details',cfg=cfg)
     names=call.caller_name.split(maxsplit=1)
-    lead=Lead(first_name=names[0],last_name=names[1] if len(names)>1 else '',email='',phone=call.caller_phone,status='new',conversion_source='phone_assistant',notes='Caller requested a staff callback. '+details)
+    department=db.get(PhoneCallDepartment,call.call_sid)
+    prefix='Marketing inquiry. ' if department and department.department=='marketing' else ''
+    lead=Lead(first_name=names[0],last_name=names[1] if len(names)>1 else '',email='',phone=call.caller_phone,status='new',conversion_source='phone_assistant',notes=prefix+'Caller requested a staff callback. '+details)
     db.add(lead);db.flush();call.lead_id=lead.id;call.stage='callback_saved';db.commit()
-    response=VoiceResponse();say(response,'Thank you. Your request has been saved for the TNG Boxing team. Staff will follow up with you. Goodbye.');response.hangup();return xml(response)
+    response=VoiceResponse();say(response,'Thank you. Your request has been saved for the TNG Boxing team. Staff will follow up with you. Goodbye.',cfg);response.hangup();return xml(response)
 
 @router.post('/transfer-result')
 async def transfer_result(request:Request,db:Session=Depends(get_db)):
     form=await verified(request);cfg=config(db);call=get_call(db,form)
     if form.get('DialCallStatus')=='completed':
-        call.stage='staff_connected';db.commit();response=VoiceResponse();response.hangup();return xml(response)
+        department=db.get(PhoneCallDepartment,call.call_sid)
+        call.stage='marketing_connected' if department and department.department=='marketing' else 'staff_connected';db.commit();response=VoiceResponse();response.hangup();return xml(response)
     call.stage='callback_name' if call.caller_phone else 'callback_phone';db.commit()
-    return callback_prompt(call)
+    return callback_prompt(call,cfg)
 
 @router.post('/status')
 async def status_callback(request:Request,db:Session=Depends(get_db)):

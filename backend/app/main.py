@@ -1291,16 +1291,8 @@ def front_desk_join_page_data(
 ):
     front_desk_rep = get_or_create_front_desk_rep(db)
 
-    products = (
-        db.query(MembershipProduct)
-        .filter(
-            MembershipProduct.active == True,
-            MembershipProduct.is_membership == True,
-            MembershipProduct.price.in_([150, 300, 999]),
-        )
-        .order_by(MembershipProduct.price.asc())
-        .all()
-    )
+    from app.services.public_membership_catalog import public_join_products
+    products = public_join_products(db)
 
     db.commit()
     db.refresh(front_desk_rep)
@@ -1344,16 +1336,8 @@ def join_page_data(slug: str, db: Session = Depends(get_db)):
             detail="Rep link not found",
         )
 
-    products = (
-        db.query(MembershipProduct)
-        .filter(
-            MembershipProduct.active == True,
-            MembershipProduct.is_membership == True,
-            MembershipProduct.price.in_([150, 300, 999]),
-        )
-        .order_by(MembershipProduct.price.asc())
-        .all()
-    )
+    from app.services.public_membership_catalog import public_join_products
+    products = public_join_products(db)
 
     return {
         "rep_id": rep.id,

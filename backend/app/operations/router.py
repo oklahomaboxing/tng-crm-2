@@ -38,3 +38,5 @@ from app.mail.microsoft365 import router as microsoft_mail_router
 router.include_router(microsoft_mail_router)
 from app.phone.routes import router as phone_assistant_router
 router.include_router(phone_assistant_router)
+from app.phone.tickets import router as phone_ticket_router
+router.include_router(phone_ticket_router)
