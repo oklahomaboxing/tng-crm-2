@@ -57,6 +57,7 @@ const FighterRegistration = lazy(() => import("./pages/FighterRegistration.jsx")
 const UserManagement = lazy(() => import("./pages/UserManagement.jsx"));
 const QRReferrals = lazy(() => import("./pages/QRReferrals.jsx"));
 const MarketingCenter = lazy(() => import("./pages/MarketingCenter.jsx"));
+const TextInbox = lazy(() => import("./pages/TextInbox.jsx"));
 const CallCenter = lazy(() => import("./pages/CallCenter.jsx"));
 const SystemOverview = lazy(() => import("./pages/SystemOverview"));
 
@@ -835,6 +836,7 @@ return (
       {page === "Dashboard" && role !== "rep" && (
         <Dashboard dash={dash} leader={leader} load={load} onNavigate={navigate} userName={userName} error={dashboardError} />
       )}
+      {page === "Text Inbox" && ["admin", "staff"].includes(role) && <TextInbox />}
       {page === "Call Center" && role === "admin" && <CallCenter onNavigate={navigate} />}
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
       {page === "TNG Apparel" && role === "admin" && <ApparelAdmin/>}

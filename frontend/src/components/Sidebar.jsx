@@ -40,6 +40,7 @@ export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
+  "Text Inbox": <CampaignRoundedIcon />,
   "Call Center": <DialpadRoundedIcon />,
   "System Overview": <HealthAndSafetyRoundedIcon />,
   "Renewal Reminders": <CampaignRoundedIcon />,

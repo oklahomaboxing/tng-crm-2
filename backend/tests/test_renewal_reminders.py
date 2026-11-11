@@ -115,7 +115,7 @@ class RenewalReminderTests(unittest.TestCase):
   from unittest.mock import AsyncMock
   self.due(False);self.db.query(MarketingContact).delete();self.db.commit();self.waiver(True)
   self.assertIsNone(next(i for i in plan(self.db,self.now) if i['channel']=='sms')['reason'])
-  with patch('app.marketing.sms.validate_webhook',new=AsyncMock(return_value={'From':'+14055550100','Body':'STOP'})):
+  with patch.dict(os.environ,{'TWILIO_PHONE_NUMBER':'+14055550199'}),patch('app.marketing.sms.validate_webhook',new=AsyncMock(return_value={'From':'+14055550100','To':'+14055550199','MessageSid':'SM'+'1'*32,'Body':'STOP'})):
    r=self.client.post('/api/marketing/sms/inbound',data={})
   self.assertEqual(r.status_code,200,r.text);self.db.expire_all()
   self.assertEqual(next(i for i in plan(self.db,self.now) if i['channel']=='sms')['reason'],'sms_opted_out')

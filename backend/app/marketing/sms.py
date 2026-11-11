@@ -200,6 +200,8 @@ async def status(delivery_id:int,request:Request,db:Session=Depends(get_db)):
 @router.post('/inbound')
 async def inbound(request:Request,db:Session=Depends(get_db)):
     form=await validate_webhook(request)
+    from app.messaging.inbox import capture
+    capture(db,form)
     try:phone=normalize_ticket_phone(form.get('From'))
     except ValueError:raise HTTPException(400,'Invalid sender')
     command=str(form.get('OptOutType') or form.get('Body') or '').strip().upper()
@@ -214,6 +216,7 @@ async def inbound(request:Request,db:Session=Depends(get_db)):
                 else:contact.sms_unsubscribed=True;contact.sms_opt_in=False
                 contact.updated_at=datetime.utcnow()
         db.commit()
+    db.commit()
     if command=='HELP':
         return Response('<Response><Message>TNG Boxing member texts. Help: 405-959-5823 or marketing@tngboxinggym.com. Reply STOP to unsubscribe.</Message></Response>',media_type='application/xml')
     return Response('<Response/>',media_type='application/xml')

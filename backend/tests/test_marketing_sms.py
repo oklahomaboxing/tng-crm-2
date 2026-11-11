@@ -55,7 +55,7 @@ class MarketingTests(unittest.TestCase):
   with patch('app.marketing.sms.approved_routes',return_value={'notification':'MGfixture'}),patch('app.marketing.sms.Client') as provider:
    self.assertEqual(self.client.post(f'/api/marketing/campaigns/{campaign}/send',headers=self.headers()).status_code,409);provider.assert_not_called()
  def test_stop_start_and_forged_webhooks(self):
-  c=self.contact();path='/api/marketing/sms/inbound';form={'AccountSid':'ACfixture','From':c.phone,'Body':'STOP'}
+  c=self.contact();path='/api/marketing/sms/inbound';form={'AccountSid':'ACfixture','From':c.phone,'To':os.environ['TWILIO_PHONE_NUMBER'],'MessageSid':'SM'+'1'*32,'Body':'STOP'}
   self.assertEqual(self.client.post(path,data=form).status_code,401)
   with patch.dict(os.environ,{'TWILIO_AUTH_TOKEN':'fixture-token','TWILIO_ACCOUNT_SID':'ACfixture'}):
    for body in ['STOP','START']:
