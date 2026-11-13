@@ -1,3 +1,4 @@
+import ContractDeductions from "../components/contracts/ContractDeductions.jsx";
 import SignedContractLibrary from "../components/contracts/SignedContractLibrary.jsx";
 import React from "react";
 import DocuSignConnectionPanel from "../components/DocuSignConnectionPanel.jsx";
@@ -224,6 +225,7 @@ export default function EventContractsPage({
                     </Button>
                   </Stack>
 
+                  <Box sx={{mt:2,mb:2}}><Typography fontWeight={800} sx={{mb:1}}>Fighter deductions</Typography><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap><ContractDeductions contractId={bout.red_contract?.id} fighterName={bout.red?.legal_name}/><ContractDeductions contractId={bout.blue_contract?.id} fighterName={bout.blue?.legal_name}/></Stack><Typography variant="caption" color="text.secondary">Add blood work, hotel or other charges and view each fighter’s projected payout. Generate a contract first if the button is unavailable.</Typography></Box>
                   <Collapse
                     in={expandedBouts[bout.id] ?? (index === 0)}
                     timeout="auto"

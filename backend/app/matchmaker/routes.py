@@ -3439,6 +3439,7 @@ Rules:
                     BoxingContract.fighter_id ==
                     bout.red_fighter_id,
                 )
+                .order_by(BoxingContract.id.desc())
                 .first()
             )
 
@@ -3449,6 +3450,7 @@ Rules:
                     BoxingContract.fighter_id ==
                     bout.blue_fighter_id,
                 )
+                .order_by(BoxingContract.id.desc())
                 .first()
             )
 
@@ -5031,9 +5033,9 @@ Do not add fake ticket information.
             * contract.per_diem_days
         )
 
-        contract.deductions = float(
-            data.get("deductions") or 0
-        )
+        from .deductions import recorded_total
+        recorded = recorded_total(db, contract)
+        contract.deductions = recorded if recorded is not None else float(data.get("deductions") or 0)
 
         contract.boxer_paid = (
             contract.gross_purse
@@ -7290,6 +7292,10 @@ Do not add fake ticket information.
             "cancellation_pay",
         }
 
+        from .deductions import ContractDeductions
+        if "deductions" in data and db.get(ContractDeductions, contract.id):
+            raise HTTPException(409, "Use the itemized deductions editor for this contract.")
+
         for key, value in data.items():
             if key not in allowed:
                 continue
@@ -7310,6 +7316,7 @@ Do not add fake ticket information.
         contract.boxer_paid = (
             (contract.gross_purse or 0)
             + (contract.travel_expense or 0)
+            + (contract.per_diem_total or 0)
             - (contract.deductions or 0)
         )
 
