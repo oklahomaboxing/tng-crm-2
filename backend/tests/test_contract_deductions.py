@@ -53,3 +53,30 @@ class ContractDeductionTests(unittest.TestCase):
   self.contract('generated');new=BoxingContract(event_id=self.c.event_id,bout_id=self.c.bout_id,fighter_id=self.c.fighter_id,opponent_id=self.c.opponent_id,corner='red',status='signed',boxer_name='Test Fighter',gross_purse=1000);self.db.add(new);self.db.commit()
   r=self.client.get(f'/api/boxing/events/{self.c.event_id}/workspace',headers=self.headers());self.assertEqual(r.status_code,200,r.text)
   self.assertEqual(r.json()['bouts'][0]['red_contract']['id'],new.id)
+ def test_official_pdf_prints_itemized_charges_and_current_payout_without_rewriting_signed_terms(self):
+  from unittest.mock import patch
+  from app.matchmaker import routes
+  path=self.contract('signed');self.c.per_diem_total=0;self.db.commit();self.client.put(path,headers=self.headers(),json=self.body())
+  captured=[];original=routes.Paragraph
+  def paragraph(text,*args,**kwargs):captured.append(str(text));return original(text,*args,**kwargs)
+  with patch.object(routes,'Paragraph',side_effect=paragraph):r=self.client.get(f'/api/boxing/contracts/{self.c.id}/official-pdf',headers=self.headers())
+  self.assertEqual(r.status_code,200,r.text);self.assertTrue(r.content.startswith(b'%PDF-'))
+  text=' '.join(captured);self.assertIn('Blood work',text);self.assertIn('$120.00',text);self.assertIn('Hotel',text);self.assertIn('$85.00',text);self.assertIn('$205.00',text);self.assertIn('$995',text);self.assertIn('PAYOUT REVIEW COPY',text)
+  self.db.refresh(self.c);self.assertEqual(self.c.deductions,0)
+ def test_unsigned_pdf_includes_deductions_in_new_signing_payload(self):
+  from app.matchmaker.deductions import pdf_deductions
+  from app.matchmaker.routes import build_official_contract_pdf
+  path=self.contract('draft');self.client.put(path,headers=self.headers(),json=self.body())
+  summary=pdf_deductions(self.db,self.c,for_signing=True);self.assertEqual(summary['total_deductions_cents'],20500)
+  self.c.status='signed';self.db.commit();self.assertIsNone(pdf_deductions(self.db,self.c,for_signing=True))
+ def test_long_itemized_lists_can_paginate_in_final_pdf(self):
+  path=self.contract('draft');items=[{'label':f'Deduction {i} '+('x'*100),'amount':'1.00'} for i in range(50)]
+  self.assertEqual(self.client.put(path,headers=self.headers(),json={'version':0,'items':items}).status_code,200)
+  r=self.client.get(f'/api/boxing/contracts/{self.c.id}/official-pdf',headers=self.headers());self.assertEqual(r.status_code,200,r.text);self.assertTrue(r.content.startswith(b'%PDF-'))
+ def test_original_signed_download_remains_byte_for_byte_unchanged(self):
+  from app.matchmaker.models import BoxingSignedContractDocument
+  path=self.contract('signed');original=b'%PDF-original-signed-fixture-preserved'
+  doc=BoxingSignedContractDocument(contract_id=self.c.id,file_name='signed.pdf',file_data=original);self.db.add(doc);self.db.commit()
+  self.client.put(path,headers=self.headers(),json=self.body())
+  review=self.client.get(f'/api/boxing/contracts/{self.c.id}/official-pdf',headers=self.headers());self.assertEqual(review.status_code,200)
+  signed=self.client.get(f'/api/boxing/contracts/{self.c.id}/signed-file',headers=self.headers());self.assertEqual(signed.status_code,200);self.assertEqual(signed.content,original)

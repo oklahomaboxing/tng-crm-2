@@ -102,3 +102,9 @@ def recorded_total(db,c):
     if not c.id:return None
     row=db.get(ContractDeductions,c.id)
     return (row.base_deductions_cents+sum(i['amount_cents'] for i in json.loads(row.items_json)))/100 if row else None
+
+
+def pdf_deductions(db,c,for_signing=False):
+    if not c.id or not db.get(ContractDeductions,c.id):return None
+    if for_signing and locked(db,c):return None
+    return view(db,c)

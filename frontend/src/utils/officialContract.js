@@ -40,6 +40,9 @@ export function buildOfficialContractHtml(contract) {
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;");
 
+  const deductions=contract.deduction_summary;
+  const deductionRows=deductions ? `${deductions.base_deductions_cents ? `<div>Existing contract deductions: $${money(deductions.base_deductions_cents/100)}</div>` : ''}${deductions.items.map(i=>`<div>${safe(i.label)}: $${money(i.amount_cents/100)}</div>`).join('')}<div><b>Total deductions: $${money(deductions.total_deductions_cents/100)}</b></div>` : '';
+  const review=deductions?.signed_terms_locked;
   return `
 <!DOCTYPE html>
 <html>
@@ -142,6 +145,7 @@ export function buildOfficialContractHtml(contract) {
 </head>
 
 <body>
+${review ? '<p><b>PAYOUT REVIEW COPY — RECORDED DEDUCTIONS</b><br>This copy does not amend a sent or signed agreement or reproduce its signatures. Download the original signed contract separately.</p>' : ''}
 
 <div class="print-bar">
   <button onclick="window.print()">
@@ -341,8 +345,7 @@ the contestant
   </div>
 
   <div>
-    Deductions:
-    <b>$${money(contract.deductions)}</b>
+    ${deductions ? `<b>ITEMIZED PAYOUT DEDUCTIONS</b>${deductionRows}` : `Deductions: <b>$${money(contract.deductions)}</b>`}
   </div>
 
 </div>
@@ -352,8 +355,8 @@ the contestant
   text-align:center;
   font-weight:bold;
 ">
-  BOXER WILL BE PAID:
-  $${money(contract.boxer_paid)}
+  ${review ? 'PROJECTED NET PAYOUT:' : 'BOXER WILL BE PAID:'}
+  $${money(deductions ? deductions.net_payout_cents/100 : contract.boxer_paid)}
 </p>
 
 </body>

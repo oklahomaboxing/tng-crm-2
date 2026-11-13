@@ -622,9 +622,10 @@ def build_official_contract_pdf(
     opponent,
     event,
     bout=None,
+    deduction_summary=None,
 ):
     """
-    Build the authoritative TNGOS Oklahoma boxing contract PDF.
+    Build the TNGOS Oklahoma boxing contract PDF with saved deduction details.
 
     This same PDF will be used for:
     - staff download
@@ -925,6 +926,11 @@ def build_official_contract_pdf(
             ),
     }
 
+    if deduction_summary and deduction_summary['signed_terms_locked']:
+        story.append(Paragraph('<b>PAYOUT REVIEW COPY - RECORDED DEDUCTIONS</b>', center_bold))
+        story.append(Paragraph('Deductions below are recorded payout adjustments. This review copy does not amend a sent or signed agreement and does not reproduce its signatures. Download the original signed contract separately. Ticket commissions are separate from this payout.', body_style))
+        story.append(Spacer(1, 8))
+
     story.append(
         Paragraph(
             "OKLAHOMA STATE ATHLETIC COMMISSION",
@@ -1168,17 +1174,31 @@ def build_official_contract_pdf(
         body_style,
     )
 
-    money_right = Paragraph(
-        (
-            "<b>GROSS PURSE:</b> "
-            f"${money(value(contract, 'gross_purse'))}<br/>"
-            "<b>TRAVEL ALLOWANCE:</b> "
-            f"${money(value(contract, 'travel_expense'))}<br/>"
-            "<b>Deductions:</b> "
-            f"${money(value(contract, 'deductions'))}"
-        ),
-        body_style,
+    financial_lines = (
+        "<b>GROSS PURSE:</b> "
+        f"${money(value(contract, 'gross_purse'))}<br/>"
+        "<b>TRAVEL ALLOWANCE:</b> "
+        f"${money(value(contract, 'travel_expense'))}<br/>"
     )
+    if deduction_summary:
+        if deduction_summary['per_diem_cents']:
+            financial_lines += f"<b>PER DIEM:</b> ${deduction_summary['per_diem_cents']/100:,.2f}<br/>"
+        story.append(Paragraph('<b>ITEMIZED PAYOUT DEDUCTIONS</b>', body_style))
+        rows=[[Paragraph('<b>Description</b>', body_style), Paragraph('<b>Amount</b>', body_style)]]
+        if deduction_summary['base_deductions_cents']:
+            rows.append([Paragraph('Existing contract deductions', body_style), Paragraph(f"${deduction_summary['base_deductions_cents']/100:,.2f}", body_style)])
+        for item in deduction_summary['items']:
+            rows.append([Paragraph(safe(item['label']), body_style), Paragraph(f"${item['amount_cents']/100:,.2f}", body_style)])
+        if len(rows)==1:rows.append([Paragraph('None', body_style),Paragraph('$0.00', body_style)])
+        rows.append([Paragraph('<b>Total deductions</b>', body_style),Paragraph(f"<b>${deduction_summary['total_deductions_cents']/100:,.2f}</b>", body_style)])
+        deduction_table=Table(rows,colWidths=[5.8*inch,1.5*inch],repeatRows=1)
+        deduction_table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LINEBELOW',(0,0),(-1,-1),.3,colors.lightgrey),('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#f7e8ea'))]))
+        story.extend([deduction_table,Spacer(1,8)])
+        financial_lines += f"<b>TOTAL DEDUCTIONS:</b> ${deduction_summary['total_deductions_cents']/100:,.2f}"
+
+    else:
+        financial_lines += f"<b>Deductions:</b> ${money(value(contract, 'deductions'))}"
+    money_right = Paragraph(financial_lines, body_style)
 
     signature_table = Table(
         [[signature_left, money_right]],
@@ -1199,7 +1219,7 @@ def build_official_contract_pdf(
 
     story.append(Spacer(1, 4))
 
-    boxer_paid = value(contract, "boxer_paid")
+    boxer_paid = deduction_summary['net_payout_cents']/100 if deduction_summary else value(contract, "boxer_paid")
 
     if boxer_paid in ("", None):
         try:
@@ -1214,8 +1234,8 @@ def build_official_contract_pdf(
     story.append(
         Paragraph(
             (
-                "<b>BOXER WILL BE PAID: "
-                f"${money(boxer_paid)}</b>"
+                ("<b>PROJECTED NET PAYOUT: " if deduction_summary and deduction_summary['signed_terms_locked'] else "<b>BOXER WILL BE PAID: ")
+                + f"${money(boxer_paid)}</b>"
             ),
             center_bold,
         )
@@ -5080,7 +5100,9 @@ Do not add fake ticket information.
 
         db.refresh(contract)
 
+        from .deductions import pdf_deductions
         return {
+            "deduction_summary": pdf_deductions(db, contract),
             "id": contract.id,
             "bout_id": contract.bout_id,
             "fighter_id": contract.fighter_id,
@@ -5364,12 +5386,14 @@ Do not add fake ticket information.
                 detail="Contract event not found",
             )
 
+        from .deductions import pdf_deductions
         pdf_bytes = build_official_contract_pdf(
             contract=contract,
             fighter=fighter,
             opponent=opponent,
             event=event,
             bout=bout,
+            deduction_summary=pdf_deductions(db, contract),
         )
 
         safe_boxer = (
@@ -5500,12 +5524,14 @@ Do not add fake ticket information.
         token = _docusign_access_token()
         api_base = _docusign_api_base()
 
+        from .deductions import pdf_deductions
         pdf_bytes = build_official_contract_pdf(
             contract=contract,
             fighter=fighter,
             opponent=opponent,
             event=event,
             bout=bout,
+            deduction_summary=pdf_deductions(db, contract, for_signing=True),
         )
 
         fighter_name = str(
@@ -6036,12 +6062,14 @@ Do not add fake ticket information.
         token = _adobe_sign_access_token()
         api_base = _adobe_sign_api_base(token)
 
+        from .deductions import pdf_deductions
         pdf_bytes = build_official_contract_pdf(
             contract=contract,
             fighter=fighter,
             opponent=opponent,
             event=event,
             bout=bout,
+            deduction_summary=pdf_deductions(db, contract, for_signing=True),
         )
 
         safe_name = (

@@ -927,7 +927,7 @@ export default function EventContractsPage({
                                 )
                               }
                             >
-                              View Official PDF
+                              View Contract & Deductions
                             </Button>
 
                             <Button
@@ -1544,7 +1544,7 @@ export default function EventContractsPage({
                                 )
                               }
                             >
-                              View Official PDF
+                              View Contract & Deductions
                             </Button>
 
                             <Button
