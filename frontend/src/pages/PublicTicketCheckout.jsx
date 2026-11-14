@@ -33,8 +33,14 @@ export default function PublicTicketCheckout({eventId: portalEventId,sellerCode:
   const accessToken = params.get("access_token") || "";
   const attemptRef = useRef(null);
   const purchaseBusy = useRef(false);
+  const [savedOrderId,setSavedOrderId]=useState(null);
   const [confirmedPaymentState, setConfirmedPaymentState] = useState(null);
   const [lookupEmail, setLookupEmail] = useState("");
+  useEffect(()=>{
+    function restored(e){if(e.persisted){purchaseBusy.current=false;setSubmitting(false);setMessage('You returned from Clover. Check your saved order status before paying again. A pending bank charge is not a confirmed ticket purchase.')}}
+    window.addEventListener('pageshow',restored);return()=>window.removeEventListener('pageshow',restored);
+  },[]);
+
   const [lookupAttempt, setLookupAttempt] = useState(0);
 
   const [data, setData] = useState(null);
@@ -346,6 +352,7 @@ export default function PublicTicketCheckout({eventId: portalEventId,sellerCode:
         );
       }
 
+      setSavedOrderId(order.order_id);
       try { localStorage.setItem(
         "tngPendingTicketOrder",
         JSON.stringify({
@@ -557,6 +564,7 @@ export default function PublicTicketCheckout({eventId: portalEventId,sellerCode:
           </div>
         )}
 
+        {savedOrderId&&!submitting&&<div style={styles.message}><a style={{color:'#fca5a5'}} href={`/events/${eventId}/tickets?ticket_payment=success&order=${savedOrderId}`}>Check saved order #{savedOrderId}</a><p>Check this order before submitting another payment.</p></div>}
         <form
           onSubmit={purchaseTickets}
         >
