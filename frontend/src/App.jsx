@@ -1,3 +1,4 @@
+import {ticketSellerFromLocation,legacyPhoneTicketEvent} from './services/ticketLinks';
 
 
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -46,6 +47,7 @@ const TNGAcademy = lazy(() => import("./pages/academy/TNGAcademy.jsx"));
 const Matchmaker = lazy(() => import("./pages/Matchmaker.jsx"));
 const ManagerPortal = lazy(() => import("./pages/ManagerPortal.jsx"));
 const MediaPassRequest = lazy(() => import("./pages/MediaPassRequest.jsx"));
+const PublicSellerTickets = lazy(() => import("./pages/PublicSellerTickets.jsx"));
 const PublicTicketCheckout = lazy(() => import("./pages/PublicTicketCheckout.jsx"));
 const TicketPolicies = lazy(() => import("./pages/TicketPolicies.jsx"));
 const FighterActivate = lazy(() => import("./pages/FighterActivate.jsx"));
@@ -123,6 +125,10 @@ function PaymentMessage({ status }) {
 }
 
 function RootEntry() {
+  const phoneTicketEvent=legacyPhoneTicketEvent(window.location);
+  if(phoneTicketEvent!==null)return <PublicSellerTickets phoneEventId={phoneTicketEvent}/>;
+  const publicSellerCode=ticketSellerFromLocation(window.location);
+  if(publicSellerCode!==null)return <PublicSellerTickets sellerCode={publicSellerCode}/>;
   if (/^\/events\/\d+\/media\/?$/.test(window.location.pathname)) return <MediaPassRequest />;
   if (/^\/(?:kiosk\/checkin|check-in)\/?$/.test(window.location.pathname)) return <CheckinKiosk />;
   const isFighterPreview =

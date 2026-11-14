@@ -13,3 +13,13 @@ Public catalog requests after cutoff redirect to the configured active exempt se
 Settings use an additive `event_ticket_sales_windows` table, created by the existing metadata startup path. No cron timing or browser clock is needed. The cutoff is evaluated on each request using server UTC.
 
 Validation: backend tests cover authorization, cutoff equality and time conversion, exemptions, invalid targets, paused links, pending checkout blocking, redirects and post-cutoff payment fulfillment. Browser fixtures cover controls, mobile layout, redirect notice and paid-ticket retrieval. No live sale, SMS or ticket void is used for verification.
+
+## Direct seller portals
+
+Canonical sales links now use `/tickets/{seller_public_code}`. Fighter portal shares, staff copies, QR images, seller-link emails, and phone-requested texts use the same URL builder. The public route resolves the saved seller and event before loading their named sales page; it never opens a private fighter account or requires a CRM login. The original `/events/{event_id}/tickets?seller=...` links still work.
+
+Legacy root `?seller=...` and `?seller_code=...` links, plus root `?fighter=...` or `?join=...` containing generated ticket codes such as `F2-1234ABCD`, resolve to the corresponding sales portal. Ordinary membership referral slugs retain their existing signup behavior. Invalid seller codes show an explicit link error rather than falling through to the main login screen. Existing private paid-ticket retrieval links remain unchanged.
+
+The event sales API still enforces paused sellers, cutoff times, and the configured TNG redirect. Canonical link resolution alone does not enable sales or bypass these policies. Phone company selection recognizes the official TNG Promotions seller even when that record was historically stored under the fighter seller type, without changing its identity or commission terms.
+
+Old phone texts containing `/events/{event_id}/tickets?source=phone` without a seller are also resolved to the event's existing TNG Promotions seller when available. This repairs already-sent links without sending replacement messages. Paid/failure return URLs and ordinary event links remain on the existing order-status routes. Resolution never marks an order paid, creates tickets or retries a charge. Customer checkout copy explicitly says that payment must be completed on Clover before QR tickets are issued.

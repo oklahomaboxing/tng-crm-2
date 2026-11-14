@@ -1,3 +1,4 @@
+import {publicTicketUrl} from '../services/ticketLinks';
 import MediaPassPanel from '../components/tickets/MediaPassPanel.jsx';
 import {CommissionReportPanel} from '../components/tickets/CommissionReports.jsx';
 import SellerSalesControls from "../components/tickets/SellerSalesControls.jsx";
@@ -391,10 +392,7 @@ const [ticketTypes, setTicketTypes] = useState([]);
   }
 
   function sellerTicketUrl(seller) {
-    return (
-      `https://tngos.tngboxinggym.com/events/${eventId}/tickets` +
-      `?seller=${seller.public_code}`
-    );
+    return publicTicketUrl(eventId,seller.public_code);
   }
 
   async function copySellerLink(seller) {

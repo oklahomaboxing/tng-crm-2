@@ -1,3 +1,4 @@
+from .sales_links import public_sales_url
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -430,7 +431,7 @@ def seller_ticket_qr(
     if not seller:
         raise HTTPException(status_code=404, detail="Seller not found")
 
-    url = f"https://tngos.tngboxinggym.com/events/{event_id}/tickets?seller={seller.public_code}"
+    url = public_sales_url(event_id, seller.public_code)
 
     img = qrcode.make(url)
     buf = io.BytesIO()
@@ -480,10 +481,7 @@ def email_seller_ticket_link(
             detail="Event not found",
         )
 
-    ticket_url = (
-        f"https://tngos.tngboxinggym.com/events/"
-        f"{event_id}/tickets?seller={seller.public_code}"
-    )
+    ticket_url = public_sales_url(event_id, seller.public_code)
 
     img = qrcode.make(ticket_url)
     buf = io.BytesIO()

@@ -1,3 +1,4 @@
+import {publicTicketUrl} from '../services/ticketLinks';
 import {purchaseAttempt,clearPurchaseAttempt} from '../services/ticketPurchaseAttempt';
 import React, { useEffect, useMemo, useState, useRef } from "react";
 
@@ -9,20 +10,20 @@ function money(cents) {
   return `$${((Number(cents) || 0) / 100).toFixed(2)}`;
 }
 
-export default function PublicTicketCheckout() {
+export default function PublicTicketCheckout({eventId: portalEventId,sellerCode: portalSellerCode} = {}) {
   const match =
     window.location.pathname.match(
       /^\/events\/(\d+)\/tickets\/?$/
     );
 
-  const eventId = match?.[1];
+  const eventId = String(portalEventId || match?.[1] || '');
 
   const params = new URLSearchParams(
     window.location.search
   );
 
   const sellerCode =
-    params.get("seller") || "";
+    portalSellerCode || params.get("seller") || "";
 
   const paymentStatus =
     params.get("ticket_payment");
@@ -105,8 +106,7 @@ export default function PublicTicketCheckout() {
         }
 
         if (body.sales_closed && body.redirect_seller_code) {
-          const next = new URL(`/events/${encodeURIComponent(eventId)}/tickets`, window.location.origin);
-          next.searchParams.set('seller', body.redirect_seller_code);
+          const next = new URL(publicTicketUrl(eventId,body.redirect_seller_code,window.location.origin));
           next.searchParams.set('sales_notice', 'cutoff');
           window.location.replace(next.toString());
           return;
@@ -138,8 +138,7 @@ export default function PublicTicketCheckout() {
       const response = await fetch(`${API}/api/ticketing/public/events/${eventId}/tickets?seller=${encodeURIComponent(sellerCode)}`);
       const body = await response.json();
       if (response.ok && body.sales_closed && body.redirect_seller_code) {
-        const next = new URL(`/events/${encodeURIComponent(eventId)}/tickets`, window.location.origin);
-        next.searchParams.set('seller', body.redirect_seller_code);
+        const next = new URL(publicTicketUrl(eventId,body.redirect_seller_code,window.location.origin));
         next.searchParams.set('sales_notice', 'cutoff');
         window.location.replace(next.toString());
         return true;
@@ -523,8 +522,9 @@ export default function PublicTicketCheckout() {
         </div>
 
         <h1 style={styles.title}>
-          {data.event?.name}
+          {data.seller ? `${data.seller.display_name || data.seller.name} · Ticket Sales` : data.event?.name}
         </h1>
+        {data.seller && <h2 style={{fontSize:22,textAlign:'center'}}>{data.event?.name}</h2>}
 
         <div style={styles.eventInfo}>
           {data.event?.event_date}
@@ -690,7 +690,7 @@ export default function PublicTicketCheckout() {
             >
               {submitting
                 ? "Opening Clover..."
-                : `Buy Tickets - ${money(total)}`}
+                : `Continue to Clover - ${money(total)}`}
             </button>
 
             <div
@@ -698,8 +698,7 @@ export default function PublicTicketCheckout() {
                 styles.secureText
               }
             >
-              Secure payment powered by
-              Clover
+              Complete your payment on Clover to receive your QR tickets. Saving this order alone does not confirm payment.
             </div>
           </div>
         </form>

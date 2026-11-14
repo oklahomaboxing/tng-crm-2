@@ -37,7 +37,7 @@ class PhoneTicketTests(unittest.TestCase):
             r=self.webhook('tickets/confirm',Digits='1');self.assertEqual(r.status_code,200,r.text)
             args=provider.messages.create.call_args.kwargs
             self.assertEqual(args['to'],'+14055550101')
-            self.assertIn('seller=TNG-PUBLIC',args['body'])
+            self.assertIn('/tickets/TNG-PUBLIC?source=phone',args['body'])
             self.assertIn('Reply STOP to unsubscribe.',args['body'])
             self.assertEqual(args['messaging_service_sid'],'MG-test')
             self.assertIn('payment confirmation',args['body'])
@@ -124,3 +124,14 @@ class PhoneTicketTests(unittest.TestCase):
         with patch('app.phone.tickets.Client') as provider:
             self.webhook('menu',Digits='5');self.webhook('tickets/confirm',Digits='1')
             provider.assert_not_called()
+
+    def test_company_stored_under_fighter_type_keeps_company_ticket_routing(self):
+        self.event();self.seller.seller_type='fighter'
+        self.db.add(EventSalesWindow(event_id=self.event_row.id,cutoff_at=datetime(2020,1,1),exempt_seller_ids_json=json.dumps([self.seller.id])));self.db.commit()
+        provider=Mock();provider.messages.create.return_value.sid='SM-company-type'
+        with patch('app.phone.tickets.Client',return_value=provider):
+            self.assertIn('Press 1 to request this one text',self.webhook('menu',Digits='5').text)
+            self.webhook('tickets/confirm',Digits='1')
+        self.assertIn('/tickets/TNG-PUBLIC?source=phone',provider.messages.create.call_args.kwargs['body'])
+        self.assertEqual(self.seller.seller_type,'fighter')
+        self.assertEqual(self.db.query(TicketOrder).count(),0)

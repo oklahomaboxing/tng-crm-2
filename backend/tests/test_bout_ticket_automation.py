@@ -35,7 +35,7 @@ class BoutTicketAutomationTests(unittest.TestCase):
         r=self.client.get('/api/fighter/me/ticket-sales',headers=self.headers('fighter'))
         self.assertEqual(r.status_code,200,r.text)
         self.assertEqual(len(r.json()['events']),1)
-        self.assertIn('?seller=',r.json()['events'][0]['ticket_url'])
+        self.assertIn('/tickets/',r.json()['events'][0]['ticket_url'])
 
     def test_import_and_assignment_change_create_missing_links_once(self):
         self.card();bout=self.make();self.db.commit()

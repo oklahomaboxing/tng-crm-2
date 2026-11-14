@@ -1,3 +1,4 @@
+from app.ticketing.sales_links import public_sales_url
 """Caller-requested secure ticket purchase links; no card collection or payment assertions."""
 import hashlib,os,json
 from datetime import datetime,timedelta
@@ -161,9 +162,7 @@ async def confirm_link(request:Request,db:Session=Depends(get_db)):
     try:db.commit()
     except IntegrityError:db.rollback();return gather('A link was already requested. Please check your messages.','menu',cfg=cfg)
     e,p,s=event
-    query={'source':'phone'}
-    if s:query['seller']=s.public_code
-    link=os.getenv('TNG_APP_URL','https://tngos.tngboxinggym.com').rstrip('/')+f'/events/{e.id}/tickets?'+urlencode(query)
+    link=public_sales_url(e.id,s.public_code if s else None,source='phone')
     text=ensure_stop_footer(f'TNG Boxing: You requested tickets for {e.name}. Choose your tickets and pay securely through Clover here: {link} Tickets are issued after payment confirmation.')
     try:
         client=Client(os.environ['TWILIO_ACCOUNT_SID'],os.environ['TWILIO_AUTH_TOKEN'],http_client=TwilioHttpClient(timeout=5))

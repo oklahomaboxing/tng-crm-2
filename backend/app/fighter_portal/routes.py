@@ -1,3 +1,4 @@
+from app.ticketing.sales_links import public_sales_url
 import json
 from fastapi.responses import StreamingResponse
 from reportlab.lib.pagesizes import LETTER
@@ -2647,11 +2648,7 @@ def fighter_ticket_sales(
             0,
         )
 
-        ticket_url = (
-            "https://tngos.tngboxinggym.com"
-            f"/events/{seller.event_id}/tickets"
-            f"?seller={seller.public_code}"
-        )
+        ticket_url = public_sales_url(seller.event_id, seller.public_code)
 
         qr_image = qrcode.make(ticket_url)
         qr_buffer = io.BytesIO()

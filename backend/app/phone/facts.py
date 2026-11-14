@@ -1,3 +1,4 @@
+from app.ticketing.sales_links import company_sellers
 """Live public facts. Never reads negotiated member rates or private bout contracts."""
 import re
 from datetime import date,datetime
@@ -70,7 +71,7 @@ def ticket_events(db):
     result=[]
     for event,pub in public_events(db):
         if not db.query(EventTicketType.id).filter_by(event_id=event.id,active=True).first():continue
-        company=db.query(EventSeller).filter(EventSeller.event_id==event.id,func.lower(func.trim(EventSeller.display_name))=='tng promotions',EventSeller.seller_type!='fighter').all()
+        company=company_sellers(db,event.id)
         seller=next((s for s in company if sales_access(db,event.id,s)['sales_open']),None)
         if company and not seller:continue
         if sales_access(db,event.id,seller)['sales_open']:result.append((event,pub,seller))
