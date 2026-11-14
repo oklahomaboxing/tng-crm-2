@@ -1,3 +1,4 @@
+import MediaPassPanel from '../components/tickets/MediaPassPanel.jsx';
 import {CommissionReportPanel} from '../components/tickets/CommissionReports.jsx';
 import SellerSalesControls from "../components/tickets/SellerSalesControls.jsx";
 import React, { useEffect, useState } from "react";
@@ -638,6 +639,7 @@ const [ticketTypes, setTicketTypes] = useState([]);
         </button>
       </div>
 
+      {eventId && <MediaPassPanel key={`media-${eventId}`} eventId={eventId}/>}
       {eventId && <CommissionReportPanel key={eventId} eventId={eventId}/>}
       {eventId && summary?.state_athletic_commission && <section aria-label="Oklahoma State Athletic Commission" style={{ marginTop: 24, padding: 22, border: '1px solid #d71920', borderRadius: 12, background: '#fff8f8' }}>
         <h2 style={{ marginTop: 0 }}>Oklahoma State Athletic Commission — 5%</h2>

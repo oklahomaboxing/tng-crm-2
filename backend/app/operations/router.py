@@ -57,3 +57,6 @@ router.include_router(commission_reports_router)
 
 from app.ticketing.followup import router as ticket_followup_router
 router.include_router(ticket_followup_router)
+
+from app.events.media import router as event_media_router
+router.include_router(event_media_router)
