@@ -41,3 +41,7 @@
 .tng-command-page {animation:tng-command-enter .22s ease-out;}
 @keyframes tng-command-enter {from{opacity:.5;transform:translateY(7px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.tng-command-page{animation:none!important;}}
+/* Keep existing ticket-report and checkout surfaces readable in Command mode. */
+.tng-command .tng-main [style*="background: rgb(255, 248, 248)"],
+.tng-command .tng-main [style*="background: rgb(250, 250, 250)"],
+.tng-command .tng-main [style*="background: rgb(245, 245, 245)"] {background:#102a40dd!important;color:#e6f4ff!important;}
