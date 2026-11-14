@@ -11,7 +11,7 @@ import {
   Stack,
   Toolbar,
   Tooltip,
-  Typography,
+  Typography, ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
@@ -29,6 +29,7 @@ function initials(name) {
 
 export default function TopBar({
   page,
+  mode, onModeChange,
   role,
   userName,
   onMenu,
@@ -52,7 +53,7 @@ export default function TopBar({
         borderBottom: "1px solid #293240",boxShadow:'inset 0 2px 0 #d71932',
       }}
     >
-      <Toolbar sx={{ minHeight: { xs: 68, md: 76 }, gap: 1.5 }}>
+      <Toolbar sx={{ minHeight: { xs: 68, md: 76 }, gap: 1, flexWrap: {xs:"wrap",md:"nowrap"}, py:{xs:1,md:0} }}>
         <IconButton
           onClick={onMenu}
           sx={{ color:'#dbe6f4',display: { xs: "inline-flex", lg: "none" } }}
@@ -81,6 +82,7 @@ export default function TopBar({
             alignItems: "center",
           }}
         >
+          <ToggleButtonGroup size="small" exclusive value={mode||'standard'} onChange={(_,v)=>{if(v)onModeChange?.(v)}} aria-label="Display mode" sx={{bgcolor:'#ffffff09','& .MuiToggleButton-root':{color:'#c8dceb',borderColor:'#527087',fontSize:12,px:1,'&.Mui-selected':{color:'#04121e',bgcolor:'#8de7ff','&:hover':{bgcolor:'#b3f0ff'}}}}}><ToggleButton value="standard">Standard</ToggleButton><ToggleButton value="command">Command</ToggleButton></ToggleButtonGroup>
           <WorkspaceSearch role={role} onNavigate={onNavigate}/>
           <Tooltip title="Refresh overview metrics">
             <IconButton onClick={onRefresh} aria-label="Refresh overview metrics" sx={{color:'#aebdd1'}}>

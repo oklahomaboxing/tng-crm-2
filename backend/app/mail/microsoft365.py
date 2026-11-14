@@ -226,7 +226,8 @@ def send_welcome(db,payload,key):
     message={'subject':payload['subject'],'body':{'contentType':'HTML','content':payload['html']},
              'toRecipients':[{'emailAddress':{'address':email}} for email in payload['to']],
              'replyTo':[{'emailAddress':{'address':MAILBOX}}],
-             'attachments':[{'@odata.type':'#microsoft.graph.fileAttachment','name':a['filename'],'contentType':'application/pdf','contentBytes':a['content']} for a in payload.get('attachments',[])]}
+             'attachments':[{'@odata.type':'#microsoft.graph.fileAttachment','name':a['filename'],'contentType':a.get('content_type','application/pdf'),'contentBytes':a['content']} for a in payload.get('attachments',[])]}
+    if payload.get('cc'):message['ccRecipients']=[{'emailAddress':{'address':email}} for email in payload['cc']]
     try:
         r=requests.post(GRAPH+'/me/sendMail',headers=headers,json={'message':message,'saveToSentItems':True},timeout=20,allow_redirects=False)
         if r.status_code!=202:

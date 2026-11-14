@@ -52,3 +52,5 @@ from app.phone.coaches import router as phone_coaches_router
 router.include_router(phone_coaches_router)
 from app.matchmaker.deductions import router as contract_deductions_router
 router.include_router(contract_deductions_router)
+from app.ticketing.commission_reports import router as commission_reports_router
+router.include_router(commission_reports_router)

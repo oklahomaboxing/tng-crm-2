@@ -1,3 +1,9 @@
+import {ThemeProvider} from '@mui/material';
+import standardTheme from '../theme/tngTheme';
+import commandTheme from '../theme/commandTheme';
+import {readDisplayMode,saveDisplayMode} from '../services/displayMode';
+import CommandCenter from '../components/workspace/CommandCenter';
+import {CommissionReportAlerts} from '../components/tickets/CommissionReports.jsx';
 import React, { Suspense, useState } from "react";
 import { Box, Drawer } from "@mui/material";
 import Sidebar from "../components/Sidebar.jsx";
@@ -19,6 +25,8 @@ export default function AppShell({
   children,
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mode,setMode]=useState(readDisplayMode);
+  function changeMode(value){setMode(saveDisplayMode(value));}
 
   const drawer = (
     <Sidebar
@@ -30,7 +38,7 @@ export default function AppShell({
   );
 
   return (
-    <Box className="tng-shell" sx={{ minHeight: "100vh" }}>
+    <ThemeProvider theme={mode==='command'?commandTheme:standardTheme}><Box className={`tng-shell ${mode==='command'?'tng-command':''}`} data-display-mode={mode} sx={{ minHeight: "100vh" }}>
       <Drawer
         variant="permanent"
         open
@@ -71,6 +79,8 @@ export default function AppShell({
         }}
       >
         <TopBar
+          mode={mode}
+          onModeChange={changeMode}
           page={page}
           role={role}
           userName={userName}
@@ -93,9 +103,11 @@ export default function AppShell({
             pb: { xs: 12, md: 9 },
           }}
         >
-          <WorkspaceBoundary workspace={page}><Suspense fallback={<WorkspaceLoading/>}>{children}</Suspense></WorkspaceBoundary>
+          {role==='admin'&&<CommissionReportAlerts/>}
+          {role==='admin'&&mode==='command'&&<CommandCenter onNavigate={setPage}/>}
+          <Box key={page} className={mode==='command'?'tng-command-page':undefined}><WorkspaceBoundary workspace={page}><Suspense fallback={<WorkspaceLoading/>}>{children}</Suspense></WorkspaceBoundary></Box>
         </Box>
       </Box>
-    </Box>
+    </Box></ThemeProvider>
   );
 }

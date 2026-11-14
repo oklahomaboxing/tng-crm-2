@@ -48,7 +48,7 @@ class ApparelTests(unittest.TestCase):
   self.db.rollback();order=self.db.query(ApparelOrder).one();self.assertEqual(self.client.put('/api/apparel/admin/orders/'+str(order.id),headers=self.headers(),json={'status':'collected'}).status_code,409)
  def test_unknown_checkout_not_replayed_and_order_status_has_no_contact_information(self):
   self.make_product();body={'request_key':'b'*32,'expected_price_cents':2000,'name':'Buyer','email':'buyer@example.com','variant_id':self.variant.id}
-  with patch.dict(os.environ,{'CLOVER_API_TOKEN':'test','CLOVER_MERCHANT_ID':'test'}),patch('app.apparel.routes.requests.post',side_effect=TimeoutError()):
+  with patch.dict(os.environ,{'CLOVER_API_TOKEN':'test','CLOVER_MERCHANT_ID':'test'}),patch('app.apparel.routes.requests.post',side_effect=TimeoutError()),patch('app.apparel.routes.price',return_value=2000):
    self.assertEqual(self.client.post('/api/apparel/checkout',json=body).status_code,503)
   with patch('app.apparel.routes.requests.post') as post:
    self.assertEqual(self.client.post('/api/apparel/checkout',json=body).status_code,409);post.assert_not_called()

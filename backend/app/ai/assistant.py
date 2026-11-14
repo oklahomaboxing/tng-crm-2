@@ -145,3 +145,12 @@ def ask(data:Question,response:Response,db=Depends(get_db),user=Depends(current_
         'ai_unavailable':'Live report questions still work. The AI language service is unavailable; try a suggested question.',
         'ai_not_configured':'Live report questions still work. Connect an OpenAI API account to enable broader language interpretation.'}.get(engine)
     return {'answer':answer(topic,facts),'topic':topic,'engine':engine,'ai_notice':notice,'facts':facts,'sources':['TNGOS membership report','Recorded ticket orders','Saved fight card','Operations work queue']}
+
+@router.post('/briefing')
+def command_briefing(data:Question,response:Response,db=Depends(get_db),user=Depends(current_user)):
+    """Local report routing for Command mode; never invokes a paid model or writes business records."""
+    require_admin(user);response.headers['Cache-Control']='private, no-store';limit_requests(db,user)
+    if not data.question.strip():raise HTTPException(422,'Ask a question.')
+    topic=choose_topic(data.question,data.previous_topic) or 'help'
+    facts=snapshot(db,user,data.event_id)
+    return {'answer':answer(topic,facts),'topic':topic,'engine':'live_reports','facts':facts,'sources':['TNGOS membership report','Recorded ticket orders','Saved fight card','Operations work queue']}

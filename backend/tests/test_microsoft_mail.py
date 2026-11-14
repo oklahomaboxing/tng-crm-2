@@ -113,3 +113,14 @@ class MicrosoftMailTests(unittest.TestCase):
         self.assertEqual(r.json()['provider'],'resend')
         cfg=self.db.get(MicrosoftMailbox,1);self.db.refresh(cfg)
         self.assertIsNone(cfg.access_token);self.assertIsNone(cfg.refresh_token)
+
+    def test_graph_commission_cc_and_zip_content_type(self):
+        self.connected()
+        payload=self.payload();payload['cc']=['Diana.Fletcher@osac.ok.gov']
+        payload['attachments'].append({'filename':'reports.zip','content':'UEs=','content_type':'application/zip'})
+        with patch('app.mail.microsoft365.requests.post',return_value=Mock(status_code=202)) as post:
+            send_welcome(self.db,payload,'commission-serialization')
+        message=post.call_args.kwargs['json']['message']
+        self.assertEqual(message['ccRecipients'][0]['emailAddress']['address'],'Diana.Fletcher@osac.ok.gov')
+        self.assertEqual(message['attachments'][0]['contentType'],'application/pdf')
+        self.assertEqual(message['attachments'][1]['contentType'],'application/zip')
