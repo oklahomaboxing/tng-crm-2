@@ -3482,6 +3482,17 @@ async def clover_webhook(request: Request, db: Session = Depends(get_db)):
         }
 
     if webhook_status in ["DECLINED", "FAILED"]:
+        from app.ticketing.models import TicketPaymentFailure
+        failed_reference = str(hosted_checkout_id or checkout_id or "")
+        failed_ticket = db.query(TicketOrder).filter_by(clover_checkout_id=failed_reference).with_for_update().first() if failed_reference else None
+        if failed_ticket and failed_ticket.payment_status in ("pending", "failed"):
+            failed_ticket.payment_status = "failed"
+            failure = db.get(TicketPaymentFailure, failed_ticket.id)
+            if not failure:
+                failure = TicketPaymentFailure(order_id=failed_ticket.id); db.add(failure)
+            failure.status = webhook_status
+            failure.reported_at = datetime.utcnow()
+            db.commit()
         matching_checkout_id = str(hosted_checkout_id or checkout_id or "")
 
         if matching_checkout_id:

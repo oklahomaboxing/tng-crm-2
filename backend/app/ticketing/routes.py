@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.core.dependencies import current_user, staff_user
-from .models import EventSeller, EventTicketType, TicketOrder, IssuedTicket, EventSalesWindow
+from .models import EventSeller, EventTicketType, TicketOrder, IssuedTicket, EventSalesWindow, TicketOrderRequest
 from .sales_access import require_sales_open, sales_access
 from .service import generate_public_code, generate_receipt_number, scan_ticket, seller_totals
 from datetime import datetime
@@ -35,12 +35,20 @@ class ScanRequest(BaseModel):
     device_label: str | None = None
 
 class PublicTicketOrderCreate(BaseModel):
+    request_key: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     buyer_name: str
     buyer_email: EmailStr
     buyer_phone: str | None = None
     ticket_sms_consent: bool = False
     seller_code: str | None = None
     items: list[dict]
+
+
+def order_created_response(order):
+    return {"order_id": order.id, "receipt_number": order.receipt_number,
+            "event_id": order.event_id, "seller_id": order.seller_id,
+            "subtotal_cents": order.subtotal_cents, "total_cents": order.total_cents,
+            "payment_status": order.payment_status}
 
 
 @router.post("/public/events/{event_id}/orders")
@@ -74,6 +82,18 @@ def create_public_ticket_order(
         raise HTTPException(status_code=400, detail=str(exc))
     if body.ticket_sms_consent and not phone:
         raise HTTPException(400, "A mobile phone is required for ticket texts")
+    import hashlib
+    payload_hash = hashlib.sha256(json.dumps({"event_id": event_id,
+        **body.model_dump(exclude={"request_key"})}, sort_keys=True).encode()).hexdigest()
+    def existing_request():
+        saved = db.get(TicketOrderRequest, body.request_key) if body.request_key else None
+        if saved:
+            if saved.payload_hash != payload_hash:
+                raise HTTPException(409, "Checkout details changed. Start a new purchase attempt.")
+            return order_created_response(db.get(TicketOrder, saved.order_id))
+    previous = existing_request()
+    if previous:
+        return previous
     from .service import seller_commission_cents
     normalized_items = []
     subtotal_cents = 0
@@ -133,18 +153,19 @@ def create_public_ticket_order(
         from .models import TicketSmsConsent
         db.add(TicketSmsConsent(order_id=order.id, phone=phone,
             notice_version="ticket-sms-v1", notice_text=TICKET_SMS_NOTICE))
-    db.commit()
+    if body.request_key:
+        db.add(TicketOrderRequest(request_key=body.request_key, payload_hash=payload_hash, order_id=order.id))
+    from sqlalchemy.exc import IntegrityError
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        previous = existing_request()
+        if previous:
+            return previous
+        raise
     db.refresh(order)
-
-    return {
-        "order_id": order.id,
-        "receipt_number": order.receipt_number,
-        "event_id": event_id,
-        "seller_id": order.seller_id,
-        "subtotal_cents": order.subtotal_cents,
-        "total_cents": order.total_cents,
-        "payment_status": order.payment_status,
-    }
+    return order_created_response(order)
 
 @router.post("/events/{event_id}/sellers")
 def create_seller(event_id: int, body: SellerCreate, db: Session = Depends(get_db), user=Depends(staff_user)):
@@ -188,9 +209,12 @@ def public_order_tickets(
         raise HTTPException(status_code=403, detail="Ticket access does not match order")
 
     if order.payment_status != "paid":
+        from .models import TicketPaymentFailure
+        failure = db.get(TicketPaymentFailure, order.id) if order.payment_status == "failed" else None
         return {
             "order_id": order.id,
             "payment_status": order.payment_status,
+            "payment_failure": failure.status.lower() if failure else None,
             "tickets": [],
         }
 

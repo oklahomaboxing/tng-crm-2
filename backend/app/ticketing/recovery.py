@@ -45,6 +45,8 @@ def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
     orders = db.query(TicketOrder, EventSeller.display_name).outerjoin(
         EventSeller, EventSeller.id == TicketOrder.seller_id).filter(
         TicketOrder.event_id == event_id).order_by(TicketOrder.id.desc()).all()
+    from .followup import paid_matches
+    completed_matches = paid_matches([o for o, _ in orders])
     # Batch aggregates avoid loading QR credentials or querying once per order.
     counts = {r.order_id: r for r in db.query(
         IssuedTicket.order_id, func.count(IssuedTicket.id).label("issued"),
@@ -59,7 +61,7 @@ def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
             "sent_at": d.sent_at.isoformat() if d.sent_at else None})
     summary = {"orders": len(orders), "paid_orders": 0, "paid_total_cents": 0,
                "pending_orders": 0, "unfinished_checkouts": 0, "needs_attention": 0, "unattributed_paid_orders": 0,
-               "commission_earned_cents": 0}
+               "commission_earned_cents": 0, "attempts_with_other_paid_purchase": sum(bool(v) for v in completed_matches.values()), "unfinished_without_paid_purchase": sum(not v for v in completed_matches.values())}
     rows = []
     query = q.strip().casefold()
     for o, seller_name in orders:
@@ -105,9 +107,12 @@ def recovery_dashboard(event_id: int, q: str = Query("", max_length=160),
         else:
             payment_label = {"paid": "Paid", "failed": "Payment failed — not a completed purchase",
                 "refunded": "Refunded", "partial_refund": "Partially refunded"}.get(o.payment_status, "Payment status needs review")
+        paid_elsewhere = completed_matches.get(o.id, [])
+        if paid_elsewhere:
+            payment_label = "Unfinished attempt — customer has another paid purchase"
         record_kind = "unfinished_checkout" if o.payment_status in ("pending", "failed") else "purchase" if o.payment_status in ("paid", "refunded", "partial_refund") else "review"
         row = {"order_id": o.id, "receipt_number": o.receipt_number,
-               "record_kind": record_kind, "payment_status_label": payment_label,
+               "record_kind": record_kind, "other_paid_order_ids": paid_elsewhere, "payment_status_label": payment_label,
                "buyer_name": o.buyer_name, "buyer_email": o.buyer_email,
                "buyer_phone": o.buyer_phone, "seller_id": o.seller_id,
                "seller_name": seller_name, "payment_status": o.payment_status, "payment_provider": o.payment_provider,

@@ -163,3 +163,20 @@ class EventSalesWindow(Base):
     cutoff_at = Column(DateTime, nullable=True)  # naive UTC, like existing attendance/ticket timestamps
     exempt_seller_ids_json = Column(Text, nullable=False, default="[]")
     redirect_seller_id = Column(Integer, ForeignKey("event_sellers.id"), nullable=True)
+
+class TicketOrderRequest(Base):
+    __tablename__ = "ticket_order_requests"
+    request_key = Column(String(32), primary_key=True)
+    payload_hash = Column(String(64), nullable=False)
+    order_id = Column(Integer, ForeignKey("ticket_orders.id", ondelete="CASCADE"), nullable=False, unique=True)
+
+class TicketPaymentFailure(Base):
+    __tablename__ = "ticket_payment_failures"
+    order_id = Column(Integer, ForeignKey("ticket_orders.id", ondelete="CASCADE"), primary_key=True)
+    status = Column(String(16), nullable=False)
+    reported_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+class TicketCheckoutRequest(Base):
+    __tablename__ = "ticket_checkout_requests"
+    order_id = Column(Integer, ForeignKey("ticket_orders.id", ondelete="CASCADE"), primary_key=True)
+    status = Column(String(16), nullable=False)

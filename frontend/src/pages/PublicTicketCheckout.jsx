@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import {purchaseAttempt,clearPurchaseAttempt} from '../services/ticketPurchaseAttempt';
+import React, { useEffect, useMemo, useState, useRef } from "react";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -29,6 +30,9 @@ export default function PublicTicketCheckout() {
   const returnedOrderId =
     params.get("order");
   const accessToken = params.get("access_token") || "";
+  const attemptRef = useRef(null);
+  const purchaseBusy = useRef(false);
+  const [confirmedPaymentState, setConfirmedPaymentState] = useState(null);
   const [lookupEmail, setLookupEmail] = useState("");
   const [lookupAttempt, setLookupAttempt] = useState(0);
 
@@ -66,7 +70,7 @@ export default function PublicTicketCheckout() {
   useEffect(() => {
     if (!eventId) return;
     // Paid-order retrieval remains available after seller sales close.
-    if (paymentStatus === "success" && returnedOrderId) {
+    if (["success", "failure"].includes(paymentStatus) && returnedOrderId) {
       setData({ ticket_types: [] });
       setLoading(false);
       return;
@@ -162,7 +166,7 @@ export default function PublicTicketCheckout() {
 
   useEffect(() => {
     if (
-      paymentStatus !== "success" ||
+      !["success", "failure"].includes(paymentStatus) ||
       !returnedOrderId
     ) {
       return;
@@ -192,11 +196,9 @@ export default function PublicTicketCheckout() {
         return;
       }
 
-      for (
-        let attempt = 0;
-        attempt < 8;
-        attempt += 1
-      ) {
+      let attempt = 0;
+      while (!cancelled) {
+        attempt += 1;
         if (cancelled) return;
 
         try {
@@ -213,6 +215,16 @@ export default function PublicTicketCheckout() {
             return;
           }
           if (cancelled) return;
+          setConfirmedPaymentState(body.payment_status);
+          if (body.payment_status === 'failed') {
+            setMessage(body.payment_failure === 'declined' ? 'Payment declined. Your tickets were not issued. Try another payment method or contact TNG.' : 'Payment failed. Your tickets were not issued. Contact TNG or return to ticket selection.');
+            return;
+          }
+          if (['refunded','partial_refund'].includes(body.payment_status)) {
+            setMessage('This order has a refund recorded. Contact TNG before making another payment.');return;
+          }
+          if (body.payment_status === 'paid') setMessage('Payment confirmed. Preparing your tickets—do not pay again.');
+          else if (attempt >= 8) setMessage('Payment not confirmed yet. Keep this screen open; we will keep checking. Do not pay again. Contact TNG with your order number if you need help.');
 
           if (
             response.ok &&
@@ -220,6 +232,7 @@ export default function PublicTicketCheckout() {
             body.tickets?.length
           ) {
             setTickets(body.tickets);
+            clearPurchaseAttempt();
             setReceipt(
               body.receipt_number || ""
             );
@@ -231,11 +244,11 @@ export default function PublicTicketCheckout() {
             return;
           }
         } catch {
-          // Clover webhook may still be processing.
+          if (!cancelled) setMessage('Unable to check payment right now. Your order stays open and automatic checking continues. Do not pay again.');
         }
 
         await new Promise((resolve) =>
-          setTimeout(resolve, 2000)
+          setTimeout(resolve, attempt < 8 ? 2000 : 10000)
         );
       }
 
@@ -256,6 +269,7 @@ export default function PublicTicketCheckout() {
 
   async function purchaseTickets(event) {
     event.preventDefault();
+    if (purchaseBusy.current) return;
 
     setMessage("");
 
@@ -299,7 +313,14 @@ export default function PublicTicketCheckout() {
     }
 
     try {
+      purchaseBusy.current = true;
       setSubmitting(true);
+      const details = {buyer_name: buyerName.trim(), buyer_email: buyerEmail.trim().toLowerCase(),
+        buyer_phone: ticketSmsConsent ? buyerPhone.trim() : null, ticket_sms_consent: ticketSmsConsent,
+        seller_code: sellerCode || null, items};
+      const attempt = purchaseAttempt({eventId, details, quotedTotalCents:total}, attemptRef.current);
+      attemptRef.current = attempt;
+
 
       const orderResponse =
         await fetch(
@@ -311,18 +332,7 @@ export default function PublicTicketCheckout() {
               "Content-Type":
                 "application/json",
             },
-            body: JSON.stringify({
-              buyer_name:
-                buyerName.trim(),
-              buyer_email:
-                buyerEmail.trim(),
-              buyer_phone:
-                ticketSmsConsent ? buyerPhone.trim() : null,
-              ticket_sms_consent: ticketSmsConsent,
-              seller_code:
-                sellerCode || null,
-              items,
-            }),
+            body: JSON.stringify({...details, request_key: attempt.key}),
           }
         );
 
@@ -337,7 +347,7 @@ export default function PublicTicketCheckout() {
         );
       }
 
-      localStorage.setItem(
+      try { localStorage.setItem(
         "tngPendingTicketOrder",
         JSON.stringify({
           orderId: order.order_id,
@@ -347,6 +357,8 @@ export default function PublicTicketCheckout() {
           eventId,
         })
       );
+
+      } catch { /* Restricted storage must not stop Clover checkout. */ }
 
       const checkoutResponse =
         await fetch(
@@ -368,7 +380,7 @@ export default function PublicTicketCheckout() {
         );
       }
 
-      if (checkout.status === "paid" && Number(checkout.total_cents) === 0) {
+      if (checkout.status === "paid") {
         window.location.href =
           checkout.ticket_url || `/events/${eventId}/tickets?ticket_payment=success&order=${order.order_id}`;
         return;
@@ -385,6 +397,7 @@ export default function PublicTicketCheckout() {
     } catch (error) {
       setMessage(error.message);
       setSubmitting(false);
+      purchaseBusy.current = false;
     }
   }
 
@@ -489,7 +502,7 @@ export default function PublicTicketCheckout() {
     );
   }
 
-  if (paymentStatus === "success" && returnedOrderId) {
+  if (["success", "failure"].includes(paymentStatus) && returnedOrderId) {
     return <main style={styles.page}><section style={styles.container}>
       <h1>Your Ticket Order #{returnedOrderId}</h1>
       <p role="status">{message || "Waiting for payment confirmation…"}</p>
@@ -497,7 +510,8 @@ export default function PublicTicketCheckout() {
         <input type="email" value={lookupEmail} onChange={(e) => setLookupEmail(e.target.value)} />
       </label>}
       <button type="button" onClick={() => setLookupAttempt((n) => n + 1)}>Retry Ticket Lookup</button>
-      <p>Please do not purchase again while we confirm this payment.</p>
+      {confirmedPaymentState==='failed' ? <button type="button" onClick={()=>{clearPurchaseAttempt();window.location.href=`/events/${eventId}/tickets${sellerCode?'?seller='+encodeURIComponent(sellerCode):''}`}}>Return to ticket selection</button> : <p>Please do not purchase again while we confirm this payment. This screen keeps checking automatically.</p>}
+      <p><a href="mailto:marketing@tngboxinggym.com">Contact TNG for help</a></p>
     </section></main>;
   }
 
@@ -533,8 +547,7 @@ export default function PublicTicketCheckout() {
         {paymentStatus ===
           "failure" && (
           <div style={styles.error}>
-            Payment was not completed.
-            You can try again below.
+            Payment has not been confirmed on this page. If you already submitted a payment, contact TNG before trying again.
           </div>
         )}
 

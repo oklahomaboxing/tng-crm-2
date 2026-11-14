@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.matchmaker.models import BoxingEvent
-from app.ticketing.models import TicketOrder, EventTicketType, TicketCheckoutAttempt
+from app.ticketing.models import TicketOrder, EventTicketType, TicketCheckoutAttempt, TicketCheckoutRequest
 from app.ticketing.service import issue_paid_order
 from app.ticketing.delivery import queue_deliveries, deliver_order, ticket_page_url
 
@@ -209,11 +209,7 @@ def create_ticket_clover_checkout(
 
     success_url = ticket_page_url(order)
 
-    failure_url = (
-        f"{app_url}/events/{order.event_id}/tickets"
-        f"?ticket_payment=failure"
-        f"&order={order.id}"
-    )
+    failure_url = success_url.replace("ticket_payment=success", "ticket_payment=failure")
 
     payload = {
         "customer": customer,
@@ -233,23 +229,30 @@ def create_ticket_clover_checkout(
         "Accept": "application/json",
     }
 
-    response = requests.post(
-        f"{base_url}/invoicingcheckoutservice/v1/checkouts",
-        json=payload,
-        headers=headers,
-        timeout=30,
-    )
-
+    claim = db.get(TicketCheckoutRequest, order.id)
+    if claim and claim.status != "rejected":
+        raise HTTPException(409, "Checkout is already processing or its outcome is uncertain. Do not pay again; contact TNG with your order number.")
+    if not claim:
+        claim = TicketCheckoutRequest(order_id=order.id, status="creating"); db.add(claim)
+    else:
+        claim.status = "creating"
+    db.commit()  # Persist the claim before contacting Clover; timeout retries cannot create another checkout.
+    try:
+        response = requests.post(f"{base_url}/invoicingcheckoutservice/v1/checkouts",
+            json=payload, headers=headers, timeout=30)
+    except requests.RequestException:
+        claim.status = "unknown"; db.commit()
+        raise HTTPException(503, "Checkout confirmation was interrupted. Your order is saved. Do not start another payment; contact TNG with your order number.")
     if response.status_code >= 400:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Clover ticket checkout error "
-                f"{response.status_code}: {response.text}"
-            ),
-        )
-
-    clover_data = response.json()
+        claim.status = "rejected" if 400 <= response.status_code < 500 else "unknown"
+        db.commit()
+        raise HTTPException(503, "Secure checkout could not be opened. Your order is saved. This is not a card-decline confirmation; contact TNG if it persists." if claim.status == "rejected" else "Checkout outcome is uncertain. Your order is saved. Do not pay again; contact TNG with your order number.")
+    try:
+        clover_data = response.json()
+        if not isinstance(clover_data, dict): raise ValueError()
+    except ValueError:
+        claim.status = "unknown"; db.commit()
+        raise HTTPException(503, "Clover checkout response could not be confirmed. Do not pay again; contact TNG.")
 
     checkout_id = (
         clover_data.get("checkoutSessionId")
@@ -264,17 +267,20 @@ def create_ticket_clover_checkout(
     )
 
     if not checkout_id:
+        claim.status = "unknown"; db.commit()
         raise HTTPException(
             status_code=500,
             detail="Clover did not return a checkout ID",
         )
 
     if not checkout_url:
+        claim.status = "unknown"; db.commit()
         raise HTTPException(
             status_code=500,
             detail="Clover did not return a checkout URL",
         )
 
+    claim.status = "ready"
     order.clover_checkout_id = str(checkout_id)
     db.add(TicketCheckoutAttempt(order_id=order.id, checkout_id=str(checkout_id), checkout_url=checkout_url))
 

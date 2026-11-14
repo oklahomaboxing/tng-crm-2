@@ -43,17 +43,27 @@ export default function TicketRecoveryPanel({ eventId, onChanged }) {
     } catch (e) { setError(`${e.message}. If the connection failed, refresh statuses before retrying.`); }
     finally { setBusy(null); }
   }
+  async function downloadFollowup(includeCompleted=false) {
+    setError('');
+    try {
+      const response=await fetch(`${API}/api/ticketing/events/${eventId}/unfinished-customers.csv?include_completed=${includeCompleted}`,{headers:headers(),cache:'no-store'});
+      if(!response.ok)throw Error('Could not download the customer follow-up list.');
+      const url=URL.createObjectURL(await response.blob());const link=document.createElement('a');link.href=url;link.download=`tng_event_${eventId}_customer_followup${includeCompleted?'_all':''}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    } catch(e){setError(e.message)}
+  }
   const summary = data?.summary;
   return <section className="ticket-recovery" aria-label="Ticket recovery">
     <header><div><p className="recovery-eyebrow">CUSTOMER SUPPORT</p><h2>Orders & ticket recovery</h2><p>Paid purchases and ticket support, with unfinished checkouts kept in a separate view.</p></div>
       <button type="button" disabled={loading || !!busy} onClick={() => setRevision(v => v + 1)}>Refresh statuses</button></header>
     {summary && <div className="recovery-stats">
-      {[[money(summary.paid_total_cents), 'Recorded paid sales'], [summary.needs_attention, 'Paid orders needing attention'], [summary.unfinished_checkouts ?? summary.pending_orders, 'Unfinished checkouts'], [summary.unattributed_paid_orders, 'Paid orders without seller'], [money(summary.commission_earned_cents), 'Commission earned']].map(([value, label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
+      {[[money(summary.paid_total_cents), 'Recorded paid sales'], [summary.needs_attention, 'Paid orders needing attention'], [summary.unfinished_without_paid_purchase ?? summary.unfinished_checkouts ?? summary.pending_orders, 'Unconfirmed attempts to review'], [summary.attempts_with_other_paid_purchase ?? 0, 'Other attempts · customer paid'], [summary.unattributed_paid_orders, 'Paid orders without seller'], [money(summary.commission_earned_cents), 'Commission earned']].map(([value, label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
     </div>}
     <p className="recovery-note">Commission is earned on valid or used tickets; it is not a payout balance. Unfinished checkouts contribute no paid revenue or earned commission. Saving ticket details does not confirm payment. Email “sent” means accepted by the provider; SMS “delivered” is a carrier confirmation.</p>
     <div className="recovery-actions" role="group" aria-label="Purchase or checkout records">
       <button type="button" aria-pressed={issue === 'paid'} onClick={() => { setIssue('paid'); setPage(1); }}>Paid purchases</button>
       <button type="button" aria-pressed={issue === 'unfinished'} onClick={() => { setIssue('unfinished'); setPage(1); }}>Unfinished checkouts</button>
+      <button type="button" onClick={()=>downloadFollowup(false)}>Download customer call list</button>
+      <button type="button" onClick={()=>downloadFollowup(true)}>Download all unfinished customers</button>
       <button type="button" aria-pressed={issue === 'all'} onClick={() => { setIssue('all'); setPage(1); }}>All records</button>
     </div>
     {issue === 'unfinished' && <p className="recovery-notice">These are saved checkout attempts, not confirmed purchases. We do not know whether the customer left checkout, a payment failed, or a technical error occurred unless that result was recorded. Contact details do not grant permission for marketing messages.</p>}
@@ -64,11 +74,11 @@ export default function TicketRecoveryPanel({ eventId, onChanged }) {
     {loading ? <p role="status">Loading orders…</p> : !error && data && <>
       <div className="recovery-table"><table><thead><tr><th>Customer / record</th><th>Payment</th><th>Tickets / fighter</th><th>Delivery</th><th>Next step</th></tr></thead><tbody>
         {data.orders.map(order => <tr key={order.order_id}>
-          <td><strong>{order.buyer_name}</strong><span>{order.buyer_email}</span><span>#{order.order_id} · {order.receipt_number}</span><small>{order.created_at ? new Date(`${order.created_at}Z`).toLocaleString() : ''}</small></td>
+          <td><strong>{order.buyer_name}</strong><span>{order.buyer_email}</span>{order.buyer_phone && <span>{order.buyer_phone}</span>}<span>#{order.order_id} · {order.receipt_number}</span><small>{order.created_at ? new Date(`${order.created_at}Z`).toLocaleString() : ''}</small></td>
           <td><strong>{money(order.total_cents)}</strong>{['pending', 'failed'].includes(order.payment_status) && <small>Checkout value · payment not confirmed</small>}{order.payment_provider === 'paper_cash' && <small>Paper cash sale · staff recorded</small>}<span className={`recovery-badge ${order.payment_status === 'paid' ? 'paid' : ''}`}>{order.payment_status_label || ({ paid: 'Paid', pending: order.clover_checkout_id ? 'Checkout started — payment not confirmed' : 'Details saved — checkout not confirmed', failed: 'Payment failed — not a completed purchase', refunded: 'Refunded', partial_refund: 'Partially refunded' }[order.payment_status] || 'Payment status needs review')}</span>{order.payment_id && <small>Payment: {order.payment_id}</small>}{order.clover_checkout_id && <small>Checkout: {order.clover_checkout_id}</small>}</td>
           <td>{['pending', 'failed'].includes(order.payment_status) ? <><strong>{order.expected_tickets ?? '?'} ticket(s) selected</strong><span>{order.issued_tickets ? `${order.issued_tickets} issued — payment state needs review` : 'No tickets issued'}</span></> : <><strong>{order.issued_tickets} / {order.expected_tickets ?? '?'} issued</strong><span>{order.usable_tickets} valid or used</span></>}<span>{['pending', 'failed'].includes(order.payment_status) ? 'Referral: ' : ''}{order.seller_name || (order.seller_id ? `Seller #${order.seller_id}` : 'No seller attribution')}</span><small>{['pending', 'failed'].includes(order.payment_status) ? 'No commission earned' : `Commission: ${money(order.commission_cents)}`}</small></td>
           <td>{['pending', 'failed'].includes(order.payment_status) ? <span>Not sent — awaiting confirmed payment</span> : order.payment_provider === 'paper_cash' ? <span>Printed ticket · no messages</span> : order.deliveries.length ? order.deliveries.map(d => <div className="recovery-delivery" key={d.channel}><strong>{d.channel.toUpperCase()}: {d.status}</strong><small>{d.attempts} attempt(s){d.last_error ? ` · ${d.last_error}` : ''}</small></div>) : <span>Not queued</span>}</td>
-          <td>{order.issues.map(text => <small className="recovery-warning" key={text}>{text}</small>)}<div className="recovery-actions">
+          <td>{order.other_paid_order_ids?.length>0&&<small className="recovery-warning">Paid purchase found: #{order.other_paid_order_ids.join(", #")}. Do not request another payment.</small>}{order.issues.map(text => <small className="recovery-warning" key={text}>{text}</small>)}<div className="recovery-actions">
             {order.payment_status === 'paid' && order.usable_tickets > 0 && <button disabled={!!busy} onClick={() => action(order, 'view')}>View tickets</button>}
             {order.can_recover && order.issues.length > 0 && <button disabled={!!busy} onClick={() => { if (window.confirm(`Recover order #${order.order_id}? This may issue missing tickets and retry unsuccessful ticket notifications to the saved customer contacts. Accepted deliveries are skipped. No payment is charged.`)) action(order, 'recover'); }}>Recover / retry</button>}
             {order.payment_status === 'paid' && !order.can_recover && order.issues.length > 0 && <small>Manual ticket review required; automatic recovery is blocked.</small>}
