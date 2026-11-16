@@ -200,13 +200,14 @@ def record_sales(batch_id: int, body: PaperSale, db: Session = Depends(get_db), 
 def return_unsold(batch_id: int, body: BatchSelection, db: Session = Depends(get_db), user=Depends(staff_user)):
     batch = batch_or_404(db, batch_id)
     rows = selection(db, batch_id, body.ticket_ids)
-    if any(t.status in ('sold','offline_used') for t in rows):
-        raise HTTPException(409, 'A sold ticket cannot be returned through the unsold-ticket flow')
+    if any(t.status not in ('allocated','released','returned') or t.order_id is not None for t in rows):
+        raise HTTPException(409, 'Sold, admitted or order-linked tickets cannot be returned as unsold. Refresh the batch and select only unscanned unsold tickets.')
+    new_returns = sum(t.status != 'returned' for t in rows)
     for t in rows:
         t.status='returned';t.returned_at=t.returned_at or datetime.utcnow()
     db.add(SecurityLog(user_id=user.id, action='PAPER_TICKETS_RETURNED', description=f'Batch {batch_id}; ticket IDs {body.ticket_ids}',success=True))
     db.commit()
-    return batch_summary(db, batch)
+    return {**batch_summary(db, batch), 'new_returns_recorded':new_returns, 'already_returned':len(rows)-new_returns}
 
 
 @router.get('/paper-batches/{batch_id}/print.pdf')

@@ -224,4 +224,27 @@ class PaperTicketTests(unittest.TestCase):
         self.assertEqual(self.batch(201).status_code,422)
         self.assertEqual(self.batch(0).status_code,422)
 
+
+    def test_mixed_admitted_selection_is_atomic_but_unscanned_returns_work(self):
+        b=self.batch(3).json()['id'];rows=self.db.query(PaperTicket).filter_by(batch_id=b).order_by(PaperTicket.id).all()
+        self.client.post(f'/api/ticketing/paper-batches/{b}/release-offline',json={'expected_quantity':3},headers=self.headers())
+        self.assertEqual(self.scan(rows[0])['result'],'admitted')
+        url=f'/api/ticketing/paper-batches/{b}/return-unsold'
+        r=self.client.post(url,headers=self.headers(),json={'ticket_ids':[t.id for t in rows]})
+        self.assertEqual(r.status_code,409)
+        self.db.expire_all();self.assertEqual([t.status for t in rows],['offline_used','released','released'])
+        for expected in [2,0]:
+            r=self.client.post(url,headers=self.headers(),json={'ticket_ids':[t.id for t in rows[1:]]})
+            self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['new_returns_recorded'],expected)
+        self.db.expire_all();self.assertEqual(rows[0].status,'offline_used')
+        self.assertEqual(self.scan(rows[1])['result'],'void')
+        self.assertEqual(self.db.query(TicketOrder).filter_by(payment_provider='paper_cash').count(),0)
+
+    def test_return_rejects_order_linked_ticket_even_with_stale_unsold_status(self):
+        b=self.batch(1).json()['id'];paper=self.db.query(PaperTicket).filter_by(batch_id=b).one()
+        order=self.db.query(TicketOrder).first();paper.order_id=order.id;self.db.commit()
+        r=self.client.post(f'/api/ticketing/paper-batches/{b}/return-unsold',headers=self.headers(),json={'ticket_ids':[paper.id]})
+        self.assertEqual(r.status_code,409)
+        self.db.refresh(paper);self.assertEqual(paper.status,'allocated')
+
 if __name__=='__main__':unittest.main(verbosity=2)
