@@ -13,7 +13,7 @@ test('corrupt or blocked browser storage never breaks a workspace',()=>{
 });
 test('favorites and recent modules cannot cross role access boundaries',()=>{
  const prefs={pinned:['Security Center','Members','Members',42],recent:['Members','User Management'],density:'not-valid'};
- assert.deepEqual(normalizePreferences('staff',prefs),{density:'comfortable',focus:false,pinned:['Members'],recent:['Members']});
+ assert.deepEqual(normalizePreferences('staff',prefs),{density:'comfortable',layout_version:2,focus:true,pinned:['Members'],recent:['Members']});
  assert.deepEqual(togglePinnedWorkspace('staff',prefs,'Security Center').pinned,['Members']);
  assert.deepEqual(visitWorkspace('staff',prefs,'Security Center').recent,['Members']);
 });
@@ -40,3 +40,5 @@ test('event section links round trip and financial recap remains staff restricte
  assert.deepEqual(readWorkspace('#/members?section=contracts','admin').target,{});
  assert.deepEqual(readWorkspace('#/tng-boxing-events?section=tickets','staff').target,{eventSection:'tickets'});
 });
+
+test('simpler layout hides guidance for new and previous automatic preferences',()=>{assert.equal(normalizePreferences('admin',{focus:false}).focus,true);assert.equal(normalizePreferences('admin',{layout_version:2,focus:false}).focus,false);});

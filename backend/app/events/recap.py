@@ -17,7 +17,7 @@ from app.ticketing.sales_reports import commission_summary, quantity
 from app.revenue.models import EventRevenuePayment
 router = APIRouter(prefix='/api/events', tags=['Event recap'])
 CT = ZoneInfo('America/Chicago')
-CANCELLED = {'cancelled', 'canceled', 'void', 'withdrawn', 'declined', 'rejected'}
+CANCELLED = {'cancelled', 'canceled', 'void', 'withdrawn', 'declined', 'rejected', 'removed', 'deleted'}
 TREATMENTS = Literal['other', 'fighter_pay', 'ticket_commission', 'state_assessment', 'exclude']
 
 class EventPursePayment(Base):
@@ -80,13 +80,13 @@ def recap(db, eid):
         if health[key]:
             issues.add(f'{health[key]} {label}.')
     bouts = db.query(BoxingBout).filter_by(event_id=eid).order_by(BoxingBout.id).all()
-    active = [b for b in bouts if str(b.status or '').lower() not in CANCELLED]
+    active = [b for b in bouts if str(b.status or '').strip().lower() not in CANCELLED]
     contracts = db.query(BoxingContract).filter_by(event_id=eid).order_by(BoxingContract.id.desc()).all()
     cids = [c.id for c in contracts]
     signed = {x[0] for x in db.query(BoxingContractSignature.contract_id).filter(BoxingContractSignature.contract_id.in_(cids))} | {x[0] for x in db.query(BoxingSignedContractDocument.contract_id).filter(BoxingSignedContractDocument.contract_id.in_(cids))}
     deductions = {r.contract_id: r for r in db.query(ContractDeductions).filter(ContractDeductions.contract_id.in_(cids))}
     purse_records = {r.fighter_id: r for r in db.query(EventPursePayment).filter_by(event_id=eid)}
-    participant_ids = {f for b in bouts for f in [b.red_fighter_id, b.blue_fighter_id]} | set(purse_records)
+    participant_ids = {f for b in active for f in [b.red_fighter_id, b.blue_fighter_id]}
     fighters = {f.id: f for f in db.query(BoxingFighter).filter(BoxingFighter.id.in_(participant_ids))}
     rows = {}
 
@@ -145,13 +145,10 @@ def recap(db, eid):
             r['net_obligation_cents'] += g + t + p - ded
     if not active:
         issues.add('No active bout purse costs are recorded; the event result may be incomplete.')
-    cancelled_ids = {b.id for b in bouts if b not in active}
-    if cancelled_ids and any((c.bout_id in cancelled_ids and (c.cancellation_pay or 0) > 0 for c in contracts)):
-        issues.add('Cancelled bouts have cancellation clauses. Review any settlement owed; full cancelled-bout purses are not automatically counted.')
-    for fid, p in purse_records.items():
-        r = row(fid)
-        if fid not in active_ids:
-            r['basis'].append('Recorded payment outside the active card; review settlement terms')
+    excluded_purses = [p for fid, p in purse_records.items() if fid not in active_ids]
+    excluded_paid_cents = sum(int(p.amount_paid_cents or 0) for p in excluded_purses)
+    if excluded_purses:
+        issues.add(f'{len(excluded_purses)} off-card purse payment record(s), totaling ${excluded_paid_cents / 100:,.2f}, are excluded from this current-card recap. Saved payment history is retained.')
     sellers = db.query(EventSeller).filter_by(event_id=eid).order_by(EventSeller.id).all()
     seller_map = {s.id: s for s in sellers}
     sales = {}
@@ -236,8 +233,8 @@ def recap(db, eid):
     purse_cost = sum((r['purse_cost_cents'] for r in fighter_rows))
     comm_cost = sum((r['commission_cost_cents'] for r in seller_rows))
     total_cost = purse_cost + comm_cost + assessment + other_cost
-    summary = {'ticket_sales_cents': gross, 'customer_fees_cents': fees_collected, 'paid_ticket_quantity': sum((quantity(o) for o in paid.values())), 'unconfirmed_orders': sum((o.payment_status in ('pending', 'failed') for o in orders)), 'refunded_orders': sum((o.payment_status == 'refunded' for o in orders)), 'gross_purse_cents': sum((r['gross_purse_cents'] for r in fighter_rows)), 'travel_cents': sum((r['travel_cents'] for r in fighter_rows)), 'per_diem_cents': sum((r['per_diem_cents'] for r in fighter_rows)), 'deductions_cents': sum((r['deductions_cents'] for r in fighter_rows)), 'net_purse_obligation_cents': sum((r['net_obligation_cents'] for r in fighter_rows)), 'purse_cost_cents': purse_cost, 'commission_cost_cents': comm_cost, 'fighter_and_seller_cost_cents': purse_cost + comm_cost, 'ticket_contribution_cents': gross - purse_cost - comm_cost, 'state_assessment_cents': assessment, 'assessment_basis': 'recorded_actual' if assessment_values else 'estimated_5_percent', 'other_expenses_cents': other_cost, 'other_income_cents': other_income, 'total_recorded_income_cents': gross + other_income, 'total_cost_cents': total_cost, 'recorded_result_cents': gross + other_income - total_cost, 'purse_payments_recorded_cents': sum((r['purse_paid_cents'] or 0 for r in fighter_rows)), 'purse_payment_status_unknown': sum((r['purse_paid_cents'] is None for r in fighter_rows)), 'remaining_recorded_purses_cents': sum((r['remaining_purse_cents'] for r in fighter_rows if r['purse_paid_cents'] is not None)), 'unreconciled_purse_obligations_cents': sum((r['net_obligation_cents'] for r in fighter_rows if r['purse_paid_cents'] is None)), 'commission_payments_recorded_cents': sum((r['commission_paid_cents'] or 0 for r in seller_rows)), 'remaining_commissions_cents': sum((r['remaining_cents'] for r in seller_rows)), 'commission_payment_status_unknown': sum((r['commission_paid_cents'] is None and r['commission_earned_cents'] > 0 for r in seller_rows))}
-    return {'event': {'id': event.id, 'name': event.name, 'date': event.event_date, 'status': event.status}, 'summary': summary, 'fighters': fighter_rows, 'sellers': seller_rows, 'expenses': fee_rows, 'other_income': income_rows, 'warnings': sorted(issues), 'provisional': bool(issues), 'generated_at': datetime.now(timezone.utc).isoformat(), 'basis': 'Recorded paid ticket subtotals + PAID sponsor/vendor receipts − net purse/allowance obligations (or higher recorded payments) − earned seller commissions (or higher recorded payments) − state assessment − other actual expenses. Pending sales, customer fees, textual estimates and unreconciled partial refunds are not included. This is not a bank balance or proof that an unrecorded payment is unpaid.'}
+    summary = {'excluded_off_card_purse_records': len(excluded_purses), 'excluded_off_card_purse_paid_cents': excluded_paid_cents, 'current_card_fighters': len(fighter_rows), 'ticket_sales_cents': gross, 'customer_fees_cents': fees_collected, 'paid_ticket_quantity': sum((quantity(o) for o in paid.values())), 'unconfirmed_orders': sum((o.payment_status in ('pending', 'failed') for o in orders)), 'refunded_orders': sum((o.payment_status == 'refunded' for o in orders)), 'gross_purse_cents': sum((r['gross_purse_cents'] for r in fighter_rows)), 'travel_cents': sum((r['travel_cents'] for r in fighter_rows)), 'per_diem_cents': sum((r['per_diem_cents'] for r in fighter_rows)), 'deductions_cents': sum((r['deductions_cents'] for r in fighter_rows)), 'net_purse_obligation_cents': sum((r['net_obligation_cents'] for r in fighter_rows)), 'purse_cost_cents': purse_cost, 'commission_cost_cents': comm_cost, 'fighter_and_seller_cost_cents': purse_cost + comm_cost, 'ticket_contribution_cents': gross - purse_cost - comm_cost, 'state_assessment_cents': assessment, 'assessment_basis': 'recorded_actual' if assessment_values else 'estimated_5_percent', 'other_expenses_cents': other_cost, 'other_income_cents': other_income, 'total_recorded_income_cents': gross + other_income, 'total_cost_cents': total_cost, 'recorded_result_cents': gross + other_income - total_cost, 'purse_payments_recorded_cents': sum((r['purse_paid_cents'] or 0 for r in fighter_rows)), 'purse_payment_status_unknown': sum((r['purse_paid_cents'] is None for r in fighter_rows)), 'remaining_recorded_purses_cents': sum((r['remaining_purse_cents'] for r in fighter_rows if r['purse_paid_cents'] is not None)), 'unreconciled_purse_obligations_cents': sum((r['net_obligation_cents'] for r in fighter_rows if r['purse_paid_cents'] is None)), 'commission_payments_recorded_cents': sum((r['commission_paid_cents'] or 0 for r in seller_rows)), 'remaining_commissions_cents': sum((r['remaining_cents'] for r in seller_rows)), 'commission_payment_status_unknown': sum((r['commission_paid_cents'] is None and r['commission_earned_cents'] > 0 for r in seller_rows))}
+    return {'roster_scope': 'current_bout_card', 'current_bout_ids': [b.id for b in active], 'event': {'id': event.id, 'name': event.name, 'date': event.event_date, 'status': event.status}, 'summary': summary, 'fighters': fighter_rows, 'sellers': seller_rows, 'expenses': fee_rows, 'other_income': income_rows, 'warnings': sorted(issues), 'provisional': bool(issues), 'generated_at': datetime.now(timezone.utc).isoformat(), 'basis': 'Fighter breakdown and purse totals use only fighters on the current bout card. Off-card purse records are excluded and retained in payment history. Ticket revenue, seller commissions and other event costs remain event-wide. Recorded paid ticket subtotals + PAID sponsor/vendor receipts − net purse/allowance obligations (or higher recorded payments) − earned seller commissions (or higher recorded payments) − state assessment − other actual expenses. Pending sales, customer fees, textual estimates and unreconciled partial refunds are not included. This is not a bank balance or proof that an unrecorded payment is unpaid.'}
 
 @router.get('/{event_id}/recap')
 def get_recap(event_id: int, response: Response, db=Depends(get_db), user=Depends(staff_user)):
@@ -276,10 +273,10 @@ class CommissionBody(PaymentBody):
 @router.put('/{event_id}/recap/purses/{fighter_id}')
 def record_purse(event_id: int, fighter_id: int, body: PurseBody, db=Depends(get_db), user=Depends(staff_user)):
     event_for(db, event_id, True)
-    participants = {f for b in db.query(BoxingBout).filter_by(event_id=event_id) for f in [b.red_fighter_id, b.blue_fighter_id]}
+    participants = {f for b in db.query(BoxingBout).filter_by(event_id=event_id) if str(b.status or '').strip().lower() not in CANCELLED for f in [b.red_fighter_id, b.blue_fighter_id]}
     row = db.query(EventPursePayment).filter_by(event_id=event_id, fighter_id=fighter_id).first()
-    if fighter_id not in participants and (not row):
-        raise HTTPException(404, 'Fighter is not on this event card')
+    if fighter_id not in participants:
+        raise HTTPException(409, 'Fighter is not on the current bout card. Saved payment history is retained; refresh the recap.')
     version = row.version if row else 0
     if body.version != version:
         raise HTTPException(409, 'Purse payment record changed. Refresh before saving.')

@@ -3,7 +3,7 @@ export const WORKSPACE_PREFERENCES_KEY='tng_workspace_preferences_v1';
 export function normalizePreferences(role,value={}) {
   const allowed=Array.isArray(ROLE_MENUS[role])?ROLE_MENUS[role]:[];
   const list=(items,max)=>Array.isArray(items)?[...new Set(items.filter(p=>typeof p==='string'&&allowed.includes(p)))].slice(0,max):[];
-  return {density:value?.density==='compact'?'compact':'comfortable',focus:value?.focus===true,pinned:list(value?.pinned,8),recent:list(value?.recent,6)};
+  return {density:value?.density==='compact'?'compact':'comfortable',layout_version:2,focus:value?.layout_version===2?value?.focus!==false:true,pinned:list(value?.pinned,8),recent:list(value?.recent,6)};
 }
 export function readWorkspacePreferences(role,storage) {
   try{return normalizePreferences(role,JSON.parse((storage||window.localStorage).getItem(WORKSPACE_PREFERENCES_KEY)||'{}')?.[role]);}catch{return normalizePreferences(role);}

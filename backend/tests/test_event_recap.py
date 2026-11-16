@@ -125,14 +125,22 @@ class RecapTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json()['total'], 1)
 
-    def test_cancelled_bout_keeps_actual_payment_and_overpayment_cost(self):
+    def test_cancelled_bout_excludes_paid_fighter_without_deleting_history(self):
         self.fixture()
         self.client.put(self.url + f'/purses/{self.a.id}', headers=self.headers(), json={'amount_paid': '150', 'version': 0})
         self.bout.status = 'cancelled'
         self.db.commit()
         s = self.get()['summary']
         self.assertEqual(s['net_purse_obligation_cents'], 0)
-        self.assertEqual(s['purse_cost_cents'], 15000)
+        self.assertEqual(s['purse_cost_cents'], 0)
+        self.assertEqual(s['excluded_off_card_purse_paid_cents'], 15000)
+        self.assertEqual(self.get()['fighters'], [])
+        self.assertEqual(self.db.query(EventPursePayment).one().amount_paid_cents, 15000)
+        response=self.client.put(self.url+f'/purses/{self.a.id}',headers=self.headers(),json={'amount_paid':'160','version':1})
+        self.assertEqual(response.status_code,409)
+        self.bout.status='completed';self.db.commit()
+        self.assertEqual(self.get()['summary']['purse_payments_recorded_cents'],15000)
+        self.assertEqual(self.get()['summary']['purse_cost_cents'],20000)
 
     def test_collected_other_income_deduplicates_references_and_ignores_pending(self):
         from app.revenue.models import RevenueOrganization, EventRevenuePayment
@@ -159,3 +167,31 @@ class RecapTests(unittest.TestCase):
         self.assertEqual(data['summary']['purse_payment_status_unknown'],1)
         self.assertEqual(next(r for r in data['fighters'] if r['fighter_id']==self.a.id)['purse_paid_cents'],0)
         self.assertEqual(self.client.put(self.url+f'/purses/{self.a.id}',headers=self.headers(),json={'amount_paid':'5','paid_date':'2099-01-01','version':1}).status_code,422)
+
+    def test_replaced_fighter_and_old_contract_do_not_reappear_from_payment(self):
+        self.fixture()
+        self.client.put(self.url+f'/purses/{self.a.id}',headers=self.headers(),json={'amount_paid':'125','version':0})
+        replacement=BoxingFighter(legal_name='Current Replacement')
+        self.db.add(replacement);self.db.flush()
+        self.bout.red_fighter_id=replacement.id;self.db.commit()
+        data=self.get()
+        self.assertEqual({r['fighter_id'] for r in data['fighters']},{replacement.id,self.b.id})
+        self.assertEqual(data['summary']['net_purse_obligation_cents'],15000)
+        self.assertEqual(data['summary']['purse_payments_recorded_cents'],0)
+        self.assertEqual(data['summary']['excluded_off_card_purse_paid_cents'],12500)
+        self.assertEqual(data['summary']['ticket_sales_cents'],8000)
+        self.assertEqual(data['summary']['commission_cost_cents'],800)
+        self.assertEqual(self.db.query(EventPursePayment).count(),1)
+        self.assertEqual(data['roster_scope'],'current_bout_card')
+        csv=self.client.get(self.url+'.csv',headers=self.headers()).text
+        fighter_section=csv.split('Fighters\r\n',1)[1].split('Ticket commissions',1)[0]
+        self.assertNotIn('Red Fighter',fighter_section)
+        self.assertIn('Current Replacement',fighter_section)
+
+    def test_all_off_card_statuses_exclude_fighters_but_completed_remains(self):
+        self.fixture()
+        for status in ['cancelled','canceled','void','withdrawn','declined','rejected','removed','deleted',' VOID ']:
+            self.bout.status=status;self.db.commit()
+            self.assertEqual(self.get()['fighters'],[],status)
+        self.bout.status='completed';self.db.commit()
+        self.assertEqual(len(self.get()['fighters']),2)

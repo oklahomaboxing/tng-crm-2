@@ -42,6 +42,7 @@ import EventTicketsPage from "./EventTicketsPage.jsx";
 import EventSettingsPage from "./EventSettingsPage.jsx";
 import EventRevenuePage from "./EventRevenuePage.jsx";
 import EventRecap from "./EventRecap.jsx";
+import {isCurrentBout} from "../utils/boutCard";
 import EventFightersPage from "./EventFightersPage.jsx";
 import EventFightNightPage from "./EventFightNightPage.jsx";
 import EventMatchmakingPage from "./EventMatchmakingPage.jsx";
@@ -1217,17 +1218,8 @@ export default function EventWorkspace({
   const event = data.event;
   const bouts = data.bouts || [];
 
-  const activeBouts = bouts.filter(
-    (bout) =>
-      bout.status !== "cancelled" &&
-      bout.status !== "void"
-  );
-
-  const cancelledBouts = bouts.filter(
-    (bout) =>
-      bout.status === "cancelled" ||
-      bout.status === "void"
-  );
+  const activeBouts = bouts.filter(isCurrentBout);
+  const cancelledBouts = bouts.filter(bout => !isCurrentBout(bout));
 
   const fighters = data.fighters || [];
   const totalChecklist =
