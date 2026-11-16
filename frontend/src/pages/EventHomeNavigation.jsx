@@ -23,6 +23,7 @@ import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import StadiumRoundedIcon from "@mui/icons-material/StadiumRounded";
 
 const pages = [
+  {label: "Event Recap", description: "Event profit, paid purses and separate ticket commission records.", tab: 13, icon: PaymentsRoundedIcon, group: "Finance"},
   {
     label: "Fight Card",
     description: "Official bouts, bout order and fighter details.",
@@ -110,7 +111,7 @@ export default function EventHomeNavigation({ setTab }) {
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0,1fr))", xl: "repeat(3,minmax(0,1fr))" }, gap: 2 }}>
       {groups.map(group => <Card key={group} sx={{ p: 2.5 }}>
         <Typography variant="overline" sx={{ fontWeight: 850, letterSpacing: ".12em", color: "text.secondary" }}>{group}</Typography>
-        {pages.filter(page => page.group === group).map(page => {
+        {pages.filter(page => page.group === group && (page.tab !== 13 || ["admin", "staff"].includes(localStorage.getItem("role")))).map(page => {
           const Icon = page.icon;
           return <CardActionArea key={page.tab} onClick={() => setTab(page.tab)} sx={{ borderRadius: 2, mt: 1, p: 1.5 }}>
             <Stack direction="row" spacing={2} alignItems="center"><Icon sx={{ color: "primary.main" }} /><Box><Typography fontWeight={800}>{page.label}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{page.description}</Typography></Box></Stack>

@@ -63,3 +63,6 @@ router.include_router(event_media_router)
 
 from app.ticketing.sales_links import router as public_ticket_portal_router
 router.include_router(public_ticket_portal_router)
+
+from app.events.recap import router as event_recap_router
+router.include_router(event_recap_router)

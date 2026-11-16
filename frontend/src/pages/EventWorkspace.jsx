@@ -41,6 +41,7 @@ import EventCompliancePage from "./EventCompliancePage.jsx";
 import EventTicketsPage from "./EventTicketsPage.jsx";
 import EventSettingsPage from "./EventSettingsPage.jsx";
 import EventRevenuePage from "./EventRevenuePage.jsx";
+import EventRecap from "./EventRecap.jsx";
 import EventFightersPage from "./EventFightersPage.jsx";
 import EventFightNightPage from "./EventFightNightPage.jsx";
 import EventMatchmakingPage from "./EventMatchmakingPage.jsx";
@@ -87,6 +88,7 @@ const eventPageTitles = {
   10: "Matchmaking",
   11: "Fighters",
   12: "Fight Night",
+  13: "Event Recap",
 };
 
 function fighterLocation(fighter) {
@@ -1357,7 +1359,7 @@ export default function EventWorkspace({
         <Box><FighterWelcomeLetter key={`welcome-${eventId}`} eventId={eventId} /></Box>
 
         <Box component="nav" aria-label="Event workspace navigation" sx={{ bgcolor: "white", border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.5 }}>
-          {[["Overview", [0]], ["Competition", [1, 10, 2, 11]], ["Operations", [5, 3, 4]], ["Business", [9, 7, 6]], ["Show", [12, 8]]].map(([group, ids]) => <Box key={group} sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: .5, py: .5 }}><Typography variant="caption" sx={{ width: 90, color: "text.secondary", fontWeight: 800, pl: 1 }}>{group}</Typography>{ids.map(id => <Button key={id} size="small" aria-current={tab === id ? "page" : undefined} variant={tab === id ? "contained" : "text"} color={tab === id ? "primary" : "inherit"} onClick={() => setTab(id)}>{id === 0 ? "Overview" : eventPageTitles[id]}</Button>)}</Box>)}
+          {[["Overview", [0]], ["Competition", [1, 10, 2, 11]], ["Operations", [5, 3, 4]], ["Business", [13, 9, 7, 6]], ["Show", [12, 8]]].map(([group, ids]) => <Box key={group} sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: .5, py: .5 }}><Typography variant="caption" sx={{ width: 90, color: "text.secondary", fontWeight: 800, pl: 1 }}>{group}</Typography>{ids.filter(id => id !== 13 || ["admin", "staff"].includes(localStorage.getItem("role"))).map(id => <Button key={id} size="small" aria-current={tab === id ? "page" : undefined} variant={tab === id ? "contained" : "text"} color={tab === id ? "primary" : "inherit"} onClick={() => setTab(id)}>{id === 0 ? "Overview" : eventPageTitles[id]}</Button>)}</Box>)}
         </Box>
 
         {tab === 0 ? (
@@ -1416,6 +1418,7 @@ export default function EventWorkspace({
           </Card>
         )}
 
+        {tab === 13 && ["admin", "staff"].includes(localStorage.getItem("role")) && <EventRecap key={eventId} eventId={eventId} onOpenTickets={() => setTab(9)} onOpenExpenses={() => setTab(6)} onOpenContracts={() => setTab(2)} />}
         {tab === 8 && (
           <EventSettingsPage
             venueName={venueName}
