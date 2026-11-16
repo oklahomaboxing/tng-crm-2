@@ -71,6 +71,8 @@ const ICONS = {
 
 export default function Sidebar({
   role = "rep",
+  pinned = [],
+  onModules,
   page,
   setPage,
   onNavigate,
@@ -110,7 +112,8 @@ export default function Sidebar({
       <Divider sx={{ borderColor: "rgba(255,255,255,.09)" }} />
 
       <Box sx={{ px: 2, pt: 2 }}><TextField fullWidth value={search} onChange={e => setSearch(e.target.value)} placeholder="Find workspace" inputProps={{ 'aria-label': 'Find workspace' }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchRoundedIcon fontSize="small" sx={{ color: '#9c9ca6' }}/></InputAdornment> } }} sx={{ '& .MuiOutlinedInput-root': { color: 'white', bgcolor: '#19191e', '& fieldset': { borderColor: '#303038' } } }}/></Box>
-      {!search&&<Box sx={{px:2,pt:2}}><Typography variant="caption" sx={{color:'#8995a6',fontWeight:800,letterSpacing:1}}>DAILY TOOLS</Typography><Box sx={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:.7,mt:1}}>{dailyWorkspaces(role).map(item=><Button key={item} onClick={()=>choosePage(item)} sx={{color:page===item?'#fff':'#bbc7d8',border:'1px solid',borderColor:page===item?'#ef3c5755':'#ffffff12',bgcolor:page===item?'#d7193222':'#ffffff04',fontSize:11,lineHeight:1.4,py:1,minHeight:44,textAlign:'center'}}>{item}</Button>)}</Box></Box>}
+      {!search&&<Box sx={{px:2,pt:2}}><Typography variant="caption" sx={{color:'#8995a6',fontWeight:800,letterSpacing:1}}>{pinned.length?'PINNED TOOLS':'DAILY TOOLS'}</Typography><Box sx={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:.7,mt:1}}>{(pinned.length?pinned:dailyWorkspaces(role)).filter(item=>(ROLE_MENUS[role]||[]).includes(item)).map(item=><Button key={item} onClick={()=>choosePage(item)} sx={{color:page===item?'#fff':'#bbc7d8',border:'1px solid',borderColor:page===item?'#ef3c5755':'#ffffff12',bgcolor:page===item?'#d7193222':'#ffffff04',fontSize:11,lineHeight:1.4,py:1,minHeight:44,textAlign:'center'}}>{item}</Button>)}</Box></Box>}
+      <Box sx={{px:2,pt:1}}><Button fullWidth variant="outlined" onClick={onModules} sx={{color:"#dbe6f4",borderColor:"#ffffff24"}}>All modules & layout</Button></Box>
       <List component="nav" aria-label="Workspace navigation" sx={{ px: 1.25, py: 1.5, flex: 1, overflowY: "auto" }}>
         {WORKSPACE_GROUPS.map(group => {
           const groupItems = group.pages.filter(item => filtered.includes(item));

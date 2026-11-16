@@ -45,3 +45,21 @@
 .tng-command .tng-main [style*="background: rgb(255, 248, 248)"],
 .tng-command .tng-main [style*="background: rgb(250, 250, 250)"],
 .tng-command .tng-main [style*="background: rgb(245, 245, 245)"] {background:#102a40dd!important;color:#e6f4ff!important;}
+
+/* Shared workspace surfaces: all staff modules use the same rhythm and controls. */
+.tng-skip-link {position:fixed;left:16px;top:-100px;z-index:2000;padding:12px 20px;border-radius:10px;background:#fff;color:#111827;font-weight:800;}
+.tng-skip-link:focus {top:12px;outline:3px solid #d71932;}
+.tng-main:focus {outline:none;}
+.tng-workspace-guide::before {content:'';position:absolute;top:0;bottom:0;left:0;width:3px;background:linear-gradient(#d71932,#d7193220);}
+.tng-command .tng-workspace-guide {background:linear-gradient(115deg,#12334bdd,#0a1c2cdd);border-color:#6fdfff30;}
+.tng-command .tng-workspace-guide::before {background:linear-gradient(#66dfff,#66dfff20);}
+.tng-module-surface {min-width:0;}
+.tng-module-surface .MuiTableContainer-root {max-width:100%;overflow-x:auto;border-radius:12px;scrollbar-width:thin;}
+.tng-module-surface .MuiTableCell-root {font-variant-numeric:tabular-nums;}
+.tng-module-surface .MuiCard-root {min-width:0;}
+.tng-module-surface .MuiTabs-root {min-width:0;}
+.tng-module-surface .MuiAlert-message {min-width:0;overflow-wrap:anywhere;}
+.tng-shell[data-density="compact"] .tng-main {padding-top:18px;}
+.tng-shell[data-density="compact"] .tng-workspace-guide {margin-bottom:18px;}
+@media(max-width:600px){.tng-module-surface .MuiDialogActions-root{flex-wrap:wrap;gap:8px;}.tng-module-surface .MuiTabs-root{max-width:100%;}}
+@media print {.tng-workspace-guide,.tng-skip-link{display:none!important;}.tng-shell .MuiDrawer-root{display:none!important;}.tng-shell .tng-main{padding:0!important;}.tng-shell:has(.tng-main) > .MuiBox-root{margin-left:0!important;}}

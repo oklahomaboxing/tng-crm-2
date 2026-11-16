@@ -4,12 +4,15 @@ import commandTheme from '../theme/commandTheme';
 import {readDisplayMode,saveDisplayMode} from '../services/displayMode';
 import CommandCenter from '../components/workspace/CommandCenter';
 import {CommissionReportAlerts} from '../components/tickets/CommissionReports.jsx';
-import React, { Suspense, useState } from "react";
-import { Box, Drawer } from "@mui/material";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { Alert, Box, Drawer, createTheme } from "@mui/material";
 import Sidebar from "../components/Sidebar.jsx";
 import TopBar from "./TopBar.jsx";
 import WorkspaceBoundary, { WorkspaceLoading } from "../components/workspace/WorkspaceBoundary";
 import './command.css';
+import ModuleCenter from '../components/workspace/ModuleCenter';
+import WorkspaceGuide from '../components/workspace/WorkspaceGuide';
+import {readWorkspacePreferences,saveWorkspacePreferences,visitWorkspace,togglePinnedWorkspace} from '../services/workspacePreferences';
 
 const DRAWER_WIDTH = 270;
 
@@ -25,12 +28,23 @@ export default function AppShell({
   children,
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [modulesOpen,setModulesOpen]=useState(false);
+  const [preferenceState,setPreferenceState]=useState(()=>({role,value:readWorkspacePreferences(role)}));
+  const preferences=preferenceState.role===role?preferenceState.value:readWorkspacePreferences(role);
+  const [offline,setOffline]=useState(()=>navigator.onLine===false);
+  useEffect(()=>{const changed=()=>setOffline(navigator.onLine===false);window.addEventListener('online',changed);window.addEventListener('offline',changed);return()=>{window.removeEventListener('online',changed);window.removeEventListener('offline',changed);};},[]);
+  useEffect(()=>{setPreferenceState(state=>({role,value:saveWorkspacePreferences(role,visitWorkspace(role,state.role===role?state.value:readWorkspacePreferences(role),page))}));},[role,page]);
+  function updatePreferences(next){setPreferenceState({role,value:saveWorkspacePreferences(role,next)});}
+  function pin(page){updatePreferences(togglePinnedWorkspace(role,preferences,page));}
   const [mode,setMode]=useState(readDisplayMode);
   function changeMode(value){setMode(saveDisplayMode(value));}
+  const theme=useMemo(()=>createTheme(mode==='command'?commandTheme:standardTheme,preferences.density==='compact'?{components:{MuiTableCell:{styleOverrides:{root:{padding:'9px 12px'}}},MuiButton:{styleOverrides:{root:{minHeight:36}}},MuiOutlinedInput:{styleOverrides:{input:{paddingTop:9,paddingBottom:9}}}}}:{}),[mode,preferences.density]);
 
   const drawer = (
     <Sidebar
       role={role}
+      pinned={preferences.pinned}
+      onModules={() => setModulesOpen(true)}
       page={page}
       setPage={setPage}
       onNavigate={() => setMobileOpen(false)}
@@ -38,7 +52,9 @@ export default function AppShell({
   );
 
   return (
-    <ThemeProvider theme={mode==='command'?commandTheme:standardTheme}><Box className={`tng-shell ${mode==='command'?'tng-command':''}`} data-display-mode={mode} sx={{ minHeight: "100vh" }}>
+    <ThemeProvider theme={theme}><Box className={`tng-shell ${mode==='command'?'tng-command':''}`} data-display-mode={mode} data-density={preferences.density} sx={{ minHeight: "100vh" }}>
+      <Box component="a" href="#tng-workspace-content" className="tng-skip-link" onClick={e=>{e.preventDefault();document.getElementById('tng-workspace-content')?.focus();}}>Skip to workspace</Box>
+      <ModuleCenter open={modulesOpen} onClose={()=>setModulesOpen(false)} role={role} page={page} onNavigate={setPage} preferences={preferences} onPreferences={updatePreferences} onPin={pin}/>
       <Drawer
         variant="permanent"
         open
@@ -81,6 +97,8 @@ export default function AppShell({
         <TopBar
           mode={mode}
           onModeChange={changeMode}
+          onModules={() => setModulesOpen(true)}
+          moduleCenterOpen={modulesOpen}
           page={page}
           role={role}
           userName={userName}
@@ -94,6 +112,8 @@ export default function AppShell({
 
         <Box
           component="main"
+          id="tng-workspace-content"
+          tabIndex={-1}
           className="tng-main"
           sx={{
             width: "100%",
@@ -103,9 +123,11 @@ export default function AppShell({
             pb: { xs: 12, md: 9 },
           }}
         >
+          {offline&&<Alert severity="warning" sx={{mb:2}}>This browser is offline. Reconnect before saving or checking in. TNGOS cannot confirm changes while offline.</Alert>}
           {role==='admin'&&<CommissionReportAlerts/>}
           {role==='admin'&&mode==='command'&&<CommandCenter onNavigate={setPage}/>}
-          <Box key={page} className={mode==='command'?'tng-command-page':undefined}><WorkspaceBoundary workspace={page}><Suspense fallback={<WorkspaceLoading/>}>{children}</Suspense></WorkspaceBoundary></Box>
+          {!preferences.focus&&<WorkspaceGuide key={`guide-${page}`} role={role} page={page} onNavigate={setPage} pinned={preferences.pinned.includes(page)} onPin={pin} onModules={()=>setModulesOpen(true)}/>}
+          <Box key={page} className={`tng-module-surface ${mode==='command'?'tng-command-page':''}`}><WorkspaceBoundary workspace={page}><Suspense fallback={<WorkspaceLoading/>}>{children}</Suspense></WorkspaceBoundary></Box>
         </Box>
       </Box>
     </Box></ThemeProvider>

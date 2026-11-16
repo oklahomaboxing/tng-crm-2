@@ -18,6 +18,15 @@ export default createTheme({
   MuiTableRow:{styleOverrides:{root:{'&.MuiTableRow-hover:hover':{backgroundColor:'#f7f9fc'}}}},
   MuiDialog:{styleOverrides:{paper:{borderRadius:20,border:`1px solid ${line}`,boxShadow:'0 28px 100px #0b102b33'}}},
   MuiAlert:{styleOverrides:{root:{borderRadius:12}}},
+  MuiTabs:{styleOverrides:{root:{minHeight:48,borderBottom:`1px solid ${line}`},indicator:{height:3,borderRadius:3}}},
+  MuiTab:{styleOverrides:{root:{textTransform:'none',fontWeight:750,minHeight:48,minWidth:100}}},
+  MuiAccordion:{styleOverrides:{root:{backgroundImage:'none',boxShadow:'none',border:`1px solid ${line}`,'&:before':{display:'none'}}}},
+  MuiAccordionSummary:{styleOverrides:{root:{minHeight:56},content:{marginBlock:14}}},
+  MuiMenu:{styleOverrides:{paper:{border:`1px solid ${line}`,borderRadius:14,boxShadow:'0 16px 48px #0b102b1c'}}},
+  MuiMenuItem:{styleOverrides:{root:{minHeight:44,fontSize:14}}},
+  MuiDialogTitle:{styleOverrides:{root:{fontWeight:800,padding:'24px 24px 16px'}}},
+  MuiDialogActions:{styleOverrides:{root:{padding:'16px 24px',gap:8}}},
+  MuiTablePagination:{styleOverrides:{toolbar:{minHeight:56},selectLabel:{fontSize:13},displayedRows:{fontSize:13}}},
   MuiSkeleton:{styleOverrides:{root:{backgroundColor:'#e3e8f0'}}},
  }
 });

@@ -92,7 +92,7 @@ const ALIASES = {
  'Event Check-In':'door scanner fight night scan tickets checkin check in',
  'TNG Apparel':'shirts tee tshirt clothing shop store preorder',
  'Promoter':'matchmaker matchmaking pro boxers scouting signed pdf download contracts',
- 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget expenses',
+ 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget expenses recap paid purses payouts deductions profit loss commission',
  'Marketing Center':'sms txt text email members marketing campaigns',
  'Members':'activate activation reset email resend customer profile',
  'Renewal Reminders':'sms txt text expired expiring membership reminders renew',
@@ -108,11 +108,13 @@ export function dailyWorkspaces(role) {
  const chosen=preferred.filter(page=>allowed.includes(page));
  return chosen.length?chosen:allowed.slice(0,4);
 }
+export const EVENT_SECTIONS={overview:0,'fight-card':1,contracts:2,compliance:3,checklist:4,medicals:5,expenses:6,sponsors:7,settings:8,tickets:9,matchmaking:10,fighters:11,'fight-night':12,recap:13};
 export function workspaceSlug(page) { return page.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 export function workspaceHash(page, target = {}) {
   const params = new URLSearchParams();
   if (page === "Members" && Number.isSafeInteger(Number(target.memberId)) && Number(target.memberId) > 0) params.set("member", String(target.memberId));
   if (page === "TNG BOXING EVENTS" && Number.isSafeInteger(Number(target.eventId)) && Number(target.eventId) > 0) params.set("event", String(target.eventId));
+  if(page==='TNG BOXING EVENTS'&&Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,target.eventSection))params.set('section',target.eventSection);
   return `#/${workspaceSlug(page)}${params.size ? `?${params}` : ""}`;
 }
 export function readWorkspace(hash, role) {
@@ -125,5 +127,7 @@ export function readWorkspace(hash, role) {
     const value = Number(params.get(key));
     if (Number.isSafeInteger(value) && value > 0 && ((key === "member" && page === "Members") || (key === "event" && page === "TNG BOXING EVENTS"))) target[name] = value;
   }
+  const section=params.get('section');
+  if(page==='TNG BOXING EVENTS'&&Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,section)&&(section!=='recap'||['admin','staff'].includes(role)))target.eventSection=section;
   return { page, target };
 }

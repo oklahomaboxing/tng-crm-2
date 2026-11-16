@@ -457,7 +457,7 @@ async function submitPasswordReset() {
   function logout() {
     const oldToken=localStorage.getItem('token');
     if(oldToken)fetch(`${API}/api/auth/logout`,{method:'POST',headers:{Authorization:`Bearer ${oldToken}`},keepalive:true}).catch(()=>{});
-    const preferences=Object.fromEntries(['tng_assistant_open','tng_assistant_speak','tng_assistant_wake','tng_remember_device','tng_session_preference_version','tng_checkin_kiosk_device'].map(key=>[key,localStorage.getItem(key)]));
+    const preferences=Object.fromEntries(['tng_display_mode_v1','tng_workspace_preferences_v1','tng_assistant_open','tng_assistant_speak','tng_assistant_wake','tng_remember_device','tng_session_preference_version','tng_checkin_kiosk_device'].map(key=>[key,localStorage.getItem(key)]));
     localStorage.clear();
     for(const [key,value] of Object.entries(preferences))if(value!==null)localStorage.setItem(key,value);
     for(const key of ['fighterPreviewToken','memberPreviewToken'])sessionStorage.removeItem(key);
@@ -872,7 +872,7 @@ return (
         <ManagerPortal />
       )}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
-      {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents initialEventId={navigationTarget.eventId} />}
+      {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents initialEventId={navigationTarget.eventId} initialSection={navigationTarget.eventSection} />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
