@@ -63,3 +63,8 @@
 .tng-shell[data-density="compact"] .tng-workspace-guide {margin-bottom:18px;}
 @media(max-width:600px){.tng-module-surface .MuiDialogActions-root{flex-wrap:wrap;gap:8px;}.tng-module-surface .MuiTabs-root{max-width:100%;}}
 @media print {.tng-workspace-guide,.tng-skip-link{display:none!important;}.tng-shell .MuiDrawer-root{display:none!important;}.tng-shell .tng-main{padding:0!important;}.tng-shell:has(.tng-main) > .MuiBox-root{margin-left:0!important;}}
+
+/* Event workflow uses the same focused controls in Standard and Command modes. */
+.tng-command .tng-event-command {background:linear-gradient(125deg,#102d43ed,#081726f5);border-color:#66dfff45;box-shadow:0 12px 36px #0004;}
+.tng-command .tng-event-step {border-color:#66dfff40;background:#12354b80;color:#e6f4ff;}
+.tng-command .tng-event-step:hover {border-color:#66dfff;background:#16435caa;}

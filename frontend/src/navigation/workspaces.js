@@ -48,10 +48,12 @@ export const ROLE_MENUS = {
     "Manager Portal",
   ],
   rep: ["My Sales"],
+  investor: ["Investor Portal"],
+  sponsor: ["Sponsor Portal"],
 };
 
 export const WORKSPACE_GROUPS = [
-  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview'] },
+  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal'] },
   { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer'] },
   { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
@@ -59,6 +61,8 @@ export const WORKSPACE_GROUPS = [
   { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
 ];
 export const WORKSPACE_HINTS = {
+  "Investor Portal": "Your assigned event updates and approved business summaries",
+  "Sponsor Portal": "Your assigned sponsorship events and TNG updates",
   Dashboard: 'Daily membership, attendance, sales and event overview',
   'Text Inbox': 'Incoming SMS, unread conversations and customer service replies',
   'Call Center': 'Inbound phone calls, marketing transfers, callbacks and ticket checkout texts',
@@ -108,7 +112,7 @@ export function dailyWorkspaces(role) {
  const chosen=preferred.filter(page=>allowed.includes(page));
  return chosen.length?chosen:allowed.slice(0,4);
 }
-export const EVENT_SECTIONS={overview:0,'fight-card':1,contracts:2,compliance:3,checklist:4,medicals:5,expenses:6,sponsors:7,settings:8,tickets:9,matchmaking:10,fighters:11,'fight-night':12,recap:13};
+export const EVENT_SECTIONS={overview:0,'fight-card':1,contracts:2,compliance:3,checklist:4,medicals:5,expenses:6,sponsors:7,settings:8,tickets:9,matchmaking:10,fighters:11,'fight-night':12,recap:13,offers:14,'matchmaker-desk':15};
 export function workspaceSlug(page) { return page.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 export function workspaceHash(page, target = {}) {
   const params = new URLSearchParams();

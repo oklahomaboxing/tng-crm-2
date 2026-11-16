@@ -1,3 +1,4 @@
+import MatchmakerDesk from "./MatchmakerDesk.jsx";
 import FighterWelcomeLetter from "../components/contracts/FighterWelcomeLetter.jsx";
 import { openContractFile } from "../utils/contractFiles";
 import React, { useEffect, useMemo, useState } from "react";
@@ -17,6 +18,7 @@ import {
   Divider,
   Grid,
   MenuItem,
+  Menu,
   Select,
   Stack,
   Tab,
@@ -32,7 +34,6 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import { buildOfficialContractHtml } from "../utils/officialContract";
 import EventCommandCenter from "./EventCommandCenter.jsx";
-import EventHomeNavigation from "./EventHomeNavigation.jsx";
 import EventFightCardPage from "./EventFightCardPage.jsx";
 import EventContractsPage from "./EventContractsPage.jsx";
 import EventMedicalsPage from "./EventMedicalsPage.jsx";
@@ -90,6 +91,8 @@ const eventPageTitles = {
   11: "Fighters",
   12: "Fight Night & Results",
   13: "Event Recap",
+  14: "Offers",
+  15: "Matchmaker Desk",
 };
 
 function fighterLocation(fighter) {
@@ -109,6 +112,9 @@ export default function EventWorkspace({
 }) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState(initialTab);
+  const [toolsAnchor, setToolsAnchor] = useState(null);
+  const [showReadiness, setShowReadiness] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   const [cancelBoutOpen, setCancelBoutOpen] = useState(false);
   const [cancelBout, setCancelBout] = useState(null);
   const [cancelBoutNotes, setCancelBoutNotes] = useState("");
@@ -1348,68 +1354,29 @@ export default function EventWorkspace({
           </Alert>
         )}
 
-        <Box><FighterWelcomeLetter key={`welcome-${eventId}`} eventId={eventId} /></Box>
-
-        <Box component="nav" aria-label="Event workspace navigation" sx={{ bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.5 }}>
-          {[["Overview", [0]], ["Competition", [1, 10, 2, 11]], ["Operations", [5, 3, 4]], ["Business", [13, 9, 7, 6]], ["Show", [12, 8]]].map(([group, ids]) => <Box key={group} sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: .5, py: .5 }}><Typography variant="caption" sx={{ width: 90, color: "text.secondary", fontWeight: 800, pl: 1 }}>{group}</Typography>{ids.filter(id => id !== 13 || ["admin", "staff"].includes(localStorage.getItem("role"))).map(id => <Button key={id} size="small" aria-current={tab === id ? "page" : undefined} variant={tab === id ? "contained" : "text"} color={tab === id ? "primary" : "inherit"} onClick={() => setTab(id)}>{id === 0 ? "Overview" : eventPageTitles[id]}</Button>)}</Box>)}
+        <Box component="nav" aria-label="Event workspace navigation" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
+          {[0,10,14,15,1,2,9].map(id => <Button key={id} aria-current={tab === id ? 'page' : undefined} variant={tab === id ? 'contained' : 'text'} onClick={() => setTab(id)}>{id === 0 ? 'Overview' : eventPageTitles[id]}</Button>)}
+          <Button aria-haspopup="menu" aria-expanded={!!toolsAnchor} onClick={e=>setToolsAnchor(e.currentTarget)}>More event tools</Button>
+          <Menu anchorEl={toolsAnchor} open={!!toolsAnchor} onClose={()=>setToolsAnchor(null)}>
+            {[11,5,3,4,13,7,6,12,8].filter(id=>id!==13||['admin','staff'].includes(localStorage.getItem('role'))).map(id=><MenuItem key={id} selected={tab===id} onClick={()=>{setTab(id);setToolsAnchor(null);}}>{eventPageTitles[id]}</MenuItem>)}
+          </Menu>
         </Box>
 
-        {tab === 0 ? (
-          <Stack spacing={3}>
-            <EventCommandCenter
-              data={data}
-              setTab={setTab}
-            />
+        {tab === 0 && <Stack spacing={2}>
+          <Card className="tng-event-command" variant="outlined"><CardContent>
+            <Typography variant="overline" color="primary" sx={{letterSpacing:2}}>EVENT COMMAND / {event.name}</Typography>
+            <Typography variant="h5" fontWeight={900}>Build the next fight night</Typography>
+            <Typography color="text.secondary" sx={{mt:1,mb:2}}>Find the right matchup, agree the terms, then prepare the card and contracts. {activeBouts.length} current bouts on this event.</Typography>
+            <Box sx={{display:'grid',gridTemplateColumns:{xs:'1fr',sm:'repeat(2,minmax(0,1fr))',lg:'repeat(4,minmax(0,1fr))'},gap:2}}>
+              {[[10,'01','Find a match','Search fighters or generate match suggestions.'],[14,'02','Review offers','Track responses and add accepted matches to the card.'],[1,'03','Prepare the card','Review both corners, order and bout terms.'],[2,'04','Send contracts','Prepare documents and track signatures.']].map(([id,step,title,description])=><Box key={id}><Button className="tng-event-step" fullWidth variant="outlined" onClick={()=>setTab(id)} sx={{height:'100%',p:2,justifyContent:'flex-start',textAlign:'left',alignItems:'flex-start'}}><Box><Typography variant="caption" color="text.secondary">STEP {step}</Typography><Typography fontWeight={900}>{title}</Typography><Typography variant="body2" color="text.secondary" sx={{textTransform:'none',mt:.5}}>{description}</Typography></Box></Button></Box>)}
+            </Box>
+          </CardContent></Card>
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap"><Button variant="outlined" onClick={()=>setShowReadiness(v=>!v)} aria-expanded={showReadiness}>{showReadiness?'Hide':'Show'} event readiness</Button><Button variant="outlined" onClick={()=>setShowWelcome(v=>!v)} aria-expanded={showWelcome}>{showWelcome?'Hide':'Open'} fighter welcome letter</Button></Stack>
+          {showReadiness&&<EventCommandCenter data={data} setTab={setTab}/>}
+          {showWelcome&&<FighterWelcomeLetter key={`welcome-${eventId}`} eventId={eventId}/>}
+        </Stack>}
 
-            <EventHomeNavigation
-              setTab={setTab}
-            />
-          </Stack>
-        ) : (
-          <Card
-            sx={{
-              borderRadius: 4,
-              border: "1px solid",
-              borderColor: "divider",
-              boxShadow: "0 10px 30px rgba(15,23,42,.05)",
-            }}
-          >
-            <CardContent>
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                justifyContent="space-between"
-                alignItems={{ xs: "stretch", md: "center" }}
-                spacing={2}
-              >
-                <Box>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    fontWeight={900}
-                  >
-                    EVENT OPERATIONS
-                  </Typography>
-
-                  <Typography
-                    variant="h4"
-                    fontWeight={950}
-                  >
-                    {eventPageTitles[tab] || "Event Operations"}
-                  </Typography>
-                </Box>
-
-                <Button
-                  variant="outlined"
-                  onClick={() => setTab(0)}
-                  sx={{ fontWeight: 900 }}
-                >
-                  Event overview
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-
+        {tab === 15 && <MatchmakerDesk eventId={eventId} event={event} onOpenOffers={()=>setTab(14)}/>}
         {tab === 13 && ["admin", "staff"].includes(localStorage.getItem("role")) && <EventRecap key={eventId} eventId={eventId} onOpenTickets={() => setTab(9)} onOpenExpenses={() => setTab(6)} onOpenContracts={() => setTab(2)} />}
         {tab === 8 && (
           <EventSettingsPage
@@ -1560,8 +1527,12 @@ export default function EventWorkspace({
         )}
 
         {/* MATCHMAKING */}
-        {tab === 10 && (
+        {(tab === 10 || tab === 14) && (
           <EventMatchmakingPage
+            view={tab === 14 ? "offers" : "find"}
+            onOpenCard={()=>setTab(1)}
+            onOpenContracts={()=>setTab(2)}
+            onOpenOffers={()=>setTab(14)}
             eventId={eventId}
             event={event}
             bouts={bouts}

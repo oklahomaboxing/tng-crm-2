@@ -57,6 +57,7 @@ const EventCalendar = lazy(() => import("./pages/EventCalendar.jsx"));
 const TngBoxingEvents = lazy(() => import('./pages/TngBoxingEvents.jsx'));
 const PublicFightCalendar = lazy(() => import("./pages/PublicFightCalendar.jsx"));
 const FighterRegistration = lazy(() => import("./pages/FighterRegistration.jsx"));
+const PartnerPortal = lazy(() => import("./pages/PartnerPortal.jsx"));
 const UserManagement = lazy(() => import("./pages/UserManagement.jsx"));
 const QRReferrals = lazy(() => import("./pages/QRReferrals.jsx"));
 const MarketingCenter = lazy(() => import("./pages/MarketingCenter.jsx"));
@@ -73,6 +74,8 @@ function landingPageForRole(role) {
   if (role === "staff") return "Member Check-In";
   if (role === "matchmaker") return "Promoter";
   if (role === "manager") return "Manager Portal";
+  if (role === "investor") return "Investor Portal";
+  if (role === "sponsor") return "Sponsor Portal";
   return "Dashboard";
 }
 
@@ -874,6 +877,7 @@ return (
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents initialEventId={navigationTarget.eventId} initialSection={navigationTarget.eventSection} />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
+      {((page === "Investor Portal" && role === "investor") || (page === "Sponsor Portal" && role === "sponsor")) && <PartnerPortal/>}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
       {page === "QR Referrals" && role !== "rep" && <QRReferrals />}

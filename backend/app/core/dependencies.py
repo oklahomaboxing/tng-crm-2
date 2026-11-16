@@ -1,4 +1,4 @@
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.auth import decode_token
@@ -7,6 +7,7 @@ from app.models import User
 
 
 def current_user(
+    request: Request,
     authorization: str = Header(default=""),
     db: Session = Depends(get_db),
 ) -> User:
@@ -54,6 +55,11 @@ def current_user(
     from app.account_security import valid_session
     if not valid_session(payload, user, db):
         raise HTTPException(status_code=401, detail="Session expired. Sign in again.")
+    if user.role in {"investor", "sponsor"}:
+        path = request.url.path
+        allowed = path in {"/api/partners/portal", "/api/me", "/api/auth/remember-device", "/api/auth/forget-device", "/api/auth/logout", "/api/auth/devices"} or path.startswith("/api/auth/security/") or path.startswith("/api/auth/devices/")
+        if not allowed:
+            raise HTTPException(status_code=403, detail="This partner account can access only its portal and account security")
     return user
 
 

@@ -51,3 +51,57 @@ class MatchmakingLibraryTests(unittest.TestCase):
   c=self.contract('signed');self.db.add(BoxingSignedContractDocument(contract_id=c.id,file_name='signed.pdf',file_data=b'%PDF-1.4\n%%EOF',file_size=14));self.db.commit()
   self.assertEqual(self.client.get('/api/boxing/signed-contracts').status_code,401)
   r=self.client.get('/api/boxing/signed-contracts',headers=self.headers());self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['contracts'][0]['event_id'],self.event.id)
+
+ def accepted_offer(self,fighter=None,opponent=None,**extra):
+  from app.matchmaker.models import BoxingFightOffer
+  offer=BoxingFightOffer(event_id=self.event.id,fighter_id=(fighter or self.red).id,opponent_id=(opponent or self.blue).id,status='accepted',proposed_weight=135,rounds=4,bout_type='pro',proposed_purse=1000,**extra);self.db.add(offer);self.db.commit();return offer
+ def convert(self,offer):return self.client.post(f'/api/boxing/offers/{offer.id}/convert',headers=self.headers(),json={'corner':'red'})
+ def test_accepted_offers_reuse_draft_and_attach_both_corners_without_delivery(self):
+  r=self.client.post('/api/boxing/bouts',headers=self.headers(),json=self.payload());bout_id=r.json()['id']
+  red=self.accepted_offer();blue=self.accepted_offer(self.blue,self.red)
+  with patch('requests.post') as send:
+   one=self.convert(red);self.assertEqual(one.status_code,200,one.text)
+   two=self.convert(blue);self.assertEqual(two.status_code,200,two.text)
+   repeat=self.convert(red);self.assertEqual(repeat.status_code,200,repeat.text);self.assertTrue(repeat.json()['already_converted']);send.assert_not_called()
+  self.db.expire_all();self.assertEqual(self.db.query(BoxingBout).filter_by(event_id=self.event.id).count(),1)
+  contracts=self.db.query(BoxingContract).filter_by(bout_id=bout_id).all();self.assertEqual({(c.fighter_id,c.corner) for c in contracts},{(self.red.id,'red'),(self.blue.id,'blue')})
+  bout=self.db.get(BoxingBout,bout_id);self.assertEqual(bout.red_purse,1000);self.assertEqual(bout.blue_purse,1000)
+ def test_accepted_offer_creates_one_bout_when_no_draft_exists(self):
+  offer=self.accepted_offer();one=self.convert(offer);self.assertEqual(one.status_code,200,one.text);self.assertEqual(self.convert(offer).status_code,200);self.assertEqual(self.db.query(BoxingBout).count(),1);self.assertEqual(self.db.query(BoxingContract).count(),1)
+ def test_draft_terms_mismatch_does_not_change_card(self):
+  body={**self.payload(),'rounds':6};self.client.post('/api/boxing/bouts',headers=self.headers(),json=body);offer=self.accepted_offer();r=self.convert(offer);self.assertEqual(r.status_code,409,r.text);self.assertEqual(self.db.query(BoxingContract).count(),0);self.assertEqual(self.db.query(BoxingBout).first().rounds,6)
+ def test_existing_contract_is_never_overwritten_by_conversion(self):
+  c=self.contract('signed');bout=self.db.get(BoxingBout,c.bout_id);bout.rounds=4;bout.weight_agreed=135;bout.bout_type='pro';c.gross_purse=555;self.db.commit();offer=self.accepted_offer();r=self.convert(offer);self.assertEqual(r.status_code,409,r.text);self.db.refresh(c);self.assertEqual(c.status,'signed');self.assertEqual(c.gross_purse,555)
+ def test_other_opponent_booking_is_not_reused(self):
+  third=BoxingFighter(legal_name='Other Opponent');self.db.add(third);self.db.flush();self.db.add(BoxingBout(event_id=self.event.id,red_fighter_id=self.red.id,blue_fighter_id=third.id,status='draft',rounds=4,weight_agreed=135));self.db.commit();r=self.convert(self.accepted_offer());self.assertEqual(r.status_code,409,r.text);self.assertEqual(self.db.query(BoxingContract).count(),0)
+ def test_conversion_requires_staff_and_accepted_status(self):
+  offer=self.accepted_offer();path=f'/api/boxing/offers/{offer.id}/convert'
+  self.assertEqual(self.client.post(path,json={}).status_code,401)
+  for role in ('member','fighter','rep'):self.assertEqual(self.client.post(path,headers=self.headers(role),json={}).status_code,403)
+  offer.status='sent';self.db.commit();self.assertEqual(self.convert(offer).status_code,400);self.assertEqual(self.db.query(BoxingBout).count(),0)
+ @unittest.skipUnless(support.TEST_DATABASE_URL,'Requires isolated PostgreSQL')
+ def test_concurrent_offer_conversion_is_idempotent(self):
+  from concurrent.futures import ThreadPoolExecutor
+  from threading import Barrier
+  from app.database import SessionLocal
+  from app.main import app
+  offer=self.accepted_offer();offer_id=offer.id;gate=Barrier(2)
+  def separate_db():
+   with SessionLocal() as db:yield db
+  app.dependency_overrides[get_db]=separate_db
+  def run(_):
+   gate.wait();r=self.client.post(f'/api/boxing/offers/{offer_id}/convert',headers=self.headers(),json={});return (r.status_code,r.json())
+  with ThreadPoolExecutor(max_workers=2) as pool:statuses=list(pool.map(run,range(2)))
+  self.assertEqual([r[0] for r in statuses],[200,200],statuses);self.assertEqual(self.db.query(BoxingBout).count(),1);self.assertEqual(self.db.query(BoxingContract).count(),1)
+ def test_initial_template_failure_rolls_back_entire_conversion(self):
+  from app.matchmaker.models import BoxingContractTemplateVersion
+  from sqlalchemy import event
+  from sqlalchemy.orm import Session
+  offer=self.accepted_offer()
+  def fail_template(session,flush_context,instances):
+   if any(isinstance(row,BoxingContractTemplateVersion) for row in session.new):raise RuntimeError('fixture template failure')
+  event.listen(Session,'before_flush',fail_template)
+  try:
+   with self.assertRaisesRegex(RuntimeError,'fixture template failure'):self.convert(offer)
+  finally:event.remove(Session,'before_flush',fail_template)
+  self.db.expire_all();self.assertEqual(self.db.query(BoxingBout).count(),0);self.assertEqual(self.db.query(BoxingContract).count(),0);self.assertIsNone(self.db.get(type(offer),offer.id).bout_id)

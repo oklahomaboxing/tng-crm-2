@@ -6,6 +6,7 @@ export default function EventMatchmakingPage({
   event,
   bouts,
   onRefresh,
+  view, onOpenCard, onOpenContracts, onOpenOffers,
 }) {
   return (
     <EventFightCardBuilder
@@ -13,6 +14,7 @@ export default function EventMatchmakingPage({
       event={event}
       bouts={bouts}
       onRefresh={onRefresh}
+      view={view} onOpenCard={onOpenCard} onOpenContracts={onOpenContracts} onOpenOffers={onOpenOffers}
     />
   );
 }

@@ -2468,12 +2468,12 @@ def create_user_account(
             detail="Name, email, and password are required",
         )
 
-    if role not in ["admin", "staff", "rep", "manager", "matchmaker"]:
+    if role not in ["admin", "staff", "rep", "manager", "matchmaker", "investor", "sponsor"]:
         raise HTTPException(
             status_code=400,
             detail=(
                 "Role must be admin, staff, rep, manager, "
-                "or matchmaker"
+                "matchmaker, investor, or sponsor"
             ),
         )
 
@@ -2574,12 +2574,12 @@ def update_user_account(
             detail="Name and email are required",
         )
 
-    if role not in ["admin", "staff", "rep", "manager", "matchmaker"]:
+    if role not in ["admin", "staff", "rep", "manager", "matchmaker", "investor", "sponsor"]:
         raise HTTPException(
             status_code=400,
             detail=(
                 "Role must be admin, staff, rep, manager, "
-                "or matchmaker"
+                "matchmaker, investor, or sponsor"
             ),
         )
 

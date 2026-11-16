@@ -44,3 +44,17 @@ test('search and daily tools never expand role access',()=>{
  }
  assert.deepEqual(searchWorkspaces('staff','security'),[]);assert.deepEqual(searchWorkspaces('rep','shirts'),[]);
 });
+
+test('event offer desk supports direct links for authorized event staff',()=>{
+ const hash=workspaceHash('TNG BOXING EVENTS',{eventId:3,eventSection:'offers'});
+ for(const role of ['admin','staff','matchmaker'])assert.deepEqual(readWorkspace(hash,role),{page:'TNG BOXING EVENTS',target:{eventId:3,eventSection:'offers'}});
+ assert.equal(readWorkspace(hash,'member'),null);
+});
+
+test('investor and sponsor logins have isolated portal navigation',()=>{
+ for(const [role,page] of [['investor','Investor Portal'],['sponsor','Sponsor Portal']]){
+  assert.deepEqual(ROLE_MENUS[role],[page]);assert.equal(readWorkspace(workspaceHash(page),role).page,page);
+  for(const forbidden of ['Dashboard','Members','Reports','Promoter','TNG BOXING EVENTS','User Management'])assert.equal(readWorkspace(workspaceHash(forbidden),role),null);
+ }
+ assert.equal(readWorkspace('#/investor-portal','sponsor'),null);assert.equal(readWorkspace('#/sponsor-portal','investor'),null);
+});

@@ -1,7 +1,8 @@
-import SignedContractLibrary from "../components/contracts/SignedContractLibrary.jsx";
+import {isCurrentBout} from "../utils/boutCard";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -52,7 +53,7 @@ function fighterRecord(fighter) {
     fighter?.pro_record ||
     fighter?.record ||
     fighter?.boxing_record ||
-    "0-0"
+    "Not recorded"
   );
 }
 
@@ -112,8 +113,24 @@ export default function EventFightCardBuilder({
   event,
   bouts = [],
   onRefresh,
+  view = "all", onOpenCard, onOpenContracts, onOpenOffers,
 }) {
   const [fighters, setFighters] = useState([]);
+  const [reviewAction, setReviewAction] = useState(null);
+  const actionLock = useRef(false);
+  async function confirmAction() {
+    if (actionLock.current || !reviewAction) return;
+    actionLock.current = true;
+    try { await reviewAction.run(); } finally { actionLock.current = false; setReviewAction(null); }
+  }
+  function reviewManualOffer() {
+    if (!manual.fighter_id || !manual.opponent_id || Number(manual.fighter_id)===Number(manual.opponent_id)) { setError('Choose two different fighters.'); return; }
+    setReviewAction({title:'Review fight offer', action:'Send offer', recipient:fighterName(fighterMap[manual.fighter_id]), opponent:fighterName(fighterMap[manual.opponent_id]), terms:`${manual.rounds || 4} rounds · ${manual.proposed_weight || 'Unspecified'} lb · Purse ${money(manual.proposed_purse)} · Commission ${manual.ticket_commission_percent || 0}%`, details:`Travel ${money(manual.travel_expense)} · Hotel nights ${manual.hotel_nights || 0} · Per diem ${money(manual.per_diem_daily)} × ${manual.per_diem_days || 0} days`, run:createManualOffer});
+  }
+  function reviewAutoOffer(proposal) {
+    const terms=termsFor(proposal);
+    setReviewAction({title:'Review fight offer',action:'Send offer',recipient:fighterName(proposal.red_fighter),opponent:fighterName(proposal.blue_fighter),terms:`${terms.rounds || 4} rounds · ${terms.weight || proposal.proposed_weight || 'Unspecified'} lb · Purse ${money(terms.purse)} · Commission ${terms.ticket_commission_percent || 0}%`,run:()=>sendAutoOffer(proposal)});
+  }
   const [cardProposal,setCardProposal]=useState(null),[cardTerms,setCardTerms]=useState({rounds:4,weight:'',red_purse:0,blue_purse:0});
   const cardLock=useRef(false);
   useEffect(()=>{setCardProposal(null);},[eventId]);
@@ -129,7 +146,8 @@ export default function EventFightCardBuilder({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const [autoOpen, setAutoOpen] = useState(false);
+  const [autoOpen, setAutoOpen] = useState(view === "find");
+  useEffect(()=>{if(view === "find") {setAutoOpen(true);setManualOpen(false);}},[view]);
   const [manualOpen, setManualOpen] = useState(false);
 
   const [desiredBouts, setDesiredBouts] = useState(
@@ -230,11 +248,7 @@ export default function EventFightCardBuilder({
 
   const activeBouts = useMemo(
     () =>
-      bouts.filter(
-        (bout) =>
-          bout.status !== "cancelled" &&
-          bout.status !== "void"
-      ),
+      bouts.filter(isCurrentBout),
     [bouts]
   );
 
@@ -574,14 +588,6 @@ export default function EventFightCardBuilder({
   }
 
   async function convertOffer(offer) {
-    if (
-      !window.confirm(
-        `Create the official bout and contract from offer #${offer.id}?`
-      )
-    ) {
-      return;
-    }
-
     setWorking(true);
     setError("");
     setMessage("");
@@ -631,7 +637,18 @@ export default function EventFightCardBuilder({
 
   return (
     <Stack spacing={2} sx={{ mb: 3 }}>
-      <Stack direction="row" spacing={1} sx={{justifyContent:'flex-end'}}><SignedContractLibrary eventId={eventId}/></Stack>
+      <Dialog open={!!reviewAction} onClose={()=>{if(!working&&!actionLock.current)setReviewAction(null);}} aria-labelledby="offer-review-title" fullWidth maxWidth="sm">
+        <DialogTitle id="offer-review-title">{reviewAction?.title}</DialogTitle>
+        <DialogContent><Stack spacing={2} sx={{pt:1}}>
+          <Typography variant="overline">{event?.name || 'Current event'}</Typography>
+          <Typography variant="h6">{reviewAction?.recipient} vs {reviewAction?.opponent}</Typography>
+          <Typography>{reviewAction?.terms}</Typography>
+          {reviewAction?.details&&<Typography color="text.secondary">{reviewAction.details}</Typography>}
+          <Alert severity="info">{reviewAction?.convert ? 'Creates the bout and prepares a contract from the accepted terms. Open Contracts afterward to review and send the document.' : `This sends an offer to ${reviewAction?.recipient}. The opponent needs their own agreement. No bout is confirmed by sending this offer.`}</Alert>
+        </Stack></DialogContent>
+        <DialogActions><Button disabled={working} onClick={()=>setReviewAction(null)}>Back</Button><Button variant="contained" disabled={working} onClick={confirmAction}>{working?'Processing…':reviewAction?.action}</Button></DialogActions>
+      </Dialog>
+
       <Dialog open={!!cardProposal} onClose={()=>{if(!working)setCardProposal(null);}} fullWidth maxWidth="sm"><DialogTitle>Add proposed match to the fight card</DialogTitle><DialogContent><Stack spacing={2} sx={{pt:1}}><Typography variant="h6">{fighterName(cardProposal?.red_fighter)} vs {fighterName(cardProposal?.blue_fighter)}</Typography><Alert severity="info">Creates a draft on this event's card. Fighter acceptance, contracts and commission approval remain separate.</Alert><TextField select label="Rounds" value={cardTerms.rounds} onChange={e=>setCardTerms({...cardTerms,rounds:e.target.value})}>{[4,6,8,10,12].map(r=><MenuItem key={r} value={r}>{r}</MenuItem>)}</TextField>{[['weight','Agreed weight (lb)'],['red_purse','Red corner purse ($)'],['blue_purse','Blue corner purse ($)']].map(([key,label])=><TextField key={key} label={label} type="number" value={cardTerms[key]} onChange={e=>setCardTerms({...cardTerms,[key]:e.target.value})}/>)}{error&&<Alert severity="error">{error}</Alert>}</Stack></DialogContent><DialogActions><Button disabled={working} onClick={()=>setCardProposal(null)}>Cancel</Button><Button variant="contained" disabled={working} onClick={addProposalToCard}>Add draft to card</Button></DialogActions></Dialog>
       <Card
         sx={{
@@ -656,32 +673,30 @@ export default function EventFightCardBuilder({
                 fontWeight={950}
                 letterSpacing={1.3}
               >
-                FIGHT CARD BUILDER
+                {view === "offers" ? "OFFER DESK" : "MATCHMAKING"}
               </Typography>
 
               <Typography
                 variant="h5"
                 fontWeight={950}
               >
-                {event?.name ||
-                  "Current Event"}
+                {view === "offers" ? "Review fight offers" : "Find the next matchup"}
               </Typography>
 
               <Typography
                 color="text.secondary"
                 sx={{ mt: 0.5 }}
               >
-                Match fighters, send offers and
-                turn accepted deals into official
-                bouts without leaving this event.
+                {view === "offers" ? "Review negotiations. Add accepted offers to the card, then open contracts." : "Choose fighters and agree the bout terms. Suggestions stay drafts until you take action."}
               </Typography>
             </Box>
 
             <Stack
-              direction="row"
+              direction={{xs:"column",sm:"row"}}
               spacing={1}
               useFlexGap
               flexWrap="wrap"
+              sx={{'& .MuiButton-root':{whiteSpace:'nowrap'}}}
             >
               <Button
                 variant="outlined"
@@ -694,100 +709,37 @@ export default function EventFightCardBuilder({
                 Refresh
               </Button>
 
-              <Button
+              {view !== "offers" && <Button
                 variant="outlined"
                 startIcon={<AddRoundedIcon />}
                 onClick={() =>
-                  setManualOpen(
-                    (current) => !current
-                  )
+                  (setManualOpen(true), setAutoOpen(false))
                 }
               >
-                Manual Match
-              </Button>
+                Choose fighters
+              </Button>}
 
-              <Button
+              {view !== "offers" && <Button
                 variant="contained"
                 color="error"
                 startIcon={
                   <AutoAwesomeRoundedIcon />
                 }
                 onClick={() =>
-                  setAutoOpen(
-                    (current) => !current
-                  )
+                  (setAutoOpen(true), setManualOpen(false))
                 }
               >
-                Auto-Match
-              </Button>
+                Find suggestions
+              </Button>}
+              {onOpenOffers && view !== "offers" && <Button onClick={onOpenOffers}>Review offers ({pendingOffers.length})</Button>}
+              {onOpenCard && <Button onClick={onOpenCard}>Open fight card</Button>}
+              {onOpenContracts && view === "offers" && <Button onClick={onOpenContracts}>Open contracts</Button>}
             </Stack>
           </Stack>
 
-          <Grid
-            container
-            spacing={1.5}
-            sx={{ mt: 1 }}
-          >
-            <Grid item xs={6} md={3}>
-              <Chip
-                label={`${activeBouts.length} Official Bouts`}
-                color={
-                  activeBouts.length
-                    ? "success"
-                    : "default"
-                }
-                sx={{
-                  width: "100%",
-                  fontWeight: 900,
-                }}
-              />
-            </Grid>
-
-            <Grid item xs={6} md={3}>
-              <Chip
-                label={`${pendingOffers.length} Open Offers`}
-                color={
-                  pendingOffers.length
-                    ? "info"
-                    : "default"
-                }
-                sx={{
-                  width: "100%",
-                  fontWeight: 900,
-                }}
-              />
-            </Grid>
-
-            <Grid item xs={6} md={3}>
-              <Chip
-                label={`${acceptedReady.length} Ready to Convert`}
-                color={
-                  acceptedReady.length
-                    ? "success"
-                    : "default"
-                }
-                sx={{
-                  width: "100%",
-                  fontWeight: 900,
-                }}
-              />
-            </Grid>
-
-            <Grid item xs={6} md={3}>
-              <Chip
-                label={`${countersWaiting.length} Counters Waiting`}
-                color={
-                  countersWaiting.length
-                    ? "warning"
-                    : "default"
-                }
-                sx={{
-                  width: "100%",
-                  fontWeight: 900,
-                }}
-              />
-            </Grid>
-          </Grid>
+          <Box sx={{display:'grid',gridTemplateColumns:{xs:'repeat(2,minmax(0,1fr))',md:'repeat(4,minmax(0,1fr))'},gap:1,mt:2}}>
+            {[[activeBouts.length,'Card bouts'],[pendingOffers.length,'Open offers'],[acceptedReady.length,'Ready for card'],[countersWaiting.length,'Counters waiting']].map(([count,label])=><Box key={label} sx={{p:1.5,border:'1px solid',borderColor:'divider',borderRadius:2}}><Typography variant="h6" fontWeight={900}>{count}</Typography><Typography variant="caption" color="text.secondary">{label}</Typography></Box>)}
+          </Box>
 
           {error && (
             <Alert
@@ -815,7 +767,7 @@ export default function EventFightCardBuilder({
         </CardContent>
       </Card>
 
-      <Collapse in={autoOpen}>
+      <Collapse in={view !== "offers" && autoOpen} unmountOnExit>
         <Card variant="outlined">
           <CardContent>
             <Typography
@@ -1218,7 +1170,7 @@ export default function EventFightCardBuilder({
                                     <SendRoundedIcon />
                                   }
                                   onClick={() =>
-                                    sendAutoOffer(
+                                    reviewAutoOffer(
                                       proposal
                                     )
                                   }
@@ -1249,7 +1201,7 @@ export default function EventFightCardBuilder({
         </Card>
       </Collapse>
 
-      <Collapse in={manualOpen}>
+      <Collapse in={view !== "offers" && manualOpen} unmountOnExit>
         <Card variant="outlined">
           <CardContent>
             <Typography
@@ -1273,51 +1225,7 @@ export default function EventFightCardBuilder({
                 xs={12}
                 md={6}
               >
-                <TextField
-                  select
-                  fullWidth
-                  label="Fighter Receiving Offer"
-                  value={
-                    manual.fighter_id
-                  }
-                  onChange={(e) =>
-                    setManual(
-                      (current) => ({
-                        ...current,
-                        fighter_id:
-                          e.target.value,
-                      })
-                    )
-                  }
-                >
-                  {fighters.map(
-                    (fighter) => (
-                      <MenuItem
-                        key={
-                          fighter.id
-                        }
-                        value={
-                          fighter.id
-                        }
-                        disabled={
-                          Number(
-                            fighter.id
-                          ) ===
-                          Number(
-                            manual.opponent_id
-                          )
-                        }
-                      >
-                        {fighterName(
-                          fighter
-                        )}{" "}
-                        ({fighterRecord(
-                          fighter
-                        )})
-                      </MenuItem>
-                    )
-                  )}
-                </TextField>
+                <Autocomplete options={fighters} value={fighters.find(f=>Number(f.id)===Number(manual.fighter_id))||null} getOptionLabel={f=>`${fighterName(f)} (${fighterRecord(f)}) ${[f.city,f.state].filter(Boolean).join(', ')}`} getOptionDisabled={f=>Number(f.id)===Number(manual.opponent_id)} isOptionEqualToValue={(a,b)=>a.id===b.id} onChange={(_,f)=>setManual(current=>({...current,fighter_id:f?.id||''}))} renderInput={params=><TextField {...params} label="Fighter Receiving Offer" helperText="Search by name, record or location"/>} />
               </Grid>
 
               <Grid
@@ -1325,51 +1233,7 @@ export default function EventFightCardBuilder({
                 xs={12}
                 md={6}
               >
-                <TextField
-                  select
-                  fullWidth
-                  label="Opponent"
-                  value={
-                    manual.opponent_id
-                  }
-                  onChange={(e) =>
-                    setManual(
-                      (current) => ({
-                        ...current,
-                        opponent_id:
-                          e.target.value,
-                      })
-                    )
-                  }
-                >
-                  {fighters.map(
-                    (fighter) => (
-                      <MenuItem
-                        key={
-                          fighter.id
-                        }
-                        value={
-                          fighter.id
-                        }
-                        disabled={
-                          Number(
-                            fighter.id
-                          ) ===
-                          Number(
-                            manual.fighter_id
-                          )
-                        }
-                      >
-                        {fighterName(
-                          fighter
-                        )}{" "}
-                        ({fighterRecord(
-                          fighter
-                        )})
-                      </MenuItem>
-                    )
-                  )}
-                </TextField>
+                <Autocomplete options={fighters} value={fighters.find(f=>Number(f.id)===Number(manual.opponent_id))||null} getOptionLabel={f=>`${fighterName(f)} (${fighterRecord(f)}) ${[f.city,f.state].filter(Boolean).join(', ')}`} getOptionDisabled={f=>Number(f.id)===Number(manual.fighter_id)} isOptionEqualToValue={(a,b)=>a.id===b.id} onChange={(_,f)=>setManual(current=>({...current,opponent_id:f?.id||''}))} renderInput={params=><TextField {...params} label="Opponent" helperText="Search by name, record or location"/>} />
               </Grid>
 
               <Grid
@@ -1745,12 +1609,12 @@ export default function EventFightCardBuilder({
                     <SendRoundedIcon />
                   }
                   onClick={
-                    createManualOffer
+                    reviewManualOffer
                   }
                   disabled={working}
                   sx={{ fontWeight: 900 }}
                 >
-                  Send Fight Offer
+                  Review offer
                 </Button>
               </Grid>
             </Grid>
@@ -1758,7 +1622,8 @@ export default function EventFightCardBuilder({
         </Card>
       </Collapse>
 
-      {!!activeOffers.length && (
+      {view === "offers" && !loading && !activeOffers.length && <Alert severity="info">No open offers for this event. Start in Matchmaking to choose fighters and send an offer.</Alert>}
+      {view !== "find" && !!activeOffers.length && (
         <Card>
           <CardContent>
             <Typography
@@ -1864,14 +1729,14 @@ export default function EventFightCardBuilder({
                             >
                               {offer.proposed_weight ||
                                 "-"}{" "}
-                              lb ?{" "}
+                              lb ·{" "}
                               {offer.rounds ||
                                 "-"}{" "}
-                              rounds ?{" "}
+                              rounds ·{" "}
                               {money(
                                 offer.proposed_purse
                               )}{" "}
-                              purse ?{" "}
+                              purse ·{" "}
                               {Number(
                                 offer.ticket_commission_percent ||
                                   0
@@ -1912,9 +1777,7 @@ export default function EventFightCardBuilder({
                                 }
                                 disabled={working}
                                 onClick={() =>
-                                  convertOffer(
-                                    offer
-                                  )
+                                  setReviewAction({title:'Add accepted offer to the card',action:'Create bout and contract',recipient:fighterName(fighter),opponent:fighterName(opponent),terms:`Offer #${offer.id} · ${offer.rounds || 4} rounds · ${offer.proposed_weight || 'Unspecified'} lb · Purse ${money(offer.proposed_purse)}`,convert:true,run:()=>convertOffer(offer)})
                                 }
                               >
                                 Add accepted match to card

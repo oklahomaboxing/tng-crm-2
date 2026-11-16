@@ -4375,7 +4375,11 @@ Do not add fake ticket information.
         )
 
         db.add(row)
-        db.commit()
+        # Offer conversion owns one transaction, including the initial template.
+        if db.info.get("defer_contract_commit"):
+            db.flush()
+        else:
+            db.commit()
         db.refresh(row)
 
         return row
@@ -10222,14 +10226,6 @@ Do not add fake ticket information.
                 ),
             )
 
-        if offer.bout_id or offer.contract_id:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "This offer has already been converted"
-                ),
-            )
-
         if not offer.event_id:
             raise HTTPException(
                 status_code=400,
@@ -10247,6 +10243,21 @@ Do not add fake ticket information.
             .filter(BoxingEvent.id == offer.event_id)
             .with_for_update().first()
         )
+
+        db.refresh(offer)
+        if not event or offer.event_id != event.id or offer.fighter_id == offer.opponent_id:
+            raise HTTPException(status_code=409, detail="Review the event and fighter pairing before continuing")
+        if offer.status != "accepted":
+            raise HTTPException(status_code=409, detail="Offer changed; refresh before continuing")
+        if offer.bout_id and offer.contract_id:
+            return {
+                "offer": staff_offer_dict(offer),
+                "bout": {"id": offer.bout_id},
+                "contract": {"id": offer.contract_id},
+                "already_converted": True,
+            }
+        if offer.bout_id or offer.contract_id:
+            raise HTTPException(status_code=409, detail="This offer has an incomplete card link; ask staff to review it")
 
         fighter = (
             db.query(BoxingFighter)
@@ -10276,12 +10287,12 @@ Do not add fake ticket information.
                 detail="Fighter information missing",
             )
 
-        conflict = (
+        conflicts = (
             db.query(BoxingBout)
             .filter(
                 BoxingBout.event_id == event.id,
                 BoxingBout.status.notin_(
-                    ["void", "cancelled"]
+                    ["void", "cancelled", "canceled", "withdrawn", "declined", "rejected", "removed", "deleted"]
                 ),
                 or_(
                     BoxingBout.red_fighter_id.in_(
@@ -10292,17 +10303,31 @@ Do not add fake ticket information.
                     ),
                 ),
             )
-            .first()
+            .all()
         )
 
-        if conflict:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "One fighter is already booked "
-                    "on this event"
-                ),
+        reusable = None
+        if conflicts:
+            if len(conflicts) != 1 or {conflicts[0].red_fighter_id, conflicts[0].blue_fighter_id} != {fighter.id, opponent.id}:
+                raise HTTPException(status_code=409, detail="One fighter is already booked against another opponent on this event")
+            reusable = conflicts[0]
+            if reusable.status != "draft":
+                raise HTTPException(status_code=409, detail="This matchup is already on the card; review its contracts directly")
+            same_weight = (
+                reusable.weight_agreed is None and offer.proposed_weight is None
+            ) or (
+                reusable.weight_agreed is not None
+                and offer.proposed_weight is not None
+                and abs(float(reusable.weight_agreed) - float(offer.proposed_weight)) <= .001
             )
+            if (
+                int(reusable.rounds or 4) != int(offer.rounds or 4)
+                or reusable.bout_type != (offer.bout_type or "pro")
+                or not same_weight
+            ):
+                raise HTTPException(status_code=409, detail="Accepted rounds, weight or bout type differ from the draft card. Review the terms before continuing")
+            if db.query(BoxingContract).filter(BoxingContract.bout_id == reusable.id, BoxingContract.fighter_id == fighter.id).first():
+                raise HTTPException(status_code=409, detail="This fighter already has a contract for the draft bout. Review it in Contracts; it has not been overwritten")
 
         corner = str(
             data.get("corner") or "red"
@@ -10329,20 +10354,28 @@ Do not add fake ticket information.
             red_purse = 0
             blue_purse = purse
 
-        bout = BoxingBout(
-            event_id=event.id,
-            red_fighter_id=red_fighter_id,
-            blue_fighter_id=blue_fighter_id,
-            weight_agreed=offer.proposed_weight,
-            rounds=offer.rounds or 4,
-            bout_type=offer.bout_type or "pro",
-            status="draft",
-            red_purse=red_purse,
-            blue_purse=blue_purse,
-            match_score=offer.match_score,
-        )
+        if reusable:
+            bout = reusable
+            corner = "red" if bout.red_fighter_id == fighter.id else "blue"
+            if corner == "red":
+                bout.red_purse = purse
+            else:
+                bout.blue_purse = purse
+        else:
+            bout = BoxingBout(
+                event_id=event.id,
+                red_fighter_id=red_fighter_id,
+                blue_fighter_id=blue_fighter_id,
+                weight_agreed=offer.proposed_weight,
+                rounds=offer.rounds or 4,
+                bout_type=offer.bout_type or "pro",
+                status="draft",
+                red_purse=red_purse,
+                blue_purse=blue_purse,
+                match_score=offer.match_score,
+            )
 
-        db.add(bout)
+            db.add(bout)
 
         try:
             db.flush()

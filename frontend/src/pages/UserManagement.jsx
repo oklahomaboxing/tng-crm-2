@@ -1,3 +1,4 @@
+import PartnerAccess from "../components/PartnerAccess.jsx";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -209,6 +210,8 @@ export default function UserManagement() {
         rep: "Sales rep",
         manager: "Manager",
         matchmaker: "Matchmaker",
+        investor: "Investor",
+        sponsor: "Sponsor",
       };
 
       setMessage(
@@ -442,6 +445,7 @@ export default function UserManagement() {
         </Alert>
       )}
 
+      <Box sx={{mb:3}}><PartnerAccess/></Box>
       <Grid container spacing={3}>
         <Grid item xs={12} lg={5}>
           <Card sx={{ borderRadius: 3 }}>
@@ -455,6 +459,7 @@ export default function UserManagement() {
               </Typography>
 
               <Stack spacing={2}>
+
                 <TextField
                   select
                   label="User Role"
@@ -476,6 +481,8 @@ export default function UserManagement() {
                     Manager
                   </MenuItem>
 
+                  <MenuItem value="investor">Investor</MenuItem>
+                  <MenuItem value="sponsor">Sponsor</MenuItem>
                   <MenuItem value="matchmaker">
                     Matchmaker
                   </MenuItem>
