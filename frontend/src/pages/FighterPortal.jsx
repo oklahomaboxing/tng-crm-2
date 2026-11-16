@@ -45,6 +45,7 @@ function money(cents) {
 export default function FighterPortal({ onLogout, previewToken = null }) {
   const [data, setData] = useState(null);
   const [ticketSales, setTicketSales] = useState(null);
+  const [detailsLoading,setDetailsLoading]=useState(true);
   const [fightOffers, setFightOffers] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [selectedContractId, setSelectedContractId] = useState(null);
@@ -65,6 +66,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
   async function load() {
     try {
       setLoading(true);
+      setDetailsLoading(true);
       setMessage("");
 
       const token = (
@@ -77,56 +79,19 @@ const [photoWorking, setPhotoWorking] = useState(false);
         Authorization: `Bearer ${token}`,
       };
 
-      const [
-        profileResponse,
-        ticketResponse,
-        offersResponse,
-      ] = await Promise.all([
-        fetch(
-          `${API}/api/fighter/me`,
-          { headers }
-        ),
-        fetch(
-          `${API}/api/fighter/me/ticket-sales`,
-          { headers }
-        ),
-        fetch(
-          `${API}/api/fighter/me/fight-offers`,
-          { headers }
-        ),
-      ]);
-
-      const profileBody =
-        await profileResponse.json();
-
-      const ticketBody =
-        await ticketResponse.json();
-
-      const offersBody =
-        await offersResponse.json();
-
-      if (!profileResponse.ok) {
-        throw new Error(
-          profileBody.detail ||
-          "Could not load Fighter Portal"
-        );
-      }
-
-      if (!ticketResponse.ok) {
-        throw new Error(
-          ticketBody.detail ||
-          "Could not load ticket sales"
-        );
-      }
-
-      if (!offersResponse.ok) {
-        throw new Error(
-          offersBody.detail ||
-          "Could not load fight offers"
-        );
-      }
-
+      const profileResponse=await fetch(`${API}/api/fighter/me`,{headers,cache:"no-store"});
+      const profileBody=await profileResponse.json();
+      if(!profileResponse.ok)throw new Error(profileBody.detail||"Could not load Fighter Portal");
       setData(profileBody);
+      setLoading(false);
+
+      const [ticketResponse,offersResponse]=await Promise.all([
+        fetch(`${API}/api/fighter/me/ticket-sales`,{headers}),
+        fetch(`${API}/api/fighter/me/fight-offers`,{headers}),
+      ]);
+      const [ticketBody,offersBody]=await Promise.all([ticketResponse.json(),offersResponse.json()]);
+      if(!ticketResponse.ok)throw new Error(ticketBody.detail||"Could not load ticket sales");
+      if(!offersResponse.ok)throw new Error(offersBody.detail||"Could not load fight offers");
       setTicketSales(ticketBody);
       setFightOffers(
         Array.isArray(offersBody.offers)
@@ -139,6 +104,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
       );
     } finally {
       setLoading(false);
+      setDetailsLoading(false);
     }
   }
 
@@ -1073,12 +1039,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
     },
     {
       title: "Ticket Sales",
-      value: `${
-        ticketSales?.summary?.tickets_sold || 0
-      } tickets`,
-      note: `Commission earned: ${money(
-        ticketSales?.summary?.commission_cents || 0
-      )}`,
+      value: ticketSales?`${ticketSales.summary?.tickets_sold||0} tickets`:detailsLoading?"Loading…":"Unavailable",
+      note: ticketSales?`Commission earned: ${money(ticketSales.summary?.commission_cents||0)}`:"Ticket figures load separately from your career record.",
     },
   ];
 
@@ -1153,6 +1115,10 @@ const [photoWorking, setPhotoWorking] = useState(false);
           padding: "26px 18px 60px",
         }}
       >
+        <section aria-label="Your boxing record" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"18px 22px",marginBottom:18,background:"#17171c",border:"1px solid #ff303855",borderLeft:"4px solid #ff3038",borderRadius:16}}>
+          <div><div style={{color:"#d3d3dc",fontSize:12,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase"}}>{fighter.pro_record?"Professional career record":fighter.amateur_record?"Amateur career record":"Career record"}</div><strong style={{display:"block",fontSize:"clamp(36px,7vw,50px)",lineHeight:1.2,color:"#fff",marginTop:4}}>{fighter.pro_record||fighter.amateur_record||"Not recorded"}</strong></div>
+          <div style={{fontWeight:750,color:"#fff",fontSize:16,overflowWrap:"anywhere"}}>{fighter.legal_name}</div>
+        </section>
         <section
           style={{
             background:
@@ -1318,11 +1284,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                     fontSize: 15,
                   }}
                 >
-                  {fighter.pro_record
-                    ? `Professional Record: ${fighter.pro_record}`
-                    : fighter.amateur_record
-                    ? `Amateur Record: ${fighter.amateur_record}`
-                    : "TNG Fighter"}
+                  {fighter.pro_record?"Professional boxer":fighter.amateur_record?"Amateur boxer":"TNG Fighter"}
                 </div>
               </div>
             </div>
@@ -2704,6 +2666,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
 
         <FighterContribution key={fighter.id} fighterId={fighter.id} token={previewToken || sessionStorage.getItem("fighterPreviewToken") || localStorage.getItem("token")}/>
 
+        {ticketSales ? (
         <section
           style={{
             background: "#fff",
@@ -3027,6 +2990,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
             </div>
           )}
         </section>
+        ) : <section style={{background:"#fff",color:"#111",borderRadius:14,padding:22,marginBottom:20}}><h2 style={{marginTop:0}}>Ticket Sales & Commission</h2><p>{detailsLoading?"Loading ticket sales…":"Ticket sales are temporarily unavailable. Your career record is shown above."}</p></section>}
+
 
 
 
