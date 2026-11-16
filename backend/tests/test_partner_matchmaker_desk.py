@@ -10,25 +10,28 @@ class PartnerAndDeskTests(unittest.TestCase):
  def setUp(self):
   support.StabilizationTests.setUp(self)
   self.event=BoxingEvent(name='Assigned Event',slug='assigned-event',event_date='2027-01-30');self.other=BoxingEvent(name='Private Event',slug='private-event');self.db.add_all([self.event,self.other])
-  for role in ('investor','sponsor','matchmaker'):
+  for role in ('investor','sponsor','concessions','matchmaker'):
    u=User(name=role,email=role+'@example.com',role=role,password_hash=hash_password('Example-only-password-123!'),active=True);self.db.add(u);self.users[role]=u
   self.db.commit()
  def test_partner_accounts_created_by_admin_only_and_no_automatic_event_access(self):
-  for role in ('investor','sponsor'):
-   body={'name':'New '+role,'email':'new-'+role+'@example.com','role':role,'password':'Example-only-password-123!'}
+  for role in ('investor','sponsor','concessions'):
+   body={'name':'New '+role,'email':'new-'+role+'@example.com','role':role,'password':'Example-only-password-123!','title':'Executive Chef','phone':'+16515550123'}
    r=self.client.post('/api/users',headers=self.headers(),json=body);self.assertEqual(r.status_code,200,r.text)
+   if role=='concessions':
+    from app.events.partners import PartnerProfile
+    profile=self.db.get(PartnerProfile,r.json()['user']['id']);self.assertEqual(profile.title,'Executive Chef');self.assertEqual(profile.phone,'+16515550123')
    r=self.client.get('/api/partners/portal',headers=self.headers(role));self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['events'],[]);self.assertIn('no-store',r.headers['cache-control'])
   self.assertEqual(self.client.post('/api/users',headers=self.headers('staff'),json=body).status_code,403)
  def grant(self,role,**extra):return self.client.put('/api/partners/access',headers=self.headers(),json={'user_id':self.users[role].id,'event_id':self.event.id,'update_text':'Your event update',**extra})
  def test_grants_are_event_specific_and_sponsor_cannot_receive_financials(self):
-  self.assertEqual(self.grant('investor',financials=True).status_code,200);self.assertEqual(self.grant('sponsor',financials=True).status_code,422);self.assertEqual(self.grant('sponsor').status_code,200)
-  for role in ('investor','sponsor'):
+  self.assertEqual(self.grant('investor',financials=True).status_code,200);self.assertEqual(self.grant('sponsor',financials=True).status_code,422);self.assertEqual(self.grant('sponsor').status_code,200);self.assertEqual(self.grant('concessions').status_code,200)
+  for role in ('investor','sponsor','concessions'):
    d=self.client.get('/api/partners/portal',headers=self.headers(role)).json();self.assertEqual([e['name'] for e in d['events']],['Assigned Event']);self.assertEqual('financials' in d['events'][0],role=='investor');self.assertNotIn('fighters',d['events'][0]);self.assertNotIn('contracts',d['events'][0])
  def test_revocation_and_disabled_login_take_effect(self):
   self.grant('investor');access=self.client.get('/api/partners/access',headers=self.headers()).json();gid=access['grants'][0]['id'];self.assertEqual(self.client.delete(f'/api/partners/access/{gid}',headers=self.headers()).status_code,200);self.assertEqual(self.client.get('/api/partners/portal',headers=self.headers('investor')).json()['events'],[])
   h=self.headers('sponsor');self.users['sponsor'].active=False;self.db.commit();self.assertEqual(self.client.get('/api/partners/portal',headers=h).status_code,403)
  def test_partner_roles_cannot_access_business_operations_even_legacy_routes(self):
-  for role in ('investor','sponsor'):
+  for role in ('investor','sponsor','concessions'):
    for path in ['/api/users','/api/members','/api/sales','/api/boxing/fighters','/api/boxing/events','/api/merchandise-checkouts/1','/api/partners/access','/api/messages',f'/api/events/{self.event.id}/recap',f'/api/matchmaker-desk/events/{self.event.id}']:
     r=self.client.get(path,headers=self.headers(role));self.assertEqual(r.status_code,403,(role,path,r.text))
    self.assertEqual(self.client.get('/api/me',headers=self.headers(role)).status_code,200)
@@ -43,5 +46,14 @@ class PartnerAndDeskTests(unittest.TestCase):
   self.assertEqual(self.client.get(f'/api/matchmaker-desk/events/{self.other.id}',headers=h).json()['slots'],[]);self.assertEqual(self.client.post(f'/api/matchmaker-desk/events/{self.other.id}/slots/{sid}/notes',headers=h,json={'body':'Wrong event'}).status_code,404)
  def test_desk_requires_staff_and_valid_contact_data(self):
   path=f'/api/matchmaker-desk/events/{self.event.id}';self.assertEqual(self.client.get(path).status_code,401)
-  for role in ('member','fighter','rep','sponsor','investor'):self.assertEqual(self.client.get(path,headers=self.headers(role)).status_code,403)
+  for role in ('member','fighter','rep','sponsor','investor','concessions'):self.assertEqual(self.client.get(path,headers=self.headers(role)).status_code,403)
   for body in [{'name':' '},{'name':'Name','phone':'405-12'},{'name':'Name','email':'bad'}]:self.assertEqual(self.client.post('/api/matchmaker-desk/contacts',headers=self.headers(),json=body).status_code,422)
+
+ def test_concessions_profile_and_assigned_updates_have_no_financials(self):
+  from app.events.partners import PartnerProfile
+  self.db.add(PartnerProfile(user_id=self.users['concessions'].id,title='Executive Chef',phone='+16515550123'));self.db.commit()
+  self.assertEqual(self.grant('concessions',financials=True).status_code,422)
+  self.assertEqual(self.grant('concessions').status_code,200)
+  d=self.client.get('/api/partners/portal',headers=self.headers('concessions')).json()
+  self.assertEqual(d['title'],'Executive Chef');self.assertEqual(d['role'],'concessions');self.assertEqual(len(d['events']),1)
+  self.assertNotIn('financials',d['events'][0]);self.assertNotIn('current_bouts',d['events'][0]);self.assertNotIn('phone',d)

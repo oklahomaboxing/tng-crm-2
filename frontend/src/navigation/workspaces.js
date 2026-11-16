@@ -50,10 +50,11 @@ export const ROLE_MENUS = {
   rep: ["My Sales"],
   investor: ["Investor Portal"],
   sponsor: ["Sponsor Portal"],
+  concessions: ["Concessions Portal"],
 };
 
 export const WORKSPACE_GROUPS = [
-  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal'] },
+  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal'] },
   { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer'] },
   { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
@@ -62,6 +63,7 @@ export const WORKSPACE_GROUPS = [
 ];
 export const WORKSPACE_HINTS = {
   "Investor Portal": "Your assigned event updates and approved business summaries",
+  "Concessions Portal": "Your assigned event concessions details and updates",
   "Sponsor Portal": "Your assigned sponsorship events and TNG updates",
   Dashboard: 'Daily membership, attendance, sales and event overview',
   'Text Inbox': 'Incoming SMS, unread conversations and customer service replies',

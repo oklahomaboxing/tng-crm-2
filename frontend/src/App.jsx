@@ -76,6 +76,7 @@ function landingPageForRole(role) {
   if (role === "manager") return "Manager Portal";
   if (role === "investor") return "Investor Portal";
   if (role === "sponsor") return "Sponsor Portal";
+  if (role === "concessions") return "Concessions Portal";
   return "Dashboard";
 }
 
@@ -877,7 +878,7 @@ return (
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents initialEventId={navigationTarget.eventId} initialSection={navigationTarget.eventSection} />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
-      {((page === "Investor Portal" && role === "investor") || (page === "Sponsor Portal" && role === "sponsor")) && <PartnerPortal/>}
+      {((page === "Investor Portal" && role === "investor") || (page === "Sponsor Portal" && role === "sponsor") || (page === "Concessions Portal" && role === "concessions")) && <PartnerPortal/>}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
       {page === "QR Referrals" && role !== "rep" && <QRReferrals />}

@@ -20,6 +20,12 @@ class PartnerGrant(Base):
     financials=Column(Boolean,default=False,nullable=False)
     updated_at=Column(DateTime,default=datetime.utcnow,nullable=False)
 
+class PartnerProfile(Base):
+    __tablename__='partner_profiles'
+    user_id=Column(Integer,ForeignKey('users.id'),primary_key=True)
+    title=Column(Text,default='',nullable=False)
+    phone=Column(Text,default='',nullable=False)
+
 class GrantBody(BaseModel):
     user_id:int
     event_id:int
@@ -33,12 +39,13 @@ def admin(user=Depends(current_user)):
 @router.get('/access')
 def access(response:Response,db=Depends(get_db),user=Depends(admin)):
     response.headers['Cache-Control']='private, no-store'
-    return {'users':[{'id':u.id,'name':u.name,'role':u.role,'active':u.active} for u in db.query(User).filter(User.role.in_(['investor','sponsor'])).order_by(User.name)],'events':[{'id':e.id,'name':e.name} for e in db.query(BoxingEvent).order_by(BoxingEvent.id.desc())],'grants':[{'id':g.id,'user_id':g.user_id,'event_id':g.event_id,'update_text':g.update_text,'financials':g.financials} for g in db.query(PartnerGrant).all()]}
+    profiles={p.user_id:p for p in db.query(PartnerProfile).all()}
+    return {'users':[{'id':u.id,'name':u.name,'email':u.email,'role':u.role,'active':u.active,'title':profiles[u.id].title if u.id in profiles else '', 'phone':profiles[u.id].phone if u.id in profiles else ''} for u in db.query(User).filter(User.role.in_(['investor','sponsor','concessions'])).order_by(User.name)],'events':[{'id':e.id,'name':e.name} for e in db.query(BoxingEvent).order_by(BoxingEvent.id.desc())],'grants':[{'id':g.id,'user_id':g.user_id,'event_id':g.event_id,'update_text':g.update_text,'financials':g.financials} for g in db.query(PartnerGrant).all()]}
 
 @router.put('/access')
 def grant(body:GrantBody,db=Depends(get_db),user=Depends(admin)):
     partner=db.get(User,body.user_id)
-    if not partner or partner.role not in ('investor','sponsor'):raise HTTPException(422,'Choose an investor or sponsor account')
+    if not partner or partner.role not in ('investor','sponsor','concessions'):raise HTTPException(422,'Choose an investor, sponsor or concessions account')
     if not db.get(BoxingEvent,body.event_id):raise HTTPException(404,'Event not found')
     if body.financials and partner.role!='investor':raise HTTPException(422,'Financial summaries are available only for investor grants')
     row=db.query(PartnerGrant).filter_by(user_id=body.user_id,event_id=body.event_id).first()
@@ -55,7 +62,7 @@ def revoke(grant_id:int,db=Depends(get_db),user=Depends(admin)):
 
 @router.get('/portal')
 def portal(response:Response,db=Depends(get_db),user=Depends(current_user)):
-    if user.role not in ('investor','sponsor'):raise HTTPException(403,'Partner login required')
+    if user.role not in ('investor','sponsor','concessions'):raise HTTPException(403,'Partner login required')
     response.headers['Cache-Control']='private, no-store'
     events=[]
     for g in db.query(PartnerGrant).filter_by(user_id=user.id).all():
@@ -63,7 +70,9 @@ def portal(response:Response,db=Depends(get_db),user=Depends(current_user)):
         if not e:continue
         bouts=db.query(BoxingBout).filter_by(event_id=e.id).all()
         item={'id':e.id,'name':e.name,'date':e.event_date,'venue':e.venue,'status':e.status,'current_bouts':sum(str(b.status or '').strip().lower() not in CANCELLED for b in bouts),'update_text':g.update_text,'updated_at':g.updated_at.isoformat()+'Z'}
+        if user.role=='concessions':item.pop('current_bouts',None)
         if user.role=='investor' and g.financials:
             d=recap(db,e.id);summary=d['summary'];item['financials']={k:summary[k] for k in ['ticket_sales_cents','total_recorded_income_cents','total_cost_cents','recorded_result_cents']};item['financials_provisional']=d['provisional'];item['financials_basis']='Recorded event income and costs; not a bank balance. Incomplete records can change these totals.'
         events.append(item)
-    return {'name':user.name,'role':user.role,'events':events}
+    profile=db.get(PartnerProfile,user.id)
+    return {'name':user.name,'role':user.role,'title':profile.title if profile else '', 'events':events}

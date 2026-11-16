@@ -29,3 +29,7 @@ External roles are restricted at the shared authentication dependency to their p
 ## Validation
 
 The regression suite covers event-scoped access, revocation, disabled accounts, blank contact numbers, saved slots/notes, stale status updates, signed-contract protection and draft reuse. Isolated PostgreSQL tests also cover simultaneous offer conversion and transactional template creation. Browser checks use sample data and intercept writes; they do not send real offers or messages.
+
+## Concessions / chef accounts
+
+Create a **Concessions / Chef** user in User Management. Its title and contact phone are stored separately from member and sales-representative records. Assign events and publish service/menu coordination notes through **Partner & concessions access**. The chef signs in at `https://tngos.tngboxinggym.com/#/concessions-portal` and sees only assigned event details and concessions updates. This is a restricted coordination login, not POS/payment processing or inventory management. Concessions accounts cannot receive investor financial summaries or access member records, customer orders, contracts, or administrative APIs. Use the existing password setup/reset flow; do not share an administrator login.

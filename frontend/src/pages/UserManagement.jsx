@@ -37,6 +37,8 @@ function fighterName(fighter) {
 export default function UserManagement() {
   const [role, setRole] = useState("staff");
   const [name, setName] = useState("");
+  const [concessionsPhone,setConcessionsPhone]=useState("");
+  const [concessionsTitle,setConcessionsTitle]=useState("Executive Chef");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [referralSlug, setReferralSlug] = useState("");
@@ -190,7 +192,8 @@ export default function UserManagement() {
         email: email.trim().toLowerCase(),
         password,
         role,
-        phone: "",
+        phone: role === "concessions" ? concessionsPhone.trim() : "",
+        title: role === "concessions" ? concessionsTitle.trim() : "",
         referral_slug:
           role === "rep"
             ? referralSlug.trim().toLowerCase()
@@ -212,6 +215,7 @@ export default function UserManagement() {
         matchmaker: "Matchmaker",
         investor: "Investor",
         sponsor: "Sponsor",
+        concessions: "Concessions",
       };
 
       setMessage(
@@ -483,11 +487,13 @@ export default function UserManagement() {
 
                   <MenuItem value="investor">Investor</MenuItem>
                   <MenuItem value="sponsor">Sponsor</MenuItem>
+                  <MenuItem value="concessions">Concessions / Chef</MenuItem>
                   <MenuItem value="matchmaker">
                     Matchmaker
                   </MenuItem>
                 </TextField>
 
+                {role === "concessions" && <><TextField label="Concessions title" value={concessionsTitle} onChange={e=>setConcessionsTitle(e.target.value)}/><TextField label="Contact phone" value={concessionsPhone} onChange={e=>setConcessionsPhone(e.target.value)}/></>}
                 <TextField
                   label="Full Name"
                   value={name}

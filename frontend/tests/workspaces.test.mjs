@@ -52,7 +52,7 @@ test('event offer desk supports direct links for authorized event staff',()=>{
 });
 
 test('investor and sponsor logins have isolated portal navigation',()=>{
- for(const [role,page] of [['investor','Investor Portal'],['sponsor','Sponsor Portal']]){
+ for(const [role,page] of [['investor','Investor Portal'],['sponsor','Sponsor Portal'],['concessions','Concessions Portal']]){
   assert.deepEqual(ROLE_MENUS[role],[page]);assert.equal(readWorkspace(workspaceHash(page),role).page,page);
   for(const forbidden of ['Dashboard','Members','Reports','Promoter','TNG BOXING EVENTS','User Management'])assert.equal(readWorkspace(workspaceHash(forbidden),role),null);
  }

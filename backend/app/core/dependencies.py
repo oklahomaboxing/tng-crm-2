@@ -55,7 +55,7 @@ def current_user(
     from app.account_security import valid_session
     if not valid_session(payload, user, db):
         raise HTTPException(status_code=401, detail="Session expired. Sign in again.")
-    if user.role in {"investor", "sponsor"}:
+    if user.role in {"investor", "sponsor", "concessions"}:
         path = request.url.path
         allowed = path in {"/api/partners/portal", "/api/me", "/api/auth/remember-device", "/api/auth/forget-device", "/api/auth/logout", "/api/auth/devices"} or path.startswith("/api/auth/security/") or path.startswith("/api/auth/devices/")
         if not allowed:
