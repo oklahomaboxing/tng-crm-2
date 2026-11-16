@@ -1,3 +1,4 @@
+import BoxingResults from "../components/results/BoxingResults";
 import React from "react";
 import {
   Alert,
@@ -12,6 +13,7 @@ import {
 } from "@mui/material";
 
 export default function EventFightNightPage({
+  eventId,
   activeBouts,
   fighters,
   checklist,
@@ -38,6 +40,7 @@ export default function EventFightNightPage({
 
   return (
     <Stack spacing={2}>
+      <BoxingResults eventId={eventId}/>
       <Box>
         <Typography variant="h5" fontWeight={950}>
           Fight Night

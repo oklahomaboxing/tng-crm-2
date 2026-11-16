@@ -69,3 +69,6 @@ router.include_router(event_recap_router)
 
 from app.events.fighter_contribution import router as fighter_contribution_router
 router.include_router(fighter_contribution_router)
+
+from app.events.results import router as boxing_results_router
+router.include_router(boxing_results_router)

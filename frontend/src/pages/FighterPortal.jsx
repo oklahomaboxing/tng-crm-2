@@ -1,3 +1,4 @@
+import BoxingResults from "../components/results/BoxingResults";
 import FighterContribution from "../components/fighters/FighterContribution";
 import { openOfficialContract } from "../utils/officialContract";
 ﻿import { useEffect, useState } from "react";
@@ -2698,6 +2699,8 @@ const [photoWorking, setPhotoWorking] = useState(false);
             </div>
           </div>
         </section>
+
+        <BoxingResults key={`results-${fighter.id}`} fighterId={fighter.id} token={previewToken || sessionStorage.getItem("fighterPreviewToken") || localStorage.getItem("token")}/>
 
         <FighterContribution key={fighter.id} fighterId={fighter.id} token={previewToken || sessionStorage.getItem("fighterPreviewToken") || localStorage.getItem("token")}/>
 

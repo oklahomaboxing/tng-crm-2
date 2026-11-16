@@ -31,8 +31,17 @@ def fighter_contribution(fighter_id: int, response: Response, limit: int = Query
         row = next((r for r in data['fighters'] if r['fighter_id'] == fighter_id), None)
         if not row:
             continue
-        contribution = row['ticket_contribution_cents']
+        event_bouts = db.query(BoxingBout).filter_by(event_id=event.id).all()
+        event_bouts = [b for b in event_bouts if str(b.status or '').strip().lower() not in CANCELLED]
+        opponents = {f for b in event_bouts if fighter_id in (b.red_fighter_id,b.blue_fighter_id) for f in (b.red_fighter_id,b.blue_fighter_id) if f != fighter_id}
+        unrelated = any(fighter_id not in (b.red_fighter_id,b.blue_fighter_id) and opponents.intersection((b.red_fighter_id,b.blue_fighter_id)) for b in event_bouts)
+        opponent_rows = [r for r in data['fighters'] if r['fighter_id'] in opponents]
+        opponent_cost = sum(r['total_fighter_cost_cents'] for r in opponent_rows) if not unrelated and len(opponent_rows)==len(opponents) else None
+        combined_cost = row['total_fighter_cost_cents'] + opponent_cost if opponent_cost is not None else None
+        contribution = row['ticket_sales_cents'] - combined_cost if combined_cost is not None else None
         notes = []
+        if combined_cost is None:
+            notes.append('An opponent has other bouts on this event. Allocate those shared fighter costs before comparing this bout.')
         if any('not fully signed' in b or 'recorded purse only' in b for b in row['basis']):
             notes.append('Final signed bout terms are not fully recorded; these costs may change.')
         if row['purse_paid_cents'] is None:
@@ -52,9 +61,9 @@ def fighter_contribution(fighter_id: int, response: Response, limit: int = Query
         if unrecorded_paper:
             notes.append(f'{unrecorded_paper} paper ticket(s) have no recorded sale and are excluded until reconciled.')
         result.append({'provisional':bool(notes), 'event_id':event.id, 'event_name':event.name, 'event_date':event.event_date,
-                       **{k:row[k] for k in fields}, 'outcome':'above_direct_costs' if contribution > 0 else 'below_direct_costs' if contribution < 0 else 'break_even',
+                       **{k:row[k] for k in fields}, 'own_direct_cost_cents':row['total_fighter_cost_cents'], 'opponent_direct_cost_cents':opponent_cost, 'combined_bout_cost_cents':combined_cost, 'combined_bout_contribution_cents':contribution, 'combined_bout_outcome':'needs_allocation' if contribution is None else 'above_direct_costs' if contribution > 0 else 'below_direct_costs' if contribution < 0 else 'break_even', 'outcome':'above_direct_costs' if row['ticket_contribution_cents']>0 else 'below_direct_costs' if row['ticket_contribution_cents']<0 else 'break_even',
                        'notes':notes})
     response.headers['Cache-Control'] = 'private, no-store'
     return {'fighter_id':fighter_id, 'events':result, 'total':events.count(), 'limit':limit, 'offset':offset,
-            'basis':'Recorded paid tickets credited to this fighter minus their net purse, travel/per diem and ticket commission costs. Costs use recorded obligations or higher recorded payments. Before venue, officials, insurance, state assessment and separately recorded vendor expenses. This is a direct-cost contribution estimate, not final event profit.',
+            'cost_scope':'both_corners', 'ticket_sales_scope':'this_fighter', 'basis':'Paid tickets credited to this fighter minus their own recorded purse, travel/per diem and commission cost, before shared expenses.', 'combined_bout_basis':'Recorded paid tickets credited to this fighter minus the combined direct costs of both red and blue corners (purses, travel/per diem and ticket commissions). Ticket sales remain specific to this fighter; the same combined cost appears on each participant’s profile and must not be added together across profiles. Event recap accounting still counts each fighter once. Costs use recorded obligations or higher recorded payments. Before venue, officials, insurance, state assessment and separately recorded vendor expenses. This is a direct-cost contribution estimate, not final event profit.',
             'roster_scope':'current_bout_card'}

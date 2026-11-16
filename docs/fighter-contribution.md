@@ -16,3 +16,11 @@ A positive figure means sales exceeded recorded direct costs; a negative figure 
 Cancelled/removed bouts are excluded, consistent with the current-card recap. Completed bouts remain part of event history if still on the event card. Restoring a fighter to a card restores their saved contribution data. Changes to existing purse or commission records appear on refresh; this panel itself is read-only and sends no messages or payments.
 
 `GET /api/events/fighters/{fighter_id}/contribution` allows admin/staff or the fighter login linked to that exact fighter ID. Other fighters, managers, members, reps and anonymous visitors cannot access it. Responses include no opponent finances, customer contacts, QR tokens, private payment notes or event-wide financial totals. All responses are private/no-store; event history is paginated, 20 events by default, at most 50 per request.
+
+## Both-corner comparison
+
+The profile now compares the fighter's own credited ticket sales with the **combined costs of both red and blue corners**. The breakdown shows own direct cost, aggregate opponent direct cost, and combined bout cost. This aggregate opponent cost is intentionally visible to that bout's fighter as requested; other opponents' private payout notes or individual contract details are not returned.
+
+The original per-fighter accounting fields remain available for compatibility. New fields `combined_bout_cost_cents`, `combined_bout_contribution_cents`, and `combined_bout_outcome` drive the new display. The response advertises `cost_scope: both_corners` and `ticket_sales_scope: this_fighter`. The frontend waits for this scope before showing the updated calculation during deployment.
+
+Both participant profiles may show the same bout cost. Do not sum those profile comparisons into event expenses. The event recap continues counting each fighter's costs once. If an opponent also has unrelated bouts on the same event, combined costs are left unallocated rather than overstating this bout's cost; the display asks for allocation review.

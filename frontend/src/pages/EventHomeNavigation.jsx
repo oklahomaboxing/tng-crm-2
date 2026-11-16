@@ -88,8 +88,8 @@ const pages = [
     group: "Finance",
   },
   {
-    label: "Fight Night",
-    description: "Bout order, readiness and event-day operations.",
+    label: "Fight Night & Results",
+    description: "Official results, judges totals, bout order and event operations.",
     tab: 12,
     icon: StadiumRoundedIcon,
     group: "Event Day",

@@ -1,3 +1,4 @@
+import BoxingResults from "../components/results/BoxingResults";
 import FighterContribution from "../components/fighters/FighterContribution";
 import SignedContractLibrary from "../components/contracts/SignedContractLibrary.jsx";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -4094,6 +4095,7 @@ function MatchmakerContent() {
         <DialogContent>
           <Stack spacing={3} sx={{ pt: 1 }}>
             {editFighterOpen && ["admin","staff"].includes(localStorage.getItem("role")) && editFighterId && <FighterContribution key={editFighterId} fighterId={Number(editFighterId)}/>}
+            {editFighterOpen && ["admin","staff"].includes(localStorage.getItem("role")) && editFighterId && <BoxingResults key={`results-${editFighterId}`} fighterId={Number(editFighterId)}/>}
 
 
             <Box>

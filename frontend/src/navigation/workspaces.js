@@ -92,7 +92,7 @@ const ALIASES = {
  'Event Check-In':'door scanner fight night scan tickets checkin check in',
  'TNG Apparel':'shirts tee tshirt clothing shop store preorder',
  'Promoter':'matchmaker matchmaking pro boxers scouting signed pdf download contracts',
- 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget expenses recap paid purses payouts deductions profit loss commission',
+ 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget expenses recap paid purses payouts deductions profit loss commission results scorecards judges winners knockout',
  'Marketing Center':'sms txt text email members marketing campaigns',
  'Members':'activate activation reset email resend customer profile',
  'Renewal Reminders':'sms txt text expired expiring membership reminders renew',

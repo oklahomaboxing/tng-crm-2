@@ -22,7 +22,9 @@ class FighterContributionTests(unittest.TestCase):
         self.setup_fighter();d=self.get();r=d['events'][0]
         self.assertEqual(r['ticket_sales_cents'],8000)
         self.assertEqual(r['total_fighter_cost_cents'],13300)
-        self.assertEqual(r['ticket_contribution_cents'],-5300)
+        self.assertEqual(r['opponent_direct_cost_cents'],5000)
+        self.assertEqual(r['combined_bout_cost_cents'],18300)
+        self.assertEqual(r['combined_bout_contribution_cents'],-10300)
         self.assertEqual(r['outcome'],'below_direct_costs')
         self.assertEqual(r['travel_cents'],2000);self.assertEqual(r['per_diem_cents'],1000);self.assertEqual(r['deductions_cents'],500)
         self.assertIsNone(r['purse_paid_cents']);self.assertTrue(r['provisional'])
@@ -42,7 +44,7 @@ class FighterContributionTests(unittest.TestCase):
         self.setup_fighter()
         self.client.put(f'/api/events/{self.event.id}/recap/purses/{self.a.id}',headers=self.headers(),json={'amount_paid':'150','version':0})
         d=self.get();self.assertEqual(d['events'][0]['purse_cost_cents'],15000)
-        self.assertEqual(d['events'][0]['ticket_contribution_cents'],-7800)
+        self.assertEqual(d['events'][0]['combined_bout_contribution_cents'],-12800)
         self.bout.status='cancelled';self.db.commit();self.assertEqual(self.get()['events'],[])
         self.assertEqual(self.db.query(EventPursePayment).count(),1)
         self.bout.status='completed';self.db.commit();self.assertEqual(len(self.get()['events']),1)
@@ -72,10 +74,17 @@ class FighterContributionTests(unittest.TestCase):
         self.contract.gross_purse=10;self.contract.travel_expense=0;self.contract.per_diem_total=0;self.contract.deductions=0;self.db.commit()
         data=self.get()['events'][0]
         self.assertEqual(data['total_fighter_cost_cents'],1800)
-        self.assertEqual(data['ticket_contribution_cents'],6200)
-        self.assertEqual(data['outcome'],'above_direct_costs')
+        self.assertEqual(data['combined_bout_contribution_cents'],1200)
+        self.assertEqual(data['combined_bout_outcome'],'above_direct_costs')
         self.assertIsNone(data['purse_paid_cents'])
-        self.contract.gross_purse=72;self.db.commit()
+        self.contract.gross_purse=22;self.db.commit()
         data=self.get()['events'][0]
-        self.assertEqual(data['ticket_contribution_cents'],0)
-        self.assertEqual(data['outcome'],'break_even')
+        self.assertEqual(data['combined_bout_contribution_cents'],0)
+        self.assertEqual(data['combined_bout_outcome'],'break_even')
+
+    def test_opponent_unrelated_bout_requires_allocation_instead_of_overcounting(self):
+        from app.matchmaker.models import BoxingBout,BoxingFighter
+        self.setup_fighter();other=BoxingFighter(legal_name='Third fighter');self.db.add(other);self.db.flush()
+        self.db.add(BoxingBout(event_id=self.event.id,red_fighter_id=self.b.id,blue_fighter_id=other.id,red_purse=100));self.db.commit()
+        row=self.get()['events'][0]
+        self.assertIsNone(row['combined_bout_cost_cents']);self.assertIsNone(row['combined_bout_contribution_cents']);self.assertEqual(row['combined_bout_outcome'],'needs_allocation')

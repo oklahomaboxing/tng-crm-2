@@ -88,7 +88,7 @@ const eventPageTitles = {
   9: "Tickets",
   10: "Matchmaking",
   11: "Fighters",
-  12: "Fight Night",
+  12: "Fight Night & Results",
   13: "Event Recap",
 };
 
@@ -1656,6 +1656,7 @@ export default function EventWorkspace({
 
         {tab === 12 && (
           <EventFightNightPage
+            eventId={eventId}
             activeBouts={activeBouts}
             fighters={fighters}
             checklist={data.checklist || []}
