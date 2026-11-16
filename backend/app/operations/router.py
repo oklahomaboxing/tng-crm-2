@@ -77,3 +77,5 @@ from app.matchmaker.desk import router as matchmaker_desk_router
 router.include_router(matchmaker_desk_router)
 from app.events.partners import router as partner_router
 router.include_router(partner_router)
+from app.events.concessions import router as concessions_router
+router.include_router(concessions_router)

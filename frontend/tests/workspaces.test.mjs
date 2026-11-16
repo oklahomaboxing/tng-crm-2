@@ -52,9 +52,17 @@ test('event offer desk supports direct links for authorized event staff',()=>{
 });
 
 test('investor and sponsor logins have isolated portal navigation',()=>{
- for(const [role,page] of [['investor','Investor Portal'],['sponsor','Sponsor Portal'],['concessions','Concessions Portal']]){
+ for(const [role,page] of [['investor','Investor Portal'],['sponsor','Sponsor Portal'],['concessions','Chef & Concessions']]){
   assert.deepEqual(ROLE_MENUS[role],[page]);assert.equal(readWorkspace(workspaceHash(page),role).page,page);
   for(const forbidden of ['Dashboard','Members','Reports','Promoter','TNG BOXING EVENTS','User Management'])assert.equal(readWorkspace(workspaceHash(forbidden),role),null);
  }
  assert.equal(readWorkspace('#/investor-portal','sponsor'),null);assert.equal(readWorkspace('#/sponsor-portal','investor'),null);
+});
+
+test('chef workspace is available to admin and chef; event finance and matchmaker restrictions remain',()=>{
+ for(const role of ['admin','concessions'])assert.equal(readWorkspace('#/chef-concessions',role).page,'Chef & Concessions');
+ assert.equal(readWorkspace('#/concessions-portal','concessions').page,'Chef & Concessions');
+ for(const role of ['investor','sponsor','member','fighter','rep','matchmaker'])assert.equal(readWorkspace('#/chef-concessions',role),null);
+ assert.deepEqual(readWorkspace('#/tng-boxing-events?event=3&section=concessions','matchmaker').target,{eventId:3});
+ assert.equal(readWorkspace('#/tng-boxing-events?event=3&section=concessions','admin').target.eventSection,'concessions');
 });

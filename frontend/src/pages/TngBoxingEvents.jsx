@@ -7,7 +7,7 @@ const API=(import.meta.env.VITE_API_URL || 'https://sea-lion-app-2-gxyfr.ondigit
 export default function TngBoxingEvents({initialEventId,initialSection}){
  const [section,setSection]=useState(initialSection||'overview');
  const role=localStorage.getItem('role');
- useEffect(()=>{setSection(Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,initialSection)&&(initialSection!=='recap'||['admin','staff'].includes(role))?initialSection:'overview');},[initialSection,role]);
+ useEffect(()=>{setSection(Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,initialSection)&&(!['recap','concessions'].includes(initialSection)||['admin','staff'].includes(role))?initialSection:'overview');},[initialSection,role]);
  function openEvent(id,next=section){setSection(next);setSelected(id);window.location.hash=workspaceHash('TNG BOXING EVENTS',{eventId:id,eventSection:next});}
  const[events,setEvents]=useState([]),[selected,setSelected]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[refresh,setRefresh]=useState(0),[search,setSearch]=useState(''),[showAll,setShowAll]=useState(initialSection==='recap');
  useEffect(()=>{if(initialSection==='recap')setShowAll(true);},[initialSection]);

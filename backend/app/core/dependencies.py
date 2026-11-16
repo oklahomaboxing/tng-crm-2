@@ -58,6 +58,7 @@ def current_user(
     if user.role in {"investor", "sponsor", "concessions"}:
         path = request.url.path
         allowed = path in {"/api/partners/portal", "/api/me", "/api/auth/remember-device", "/api/auth/forget-device", "/api/auth/logout", "/api/auth/devices"} or path.startswith("/api/auth/security/") or path.startswith("/api/auth/devices/")
+        allowed = allowed or (user.role == "concessions" and (path == "/api/concessions/events" or path.startswith("/api/concessions/events/")))
         if not allowed:
             raise HTTPException(status_code=403, detail="This partner account can access only its portal and account security")
     return user

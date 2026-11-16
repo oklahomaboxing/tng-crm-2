@@ -33,3 +33,15 @@ The regression suite covers event-scoped access, revocation, disabled accounts, 
 ## Concessions / chef accounts
 
 Create a **Concessions / Chef** user in User Management. Its title and contact phone are stored separately from member and sales-representative records. Assign events and publish service/menu coordination notes through **Partner & concessions access**. The chef signs in at `https://tngos.tngboxinggym.com/#/concessions-portal` and sees only assigned event details and concessions updates. This is a restricted coordination login, not POS/payment processing or inventory management. Concessions accounts cannot receive investor financial summaries or access member records, customer orders, contracts, or administrative APIs. Use the existing password setup/reset flow; do not share an administrator login.
+
+## Chef & Concessions workspace
+
+**Dashboard → Chef & Concessions** opens the event kitchen for administrators. Chef accounts land on this same module and see their assigned events. All concessions tools are available to both roles: menu items and selling prices; food costs and planned margins; planned/sold/waste quantities; a shopping checklist grouped by CHEF’STORE, Walmart, Sam’s Club and Other; prep/service notes; menu ideas; printable published menu PDF; and store order-list CSV.
+
+An event created through the TNGOS event API or existing event import automatically receives concessions-only grants for every active chef account. The grants are created in the same transaction as the event. Disabled chefs, sponsors and investors are excluded. Administrators retain access to every event without a grant. Grant revocation remains effective; renaming an event does not recreate revoked grants. Existing events can be assigned through User Management.
+
+Menu and shopping edits use versions to prevent one person silently overwriting another's changes. Blank food costs remain unknown, so no false margin is displayed. Planned food margin excludes tax, labor, transport and overhead. Shopping estimates and manually entered receipts do not place orders or charge payments; serving counts are not reconciled Clover transactions.
+
+**Generate menu ideas** uses the existing configured OpenAI connection, with a bounded request timeout. If no connection is configured or it fails, a clearly labeled starter template is returned. Draft suggestions are reviewed and editable before import; importing adds items alongside existing ones and is idempotent. AI output cannot mark purchases as paid, assert actual receipts, record sales/waste or verify allergen information. Chef-verified ingredients, allergen labeling, supplier prices and food-service requirements remain the chef's responsibility.
+
+**Review & publish menu** creates a customer-facing snapshot containing names, descriptions, selling prices and allergen notes only. Its PDF excludes food costs, shopping information, internal prep notes and receipt values. Later edits stay draft until republished. Downloads and all workspace APIs require authorized event access.

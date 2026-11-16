@@ -9,6 +9,7 @@ export const ROLE_MENUS = {
     "TNGTrainer",
     "Promoter",
     "TNG BOXING EVENTS",
+    "Chef & Concessions",
     "Fight Calendar",
     "Products",
     "Member Check-In",
@@ -50,11 +51,11 @@ export const ROLE_MENUS = {
   rep: ["My Sales"],
   investor: ["Investor Portal"],
   sponsor: ["Sponsor Portal"],
-  concessions: ["Concessions Portal"],
+  concessions: ["Chef & Concessions"],
 };
 
 export const WORKSPACE_GROUPS = [
-  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal'] },
+  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal', 'Chef & Concessions'] },
   { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer'] },
   { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
@@ -63,6 +64,7 @@ export const WORKSPACE_GROUPS = [
 ];
 export const WORKSPACE_HINTS = {
   "Investor Portal": "Your assigned event updates and approved business summaries",
+  "Chef & Concessions": "Event kitchen: menu pricing, food costs, shopping lists, prep, AI drafts and printable menus",
   "Concessions Portal": "Your assigned event concessions details and updates",
   "Sponsor Portal": "Your assigned sponsorship events and TNG updates",
   Dashboard: 'Daily membership, attendance, sales and event overview',
@@ -114,7 +116,7 @@ export function dailyWorkspaces(role) {
  const chosen=preferred.filter(page=>allowed.includes(page));
  return chosen.length?chosen:allowed.slice(0,4);
 }
-export const EVENT_SECTIONS={overview:0,'fight-card':1,contracts:2,compliance:3,checklist:4,medicals:5,expenses:6,sponsors:7,settings:8,tickets:9,matchmaking:10,fighters:11,'fight-night':12,recap:13,offers:14,'matchmaker-desk':15};
+export const EVENT_SECTIONS={overview:0,'fight-card':1,contracts:2,compliance:3,checklist:4,medicals:5,expenses:6,sponsors:7,settings:8,tickets:9,matchmaking:10,fighters:11,'fight-night':12,recap:13,offers:14,'matchmaker-desk':15,concessions:16};
 export function workspaceSlug(page) { return page.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 export function workspaceHash(page, target = {}) {
   const params = new URLSearchParams();
@@ -125,6 +127,7 @@ export function workspaceHash(page, target = {}) {
 }
 export function readWorkspace(hash, role) {
   let [slug, query = ""] = String(hash || "").replace(/^#\/?/, "").split("?");
+  if (slug === 'concessions-portal') slug='chef-concessions';
   if (slug === 'front-desk') slug='member-check-in';
   const page = (ROLE_MENUS[role] || []).find(p => workspaceSlug(p) === slug);
   if (!page) return null;
@@ -134,6 +137,6 @@ export function readWorkspace(hash, role) {
     if (Number.isSafeInteger(value) && value > 0 && ((key === "member" && page === "Members") || (key === "event" && page === "TNG BOXING EVENTS"))) target[name] = value;
   }
   const section=params.get('section');
-  if(page==='TNG BOXING EVENTS'&&Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,section)&&(section!=='recap'||['admin','staff'].includes(role)))target.eventSection=section;
+  if(page==='TNG BOXING EVENTS'&&Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,section)&&(!['recap','concessions'].includes(section)||['admin','staff'].includes(role)))target.eventSection=section;
   return { page, target };
 }
