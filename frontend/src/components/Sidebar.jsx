@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   Box,
   Button, Collapse,
-  Divider,
+  IconButton,
   List,
   ListItemButton,
   ListItemIcon,
@@ -11,6 +11,8 @@ import {
   TextField,
   InputAdornment,
 } from "@mui/material";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import RestaurantRoundedIcon from "@mui/icons-material/RestaurantRounded";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
@@ -40,6 +42,7 @@ export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
+  "Chef & Concessions": <RestaurantRoundedIcon />,
   "Text Inbox": <CampaignRoundedIcon />,
   "Call Center": <DialpadRoundedIcon />,
   "System Overview": <HealthAndSafetyRoundedIcon />,
@@ -79,8 +82,12 @@ export default function Sidebar({
 }) {
   const [search, setSearch] = useState("");
   const filtered = searchWorkspaces(role,search);
-  const [expanded,setExpanded]=useState(()=>Object.fromEntries(WORKSPACE_GROUPS.map(g=>[g.id,g.id==='home'||g.pages.includes(page)])));
-  useEffect(()=>{const group=workspaceGroup(page);if(group)setExpanded({home:true,[group.id]:true});},[page,role]);
+  const [openGroup,setOpenGroup]=useState(()=>workspaceGroup(page)?.id||null);
+  const [shortcutsOpen,setShortcutsOpen]=useState(false);
+  useEffect(()=>{setOpenGroup(workspaceGroup(page)?.id||null);setShortcutsOpen(false);setSearch("");},[page,role]);
+  const shortcuts=(pinned.length?pinned:dailyWorkspaces(role)).filter(item=>(ROLE_MENUS[role]||[]).includes(item));
+  const groupNames={home:'Overview',gym:'Gym & members',boxing:'Boxing & events',retail:'Shop & sales',growth:'Marketing & messages',admin:'Administration'};
+  function tool(item,shortcut=false){const active=page===item;return <ListItemButton key={item} component="button" aria-current={active?'page':undefined} selected={active} onClick={()=>choosePage(item)} sx={{width:'100%',minHeight:42,borderRadius:1.5,mb:.3,pl:shortcut?1.5:2.25,color:active?'#fff':'#b5c2d4',textAlign:'left','&.Mui-selected, &.Mui-selected:hover':{bgcolor:'#d7193226',color:'#fff',boxShadow:'inset 2px 0 #ed3c55'},'&:hover':{bgcolor:'#ffffff09',color:'#fff'}}}><ListItemIcon sx={{minWidth:30,color:active?'#fa7187':'#8fa1bb','& svg':{fontSize:18}}}>{ICONS[item]||<DashboardRoundedIcon/>}</ListItemIcon><ListItemText primary={item} slotProps={{primary:{sx:{fontSize:12.5,fontWeight:active?800:550,lineHeight:1.4}}}}/></ListItemButton>;}
 
   function choosePage(item) {
     setSearch("");
@@ -89,107 +96,25 @@ export default function Sidebar({
   }
 
   return (
-    <Box className="tng-sidebar"
-      sx={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        bgcolor: "#09090b",
-        color: "white",
-      }}
-    >
-      <Box sx={{ px: 2.5, pt: 3, pb: 2.5 }}>
-        <Box sx={{display:'flex',alignItems:'center',gap:1.5,mb:1}}><Box className="tng-brand-mark">TNG</Box><Box>
-        <Typography variant="h5" letterSpacing={-0.6} sx={{fontWeight: 900}}>
-          TNG <Box component="span" sx={{ color: "#e31b23" }}>OS</Box>
-        </Typography>
-        </Box></Box>
-        <Typography variant="caption" sx={{ color: "rgba(255,255,255,.55)" }}>
-          THE NEXT GENERATION · BOXING
-        </Typography>
+    <Box className="tng-sidebar" sx={{height:'100%',display:'flex',flexDirection:'column',color:'#fff',bgcolor:'#090d14'}}>
+      <Box sx={{px:2.25,py:2,display:'flex',alignItems:'center',gap:1.5}}>
+        <Box className="tng-brand-mark" sx={{width:34,height:34,fontSize:15}}>TNG</Box>
+        <Box><Typography sx={{fontSize:19,fontWeight:900,letterSpacing:-.6}}>TNG <Box component="span" sx={{color:'#ed3c55'}}>OS</Box></Typography><Typography sx={{fontSize:9,color:'#8091a9',letterSpacing:1.5}}>THE NEXT GENERATION</Typography></Box>
       </Box>
-
-      <Divider sx={{ borderColor: "rgba(255,255,255,.09)" }} />
-
-      <Box sx={{ px: 2, pt: 2 }}><TextField fullWidth value={search} onChange={e => setSearch(e.target.value)} placeholder="Find workspace" inputProps={{ 'aria-label': 'Find workspace' }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchRoundedIcon fontSize="small" sx={{ color: '#9c9ca6' }}/></InputAdornment> } }} sx={{ '& .MuiOutlinedInput-root': { color: 'white', bgcolor: '#19191e', '& fieldset': { borderColor: '#303038' } } }}/></Box>
-      {!search&&<Box sx={{px:2,pt:2}}><Typography variant="caption" sx={{color:'#8995a6',fontWeight:800,letterSpacing:1}}>{pinned.length?'PINNED TOOLS':'DAILY TOOLS'}</Typography><Box sx={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:.7,mt:1}}>{(pinned.length?pinned:dailyWorkspaces(role)).filter(item=>(ROLE_MENUS[role]||[]).includes(item)).map(item=><Button key={item} onClick={()=>choosePage(item)} sx={{color:page===item?'#fff':'#bbc7d8',border:'1px solid',borderColor:page===item?'#ef3c5755':'#ffffff12',bgcolor:page===item?'#d7193222':'#ffffff04',fontSize:11,lineHeight:1.4,py:1,minHeight:44,textAlign:'center'}}>{item}</Button>)}</Box></Box>}
-      <Box sx={{px:2,pt:1}}><Button fullWidth variant="outlined" onClick={onModules} sx={{color:"#dbe6f4",borderColor:"#ffffff24"}}>All modules & layout</Button></Box>
-      <List component="nav" aria-label="Workspace navigation" sx={{ px: 1.25, py: 1.5, flex: 1, overflowY: "auto" }}>
-        {WORKSPACE_GROUPS.map(group => {
-          const groupItems = group.pages.filter(item => filtered.includes(item));
-          if (!groupItems.length) return null;
-          const open=!!search||!!expanded[group.id];
-          return <React.Fragment key={group.id}>
-          <ListItemButton component="button" aria-label={`Toggle ${group.label}`} aria-expanded={open} onClick={()=>setExpanded({...expanded,[group.id]:!expanded[group.id]})} sx={{width:'100%',mt:1,borderRadius:2,py:1.2,minHeight:44,color:'#93a1b4',gap:1}}><Box sx={{width:5,height:5,bgcolor:group.accent,borderRadius:'50%'}}/><Typography sx={{fontSize:10,fontWeight:850,letterSpacing:1.1,flex:1,textAlign:'left'}}>{group.label}</Typography><Typography sx={{fontSize:10,opacity:.6}}>{groupItems.length}</Typography><ExpandMoreRoundedIcon sx={{fontSize:16,transform:open?'rotate(180deg)':'none'}}/></ListItemButton>
-          <Collapse in={open} timeout={150} unmountOnExit>
-          {groupItems.map((item) => {
-          const active = page === item;
-
-          return (
-            <ListItemButton
-              key={item}
-              onClick={() => choosePage(item)}
-              selected={active}
-              aria-current={active ? "page" : undefined}
-              sx={{
-                mb: 0.5,
-                minHeight: 46,
-                borderRadius: 2.5,
-                color: active ? "white" : "rgba(255,255,255,.72)",
-                bgcolor: active ? "#d7193224" : "transparent",border:'1px solid transparent',
-                "&.Mui-selected, &.Mui-selected:hover": { bgcolor: "#d7193224", color: "white",borderColor:'#f6405a40',boxShadow:'inset 3px 0 0 #f6405a' },
-                "&:hover": {
-                  bgcolor: active ? "#d7193224" : "rgba(255,255,255,.05)",
-                  color: "white",
-                },
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  minWidth: 38,
-                  color: "inherit",
-                }}
-              >
-                {ICONS[item]}
-              </ListItemIcon>
-              <ListItemText
-                primary={item}
-                secondary={item==='Promoter'?'Fighters & matchmaking':item==='TNG BOXING EVENTS'?'Cards, tickets & contracts':undefined}
-                slotProps={{
-                  secondary: {sx:{color:'#8796ad',fontSize:11}},
-                  primary: {
-                    sx: {
-                      fontWeight: active ? 800 : 650,
-                    },
-                  },
-                }}
-              />
-            </ListItemButton>
-          );
-          })}</Collapse></React.Fragment>;
-        })}
-        {!filtered.length && <Typography sx={{ p: 2, color: '#aaa' }}>No matching workspaces</Typography>}
-      </List>
-
-      <Box sx={{ p: 2 }}>
-        <Box
-          sx={{
-            p: 1.5,
-            borderRadius: 2.5,
-            bgcolor: "rgba(255,255,255,.06)",
-            border: "1px solid rgba(255,255,255,.08)",
-          }}
-        >
-          <Typography variant="caption" sx={{ color: "rgba(255,255,255,.55)" }}>
-            <span className="tng-status-dot"/>WORKSPACE ACCESS
-          </Typography>
-          <Typography sx={{fontWeight: 800,  textTransform: "capitalize" }}>
-            {role}
-          </Typography>
-        </Box>
+      <Box sx={{px:1.75,pb:1.5}}><TextField fullWidth value={search} onChange={e=>setSearch(e.target.value)} placeholder="Find a tool…" slotProps={{htmlInput:{'aria-label':'Find workspace'},input:{startAdornment:<InputAdornment position="start"><SearchRoundedIcon sx={{fontSize:18,color:'#8fa1bb'}}/></InputAdornment>,endAdornment:search?<InputAdornment position="end"><IconButton size="small" aria-label="Clear workspace search" onClick={()=>setSearch('')} sx={{color:'#bbc7d8',minWidth:32,minHeight:32}}><CloseRoundedIcon sx={{fontSize:16}}/></IconButton></InputAdornment>:null}}} sx={{'& .MuiOutlinedInput-root':{color:'#fff',bgcolor:'#ffffff05',fontSize:12.5,'& fieldset':{borderColor:'#ffffff12'}},'& input':{py:1.25}}}/></Box>
+      <Box sx={{flex:1,minHeight:0,overflowY:'auto',px:1.25,pb:1.5}}>
+        {!search&&shortcuts.length>0&&<Box sx={{mb:1.5,border:'1px solid #ffffff0e',borderRadius:2,overflow:'hidden'}}>
+          <ListItemButton component="button" aria-label={pinned.length?'Toggle pinned tools':'Toggle daily tools'} aria-expanded={shortcutsOpen} onClick={()=>{setShortcutsOpen(v=>!v);setOpenGroup(null);}} sx={{width:'100%',minHeight:42,color:'#c2cedf',px:1.5,textAlign:'left'}}><Typography sx={{fontSize:12,fontWeight:750,flex:1}}>{pinned.length?'Pinned tools':'Daily tools'}</Typography><ExpandMoreRoundedIcon sx={{fontSize:18,transform:shortcutsOpen?'rotate(180deg)':'none'}}/></ListItemButton>
+          <Collapse in={shortcutsOpen} timeout={120} unmountOnExit><Box sx={{px:.5,pb:.5}}>{shortcuts.map(item=>tool(item,true))}</Box></Collapse>
+        </Box>}
+        <List component="nav" aria-label="Workspace navigation" disablePadding>
+          {search?<><Typography sx={{px:1.25,py:1,fontSize:10,color:'#8091a9',letterSpacing:1}}>SEARCH RESULTS · {filtered.length}</Typography>{filtered.map(item=>tool(item,true))}{!filtered.length&&<Typography sx={{p:1.5,color:'#a5b3c7',fontSize:12}}>No tools match your search.</Typography>}</>:WORKSPACE_GROUPS.map(group=>{
+            const items=group.pages.filter(item=>filtered.includes(item));if(!items.length)return null;const open=openGroup===group.id;
+            return <Box key={group.id} sx={{mb:.5}}><ListItemButton component="button" aria-label={`Toggle ${group.label}`} aria-expanded={open} onClick={()=>{setOpenGroup(open?null:group.id);setShortcutsOpen(false);}} sx={{width:'100%',minHeight:46,borderRadius:2,px:1.25,gap:1.25,color:open?'#f0f5ff':'#a8b7cc',bgcolor:open?'#ffffff06':'transparent',textAlign:'left'}}><Box sx={{width:6,height:6,bgcolor:group.accent,borderRadius:1,flexShrink:0}}/><Typography sx={{flex:1,fontSize:12.5,fontWeight:open?800:650}}>{groupNames[group.id]||group.label}</Typography><ExpandMoreRoundedIcon sx={{fontSize:18,color:'#7f91aa',transform:open?'rotate(180deg)':'none'}}/></ListItemButton><Collapse in={open} timeout={120} unmountOnExit><Box sx={{ml:1.5,mt:.5,mb:1,borderLeft:'1px solid #ffffff12',pl:.5}}>{items.map(item=>tool(item))}</Box></Collapse></Box>;
+          })}
+        </List>
       </Box>
+      <Box sx={{px:1.75,py:1.25,borderTop:'1px solid #ffffff0c'}}><Button fullWidth onClick={onModules} sx={{justifyContent:'flex-start',color:'#a9b9cf',fontSize:11.5,minHeight:36}}>All tools & layout</Button><Box sx={{display:'flex',alignItems:'center',justifyContent:'space-between',px:1,pt:.75}}><Typography sx={{fontSize:10,color:'#73849d'}}>WORKSPACE</Typography><Typography sx={{fontSize:10,color:'#b1c0d5',textTransform:'capitalize'}}>{role}</Typography></Box></Box>
     </Box>
   );
 }
-
-
