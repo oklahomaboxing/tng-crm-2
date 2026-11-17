@@ -21,7 +21,7 @@ from .services.memberships import (
     effective_membership_status,
 )
 logger = logging.getLogger(__name__)
-from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
@@ -2418,10 +2418,12 @@ def activate_prospects(
     }
 @app.get("/api/users")
 def list_users(
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
     require_admin(user)
+    response.headers["Cache-Control"] = "private, no-store"
 
     users = db.query(User).order_by(User.name.asc()).all()
 
@@ -2436,6 +2438,8 @@ def list_users(
             "email": account.email,
             "role": account.role,
             "active": account.active,
+            "last_login": account.last_login.isoformat()+"Z" if account.last_login else None,
+            "locked_until": account.locked_until.isoformat()+"Z" if account.locked_until else None,
             "sales_rep_id": rep.id if rep else None,
             "phone": rep.phone if rep else "",
             "referral_slug": rep.referral_slug if rep else "",

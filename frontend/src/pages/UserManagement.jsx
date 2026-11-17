@@ -1,3 +1,4 @@
+import AccountAccess from "../components/AccountAccess.jsx";
 import PartnerAccess from "../components/PartnerAccess.jsx";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -13,6 +14,7 @@ import {
   Stack,
   TextField,
   Typography,
+  Tabs, Tab,
 } from "@mui/material";
 
 const API = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -35,6 +37,7 @@ function fighterName(fighter) {
 }
 
 export default function UserManagement() {
+  const [section,setSection]=useState(0);
   const [role, setRole] = useState("staff");
   const [name, setName] = useState("");
   const [concessionsPhone,setConcessionsPhone]=useState("");
@@ -133,8 +136,8 @@ export default function UserManagement() {
   }
 
   useEffect(() => {
-    loadManagerData();
-  }, []);
+    if(section===1)loadManagerData();
+  }, [section]);
 
   useEffect(() => {
     if (!selectedManager) return;
@@ -449,7 +452,10 @@ export default function UserManagement() {
         </Alert>
       )}
 
-      <Box sx={{mb:3}}><PartnerAccess/></Box>
+      <Tabs value={section} onChange={(_,v)=>setSection(v)} variant="scrollable" scrollButtons="auto" aria-label="Account administration sections" sx={{mb:3}}><Tab label="Account Access"/><Tab label="Create & manage"/><Tab label="Event access"/></Tabs>
+      {section===0&&<AccountAccess/>}
+      {section===2&&<PartnerAccess/>}
+      {section===1&&<>
       <Grid container spacing={3}>
         <Grid item xs={12} lg={5}>
           <Card sx={{ borderRadius: 3 }}>
@@ -888,6 +894,7 @@ export default function UserManagement() {
           </Card>
         </Grid>
       </Grid>
+      </>}
     </Box>
   );
 }
