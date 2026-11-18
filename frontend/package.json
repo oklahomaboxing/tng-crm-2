@@ -3,7 +3,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview",
-    "prebuild": "node scripts/render-ticket-policies.mjs"
+    "prebuild": "node scripts/render-ticket-policies.mjs",
+    "postbuild": "node scripts/render-venue-booking.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
