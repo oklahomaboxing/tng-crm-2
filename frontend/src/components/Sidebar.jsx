@@ -52,6 +52,7 @@ const ICONS = {
   "Security Center": <ShieldRoundedIcon />,
   Members: <PeopleAltRoundedIcon />,
   "TNGTrainer": <SportsMmaRoundedIcon />,
+  "TNG Boxing Game": <SportsMmaRoundedIcon />,
   Promoter: <SportsMmaRoundedIcon />,
   "Amateur Matchmaker": <SportsMmaRoundedIcon />,
   "Manager Portal": <GroupsRoundedIcon />,

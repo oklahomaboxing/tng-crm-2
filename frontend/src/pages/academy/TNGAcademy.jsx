@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { lazy, Suspense, useMemo, useState } from "react";
 import {
   Box,
   Divider,
@@ -17,7 +17,9 @@ import TvRoundedIcon from "@mui/icons-material/TvRounded";
 import AITrainer from "../AITrainer.jsx";
 import AIDisplay from "../AIDisplay.jsx";
 
+const TngBoxingGame=lazy(()=>import('../TngBoxingGame'));
 const trainerItems = [
+  {key:'boxing-game',label:'Boxing Game',icon:<SportsMmaRoundedIcon/>},
   {
     key: "ai-trainer",
     label: "AI Trainer",
@@ -35,6 +37,8 @@ export default function TNGAcademy() {
 
   const content = useMemo(() => {
     switch (section) {
+      case 'boxing-game':
+        return <Suspense fallback={<Typography>Loading game…</Typography>}><TngBoxingGame/></Suspense>;
       case "tv-display":
         return <AIDisplay academyMode />;
 
@@ -56,7 +60,7 @@ export default function TNGAcademy() {
         </Typography>
 
         <Typography color="text.secondary">
-          AI-powered boxing training and live TV display.
+          Boxing training, interactive combination game and live TV display.
         </Typography>
       </Box>
 

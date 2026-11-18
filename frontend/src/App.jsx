@@ -25,6 +25,7 @@ import tngTheme from "./theme/tngTheme";
 
 import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspaces";
 import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
+const TngBoxingGame = lazy(() => import('./pages/TngBoxingGame'));
 const MemberPortal = lazy(() => import("./pages/MemberPortal.jsx"));
 const MemberActivate = lazy(() => import("./pages/MemberActivate.jsx"));
 const ApparelStore = lazy(() => import("./pages/ApparelStore.jsx"));
@@ -876,6 +877,7 @@ return (
       {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
       {page === "Leads" && role !== "rep" && <Leads />}
       {page === "TNGTrainer" && role !== "rep" && <TNGAcademy />}
+      {page === "TNG Boxing Game" && ["admin","staff"].includes(role) && <TngBoxingGame/>}
       {page === "Promoter" &&
         ["admin", "staff", "matchmaker"].includes(role) && (
           <Matchmaker />

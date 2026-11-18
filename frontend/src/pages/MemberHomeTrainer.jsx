@@ -1,3 +1,4 @@
+import BoxingGameLauncher from '../components/BoxingGameLauncher';
 import { useEffect, useRef, useState } from "react";
 import {
   Box,
@@ -349,6 +350,7 @@ export default function MemberHomeTrainer() {
     >
       <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
         <Stack spacing={3}>
+          <BoxingGameLauncher onOpen={stopWorkout}/>
           <Box>
             <Stack
               direction="row"
