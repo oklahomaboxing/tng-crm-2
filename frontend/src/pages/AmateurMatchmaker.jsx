@@ -1,6 +1,9 @@
 import React,{useEffect,useRef,useState}from'react';import{Accordion,AccordionDetails,AccordionSummary,Alert,Box,Button,Card,CardContent,Chip,Dialog,DialogActions,DialogContent,DialogTitle,FormControlLabel,Menu,MenuItem,Stack,Switch,Tab,Tabs,Table,TableBody,TableCell,TableContainer,TableHead,TablePagination,TableRow,TextField,Typography}from'@mui/material';
+import AmateurTournament from './AmateurTournament';
+import AmateurDirectory from './AmateurDirectory';
+import AmateurOfficials from './AmateurOfficials';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
-const views=[['roster','Boxer roster'],['setup','Event setup'],['matches','Match proposals'],['rules','Rules & reference']];
+const views=[['roster','Boxer roster'],['setup','Event setup'],['matches','Match proposals'],['tournament','Tournament'],['clubs','Clubs'],['officials','Officials'],['rules','Rules & reference']];
 const editorViews=[['profile','Profile'],['boxing','Boxing details'],['club','Club & coach']];
 const editorFields={profile:['member_id','first_name','last_name','dob','sex'],boxing:['declared_weight','bouts','wins','masters_class'],club:['club','coach_first_name','coach_last_name','city','state','lbc']};
 const defaultPreferences={max_bout_gap:5,allow_same_club:false,allow_coed_peewee:false,max_unlimited_weight_gap_lb:20};
@@ -91,6 +94,10 @@ export default function AmateurMatchmaker(){
      </>}
     </>:data.competition_date&&data.rules.verified&&<Typography color="text.secondary">Generate a proposed card, then switch between bouts and unmatched boxers.</Typography>}
    </Stack>)}
+
+   {view==='tournament'&&panel('tournament',<AmateurTournament key={selected} roster={data}/>)}
+   {view==='clubs'&&panel('clubs',<AmateurDirectory kind="club"/>)}
+   {view==='officials'&&panel('officials',<AmateurOfficials key={selected} roster={data} onSetup={()=>setView('setup')}/>)}
 
    {view==='rules'&&panel('rules',<Stack spacing={2}>
     <Typography variant="h5">Rules & reference</Typography>

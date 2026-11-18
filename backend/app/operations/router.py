@@ -87,3 +87,12 @@ router.include_router(venue_router)
 
 from app.amateurs.rosters import router as amateur_rosters_router
 router.include_router(amateur_rosters_router)
+
+from app.amateurs.tournaments import router as amateur_tournaments_router
+router.include_router(amateur_tournaments_router)
+
+from app.amateurs.directory import router as amateur_directory_router
+router.include_router(amateur_directory_router)
+
+from app.amateurs.officials import router as amateur_officials_router
+router.include_router(amateur_officials_router)
