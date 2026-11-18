@@ -1,0 +1,28 @@
+import React,{useEffect,useState}from'react';
+import{Alert,Box,Button,Checkbox,FormControlLabel,MenuItem,Stack,TextField,Typography}from'@mui/material';
+const API=(import.meta.env.VITE_API_URL||'').replace(/\/$/,'');
+const localDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+export default function VenueBookingForm({internal=false,initialDate='',onSaved}){
+ const [form,setForm]=useState(()=>({title:'',event_type:'Private event',contact_name:'',email:'',phone:'',starts_local:(initialDate||localDay())+'T17:00',ends_local:(initialDate||localDay())+'T20:00',guests:25,details:'',acknowledge:false,website_confirmation:'',request_key:crypto.randomUUID()}));
+ const[busy,setBusy]=useState(false),[error,setError]=useState(''),[done,setDone]=useState(null),[unavailable,setUnavailable]=useState([]);
+ const day=form.starts_local.slice(0,10);
+ useEffect(()=>{if(internal||!day)return;const c=new AbortController();const end=new Date(day+'T12:00:00Z');end.setUTCDate(end.getUTCDate()+1);fetch(`${API}/api/venue/public/availability?start=${day}&end=${end.toISOString().slice(0,10)}`,{signal:c.signal,cache:'no-store'}).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.detail||'Availability is unavailable');setUnavailable(d.unavailable||[]);}).catch(e=>{if(e.name!=='AbortError')setError(e.message);});return()=>c.abort();},[day,internal]);
+ function set(k,v){setForm(f=>({...f,[k]:v}));setError('');}
+ async function save(e){e.preventDefault();if(busy)return;setBusy(true);setError('');try{const r=await fetch(API+'/api/venue/'+(internal?'bookings':'public/requests'),{method:'POST',headers:{'Content-Type':'application/json',...(internal?{Authorization:'Bearer '+localStorage.getItem('token')}:{})},body:JSON.stringify({...form,guests:Number(form.guests)}),cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:Array.isArray(d.detail)?d.detail.map(x=>x.msg).join('; '):'Could not submit your request.');setDone(d);onSaved?.(d);}catch(e){setError(e.message);}finally{setBusy(false);}}
+ if(done)return <Alert severity="success"><Typography fontWeight={800}>Facility request received</Typography>{done.reference&&<Typography>Reference: {done.reference}</Typography>}TNG will review your request and contact you. Your booking is not confirmed yet.</Alert>;
+ return <Box component="form" onSubmit={save}><Stack spacing={2}>
+ <Alert severity="info">All dates and times are Oklahoma City time. Include setup and cleanup time. Submitting a request does not reserve a date; TNG must confirm availability, pricing and terms.</Alert>
+ {error&&<Alert severity="error">{error}</Alert>}
+ <TextField required label="Event name" value={form.title} onChange={e=>set('title',e.target.value)} inputProps={{maxLength:160}}/>
+ <TextField select label="Event type" value={form.event_type} onChange={e=>set('event_type',e.target.value)}>{['Private event','Community event','Corporate event','Training / workshop','TNG event','Maintenance / blockout','Other'].filter(x=>internal||!['TNG event','Maintenance / blockout'].includes(x)).map(x=><MenuItem key={x} value={x}>{x}</MenuItem>)}</TextField>
+ <Box sx={{display:'grid',gridTemplateColumns:{xs:'1fr',sm:'1fr 1fr'},gap:2}}><TextField required type="datetime-local" label="Start · Oklahoma City" value={form.starts_local} onChange={e=>set('starts_local',e.target.value)} slotProps={{inputLabel:{shrink:true}}}/><TextField required type="datetime-local" label="End · Oklahoma City" value={form.ends_local} onChange={e=>set('ends_local',e.target.value)} slotProps={{inputLabel:{shrink:true}}}/></Box>
+ {!!unavailable.length&&<Alert severity="warning">Reserved times on this date: {unavailable.map((x,i)=><Typography variant="body2" key={i}>{new Date(x.starts_at).toLocaleString('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – {new Date(x.ends_at).toLocaleString('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</Typography>)}</Alert>}
+ <TextField required label="Contact name" autoComplete="name" value={form.contact_name} onChange={e=>set('contact_name',e.target.value)}/>
+ <Box sx={{display:'grid',gridTemplateColumns:{xs:'1fr',sm:'1fr 1fr'},gap:2}}><TextField required type="email" label="Email" autoComplete="email" value={form.email} onChange={e=>set('email',e.target.value)}/><TextField required type="tel" label="Phone" autoComplete="tel" value={form.phone} onChange={e=>set('phone',e.target.value)}/></Box>
+ <TextField required type="number" label="Expected guests (subject to venue approval)" value={form.guests} onChange={e=>set('guests',e.target.value)} slotProps={{htmlInput:{min:1,max:10000}}}/>
+ <TextField multiline minRows={3} label="Event details, equipment and special requests" value={form.details} onChange={e=>set('details',e.target.value)} slotProps={{htmlInput:{maxLength:4000}}}/>
+ <Box sx={{display:'none'}} aria-hidden="true"><input tabIndex={-1} autoComplete="off" value={form.website_confirmation} onChange={e=>set('website_confirmation',e.target.value)}/></Box>
+ <FormControlLabel control={<Checkbox checked={form.acknowledge} onChange={e=>set('acknowledge',e.target.checked)}/>} label="I understand this is a request and TNG must confirm the booking."/>
+ <Button type="submit" variant="contained" size="large" disabled={busy||!form.acknowledge}>{busy?'Submitting…':internal?'Add booking request':'Request the facility'}</Button>
+ </Stack></Box>;
+}

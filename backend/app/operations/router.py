@@ -81,3 +81,6 @@ from app.events.concessions import router as concessions_router
 router.include_router(concessions_router)
 from app.managers.routes import router as manager_workspace_router
 router.include_router(manager_workspace_router)
+
+from app.events.venue import router as venue_router
+router.include_router(venue_router)

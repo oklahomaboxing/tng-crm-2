@@ -66,3 +66,11 @@ test('chef workspace is available to admin and chef; event finance and matchmake
  assert.deepEqual(readWorkspace('#/tng-boxing-events?event=3&section=concessions','matchmaker').target,{eventId:3});
  assert.equal(readWorkspace('#/tng-boxing-events?event=3&section=concessions','admin').target.eventSection,'concessions');
 });
+
+test('event coordinator shares booking workspace with admin and has no other modules',()=>{
+ assert.deepEqual(ROLE_MENUS.event_coordinator,['Venue & Event Bookings']);
+ const route=workspaceHash('Venue & Event Bookings');
+ assert.equal(readWorkspace(route,'admin').page,'Venue & Event Bookings');
+ assert.equal(readWorkspace(route,'event_coordinator').page,'Venue & Event Bookings');
+ for(const page of ['Dashboard','Members','Reports','User Management','TNG BOXING EVENTS'])assert.equal(readWorkspace(workspaceHash(page),'event_coordinator'),null);
+});

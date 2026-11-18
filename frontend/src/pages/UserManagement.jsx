@@ -220,6 +220,7 @@ export default function UserManagement() {
         investor: "Investor",
         sponsor: "Sponsor",
         concessions: "Concessions",
+        event_coordinator: "Event Coordinator",
       };
 
       setMessage(
@@ -495,6 +496,7 @@ export default function UserManagement() {
 
                   <MenuItem value="investor">Investor</MenuItem>
                   <MenuItem value="sponsor">Sponsor</MenuItem>
+                  <MenuItem value="event_coordinator">Event Coordinator</MenuItem>
                   <MenuItem value="concessions">Concessions / Chef</MenuItem>
                   <MenuItem value="matchmaker">
                     Matchmaker

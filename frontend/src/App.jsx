@@ -57,6 +57,8 @@ const EventCalendar = lazy(() => import("./pages/EventCalendar.jsx"));
 const TngBoxingEvents = lazy(() => import('./pages/TngBoxingEvents.jsx'));
 const PublicFightCalendar = lazy(() => import("./pages/PublicFightCalendar.jsx"));
 const FighterRegistration = lazy(() => import("./pages/FighterRegistration.jsx"));
+const VenueBookings = lazy(() => import('./pages/VenueBookings.jsx'));
+const PublicVenueBooking = lazy(() => import('./pages/PublicVenueBooking.jsx'));
 const ChefDashboard = lazy(() => import("./pages/ChefDashboard.jsx"));
 const PartnerPortal = lazy(() => import("./pages/PartnerPortal.jsx"));
 const UserManagement = lazy(() => import("./pages/UserManagement.jsx"));
@@ -78,6 +80,7 @@ function landingPageForRole(role) {
   if (role === "investor") return "Investor Portal";
   if (role === "sponsor") return "Sponsor Portal";
   if (role === "concessions") return "Chef & Concessions";
+  if (role === "event_coordinator") return "Venue & Event Bookings";
   return "Dashboard";
 }
 
@@ -130,6 +133,7 @@ function PaymentMessage({ status }) {
 }
 
 function RootEntry() {
+  if (/^\/venue\/book\/?$/.test(window.location.pathname)||window.location.hash==='#/venue-booking') return <PublicVenueBooking/>;
   const phoneTicketEvent=legacyPhoneTicketEvent(window.location);
   if(phoneTicketEvent!==null)return <PublicSellerTickets phoneEventId={phoneTicketEvent}/>;
   const publicSellerCode=ticketSellerFromLocation(window.location);
@@ -879,6 +883,7 @@ return (
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents initialEventId={navigationTarget.eventId} initialSection={navigationTarget.eventSection} />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
+      {page === "Venue & Event Bookings" && ["admin","event_coordinator"].includes(role) && <VenueBookings/>}
       {page === "Chef & Concessions" && ["admin","concessions"].includes(role) && <ChefDashboard/>}
       {((page === "Investor Portal" && role === "investor") || (page === "Sponsor Portal" && role === "sponsor") || (page === "Concessions Portal" && role === "concessions")) && <PartnerPortal/>}
       {page === "User Management" && role === "admin" && <UserManagement />}

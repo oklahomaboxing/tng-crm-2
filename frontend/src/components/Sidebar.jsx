@@ -42,6 +42,7 @@ export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
   Dashboard: <DashboardRoundedIcon />,
+  "Venue & Event Bookings": <EventRoundedIcon />,
   "Chef & Concessions": <RestaurantRoundedIcon />,
   "Text Inbox": <CampaignRoundedIcon />,
   "Call Center": <DialpadRoundedIcon />,
