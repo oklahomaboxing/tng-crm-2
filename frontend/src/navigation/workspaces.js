@@ -8,6 +8,7 @@ export const ROLE_MENUS = {
     "Members",
     "TNGTrainer",
     "Promoter",
+    "Amateur Matchmaker",
     "TNG BOXING EVENTS",
     "Chef & Concessions",
     "Venue & Event Bookings",
@@ -29,6 +30,7 @@ export const ROLE_MENUS = {
     "User Management",
   ],
   staff: [
+    "Amateur Matchmaker",
     "Member Check-In",
     "Check-In Kiosk",
     "Event Check-In",
@@ -43,6 +45,7 @@ export const ROLE_MENUS = {
   ],
   matchmaker: [
     "Promoter",
+    "Amateur Matchmaker",
     "TNG BOXING EVENTS",
     "Fight Calendar",
   ],
@@ -59,12 +62,13 @@ export const ROLE_MENUS = {
 export const WORKSPACE_GROUPS = [
   { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal', 'Chef & Concessions'] },
   { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer'] },
-  { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Venue & Event Bookings', 'TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
+  { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Amateur Matchmaker', 'Venue & Event Bookings', 'TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
   { id: 'growth', label: 'MARKETING', description: 'Leads, member communication and referral links.', accent: '#8f83d8', pages: ['Text Inbox', 'Call Center', 'Marketing Center', 'Leads', 'QR Referrals'] },
   { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
 ];
 export const WORKSPACE_HINTS = {
+  "Amateur Matchmaker": "Upload amateur boxing rosters, review ages weights and experience, USA Boxing Appendix F proposals",
   "Venue & Event Bookings": "Facility rentals, coordinator calendar, public booking requests, holds and reservations",
   "Investor Portal": "Your assigned event updates and approved business summaries",
   "Chef & Concessions": "Event kitchen: menu pricing, food costs, shopping lists, prep, AI drafts and printable menus",

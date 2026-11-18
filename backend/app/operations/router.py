@@ -84,3 +84,6 @@ router.include_router(manager_workspace_router)
 
 from app.events.venue import router as venue_router
 router.include_router(venue_router)
+
+from app.amateurs.rosters import router as amateur_rosters_router
+router.include_router(amateur_rosters_router)

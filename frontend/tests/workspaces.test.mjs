@@ -74,3 +74,8 @@ test('event coordinator shares booking workspace with admin and has no other mod
  assert.equal(readWorkspace(route,'event_coordinator').page,'Venue & Event Bookings');
  for(const page of ['Dashboard','Members','Reports','User Management','TNG BOXING EVENTS'])assert.equal(readWorkspace(workspaceHash(page),'event_coordinator'),null);
 });
+
+test('amateur matchmaking is available only to event staff and matchmakers',()=>{
+ for(const role of ['admin','staff','matchmaker'])assert.equal(readWorkspace('#/amateur-matchmaker',role).page,'Amateur Matchmaker');
+ for(const role of ['manager','member','fighter','rep','investor','sponsor','concessions','event_coordinator'])assert.equal(readWorkspace('#/amateur-matchmaker',role),null);
+});
