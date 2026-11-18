@@ -1,4 +1,3 @@
-import BoxingGameLauncher from '../components/BoxingGameLauncher';
 import BoxingResults from "../components/results/BoxingResults";
 import FighterContribution from "../components/fighters/FighterContribution";
 import { openOfficialContract } from "../utils/officialContract";
@@ -1107,7 +1106,6 @@ const [photoWorking, setPhotoWorking] = useState(false);
         >
           {managerMode?"Back to manager roster":"Sign Out"}
         </button>
-        <BoxingGameLauncher/>
       </header>
 
       {managerMode&&<div style={{padding:"14px 20px",background:"#22222b",color:"#fff"}}>Manager workspace: profile, offers, photos, contracts, results and ticket sales for this boxer. Personal electronic signatures must be completed by the boxer. Upload only PDFs already signed by the boxer.</div>}

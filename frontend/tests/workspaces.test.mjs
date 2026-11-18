@@ -80,8 +80,8 @@ test('amateur matchmaking is available only to event staff and matchmakers',()=>
  for(const role of ['manager','member','fighter','rep','investor','sponsor','concessions','event_coordinator'])assert.equal(readWorkspace('#/amateur-matchmaker',role),null);
 });
 
-test('boxing game has a dedicated gym workspace without expanding business-only roles',()=>{
- for(const role of ['admin','staff'])assert.equal(readWorkspace(workspaceHash('TNG Boxing Game'),role).page,'TNG Boxing Game');
- for(const role of ['rep','investor','sponsor','concessions','event_coordinator','matchmaker'])assert.equal(readWorkspace(workspaceHash('TNG Boxing Game'),role),null);
+test('boxing game is restricted to the administrator workspace',()=>{
+ assert.equal(readWorkspace(workspaceHash('TNG Boxing Game'),'admin').page,'TNG Boxing Game');
+ for(const role of ['staff','member','fighter','manager','rep','investor','sponsor','concessions','event_coordinator','matchmaker'])assert.equal(readWorkspace(workspaceHash('TNG Boxing Game'),role),null);
  assert.ok(searchWorkspaces('admin','controller').includes('TNG Boxing Game'));
 });

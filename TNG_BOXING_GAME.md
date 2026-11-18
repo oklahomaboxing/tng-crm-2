@@ -1,6 +1,6 @@
 # TNG Boxing Game — Combination Lab
 
-Open Gym & Members → TNG Boxing Game (admin/staff), or TNGTrainer → Boxing Game. Fighters have Play TNG Boxing Game in their portal; active members open TNGTrainer and choose Play TNG Boxing Game. No new account role, permission or external AI service is required.
+Open Gym & Members → TNG Boxing Game or TNGTrainer → Boxing Game as an administrator. The game is currently admin-only. Staff, fighters, managers and members have no navigation, portal launcher or trainer entry for it.
 
 Start round and click the ring to focus. Keyboard: 1 jab, 2 cross, 3 lead hook, 4 rear hook, 5 lead uppercut, 6 rear uppercut; A/left arrow and D/right arrow slip, S/down arrow rolls, space/up arrow blocks. P pauses/resumes, Escape pauses, F requests browser fullscreen. Exiting or changing applications automatically pauses. Fullscreen support depends on the browser.
 

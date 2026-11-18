@@ -44,7 +44,6 @@ export const ROLE_MENUS = {
     "Text Inbox",
     "QR Referrals",
     "TNGTrainer",
-    "TNG Boxing Game",
   ],
   matchmaker: [
     "Promoter",

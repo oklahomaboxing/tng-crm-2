@@ -876,8 +876,8 @@ return (
       {page === "Products" && role === "admin" && <Products />}
       {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
       {page === "Leads" && role !== "rep" && <Leads />}
-      {page === "TNGTrainer" && role !== "rep" && <TNGAcademy />}
-      {page === "TNG Boxing Game" && ["admin","staff"].includes(role) && <TngBoxingGame/>}
+      {page === "TNGTrainer" && role !== "rep" && <TNGAcademy allowGame={role === "admin"} />}
+      {page === "TNG Boxing Game" && role === "admin" && <TngBoxingGame/>}
       {page === "Promoter" &&
         ["admin", "staff", "matchmaker"].includes(role) && (
           <Matchmaker />

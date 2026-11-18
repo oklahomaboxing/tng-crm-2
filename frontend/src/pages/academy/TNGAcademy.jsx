@@ -32,13 +32,13 @@ const trainerItems = [
   },
 ];
 
-export default function TNGAcademy() {
+export default function TNGAcademy({ allowGame = false }) {
   const [section, setSection] = useState("ai-trainer");
 
   const content = useMemo(() => {
     switch (section) {
       case 'boxing-game':
-        return <Suspense fallback={<Typography>Loading game…</Typography>}><TngBoxingGame/></Suspense>;
+        return allowGame ? <Suspense fallback={<Typography>Loading game…</Typography>}><TngBoxingGame/></Suspense> : <AITrainer academyMode />;
       case "tv-display":
         return <AIDisplay academyMode />;
 
@@ -46,7 +46,7 @@ export default function TNGAcademy() {
       default:
         return <AITrainer academyMode />;
     }
-  }, [section]);
+  }, [section, allowGame]);
 
   const activeLabel =
     trainerItems.find((item) => item.key === section)?.label ||
@@ -60,7 +60,7 @@ export default function TNGAcademy() {
         </Typography>
 
         <Typography color="text.secondary">
-          Boxing training, interactive combination game and live TV display.
+          {allowGame ? 'Boxing training, interactive combination game and live TV display.' : 'Boxing training and live TV display.'}
         </Typography>
       </Box>
 
@@ -100,7 +100,7 @@ export default function TNGAcademy() {
           <Divider />
 
           <List dense sx={{ p: 1 }}>
-            {trainerItems.map((item) => (
+            {trainerItems.filter(item => allowGame || item.key !== 'boxing-game').map((item) => (
               <ListItemButton
                 key={item.key}
                 selected={section === item.key}
