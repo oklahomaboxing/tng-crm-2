@@ -1,5 +1,6 @@
 """Explicit event grants for external investor and sponsor logins."""
 from datetime import datetime
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import Column, Integer, Boolean, Text, DateTime, ForeignKey, UniqueConstraint
@@ -61,7 +62,7 @@ def revoke(grant_id:int,db=Depends(get_db),user=Depends(admin)):
     db.add(SecurityLog(user_id=user.id,action='PARTNER_ACCESS_REVOKED',description=f'Partner user {row.user_id}; event {row.event_id}'));db.delete(row);db.commit();return {'revoked':True}
 
 @router.get('/portal')
-def portal(response:Response,db=Depends(get_db),user=Depends(current_user)):
+def portal(response:Response,period:Literal['all','month','year']='all',db=Depends(get_db),user=Depends(current_user)):
     if user.role not in ('investor','sponsor','concessions'):raise HTTPException(403,'Partner login required')
     response.headers['Cache-Control']='private, no-store'
     events=[]
@@ -75,4 +76,11 @@ def portal(response:Response,db=Depends(get_db),user=Depends(current_user)):
             d=recap(db,e.id);summary=d['summary'];item['financials']={k:summary[k] for k in ['ticket_sales_cents','total_recorded_income_cents','total_cost_cents','recorded_result_cents']};item['financials_provisional']=d['provisional'];item['financials_basis']='Recorded event income and costs; not a bank balance. Incomplete records can change these totals.'
         events.append(item)
     profile=db.get(PartnerProfile,user.id)
-    return {'name':user.name,'role':user.role,'title':profile.title if profile else '', 'events':events}
+    result={'name':user.name,'role':user.role,'title':profile.title if profile else '', 'events':events}
+    if user.role=='investor':
+        from .investors import InvestorBusinessAccess,overview,safe_event
+        grant=db.get(InvestorBusinessAccess,user.id);result['business_access']=bool(grant and grant.enabled)
+        result['business']=overview(db,period) if result['business_access'] else None
+        for item in result['events']:
+            if 'financials' in item:item['financial_detail']=safe_event(db,db.get(BoxingEvent,item['id']))
+    return result

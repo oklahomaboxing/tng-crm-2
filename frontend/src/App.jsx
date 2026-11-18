@@ -62,6 +62,7 @@ const AmateurMatchmaker = lazy(() => import('./pages/AmateurMatchmaker.jsx'));
 const VenueBookings = lazy(() => import('./pages/VenueBookings.jsx'));
 const PublicVenueBooking = lazy(() => import('./pages/PublicVenueBooking.jsx'));
 const ChefDashboard = lazy(() => import("./pages/ChefDashboard.jsx"));
+const InvestorCenter = lazy(() => import('./pages/InvestorCenter.jsx'));
 const PartnerPortal = lazy(() => import("./pages/PartnerPortal.jsx"));
 const UserManagement = lazy(() => import("./pages/UserManagement.jsx"));
 const QRReferrals = lazy(() => import("./pages/QRReferrals.jsx"));
@@ -890,6 +891,7 @@ return (
       {page === "Venue & Event Bookings" && ["admin","event_coordinator"].includes(role) && <VenueBookings/>}
       {page === "Chef & Concessions" && ["admin","concessions"].includes(role) && <ChefDashboard/>}
       {((page === "Investor Portal" && role === "investor") || (page === "Sponsor Portal" && role === "sponsor") || (page === "Concessions Portal" && role === "concessions")) && <PartnerPortal/>}
+      {page === "Investor Center" && role === "admin" && <InvestorCenter/>}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}
       {page === "QR Referrals" && role !== "rep" && <QRReferrals />}

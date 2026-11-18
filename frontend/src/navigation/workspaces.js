@@ -28,6 +28,7 @@ export const ROLE_MENUS = {
     "Reports",
     "Fighter Portal Videos",
     "User Management",
+    "Investor Center",
   ],
   staff: [
     "Amateur Matchmaker",
@@ -65,9 +66,10 @@ export const WORKSPACE_GROUPS = [
   { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Amateur Matchmaker', 'Venue & Event Bookings', 'TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
   { id: 'growth', label: 'MARKETING', description: 'Leads, member communication and referral links.', accent: '#8f83d8', pages: ['Text Inbox', 'Call Center', 'Marketing Center', 'Leads', 'QR Referrals'] },
-  { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
+  { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Investor Center', 'Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
 ];
 export const WORKSPACE_HINTS = {
+  "Investor Center": "Investor business access, membership revenue, event and fighter ticket sales, expenses and published updates",
   "Amateur Matchmaker": "Upload amateur boxing rosters, review ages weights and experience, USA Boxing Appendix F proposals",
   "Venue & Event Bookings": "Facility rentals, coordinator calendar, public booking requests, holds and reservations",
   "Investor Portal": "Your assigned event updates and approved business summaries",

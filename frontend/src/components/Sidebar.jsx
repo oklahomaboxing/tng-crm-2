@@ -71,6 +71,7 @@ const ICONS = {
   "Duplicate Review": <ContentCopyRoundedIcon />,
   Reports: <AssessmentRoundedIcon />,
   "Fighter Portal Videos": <VideoLibraryRoundedIcon />,
+  "Investor Center": <AssessmentRoundedIcon />,
   "User Management": <ManageAccountsRoundedIcon />,
 };
 

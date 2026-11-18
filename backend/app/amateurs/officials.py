@@ -126,7 +126,7 @@ def update(request_id:int,body:AvailabilityUpdate,db=Depends(get_db),user=Depend
  if set(body.availability)-keys or set(body.confirmed_roles)-keys:raise HTTPException(422,'Unknown session')
  for k,role in body.confirmed_roles.items():
   if role and (role not in contact.roles or not contact.role_verified or not contact.active or body.availability.get(k)!='available'):raise HTTPException(422,'Confirm only an available official in a verified role')
- 
+
  if body.staff_note.strip() and body.staff_note!=r.staff_note:db.add(OfficialMessage(request_id=r.id,request_key='note:'+secrets.token_hex(16),channel='note',recipient='',body=body.staff_note.strip(),signature=digest(body.staff_note),status='logged',created_by=user.id))
  r.availability=body.availability;r.confirmed_roles={k:v for k,v in body.confirmed_roles.items() if v};r.staff_note=body.staff_note;r.version+=1;audit(db,user,'AVAILABILITY_RECORDED',r.id);db.commit();return {'saved':True}
 class RefreshRequest(BaseModel):version:int=Field(ge=1)
