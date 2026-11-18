@@ -1,3 +1,4 @@
+import ManagerRosterRequests from "../components/ManagerRosterRequests.jsx";
 import AccountAccess from "../components/AccountAccess.jsx";
 import PartnerAccess from "../components/PartnerAccess.jsx";
 import React, { useEffect, useMemo, useState } from "react";
@@ -452,9 +453,10 @@ export default function UserManagement() {
         </Alert>
       )}
 
-      <Tabs value={section} onChange={(_,v)=>setSection(v)} variant="scrollable" scrollButtons="auto" aria-label="Account administration sections" sx={{mb:3}}><Tab label="Account Access"/><Tab label="Create & manage"/><Tab label="Event access"/></Tabs>
+      <Tabs value={section} onChange={(_,v)=>setSection(v)} variant="scrollable" scrollButtons="auto" aria-label="Account administration sections" sx={{mb:3}}><Tab label="Account Access"/><Tab label="Create & manage"/><Tab label="Event access"/><Tab label="Roster requests"/></Tabs>
       {section===0&&<AccountAccess/>}
       {section===2&&<PartnerAccess/>}
+      {section===3&&<ManagerRosterRequests/>}
       {section===1&&<>
       <Grid container spacing={3}>
         <Grid item xs={12} lg={5}>

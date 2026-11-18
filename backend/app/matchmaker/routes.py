@@ -8512,6 +8512,7 @@ Do not add fake ticket information.
         fighter = (
             db.query(BoxingFighter)
             .filter(BoxingFighter.id == fighter_id)
+            .with_for_update()
             .first()
         )
 
@@ -9043,6 +9044,11 @@ Do not add fake ticket information.
             create_if_missing=True,
         )
 
+        active_fighter_ids = db.query(BoxingManagerFighter.fighter_id).filter(
+            BoxingManagerFighter.manager_account_id == manager.id,
+            BoxingManagerFighter.active.is_(True),
+        )
+
         rows = (
             db.query(BoxingFightOffer)
             .filter(
@@ -9053,6 +9059,7 @@ Do not add fake ticket information.
                     == user.id,
                 )
             )
+            .filter(BoxingFightOffer.fighter_id.in_(active_fighter_ids))
             .order_by(
                 BoxingFightOffer.created_at.desc(),
                 BoxingFightOffer.id.desc(),

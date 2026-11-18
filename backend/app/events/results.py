@@ -193,7 +193,10 @@ def download_results_source(event_id: int, db=Depends(get_db), user=Depends(staf
 
 @router.get('/fighters/{fighter_id}/results')
 def fighter_results(fighter_id: int, response: Response, db=Depends(get_db), user=Depends(current_user)):
-    if user.role not in ('admin', 'staff'):
+    if user.role=='manager':
+        from app.managers.access import represented_fighter
+        represented_fighter(db,user,fighter_id)
+    elif user.role not in ('admin', 'staff'):
         account = db.query(FighterAccount).filter_by(user_id=user.id).first() if user.role == 'fighter' else None
         if not account or account.fighter_id != fighter_id:
             raise HTTPException(403, 'Own fighter or staff access required')

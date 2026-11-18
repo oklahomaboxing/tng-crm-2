@@ -207,6 +207,12 @@ def _linked_fighter_account(
     user,
     db: Session,
 ):
+    if user.role=='manager':
+        from app.managers.access import delegated_account
+        account=delegated_account(db,user)
+        fighter=db.get(BoxingFighter,account.fighter_id)
+        if not fighter:raise HTTPException(404,'Boxer profile not found')
+        return account,fighter
     account = (
         db.query(FighterAccount)
         .filter(
@@ -263,6 +269,9 @@ def fighter_account_for_user(
     user: User,
 ) -> FighterAccount:
 
+    if user.role=='manager':
+        from app.managers.access import delegated_account
+        return delegated_account(db,user)
     if user.role != "fighter":
         raise HTTPException(
             status_code=403,

@@ -42,7 +42,7 @@ function money(cents) {
   }).format((Number(cents) || 0) / 100);
 }
 
-export default function FighterPortal({ onLogout, previewToken = null }) {
+export default function FighterPortal({ onLogout, previewToken = null, managerMode = false }) {
   const [data, setData] = useState(null);
   const [ticketSales, setTicketSales] = useState(null);
   const [detailsLoading,setDetailsLoading]=useState(true);
@@ -974,7 +974,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
         <p>{message}</p>
 
         <button onClick={onLogout}>
-          Sign Out
+          {managerMode?"Back to manager roster":"Sign Out"}
         </button>
       </div>
     );
@@ -1089,7 +1089,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
               fontWeight: 900,
             }}
           >
-            Fighter Portal
+            {managerMode?"Boxer workspace":"Fighter Portal"}
           </div>
         </div>
 
@@ -1104,10 +1104,11 @@ const [photoWorking, setPhotoWorking] = useState(false);
             cursor: "pointer",
           }}
         >
-          Sign Out
+          {managerMode?"Back to manager roster":"Sign Out"}
         </button>
       </header>
 
+      {managerMode&&<div style={{padding:"14px 20px",background:"#22222b",color:"#fff"}}>Manager workspace: profile, offers, photos, contracts, results and ticket sales for this boxer. Personal electronic signatures must be completed by the boxer. Upload only PDFs already signed by the boxer.</div>}
       <main
         style={{
           maxWidth: 1180,
@@ -2307,7 +2308,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                         {contractWorkingId ===
                         contract.contract_id
                           ? "OPENING CONTRACT..."
-                          : "DOWNLOAD, PRINT & SIGN CONTRACT"}
+                          : managerMode ? "DOWNLOAD CONTRACT FOR BOXER" : "DOWNLOAD, PRINT & SIGN CONTRACT"}
                       </button>
 
                       <button
@@ -2348,7 +2349,7 @@ const [photoWorking, setPhotoWorking] = useState(false);
                     </div>
                   ) : null}
 
-                  {!contract.docusign_envelope_id && ![
+                  {!managerMode && !contract.docusign_envelope_id && ![
                     "signed",
                     "declined",
                     "cancelled",

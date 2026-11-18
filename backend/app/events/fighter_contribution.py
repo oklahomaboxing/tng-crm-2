@@ -13,7 +13,10 @@ router = APIRouter(prefix='/api/events/fighters', tags=['Fighter contribution'])
 
 @router.get('/{fighter_id}/contribution')
 def fighter_contribution(fighter_id: int, response: Response, limit: int = Query(20, ge=1, le=50), offset: int = Query(0, ge=0), db=Depends(get_db), user=Depends(current_user)):
-    if user.role not in ('admin', 'staff'):
+    if user.role=='manager':
+        from app.managers.access import represented_fighter
+        represented_fighter(db,user,fighter_id)
+    elif user.role not in ('admin', 'staff'):
         if user.role != 'fighter':
             raise HTTPException(403, 'Fighter or staff account required')
         account = db.query(FighterAccount).filter_by(user_id=user.id).first()

@@ -79,3 +79,5 @@ from app.events.partners import router as partner_router
 router.include_router(partner_router)
 from app.events.concessions import router as concessions_router
 router.include_router(concessions_router)
+from app.managers.routes import router as manager_workspace_router
+router.include_router(manager_workspace_router)
