@@ -25,7 +25,7 @@ def fighter_contribution(fighter_id: int, response: Response, limit: int = Query
     event_ids = {b.event_id for b in bouts if b.event_id and str(b.status or '').strip().lower() not in CANCELLED}
     events = db.query(BoxingEvent).filter(BoxingEvent.id.in_(event_ids)).order_by(BoxingEvent.event_date.desc(), BoxingEvent.id.desc())
     result = []
-    fields = ('ticket_quantity', 'ticket_sales_cents', 'gross_purse_cents', 'travel_cents', 'per_diem_cents', 'deductions_cents', 'net_obligation_cents', 'purse_paid_cents', 'purse_cost_cents', 'commission_earned_cents', 'commission_cost_cents', 'total_fighter_cost_cents', 'ticket_contribution_cents')
+    fields = ('ticket_quantity', 'ticket_sales_cents', 'gross_purse_cents', 'travel_cents', 'per_diem_cents', 'deductions_cents', 'net_obligation_cents', 'purse_paid_cents', 'purse_status', 'commission_status', 'commission_paid_cents', 'purse_cost_cents', 'commission_earned_cents', 'commission_cost_cents', 'total_fighter_cost_cents', 'ticket_contribution_cents')
     for event in events.offset(offset).limit(limit):
         data = recap(db, event.id)
         row = next((r for r in data['fighters'] if r['fighter_id'] == fighter_id), None)

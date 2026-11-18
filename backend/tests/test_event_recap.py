@@ -195,3 +195,73 @@ class RecapTests(unittest.TestCase):
             self.assertEqual(self.get()['fighters'],[],status)
         self.bout.status='completed';self.db.commit()
         self.assertEqual(len(self.get()['fighters']),2)
+
+    def test_purse_hold_is_separate_from_paid_amount_and_commission(self):
+        self.fixture();before=self.get()['summary']['recorded_result_cents'];url=self.url+f'/purses/{self.a.id}/hold'
+        r=self.client.put(url,headers=self.headers(),json={'active':True,'reason':'Pending commission approval','version':0});self.assertEqual(r.status_code,200,r.text)
+        d=self.get();a=next(f for f in d['fighters'] if f['fighter_id']==self.a.id);self.assertEqual(a['purse_status'],'on_hold');self.assertIsNone(a['purse_paid_cents']);self.assertEqual(d['summary']['purses_on_hold'],1);self.assertEqual(d['summary']['recorded_result_cents'],before)
+        self.assertEqual(self.client.put(url,headers=self.headers(),json={'active':False,'version':0}).status_code,409)
+        r=self.client.put(url,headers=self.headers(),json={'active':False,'reason':'Approval received','version':1});self.assertEqual(r.status_code,200);a=next(f for f in self.get()['fighters'] if f['fighter_id']==self.a.id);self.assertEqual(a['purse_status'],'not_recorded');self.assertIsNone(a['purse_paid_cents'])
+
+    def test_history_preserves_cumulative_totals_dates_actor_and_hold_revisions(self):
+        self.fixture();url=self.url+f'/purses/{self.a.id}'
+        self.client.put(url,headers=self.headers(),json={'amount_paid':'50','version':0,'paid_date':'2026-11-14','notes':'Cash partial'})
+        self.client.put(url,headers=self.headers(),json={'amount_paid':'125','version':1,'notes':'Owner confirmed balance paid; date unknown'})
+        self.client.put(url+'/hold',headers=self.headers(),json={'active':True,'reason':'Review approval','version':0})
+        response=self.client.get(self.url+f'/payment-history?kind=purse&target_id={self.a.id}',headers=self.headers());self.assertEqual(response.status_code,200,response.text);self.assertIn('no-store',response.headers['cache-control'])
+        changes=response.json()['records'];payments=[r for r in changes if r['kind']=='purse'];self.assertEqual([r['paid_to_date_cents'] for r in payments],[12500,5000]);self.assertIsNone(payments[0]['paid_date']);self.assertEqual(payments[1]['paid_date'],'2026-11-14');self.assertEqual(payments[0]['recorded_by'],'admin');self.assertEqual(changes[0]['kind'],'hold');self.assertEqual(self.get()['summary']['purse_payments_recorded_cents'],12500)
+
+    def test_legacy_purse_is_preserved_as_baseline_before_correction(self):
+        self.fixture();old=EventPursePayment(event_id=self.event.id,fighter_id=self.a.id,amount_paid_cents=7500,paid_date='2026-11-14',notes='Legacy receipt',updated_by=self.users['admin'].id,version=1);self.db.add(old);self.db.commit()
+        legacy=self.client.get(self.url+f'/payment-history?kind=purse&target_id={self.a.id}',headers=self.headers()).json()['records'];self.assertTrue(legacy[0]['baseline']);self.assertEqual(legacy[0]['paid_to_date_cents'],7500)
+        self.client.put(self.url+f'/purses/{self.a.id}',headers=self.headers(),json={'amount_paid':'125','version':1})
+        changes=self.client.get(self.url+f'/payment-history?kind=purse&target_id={self.a.id}',headers=self.headers()).json()['records'];self.assertEqual([r['paid_to_date_cents'] for r in changes],[12500,7500]);self.assertTrue(changes[1]['baseline']);self.assertEqual(changes[1]['notes'],'Legacy receipt')
+
+    def test_commission_paid_status_and_history_do_not_pay_purse(self):
+        self.fixture();d=self.get();seller=next(s for s in d['sellers'] if s['seller_id']==self.seller.id);due=seller['commission_earned_cents'];r=self.client.put(self.url+f'/commissions/{self.seller.id}',headers=self.headers(),json={'amount_paid':format(due/100,'.2f'),'previous_id':None,'notes':'Owner confirmed fully paid'})
+        self.assertEqual(r.status_code,200,r.text);d=self.get();a=next(f for f in d['fighters'] if f['fighter_id']==self.a.id);self.assertEqual(a['commission_status'],'paid');self.assertEqual(a['commission_paid_cents'],due);self.assertIsNone(a['purse_paid_cents']);self.assertEqual(a['purse_status'],'not_recorded')
+        h=self.client.get(self.url+f'/payment-history?kind=commission&target_id={self.seller.id}',headers=self.headers()).json()['records'];self.assertEqual(len(h),1);self.assertEqual(h[0]['paid_to_date_cents'],due);self.assertIsNone(h[0]['paid_date']);self.assertEqual(h[0]['recorded_by'],'admin')
+
+    def test_statuses_and_exports_include_hold_without_changing_signed_contract(self):
+        self.fixture();self.client.put(self.url+f'/purses/{self.a.id}',headers=self.headers(),json={'amount_paid':'0','version':0});self.client.put(self.url+f'/purses/{self.a.id}/hold',headers=self.headers(),json={'active':True,'reason':'Pending commission approval','version':0})
+        data=self.get();a=next(f for f in data['fighters'] if f['fighter_id']==self.a.id);self.assertEqual(a['purse_status'],'on_hold');self.assertEqual(a['purse_paid_cents'],0);self.db.refresh(self.contract);self.assertEqual(self.contract.boxer_paid,125)
+        csv=self.client.get(self.url+'.csv',headers=self.headers()).text;self.assertIn('Payment status',csv);self.assertIn('Pending commission approval',csv);pdf=self.client.get(self.url+'.pdf',headers=self.headers());self.assertEqual(pdf.status_code,200);self.assertTrue(pdf.content.startswith(b'%PDF'))
+
+    def test_hold_and_history_require_staff_and_current_card_for_updates(self):
+        self.fixture();path=self.url+f'/purses/{self.a.id}/hold'
+        for role in ('member','fighter','rep'):
+            self.assertEqual(self.client.put(path,headers=self.headers(role),json={'active':True,'reason':'test','version':0}).status_code,403)
+            self.assertEqual(self.client.get(self.url+f'/payment-history?kind=purse&target_id={self.a.id}',headers=self.headers(role)).status_code,403)
+        self.assertEqual(self.client.get(self.url+f'/payment-history?kind=purse&target_id={self.a.id}').status_code,401)
+        self.assertEqual(self.client.put(path,headers=self.headers(),json={'active':True,'reason':' ','version':0}).status_code,422)
+        self.bout.status='cancelled';self.db.commit();self.assertEqual(self.client.put(path,headers=self.headers(),json={'active':True,'reason':'test','version':0}).status_code,409)
+
+    @unittest.skipUnless(support.TEST_DATABASE_URL,'Requires isolated PostgreSQL')
+    def test_simultaneous_commission_updates_create_one_snapshot(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from app.main import app
+        from app.database import SessionLocal,get_db
+        from app.events.recap import EventPaymentChange
+        self.fixture();headers=self.headers();gate=Barrier(2)
+        def separate_db():
+            with SessionLocal() as db:yield db
+        app.dependency_overrides[get_db]=separate_db
+        def run(_):gate.wait();return self.client.put(self.url+f'/commissions/{self.seller.id}',headers=headers,json={'amount_paid':'5','previous_id':None}).status_code
+        with ThreadPoolExecutor(max_workers=2) as pool:statuses=list(pool.map(run,range(2)))
+        self.assertEqual(sorted(statuses),[200,409]);self.assertEqual(self.db.query(SellerPayout).count(),1);self.assertEqual(self.db.query(EventPaymentChange).filter_by(kind='commission').count(),1)
+
+    @unittest.skipUnless(support.TEST_DATABASE_URL,'Requires isolated PostgreSQL')
+    def test_simultaneous_hold_updates_preserve_one_version_and_no_payment(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from app.main import app
+        from app.database import SessionLocal,get_db
+        from app.events.recap import EventPurseHold,EventPaymentChange
+        self.fixture();headers=self.headers();gate=Barrier(2);fid=self.a.id
+        def separate_db():
+            with SessionLocal() as db:yield db
+        app.dependency_overrides[get_db]=separate_db
+        def run(_):gate.wait();return self.client.put(self.url+f'/purses/{fid}/hold',headers=headers,json={'active':True,'reason':'Pending commission approval','version':0}).status_code
+        with ThreadPoolExecutor(max_workers=2) as pool:statuses=list(pool.map(run,range(2)))
+        self.assertEqual(sorted(statuses),[200,409]);self.assertEqual(self.db.query(EventPurseHold).count(),1);self.assertEqual(self.db.query(EventPaymentChange).filter_by(kind='hold').count(),1);self.assertEqual(self.db.query(EventPursePayment).count(),0)

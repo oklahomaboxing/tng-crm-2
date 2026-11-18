@@ -2621,7 +2621,7 @@ def fighter_ticket_sales(
                 SellerPayout.seller_id == seller.id,
             )
             .order_by(
-                SellerPayout.created_at.desc()
+                SellerPayout.created_at.desc(), SellerPayout.id.desc()
             )
             .first()
         )

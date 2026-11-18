@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint
 from app.database import Base, get_db
 from app.core.dependencies import staff_user
-from app.models import SecurityLog
+from app.models import SecurityLog, User
 from app.matchmaker.models import BoxingEvent, BoxingBout, BoxingFighter, BoxingContract, BoxingContractSignature, BoxingSignedContractDocument, BoxingEventFee
 from app.matchmaker.deductions import ContractDeductions
 from app.ticketing.models import TicketOrder, IssuedTicket, EventSeller, SellerPayout
@@ -32,6 +32,41 @@ class EventPursePayment(Base):
     version = Column(Integer, nullable=False, default=1)
     updated_by = Column(Integer, ForeignKey('users.id'), nullable=False)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+class EventPurseHold(Base):
+    __tablename__ = 'event_purse_holds'
+    __table_args__ = (UniqueConstraint('event_id','fighter_id',name='uq_event_purse_hold'),)
+    id=Column(Integer,primary_key=True)
+    event_id=Column(Integer,ForeignKey('boxing_events.id'),nullable=False,index=True)
+    fighter_id=Column(Integer,ForeignKey('boxing_fighters.id'),nullable=False)
+    active=Column(Integer,default=0,nullable=False)
+    reason=Column(Text,default='',nullable=False)
+    version=Column(Integer,default=1,nullable=False)
+    updated_by=Column(Integer,ForeignKey('users.id'),nullable=False)
+    updated_at=Column(DateTime,default=datetime.utcnow,nullable=False)
+
+class EventPaymentChange(Base):
+    __tablename__ = 'event_payment_changes'
+    id=Column(Integer,primary_key=True)
+    event_id=Column(Integer,ForeignKey('boxing_events.id'),nullable=False,index=True)
+    kind=Column(String(20),nullable=False)
+    target_id=Column(Integer,nullable=False)
+    source_id=Column(Integer,nullable=True)
+    amount_paid_cents=Column(Integer,nullable=True)
+    paid_date=Column(String(10),nullable=True)
+    notes=Column(Text,default='',nullable=False)
+    hold_active=Column(Integer,nullable=True)
+    baseline=Column(Integer,default=0,nullable=False)
+    recorded_by=Column(Integer,ForeignKey('users.id'),nullable=True)
+    recorded_at=Column(DateTime,default=datetime.utcnow,nullable=False)
+
+def payment_status(due,paid,hold=False):
+    if hold and (paid is None or paid<due or due==0):return 'on_hold'
+    if paid is None:return 'not_recorded' if due else 'nothing_due'
+    if paid>due:return 'overpaid'
+    if not due:return 'nothing_due'
+    if paid==due:return 'paid'
+    return 'partial' if paid else 'unpaid'
 
 class RecapFeeTreatment(Base):
     __tablename__ = 'event_recap_fee_treatments'
@@ -85,6 +120,7 @@ def recap(db, eid):
     cids = [c.id for c in contracts]
     signed = {x[0] for x in db.query(BoxingContractSignature.contract_id).filter(BoxingContractSignature.contract_id.in_(cids))} | {x[0] for x in db.query(BoxingSignedContractDocument.contract_id).filter(BoxingSignedContractDocument.contract_id.in_(cids))}
     deductions = {r.contract_id: r for r in db.query(ContractDeductions).filter(ContractDeductions.contract_id.in_(cids))}
+    holds = {r.fighter_id:r for r in db.query(EventPurseHold).filter_by(event_id=eid)}
     purse_records = {r.fighter_id: r for r in db.query(EventPursePayment).filter_by(event_id=eid)}
     participant_ids = {f for b in active for f in [b.red_fighter_id, b.blue_fighter_id]}
     fighters = {f.id: f for f in db.query(BoxingFighter).filter(BoxingFighter.id.in_(participant_ids))}
@@ -170,7 +206,7 @@ def recap(db, eid):
         commission = earned.get(sid, 0)
         paid_comm = max(0, int(snap.amount_paid_cents or 0)) if snap else None
         cost = max(commission, paid_comm or 0)
-        sr = {'seller_id': sid, 'name': s.display_name if s else 'Direct / unattributed', 'fighter_id': s.seller_ref_id if s and s.seller_type == 'fighter' and (s.seller_ref_id in active_ids) else None, 'ticket_quantity': counts.get(sid, 0), 'ticket_sales_cents': sales.get(sid, 0), 'commission_earned_cents': commission, 'commission_paid_cents': paid_comm, 'commission_cost_cents': cost, 'remaining_cents': max(0, commission - (paid_comm or 0)), 'previous_payout_id': snap.id if snap else None, 'notes': snap.notes or '' if snap else '', 'paid_date': snap.paid_at.replace(tzinfo=timezone.utc).astimezone(CT).date().isoformat() if snap and snap.paid_at else None}
+        sr = {'seller_id': sid, 'name': s.display_name if s else 'Direct / unattributed', 'fighter_id': s.seller_ref_id if s and s.seller_type == 'fighter' and (s.seller_ref_id in active_ids) else None, 'ticket_quantity': counts.get(sid, 0), 'ticket_sales_cents': sales.get(sid, 0), 'commission_earned_cents': commission, 'commission_paid_cents': paid_comm, 'commission_cost_cents': cost, 'remaining_cents': max(0, commission - (paid_comm or 0)), 'commission_status':payment_status(commission,paid_comm),'previous_payout_id': snap.id if snap else None, 'notes': snap.notes or '' if snap else '', 'paid_date': snap.paid_at.replace(tzinfo=timezone.utc).astimezone(CT).date().isoformat() if snap and snap.paid_at else None}
         seller_rows.append(sr)
         if paid_comm is not None and paid_comm > commission:
             issues.add(f"{sr['name']}: recorded commission payments exceed current earned commission; the higher paid cost is included.")
@@ -186,6 +222,19 @@ def recap(db, eid):
         r['total_fighter_cost_cents'] = r['purse_cost_cents'] + r['commission_cost_cents']
         r['ticket_contribution_cents'] = r['ticket_sales_cents'] - r['total_fighter_cost_cents']
         r['remaining_purse_cents'] = max(0, r['net_obligation_cents'] - (actual or 0))
+        hold=holds.get(r['fighter_id'])
+        r.update({'purse_on_hold':bool(hold and hold.active),'purse_hold_reason':hold.reason if hold else '', 'purse_hold_version':hold.version if hold else 0})
+        r['purse_status']=payment_status(r['net_obligation_cents'],actual,r['purse_on_hold'])
+        linked=[seller for seller in seller_rows if seller['fighter_id']==r['fighter_id']]
+        known=sum(seller['commission_paid_cents'] or 0 for seller in linked)
+        missing=any(seller['commission_paid_cents'] is None and seller['commission_earned_cents']>0 for seller in linked)
+        r['commission_paid_cents']=None if missing else known
+        r['commission_known_paid_cents']=known
+        r['commission_remaining_cents']=sum(seller['remaining_cents'] for seller in linked)
+        r['commission_status']='partly_recorded' if missing and known else payment_status(r['commission_earned_cents'],r['commission_paid_cents'])
+        if r['purse_on_hold'] and actual is not None and actual>=r['net_obligation_cents'] and actual>0:
+            issues.add(f"{r['name']}: purse is fully recorded as paid but a hold is still active; review the hold without changing payment history.")
+
         if actual is not None and actual > r['net_obligation_cents']:
             issues.add(f"{r['name']}: recorded purse payments exceed current net obligation; the higher paid cost is included.")
     if sum((r['deductions_cents'] for r in rows.values())):
@@ -234,6 +283,9 @@ def recap(db, eid):
     comm_cost = sum((r['commission_cost_cents'] for r in seller_rows))
     total_cost = purse_cost + comm_cost + assessment + other_cost
     summary = {'excluded_off_card_purse_records': len(excluded_purses), 'excluded_off_card_purse_paid_cents': excluded_paid_cents, 'current_card_fighters': len(fighter_rows), 'ticket_sales_cents': gross, 'customer_fees_cents': fees_collected, 'paid_ticket_quantity': sum((quantity(o) for o in paid.values())), 'unconfirmed_orders': sum((o.payment_status in ('pending', 'failed') for o in orders)), 'refunded_orders': sum((o.payment_status == 'refunded' for o in orders)), 'gross_purse_cents': sum((r['gross_purse_cents'] for r in fighter_rows)), 'travel_cents': sum((r['travel_cents'] for r in fighter_rows)), 'per_diem_cents': sum((r['per_diem_cents'] for r in fighter_rows)), 'deductions_cents': sum((r['deductions_cents'] for r in fighter_rows)), 'net_purse_obligation_cents': sum((r['net_obligation_cents'] for r in fighter_rows)), 'purse_cost_cents': purse_cost, 'commission_cost_cents': comm_cost, 'fighter_and_seller_cost_cents': purse_cost + comm_cost, 'ticket_contribution_cents': gross - purse_cost - comm_cost, 'state_assessment_cents': assessment, 'assessment_basis': 'recorded_actual' if assessment_values else 'estimated_5_percent', 'other_expenses_cents': other_cost, 'other_income_cents': other_income, 'total_recorded_income_cents': gross + other_income, 'total_cost_cents': total_cost, 'recorded_result_cents': gross + other_income - total_cost, 'purse_payments_recorded_cents': sum((r['purse_paid_cents'] or 0 for r in fighter_rows)), 'purse_payment_status_unknown': sum((r['purse_paid_cents'] is None for r in fighter_rows)), 'remaining_recorded_purses_cents': sum((r['remaining_purse_cents'] for r in fighter_rows if r['purse_paid_cents'] is not None)), 'unreconciled_purse_obligations_cents': sum((r['net_obligation_cents'] for r in fighter_rows if r['purse_paid_cents'] is None)), 'commission_payments_recorded_cents': sum((r['commission_paid_cents'] or 0 for r in seller_rows)), 'remaining_commissions_cents': sum((r['remaining_cents'] for r in seller_rows)), 'commission_payment_status_unknown': sum((r['commission_paid_cents'] is None and r['commission_earned_cents'] > 0 for r in seller_rows))}
+    summary['purses_on_hold']=sum(r['purse_status']=='on_hold' for r in fighter_rows)
+    summary['purses_fully_paid']=sum(r['purse_status'] in ('paid','overpaid') for r in fighter_rows)
+    summary['commissions_fully_paid']=sum(r['commission_status'] in ('paid','overpaid') for r in seller_rows)
     return {'roster_scope': 'current_bout_card', 'current_bout_ids': [b.id for b in active], 'event': {'id': event.id, 'name': event.name, 'date': event.event_date, 'status': event.status}, 'summary': summary, 'fighters': fighter_rows, 'sellers': seller_rows, 'expenses': fee_rows, 'other_income': income_rows, 'warnings': sorted(issues), 'provisional': bool(issues), 'generated_at': datetime.now(timezone.utc).isoformat(), 'basis': 'Fighter breakdown and purse totals use only fighters on the current bout card. Off-card purse records are excluded and retained in payment history. Ticket revenue, seller commissions and other event costs remain event-wide. Recorded paid ticket subtotals + PAID sponsor/vendor receipts − net purse/allowance obligations (or higher recorded payments) − earned seller commissions (or higher recorded payments) − state assessment − other actual expenses. Pending sales, customer fees, textual estimates and unreconciled partial refunds are not included. This is not a bank balance or proof that an unrecorded payment is unpaid.'}
 
 @router.get('/{event_id}/recap')
@@ -281,6 +333,9 @@ def record_purse(event_id: int, fighter_id: int, body: PurseBody, db=Depends(get
     if body.version != version:
         raise HTTPException(409, 'Purse payment record changed. Refresh before saving.')
     before = row.amount_paid_cents if row else None
+    if row and not db.query(EventPaymentChange).filter_by(event_id=event_id,kind='purse',target_id=fighter_id).first():
+        db.add(EventPaymentChange(event_id=event_id,kind='purse',target_id=fighter_id,source_id=row.id,amount_paid_cents=row.amount_paid_cents,paid_date=row.paid_date,notes=row.notes,baseline=1,recorded_by=row.updated_by,recorded_at=row.updated_at))
+
     if not row:
         row = EventPursePayment(event_id=event_id, fighter_id=fighter_id, updated_by=user.id)
         db.add(row)
@@ -290,6 +345,7 @@ def record_purse(event_id: int, fighter_id: int, body: PurseBody, db=Depends(get
     row.version = version + 1
     row.updated_by = user.id
     row.updated_at = datetime.utcnow()
+    db.add(EventPaymentChange(event_id=event_id,kind='purse',target_id=fighter_id,amount_paid_cents=row.amount_paid_cents,paid_date=row.paid_date,notes=row.notes,recorded_by=user.id))
     db.add(SecurityLog(user_id=user.id, action='EVENT_PURSE_PAYMENT_RECORDED', description=json.dumps({'event_id': event_id, 'fighter_id': fighter_id, 'previous_cents': before, 'paid_to_date_cents': row.amount_paid_cents, 'no_money_transferred': True}), success=True))
     db.commit()
     return {'version': row.version, 'no_money_transferred': True}
@@ -310,9 +366,49 @@ def record_commission(event_id: int, seller_id: int, body: CommissionBody, db=De
     row = SellerPayout(event_id=event_id, seller_id=seller_id, gross_sales_cents=totals['ticket_sales_cents'], commission_earned_cents=totals['commission_earned_cents'], amount_paid_cents=amount, status='paid' if amount >= totals['commission_earned_cents'] else 'partial' if amount else 'unpaid', paid_at=paid_at, notes=body.notes.strip())
     db.add(row)
     db.flush()
+    db.add(EventPaymentChange(event_id=event_id,kind='commission',target_id=seller_id,source_id=row.id,amount_paid_cents=amount,paid_date=body.paid_date.isoformat() if body.paid_date else None,notes=row.notes,recorded_by=user.id))
     db.add(SecurityLog(user_id=user.id, action='EVENT_COMMISSION_PAYMENT_RECORDED', description=json.dumps({'event_id': event_id, 'seller_id': seller_id, 'previous_snapshot_id': body.previous_id, 'snapshot_id': row.id, 'paid_to_date_cents': amount, 'no_money_transferred': True}), success=True))
     db.commit()
     return {'payout_id': row.id, 'no_money_transferred': True}
+
+class HoldBody(BaseModel):
+    active: bool
+    reason: str=Field(default='',max_length=1000)
+    version: int=Field(default=0,ge=0)
+
+@router.put('/{event_id}/recap/purses/{fighter_id}/hold')
+def set_purse_hold(event_id:int,fighter_id:int,body:HoldBody,db=Depends(get_db),user=Depends(staff_user)):
+    event_for(db,event_id,True)
+    participants={fid for b in db.query(BoxingBout).filter_by(event_id=event_id) if str(b.status or '').strip().lower() not in CANCELLED for fid in (b.red_fighter_id,b.blue_fighter_id)}
+    if fighter_id not in participants:raise HTTPException(409,'Fighter is not on the current bout card')
+    if body.active and not body.reason.strip():raise HTTPException(422,'Enter the reason this purse is being held')
+    row=db.query(EventPurseHold).filter_by(event_id=event_id,fighter_id=fighter_id).first()
+    if body.version!=(row.version if row else 0):raise HTTPException(409,'Hold changed. Refresh before saving')
+    if not row:row=EventPurseHold(event_id=event_id,fighter_id=fighter_id,updated_by=user.id,version=0);db.add(row)
+    row.active=int(body.active);row.reason=body.reason.strip();row.version+=1;row.updated_by=user.id;row.updated_at=datetime.utcnow()
+    db.add(EventPaymentChange(event_id=event_id,kind='hold',target_id=fighter_id,hold_active=int(body.active),notes=row.reason,recorded_by=user.id))
+    db.add(SecurityLog(user_id=user.id,action='EVENT_PURSE_HOLD_UPDATED',description=json.dumps({'event_id':event_id,'fighter_id':fighter_id,'active':body.active,'reason':row.reason,'no_money_transferred':True}),success=True));db.commit()
+    return {'version':row.version,'no_money_transferred':True}
+
+@router.get('/{event_id}/recap/payment-history')
+def payment_history(event_id:int,response:Response,kind:Literal['purse','commission'],target_id:int=Query(gt=0),db=Depends(get_db),user=Depends(staff_user)):
+    event_for(db,event_id);response.headers['Cache-Control']='private, no-store'
+    kinds=['purse','hold'] if kind=='purse' else ['commission']
+    changes=db.query(EventPaymentChange).filter(EventPaymentChange.event_id==event_id,EventPaymentChange.target_id==target_id,EventPaymentChange.kind.in_(kinds)).order_by(EventPaymentChange.recorded_at.desc(),EventPaymentChange.id.desc()).limit(50).all()
+    names={u.id:u.name for u in db.query(User).filter(User.id.in_([c.recorded_by for c in changes if c.recorded_by]))}
+    rows=[]
+    if kind=='commission':
+        bysource={c.source_id:c for c in changes}
+        for snap in db.query(SellerPayout).filter_by(event_id=event_id,seller_id=target_id).order_by(SellerPayout.created_at.desc(),SellerPayout.id.desc()).limit(50):
+            c=bysource.get(snap.id);rows.append({'kind':'commission','paid_to_date_cents':snap.amount_paid_cents,'paid_date':snap.paid_at.replace(tzinfo=timezone.utc).astimezone(CT).date().isoformat() if snap.paid_at else None,'notes':snap.notes or '', 'recorded_at':snap.created_at.isoformat()+'Z','recorded_by':names.get(c.recorded_by) if c else None,'baseline':not bool(c)})
+    else:
+        for c in changes:
+            rows.append({'kind':c.kind,'paid_to_date_cents':c.amount_paid_cents,'paid_date':c.paid_date,'notes':c.notes,'hold_active':bool(c.hold_active) if c.hold_active is not None else None,'recorded_at':c.recorded_at.isoformat()+'Z','recorded_by':names.get(c.recorded_by),'baseline':bool(c.baseline)})
+        if not any(c.kind=='purse' for c in changes):
+            legacy=db.query(EventPursePayment).filter_by(event_id=event_id,fighter_id=target_id).first()
+            if legacy:rows.append({'kind':'purse','paid_to_date_cents':legacy.amount_paid_cents,'paid_date':legacy.paid_date,'notes':legacy.notes,'recorded_at':legacy.updated_at.isoformat()+'Z','recorded_by':None,'baseline':True})
+        rows.sort(key=lambda r:r['recorded_at'],reverse=True)
+    return {'records':rows[:50],'basis':'Cumulative payment record revisions, not separate transfers. Do not add these totals together. Recorded-on time is not the actual payment date.'}
 
 class FeeBody(BaseModel):
     treatment: TREATMENTS
@@ -339,7 +435,10 @@ def classify_fee(event_id: int, fee_id: int, body: FeeBody, db=Depends(get_db), 
     return {'version': row.version}
 
 def export_sections(d):
-    return [('Summary', ['Metric', 'USD / value'], [[k.removesuffix('_cents').replace('_', ' ').title(), format(v / 100, '.2f') if k.endswith('_cents') else str(v).replace('_', ' ')] for k, v in d['summary'].items()]), ('Fighters', ['Fighter', 'Ticket sales', 'Purse', 'Travel', 'Per diem', 'Deductions', 'Net obligation', 'Purse cost', 'Ticket commission cost', 'Contribution', 'Purse paid to date', 'Payment status'], [[r['name'], *[r[k] / 100 for k in ['ticket_sales_cents', 'gross_purse_cents', 'travel_cents', 'per_diem_cents', 'deductions_cents', 'net_obligation_cents', 'purse_cost_cents', 'commission_cost_cents', 'ticket_contribution_cents']], r['purse_paid_cents'] / 100 if r['purse_paid_cents'] is not None else '', 'Not recorded' if r['purse_paid_cents'] is None else 'Recorded'] for r in d['fighters']]), ('Ticket commissions', ['Seller', 'Sales', 'Earned', 'Paid to date', 'Remaining / unrecorded', 'Note'], [[r['name'], r['ticket_sales_cents'] / 100, r['commission_earned_cents'] / 100, r['commission_paid_cents'] / 100 if r['commission_paid_cents'] is not None else '', r['remaining_cents'] / 100, r['notes']] for r in d['sellers']]), ('Expenses', ['Name', 'Actual USD', 'Treatment', 'Marked paid'], [[r['name'], r['actual_cents'] / 100 if r['actual_cents'] is not None else '', r['treatment'], r['paid']] for r in d['expenses']]), ('Review notes', ['Notice'], [[w] for w in d['warnings']])]
+    sections = [('Summary', ['Metric', 'USD / value'], [[k.removesuffix('_cents').replace('_', ' ').title(), format(v / 100, '.2f') if k.endswith('_cents') else str(v).replace('_', ' ')] for k, v in d['summary'].items()]), ('Fighters', ['Fighter', 'Ticket sales', 'Purse', 'Travel', 'Per diem', 'Deductions', 'Net obligation', 'Purse cost', 'Ticket commission cost', 'Contribution', 'Purse paid to date', 'Payment status'], [[r['name'], *[r[k] / 100 for k in ['ticket_sales_cents', 'gross_purse_cents', 'travel_cents', 'per_diem_cents', 'deductions_cents', 'net_obligation_cents', 'purse_cost_cents', 'commission_cost_cents', 'ticket_contribution_cents']], r['purse_paid_cents'] / 100 if r['purse_paid_cents'] is not None else '', 'Not recorded' if r['purse_paid_cents'] is None else 'Recorded'] for r in d['fighters']]), ('Ticket commissions', ['Seller', 'Sales', 'Earned', 'Paid to date', 'Remaining / unrecorded', 'Note'], [[r['name'], r['ticket_sales_cents'] / 100, r['commission_earned_cents'] / 100, r['commission_paid_cents'] / 100 if r['commission_paid_cents'] is not None else '', r['remaining_cents'] / 100, r['notes']] for r in d['sellers']]), ('Expenses', ['Name', 'Actual USD', 'Treatment', 'Marked paid'], [[r['name'], r['actual_cents'] / 100 if r['actual_cents'] is not None else '', r['treatment'], r['paid']] for r in d['expenses']]), ('Review notes', ['Notice'], [[w] for w in d['warnings']])]
+
+    sections.append(('Payment status', ['Fighter','Purse status','Purse owed','Purse paid','Purse payment date','Hold reason','Commission status','Commission paid'], [[r['name'],r['purse_status'].replace('_',' '),format(r['net_obligation_cents']/100,'.2f'),'' if r['purse_paid_cents'] is None else format(r['purse_paid_cents']/100,'.2f'),r['purse_paid_date'] or '',r['purse_hold_reason'] if r['purse_on_hold'] else '',r['commission_status'].replace('_',' '),'' if r['commission_paid_cents'] is None else format(r['commission_paid_cents']/100,'.2f')] for r in d['fighters']]))
+    return sections
 
 @router.get('/{event_id}/recap.csv')
 def export_csv(event_id: int, db=Depends(get_db), user=Depends(staff_user)):
