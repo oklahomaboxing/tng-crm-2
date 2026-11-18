@@ -117,16 +117,16 @@ def overview(db,period='all',now=None):
   if ref:seen.add(ref)
   add('sponsor_vendor',money(p.amount,review),event_dates.get(p.event_id))
  from .concessions_finance import pos_revenue,pos_references,suggest
- pos_order_refs=set()
+ pos_order_refs=set();fully_covered_pos_orders=set()
  for e in events:
-  pos_order_refs.update(pos_references(db,e.id))
+  pos_order_refs.update(pos_references(db,e.id));fully_covered_pos_orders.update(pos_references(db,e.id,True))
   if e.id in selected_ids:
    for category,value in pos_revenue(db,e.id).items():add(category,value,event_dates.get(e.id))
  products={p.id:p for p in db.query(MembershipProduct)};sale_refs=set();merch={m.clover_checkout_id:m for m in db.query(MerchandiseCheckout) if m.clover_checkout_id}
  for sale in db.query(Sale).order_by(Sale.id):
   d=day(sale.sale_date)
   product=products.get(sale.product_id)
-  if sale.clover_order_id in pos_order_refs and product and suggest(product.name) in ('concessions','bar'):review['cross_source_sales_excluded']+=1;continue
+  if sale.clover_order_id in fully_covered_pos_orders or (sale.clover_order_id in pos_order_refs and product and (suggest(product.name) in ('concessions','bar') or str(product.category or '').lower() in ('concessions','food','bar','beverage','alcohol'))):review['cross_source_sales_excluded']+=1;continue
   if not allowed_date(d,period,today) or sale.payment_status!='paid':continue
   if (sale.clover_payment_id and (sale.clover_payment_id in ticket_payrefs or sale.clover_payment_id in rev_refs)) or (sale.clover_checkout_id and sale.clover_checkout_id in ticket_checkouts):review['cross_source_sales_excluded']+=1;continue
   parent=merch.get(sale.clover_checkout_id)

@@ -56,3 +56,6 @@ class FinancialTests(unittest.TestCase):
  def test_new_welcome_letter_has_headphone_rule(self):
   from app.matchmaker.welcome_letter import draft
   self.assertIn('No loud music. Please bring headphones if you want to listen to music.',draft(self.db,self.event.id)[3])
+
+ def test_generic_ledger_mirror_of_fully_classified_pos_order_is_not_extra_revenue(self):
+  self.assertEqual(self.sync().status_code,200);p=MembershipProduct(name='Generic POS purchase',price=22,category='retail',is_membership=False);self.db.add(p);self.db.flush();self.db.add(Sale(member_id=self.member.id,sales_rep_id=self.rep.id,product_id=p.id,amount=22,payment_status='paid',clover_order_id='ORDER1',clover_payment_id='PAY1'));self.db.commit();d=overview(self.db);self.assertEqual(d['income_categories']['concessions'],1000);self.assertEqual(d['income_categories']['bar'],1000);self.assertEqual(d['income_categories']['retail_apparel'],0)

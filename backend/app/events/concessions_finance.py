@@ -160,10 +160,12 @@ def pos_revenue(db,eid):
  if not s or not s.imported_at:return {'concessions':0,'bar':0}
  data=report_data(db,eid);return {k:data['totals'][k] for k in ('concessions','bar')}
 
-def pos_references(db,eid):
+def pos_references(db,eid,fully_covered=False):
  s=db.get(EventPosSnapshot,eid)
  if not s or not s.imported_at:return set()
- settings=json.loads(s.settings_json);return {r['order_id'] for r in json.loads(s.source_json).get('rows',[]) if settings.get('items',{}).get(r['key'],suggest(r['name'],r['categories'])) in ('concessions','bar')}
+ settings=json.loads(s.settings_json);orders=defaultdict(list)
+ for r in json.loads(s.source_json).get('rows',[]):orders[r['order_id']].append(settings.get('items',{}).get(r['key'],suggest(r['name'],r['categories'])))
+ return {oid for oid,channels in orders.items() if any(c in ('concessions','bar') for c in channels) and (not fully_covered or all(c in ('concessions','bar') for c in channels))}
 
 @router.get('/{event_id}/financials')
 def get_report(event_id:int,response:Response,db=Depends(get_db),user=Depends(staff)):
