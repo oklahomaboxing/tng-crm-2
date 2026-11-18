@@ -72,7 +72,7 @@ def day(value):
 def allowed_date(d,period,now):return period=='all' or bool(d and d.year==now.year and (period=='year' or d.month==now.month))
 
 def safe_event(db,event):
- r=recap(db,event.id);fields=['ticket_sales_cents','paid_ticket_quantity','total_recorded_income_cents','other_income_cents','purse_cost_cents','commission_cost_cents','state_assessment_cents','other_expenses_cents','total_cost_cents','recorded_result_cents','purse_payments_recorded_cents','commission_payments_recorded_cents','unconfirmed_orders','assessment_basis']
+ r=recap(db,event.id);fields=['ticket_sales_cents','concessions_sales_cents','bar_sales_cents','paid_ticket_quantity','total_recorded_income_cents','other_income_cents','purse_cost_cents','commission_cost_cents','state_assessment_cents','other_expenses_cents','total_cost_cents','recorded_result_cents','purse_payments_recorded_cents','commission_payments_recorded_cents','unconfirmed_orders','assessment_basis']
  fighter_fields=['fighter_id','name','ticket_quantity','ticket_sales_cents','gross_purse_cents','travel_cents','per_diem_cents','deductions_cents','net_obligation_cents','purse_cost_cents','purse_paid_cents','purse_status','commission_earned_cents','commission_cost_cents','commission_paid_cents','commission_status','total_fighter_cost_cents','ticket_contribution_cents']
  fighters=[{k:f[k] for k in fighter_fields} for f in r['fighters']];by_id={f['fighter_id']:f for f in fighters};sellers=[]
  source_sellers={s.id:s for s in db.query(EventSeller).filter_by(event_id=event.id)}
@@ -94,7 +94,7 @@ def overview(db,period='all',now=None):
  for m in members:
   if membership_report(m,evidence,now.replace(tzinfo=None))['is_current_member']:
    name=m.membership_type or 'Membership plan';plans[name]=plans.get(name,0)+1
- events=db.query(BoxingEvent).order_by(BoxingEvent.event_date.desc(),BoxingEvent.id.desc()).all();selected=[e for e in events if allowed_date(day(e.event_date),period,today)];selected_ids={e.id for e in selected};event_details=[safe_event(db,e) for e in selected];categories={k:0 for k in ('memberships','registration','retail_apparel','concessions','other_pos','event_tickets','sponsor_vendor','other_recorded')};timeline={};membership_sales={};seen=set();membership_transactions=0
+ events=db.query(BoxingEvent).order_by(BoxingEvent.event_date.desc(),BoxingEvent.id.desc()).all();selected=[e for e in events if allowed_date(day(e.event_date),period,today)];selected_ids={e.id for e in selected};event_details=[safe_event(db,e) for e in selected];categories={k:0 for k in ('memberships','registration','retail_apparel','concessions','bar','other_pos','event_tickets','sponsor_vendor','other_recorded')};timeline={};membership_sales={};seen=set();membership_transactions=0
  def add(category,value,d,expense=False):
   if not expense:categories[category]+=value
   if d:
@@ -116,9 +116,17 @@ def overview(db,period='all',now=None):
   if ref and (ref in ticket_payrefs or ref in seen):review['duplicate_ledger_rows']+=1;continue
   if ref:seen.add(ref)
   add('sponsor_vendor',money(p.amount,review),event_dates.get(p.event_id))
+ from .concessions_finance import pos_revenue,pos_references,suggest
+ pos_order_refs=set()
+ for e in events:
+  pos_order_refs.update(pos_references(db,e.id))
+  if e.id in selected_ids:
+   for category,value in pos_revenue(db,e.id).items():add(category,value,event_dates.get(e.id))
  products={p.id:p for p in db.query(MembershipProduct)};sale_refs=set();merch={m.clover_checkout_id:m for m in db.query(MerchandiseCheckout) if m.clover_checkout_id}
  for sale in db.query(Sale).order_by(Sale.id):
   d=day(sale.sale_date)
+  product=products.get(sale.product_id)
+  if sale.clover_order_id in pos_order_refs and product and suggest(product.name) in ('concessions','bar'):review['cross_source_sales_excluded']+=1;continue
   if not allowed_date(d,period,today) or sale.payment_status!='paid':continue
   if (sale.clover_payment_id and (sale.clover_payment_id in ticket_payrefs or sale.clover_payment_id in rev_refs)) or (sale.clover_checkout_id and sale.clover_checkout_id in ticket_checkouts):review['cross_source_sales_excluded']+=1;continue
   parent=merch.get(sale.clover_checkout_id)

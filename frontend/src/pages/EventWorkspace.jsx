@@ -1,3 +1,5 @@
+import EventBudget from '../components/EventBudget';
+import {workspaceHash} from '../navigation/workspaces';
 import ConcessionsWorkspace from "./ConcessionsWorkspace.jsx";
 import MatchmakerDesk from "./MatchmakerDesk.jsx";
 import FighterWelcomeLetter from "../components/contracts/FighterWelcomeLetter.jsx";
@@ -95,6 +97,7 @@ const eventPageTitles = {
   14: "Offers",
   15: "Matchmaker Desk",
   16: "Concessions",
+  17: "Budget & Forecast",
 };
 
 function fighterLocation(fighter) {
@@ -1311,6 +1314,7 @@ export default function EventWorkspace({
             >
               All promoter events
             </Button>
+            {["admin","staff"].includes(localStorage.getItem("role"))&&<><Button sx={{mb:1}} href={workspaceHash("Announcer & DJ",{eventId})}>Announcer & DJ show plan</Button><Button sx={{mb:1}} onClick={()=>setTab(17)}>Event budget & forecast</Button></>}
 
             <Typography
               variant="h4"
@@ -1360,7 +1364,7 @@ export default function EventWorkspace({
           {[0,10,14,15,1,2,9].map(id => <Button key={id} aria-current={tab === id ? 'page' : undefined} variant={tab === id ? 'contained' : 'text'} onClick={() => setTab(id)}>{id === 0 ? 'Overview' : eventPageTitles[id]}</Button>)}
           <Button aria-haspopup="menu" aria-expanded={!!toolsAnchor} onClick={e=>setToolsAnchor(e.currentTarget)}>More event tools</Button>
           <Menu anchorEl={toolsAnchor} open={!!toolsAnchor} onClose={()=>setToolsAnchor(null)}>
-            {[16,11,5,3,4,13,7,6,12,8].filter(id=>![13,16].includes(id)||['admin','staff'].includes(localStorage.getItem('role'))).map(id=><MenuItem key={id} selected={tab===id} onClick={()=>{setTab(id);setToolsAnchor(null);}}>{eventPageTitles[id]}</MenuItem>)}
+            {[17,16,11,5,3,4,13,7,6,12,8].filter(id=>![13,16,17].includes(id)||['admin','staff'].includes(localStorage.getItem('role'))).map(id=><MenuItem key={id} selected={tab===id} onClick={()=>{setTab(id);setToolsAnchor(null);}}>{eventPageTitles[id]}</MenuItem>)}
           </Menu>
         </Box>
 
@@ -1378,6 +1382,7 @@ export default function EventWorkspace({
           {showWelcome&&<FighterWelcomeLetter key={`welcome-${eventId}`} eventId={eventId}/>}
         </Stack>}
 
+        {tab === 17 && ["admin","staff"].includes(localStorage.getItem("role")) && <EventBudget key={eventId} eventId={eventId}/>}
         {tab === 16 && ["admin","staff"].includes(localStorage.getItem("role")) && <ConcessionsWorkspace key={eventId} eventId={eventId} embedded/>}
         {tab === 15 && <MatchmakerDesk eventId={eventId} event={event} onOpenOffers={()=>setTab(14)}/>}
         {tab === 13 && ["admin", "staff"].includes(localStorage.getItem("role")) && <EventRecap key={eventId} eventId={eventId} onOpenTickets={() => setTab(9)} onOpenExpenses={() => setTab(6)} onOpenContracts={() => setTab(2)} />}

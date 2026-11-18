@@ -99,3 +99,9 @@ router.include_router(amateur_officials_router)
 
 from app.events.investors import router as investor_business_router
 router.include_router(investor_business_router)
+from app.events.concessions_finance import router as concessions_finance_router
+router.include_router(concessions_finance_router)
+from app.events.show_control import router as show_control_router
+router.include_router(show_control_router)
+from app.events.budget import router as event_budget_router
+router.include_router(event_budget_router)

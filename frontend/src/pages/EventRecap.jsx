@@ -1,3 +1,4 @@
+import EventBudget from '../components/EventBudget';
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, Chip, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
@@ -36,6 +37,7 @@ function ExpenseRow({row,eventId,reload}){
 }
 function DataTable({heads,rows}) {return <Box sx={{minWidth:0,maxWidth:'100%',overflowX:'auto','& table':{width:'100%',borderCollapse:'collapse'},'& th,& td':{textAlign:'left',p:1.5,borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap'}}}><table><thead><tr>{heads.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{r.map((v,j)=><td key={j}>{v}</td>)}</tr>)}</tbody></table></Box>;}
 export default function EventRecap({eventId,onOpenTickets,onOpenExpenses,onOpenContracts}){
+ const[budgetOpen,setBudgetOpen]=useState(false);
   const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[tab,setTab]=useState(0),[comparison,setComparison]=useState(null),[offset,setOffset]=useState(0),[advanced,setAdvanced]=useState(false),[search,setSearch]=useState(''),[notice,setNotice]=useState(''),[focus,setFocus]=useState(null),[paymentFilter,setPaymentFilter]=useState('all');
   const activeEvent=useRef(eventId),requestNumber=useRef(0);activeEvent.current=eventId;
   async function load(){const target=eventId,request=++requestNumber.current;setBusy(true);setError('');try{const r=await axios.get(`${BASE}/api/events/${target}/recap`,{headers:auth()});if(activeEvent.current!==target||request!==requestNumber.current)return false;setData(r.data);return true;}catch(e){if(activeEvent.current===target&&request===requestNumber.current)setError(e.response?.data?.detail||'Unable to load event recap. Please retry.');return false;}finally{if(activeEvent.current===target&&request===requestNumber.current)setBusy(false);}}
@@ -46,7 +48,8 @@ export default function EventRecap({eventId,onOpenTickets,onOpenExpenses,onOpenC
   const s=data.summary;
   const matches=r=>r.name.toLowerCase().includes(search.trim().toLowerCase());
   return <Stack spacing={2} sx={{minWidth:0,width:'100%'}}>
-    <Stack direction="row" sx={{justifyContent:'space-between',alignItems:'center',gap:1,flexWrap:'wrap'}}><Typography variant="h5">Event Recap</Typography><Chip size="small" label={data.provisional?'Provisional':'Recorded amounts'} color={data.provisional?'warning':'success'}/></Stack>
+    <Dialog fullScreen open={budgetOpen} onClose={()=>setBudgetOpen(false)}><DialogContent><Button sx={{mb:2}} onClick={()=>setBudgetOpen(false)}>Back to event recap</Button>{budgetOpen&&<EventBudget eventId={eventId}/>}</DialogContent></Dialog>
+    <Stack direction="row" sx={{justifyContent:'space-between',alignItems:'center',gap:1,flexWrap:'wrap'}}><Typography variant="h5">Event Recap</Typography><Button variant="outlined" onClick={()=>setBudgetOpen(true)}>Event budget & forecast</Button><Chip size="small" label={data.provisional?'Provisional':'Recorded amounts'} color={data.provisional?'warning':'success'}/></Stack>
     {error&&<Alert severity="error">{String(error)}</Alert>}
     {notice&&<Alert severity="success" onClose={()=>setNotice('')}>{notice}</Alert>}
     <Box sx={{display:'grid',gridTemplateColumns:{xs:'1fr',sm:'repeat(3,minmax(0,1fr))'},gap:1.5}}>{[[s.other_income_cents>0?'Total income':'Ticket sales',s.other_income_cents>0?s.total_recorded_income_cents:s.ticket_sales_cents],['Total costs',s.total_cost_cents],['Event result',s.recorded_result_cents]].map(([label,value])=><Card key={label} sx={{p:2}}><Typography color="text.secondary">{label}</Typography><Typography variant="h4" color={value<0?'error.main':undefined}>{money(value)}</Typography></Card>)}</Box>

@@ -196,8 +196,8 @@ export default function UserManagement() {
         email: email.trim().toLowerCase(),
         password,
         role,
-        phone: role === "concessions" ? concessionsPhone.trim() : "",
-        title: role === "concessions" ? concessionsTitle.trim() : "",
+        phone: ["concessions","announcer","dj"].includes(role) ? concessionsPhone.trim() : "",
+        title: ["concessions","announcer","dj"].includes(role) ? concessionsTitle.trim() : "",
         referral_slug:
           role === "rep"
             ? referralSlug.trim().toLowerCase()
@@ -221,6 +221,7 @@ export default function UserManagement() {
         sponsor: "Sponsor",
         concessions: "Concessions",
         event_coordinator: "Event Coordinator",
+        announcer: "Announcer", dj: "DJ",
       };
 
       setMessage(
@@ -477,9 +478,9 @@ export default function UserManagement() {
                   select
                   label="User Role"
                   value={role}
-                  onChange={(event) =>
-                    setRole(event.target.value)
-                  }
+                  onChange={(event) => {
+                    setRole(event.target.value);setConcessionsTitle(event.target.value === "announcer" ? "Ring Announcer" : event.target.value === "dj" ? "DJ" : "Executive Chef");
+                  }}
                   fullWidth
                 >
                   <MenuItem value="staff">
@@ -496,14 +497,14 @@ export default function UserManagement() {
 
                   <MenuItem value="investor">Investor</MenuItem>
                   <MenuItem value="sponsor">Sponsor</MenuItem>
-                  <MenuItem value="event_coordinator">Event Coordinator</MenuItem>
+                  <MenuItem value="announcer">Announcer</MenuItem><MenuItem value="dj">DJ</MenuItem><MenuItem value="event_coordinator">Event Coordinator</MenuItem>
                   <MenuItem value="concessions">Concessions / Chef</MenuItem>
                   <MenuItem value="matchmaker">
                     Matchmaker
                   </MenuItem>
                 </TextField>
 
-                {role === "concessions" && <><TextField label="Concessions title" value={concessionsTitle} onChange={e=>setConcessionsTitle(e.target.value)}/><TextField label="Contact phone" value={concessionsPhone} onChange={e=>setConcessionsPhone(e.target.value)}/></>}
+                {["concessions","announcer","dj"].includes(role) && <><TextField label="Professional title" value={concessionsTitle} onChange={e=>setConcessionsTitle(e.target.value)}/><TextField label="Contact phone" value={concessionsPhone} onChange={e=>setConcessionsPhone(e.target.value)}/></>}
                 <TextField
                   label="Full Name"
                   value={name}

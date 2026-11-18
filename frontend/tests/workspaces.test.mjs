@@ -85,3 +85,19 @@ test('boxing game is restricted to the administrator workspace',()=>{
  for(const role of ['staff','member','fighter','manager','rep','investor','sponsor','concessions','event_coordinator','matchmaker'])assert.equal(readWorkspace(workspaceHash('TNG Boxing Game'),role),null);
  assert.ok(searchWorkspaces('admin','controller').includes('TNG Boxing Game'));
 });
+
+test('announcer and DJ workspaces are isolated and preserve event links',()=>{
+ for(const role of ['announcer','dj']){
+  assert.deepEqual(ROLE_MENUS[role],['Announcer & DJ']);
+  assert.deepEqual(readWorkspace(workspaceHash('Announcer & DJ',{eventId:2}),role),{page:'Announcer & DJ',target:{eventId:2}});
+  for(const page of ['Members','Reports','User Management','Investor Center','TNG Boxing Game'])assert.equal(readWorkspace(workspaceHash(page),role),null);
+ }
+ for(const role of ['member','fighter','investor','sponsor','concessions','rep','manager'])assert.equal(readWorkspace(workspaceHash('Announcer & DJ'),role),null);
+});
+
+test('event budget links are available to finance staff and filtered for matchmaking roles',()=>{
+ const hash=workspaceHash('TNG BOXING EVENTS',{eventId:3,eventSection:'budget'});
+ for(const role of ['admin','staff'])assert.equal(readWorkspace(hash,role).target.eventSection,'budget');
+ assert.deepEqual(readWorkspace(hash,'matchmaker').target,{eventId:3});
+ for(const role of ['announcer','dj','investor','sponsor','concessions','member'])assert.equal(readWorkspace(hash,role),null);
+});

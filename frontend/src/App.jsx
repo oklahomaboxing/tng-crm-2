@@ -25,6 +25,7 @@ import tngTheme from "./theme/tngTheme";
 
 import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspaces";
 import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
+const ShowControl=lazy(()=>import('./pages/ShowControl'));
 const TngBoxingGame = lazy(() => import('./pages/TngBoxingGame'));
 const MemberPortal = lazy(() => import("./pages/MemberPortal.jsx"));
 const MemberActivate = lazy(() => import("./pages/MemberActivate.jsx"));
@@ -84,6 +85,7 @@ function landingPageForRole(role) {
   if (role === "investor") return "Investor Portal";
   if (role === "sponsor") return "Sponsor Portal";
   if (role === "concessions") return "Chef & Concessions";
+  if (["announcer","dj"].includes(role)) return "Announcer & DJ";
   if (role === "event_coordinator") return "Venue & Event Bookings";
   return "Dashboard";
 }
@@ -893,6 +895,7 @@ return (
       {page === "Venue & Event Bookings" && ["admin","event_coordinator"].includes(role) && <VenueBookings/>}
       {page === "Chef & Concessions" && ["admin","concessions"].includes(role) && <ChefDashboard/>}
       {((page === "Investor Portal" && role === "investor") || (page === "Sponsor Portal" && role === "sponsor") || (page === "Concessions Portal" && role === "concessions")) && <PartnerPortal/>}
+      {page === "Announcer & DJ" && ["admin","staff","announcer","dj"].includes(role) && <ShowControl initialEventId={navigationTarget.eventId}/>}
       {page === "Investor Center" && role === "admin" && <InvestorCenter/>}
       {page === "User Management" && role === "admin" && <UserManagement />}
       {page === "Security Center" && role === "admin" && <SecurityCenter />}

@@ -2472,12 +2472,12 @@ def create_user_account(
             detail="Name, email, and password are required",
         )
 
-    if role not in ["admin", "staff", "rep", "manager", "matchmaker", "investor", "sponsor", "concessions", "event_coordinator"]:
+    if role not in ["admin", "staff", "rep", "manager", "matchmaker", "investor", "sponsor", "concessions", "event_coordinator", "announcer", "dj"]:
         raise HTTPException(
             status_code=400,
             detail=(
                 "Role must be admin, staff, rep, manager, "
-                "matchmaker, investor, sponsor, concessions, or event_coordinator"
+                "matchmaker, investor, sponsor, concessions, event_coordinator, announcer, or dj"
             ),
         )
 
@@ -2519,9 +2519,9 @@ def create_user_account(
     db.add(account)
     db.flush()
 
-    if role == "concessions":
+    if role in ("concessions","announcer","dj"):
         from app.events.partners import PartnerProfile
-        db.add(PartnerProfile(user_id=account.id,title=str(data.get("title") or "Concessions")[:160],phone=phone[:40]))
+        db.add(PartnerProfile(user_id=account.id,title=str(data.get("title") or {"concessions":"Concessions","announcer":"Ring Announcer","dj":"DJ"}.get(role,role))[:160],phone=phone[:40]))
 
     rep = None
 
@@ -2582,12 +2582,12 @@ def update_user_account(
             detail="Name and email are required",
         )
 
-    if role not in ["admin", "staff", "rep", "manager", "matchmaker", "investor", "sponsor", "concessions", "event_coordinator"]:
+    if role not in ["admin", "staff", "rep", "manager", "matchmaker", "investor", "sponsor", "concessions", "event_coordinator", "announcer", "dj"]:
         raise HTTPException(
             status_code=400,
             detail=(
                 "Role must be admin, staff, rep, manager, "
-                "matchmaker, investor, sponsor, concessions, or event_coordinator"
+                "matchmaker, investor, sponsor, concessions, event_coordinator, announcer, or dj"
             ),
         )
 

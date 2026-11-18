@@ -1,3 +1,4 @@
+import ConcessionsFinancials from '../components/ConcessionsFinancials';
 import React,{useEffect,useRef,useState}from'react';
 import{Alert,Box,Button,Card,CardContent,Checkbox,Chip,Dialog,DialogActions,DialogContent,DialogTitle,FormControlLabel,MenuItem,Stack,Tab,Tabs,TextField,Typography}from'@mui/material';
 const API=(import.meta.env.VITE_API_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
@@ -28,9 +29,10 @@ export default function ConcessionsWorkspace({eventId,onBack,embedded=false}){
   <Stack direction={{xs:'column',sm:'row'}} justifyContent="space-between" gap={2}><Box>{onBack&&<Button onClick={onBack}>Back to assigned events</Button>}<Typography variant="overline" color="primary">TNG CONCESSIONS</Typography><Typography variant="h4">{embedded?'Concessions':data?.event.name||'Event kitchen'}</Typography><Typography color="text.secondary">Plan the menu, shop by store, and prepare for service.</Typography></Box><Button variant="outlined" disabled={busy||loading} onClick={load}>Refresh plan</Button></Stack>
   {error&&<Alert severity="error" onClose={()=>setError('')}>{error}</Alert>}{notice&&<Alert severity="success" onClose={()=>setNotice('')}>{notice}</Alert>}
   {loading&&!data?<Typography>Loading concessions…</Typography>:data&&<>
-  <Box sx={{display:'grid',gridTemplateColumns:{xs:'repeat(2,minmax(0,1fr))',md:'repeat(4,minmax(0,1fr))'},gap:1.5}}>{metrics.map(([label,value])=><Card key={label} variant="outlined"><CardContent><Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="h6" sx={{overflowWrap:'anywhere'}}>{value}</Typography></CardContent></Card>)}</Box>
-  <Typography variant="caption" color="text.secondary">{data.basis}</Typography>
-  <Tabs value={tab} onChange={(_,v)=>setTab(v)} variant="scrollable" scrollButtons="auto" aria-label="Concessions sections"><Tab label="Menu & prices"/><Tab label="Shopping list"/><Tab label="Prep & service"/></Tabs>
+  {tab!==3&&<Box sx={{display:'grid',gridTemplateColumns:{xs:'repeat(2,minmax(0,1fr))',md:'repeat(4,minmax(0,1fr))'},gap:1.5}}>{metrics.map(([label,value])=><Card key={label} variant="outlined"><CardContent><Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="h6" sx={{overflowWrap:'anywhere'}}>{value}</Typography></CardContent></Card>)}</Box>}
+  {tab!==3&&<Typography variant="caption" color="text.secondary">{data.basis}</Typography>}
+  <Tabs value={tab} onChange={(_,v)=>setTab(v)} variant="scrollable" scrollButtons="auto" aria-label="Concessions sections"><Tab label="Menu & prices"/><Tab label="Shopping list"/><Tab label="Prep & service"/>{["admin","staff"].includes(localStorage.getItem("role"))&&<Tab label="Sales & profit"/>}</Tabs>
+  {tab===3&&["admin","staff"].includes(localStorage.getItem("role"))&&<ConcessionsFinancials eventId={eventId} request={request} download={download}/>}
   {tab===0&&<Stack spacing={2}>
    <Stack direction={{xs:'column',sm:'row'}} spacing={1} useFlexGap flexWrap="wrap"><Button variant="contained" onClick={()=>{setError('');setEditor({kind:'menu',...blankMenu});}}>Add menu item</Button><Button variant="outlined" disabled={busy} onClick={()=>{setError('');setGenerateOpen(true);}}>Generate menu ideas</Button><Button disabled={busy||!data.menu.some(m=>m.enabled)} onClick={()=>setPublishOpen(true)}>Review & publish menu</Button><Button disabled={busy||!data.published_at} onClick={()=>download('/menu.pdf',`tng-event-${eventId}-menu.pdf`)}>Download published menu</Button></Stack>
    <Typography variant="caption" color="text.secondary">{data.published_at?'Published '+new Date(data.published_at).toLocaleString()+'. Edits remain drafts until you publish again.':'Menu is a draft. Review prices and ingredients before publishing.'}</Typography>

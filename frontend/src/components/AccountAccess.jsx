@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState}from'react';
 import{Alert,Box,Button,Card,CardContent,Chip,MenuItem,Stack,Table,TableBody,TableCell,TableContainer,TableHead,TablePagination,TableRow,TextField,Typography}from'@mui/material';
 const API=(import.meta.env.VITE_API_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
-const labels={event_coordinator:'Event Coordinator',admin:'Administrator',staff:'Staff',matchmaker:'Matchmaker',investor:'Investor',sponsor:'Sponsor',concessions:'Chef / Concessions',manager:'Manager',rep:'Sales representative',member:'Member login',fighter:'Fighter login'};
+const labels={announcer:'Announcer',dj:'DJ',event_coordinator:'Event Coordinator',admin:'Administrator',staff:'Staff',matchmaker:'Matchmaker',investor:'Investor',sponsor:'Sponsor',concessions:'Chef / Concessions',manager:'Manager',rep:'Sales representative',member:'Member login',fighter:'Fighter login'};
 const order=Object.keys(labels);
 export default function AccountAccess(){
  const[accounts,setAccounts]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[search,setSearch]=useState(''),[role,setRole]=useState('all'),[status,setStatus]=useState('all'),[page,setPage]=useState(0),[pageSize,setPageSize]=useState(25),[updated,setUpdated]=useState(null),[refresh,setRefresh]=useState(0);

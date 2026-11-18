@@ -10,6 +10,7 @@ export const ROLE_MENUS = {
     "TNG Boxing Game",
     "Promoter",
     "Amateur Matchmaker",
+    "Announcer & DJ",
     "TNG BOXING EVENTS",
     "Chef & Concessions",
     "Venue & Event Bookings",
@@ -33,6 +34,7 @@ export const ROLE_MENUS = {
   ],
   staff: [
     "Amateur Matchmaker",
+    "Announcer & DJ",
     "Member Check-In",
     "Check-In Kiosk",
     "Event Check-In",
@@ -59,17 +61,20 @@ export const ROLE_MENUS = {
   sponsor: ["Sponsor Portal"],
   concessions: ["Chef & Concessions"],
   event_coordinator: ["Venue & Event Bookings"],
+  announcer: ["Announcer & DJ"],
+  dj: ["Announcer & DJ"],
 };
 
 export const WORKSPACE_GROUPS = [
   { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal', 'Chef & Concessions'] },
   { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer', 'TNG Boxing Game'] },
-  { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Amateur Matchmaker', 'Venue & Event Bookings', 'TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
+  { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Announcer & DJ', 'Amateur Matchmaker', 'Venue & Event Bookings', 'TNG BOXING EVENTS', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
   { id: 'growth', label: 'MARKETING', description: 'Leads, member communication and referral links.', accent: '#8f83d8', pages: ['Text Inbox', 'Call Center', 'Marketing Center', 'Leads', 'QR Referrals'] },
   { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Investor Center', 'Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
 ];
 export const WORKSPACE_HINTS = {
+  "Announcer & DJ": "Event run of show, fighter introductions, walkout songs, announcer profile, sponsor promotions and concessions sales announcements",
   "TNG Boxing Game": "Play boxing combinations with keyboard or controller: punches, slips, defense and timed drills",
   "Investor Center": "Investor business access, membership revenue, event and fighter ticket sales, expenses and published updates",
   "Amateur Matchmaker": "Upload amateur boxing rosters, review ages weights and experience, USA Boxing Appendix F proposals",
@@ -111,7 +116,7 @@ const ALIASES = {
  'Event Check-In':'door scanner fight night scan tickets checkin check in',
  'TNG Apparel':'shirts tee tshirt clothing shop store preorder',
  'Promoter':'matchmaker matchmaking pro boxers scouting signed pdf download contracts',
- 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget expenses recap paid purses payouts deductions profit loss commission results scorecards judges winners knockout',
+ 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget forecast planning break even itemized expenses concessions bar recap paid purses payouts deductions profit loss commission results scorecards judges winners knockout',
  'Marketing Center':'sms txt text email members marketing campaigns',
  'Members':'activate activation reset email resend customer profile',
  'Renewal Reminders':'sms txt text expired expiring membership reminders renew',
@@ -127,12 +132,12 @@ export function dailyWorkspaces(role) {
  const chosen=preferred.filter(page=>allowed.includes(page));
  return chosen.length?chosen:allowed.slice(0,4);
 }
-export const EVENT_SECTIONS={overview:0,'fight-card':1,contracts:2,compliance:3,checklist:4,medicals:5,expenses:6,sponsors:7,settings:8,tickets:9,matchmaking:10,fighters:11,'fight-night':12,recap:13,offers:14,'matchmaker-desk':15,concessions:16};
+export const EVENT_SECTIONS={overview:0,'fight-card':1,contracts:2,compliance:3,checklist:4,medicals:5,expenses:6,sponsors:7,settings:8,tickets:9,matchmaking:10,fighters:11,'fight-night':12,recap:13,offers:14,'matchmaker-desk':15,concessions:16,budget:17};
 export function workspaceSlug(page) { return page.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 export function workspaceHash(page, target = {}) {
   const params = new URLSearchParams();
   if (page === "Members" && Number.isSafeInteger(Number(target.memberId)) && Number(target.memberId) > 0) params.set("member", String(target.memberId));
-  if (page === "TNG BOXING EVENTS" && Number.isSafeInteger(Number(target.eventId)) && Number(target.eventId) > 0) params.set("event", String(target.eventId));
+  if (["TNG BOXING EVENTS","Announcer & DJ"].includes(page) && Number.isSafeInteger(Number(target.eventId)) && Number(target.eventId) > 0) params.set("event", String(target.eventId));
   if(page==='TNG BOXING EVENTS'&&Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,target.eventSection))params.set('section',target.eventSection);
   return `#/${workspaceSlug(page)}${params.size ? `?${params}` : ""}`;
 }
@@ -145,9 +150,9 @@ export function readWorkspace(hash, role) {
   const params = new URLSearchParams(query), target = {};
   for (const [key, name] of [["member", "memberId"], ["event", "eventId"]]) {
     const value = Number(params.get(key));
-    if (Number.isSafeInteger(value) && value > 0 && ((key === "member" && page === "Members") || (key === "event" && page === "TNG BOXING EVENTS"))) target[name] = value;
+    if (Number.isSafeInteger(value) && value > 0 && ((key === "member" && page === "Members") || (key === "event" && ["TNG BOXING EVENTS","Announcer & DJ"].includes(page)))) target[name] = value;
   }
   const section=params.get('section');
-  if(page==='TNG BOXING EVENTS'&&Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,section)&&(!['recap','concessions'].includes(section)||['admin','staff'].includes(role)))target.eventSection=section;
+  if(page==='TNG BOXING EVENTS'&&Object.prototype.hasOwnProperty.call(EVENT_SECTIONS,section)&&(!['recap','concessions','budget'].includes(section)||['admin','staff'].includes(role)))target.eventSection=section;
   return { page, target };
 }
