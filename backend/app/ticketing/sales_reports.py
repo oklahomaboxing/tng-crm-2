@@ -14,6 +14,7 @@ from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from app.matchmaker.models import BoxingEvent
+from .assessment import required_cents,percentage_cents,MINIMUM_CENTS
 from .models import TicketOrder, IssuedTicket, EventSeller, EventTicketType, PaperTicket, PaperTicketBatch
 
 
@@ -32,16 +33,16 @@ def commission_summary(db, event_id, orders=None):
     orders = orders if orders is not None else db.query(TicketOrder).filter_by(event_id=event_id).all()
     paid = [o for o in orders if o.payment_status == 'paid']
     gross = sum(int(o.subtotal_cents or 0) for o in paid)
-    amount = int((Decimal(gross) * Decimal('0.05')).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    amount = required_cents(gross)
     paper = db.query(PaperTicket).join(PaperTicketBatch).filter(PaperTicketBatch.event_id == event_id, PaperTicket.status.in_(['allocated', 'released', 'offline_used'])).all()
     issued_counts = dict(db.query(IssuedTicket.order_id, func.count(IssuedTicket.id)).filter_by(event_id=event_id).group_by(IssuedTicket.order_id).all())
-    return {'rate_percent': 5, 'paid_ticket_gross_cents': gross, 'state_commission_cents': amount,
+    return {'rate_percent': 5, 'minimum_cents':MINIMUM_CENTS,'percentage_only_cents':percentage_cents(gross),'minimum_applied':percentage_cents(gross)<MINIMUM_CENTS, 'paid_ticket_gross_cents': gross, 'state_commission_cents': amount,
             'paid_orders': len(paid), 'paid_ticket_quantity': sum(quantity(o) for o in paid),
             'unpaid_orders': sum(o.payment_status in ('pending', 'failed') for o in orders),
             'unreconciled_paper_tickets': len(paper),
             'partial_refund_orders': sum(o.payment_status == 'partial_refund' for o in orders),
             'paid_orders_missing_tickets': sum(issued_counts.get(o.id, 0) != quantity(o) for o in paid),
-            'basis': '5% of recorded paid ticket subtotals, before seller commissions. Fees and unpaid/refunded orders excluded. Partial refunds and unrecorded paper sales need reconciliation.'}
+            'basis': 'Greater of $450 minimum or 5% of recorded paid ticket subtotals, before seller commissions. Fees and unpaid/refunded orders excluded. Partial refunds and unrecorded paper sales need reconciliation.'}
 
 
 def report_data(db, event_id):
@@ -82,12 +83,12 @@ def sections(event, summary, orders, sellers, paper, ledger):
     totals = [['Event',event.name],['Event date',str(event.event_date or '')],['Generated (UTC)',datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')],
               ['Paid orders',summary['paid_orders']],['Paid ticket quantity',summary['paid_ticket_quantity']],
               ['Recorded paid ticket gross',money(summary['paid_ticket_gross_cents'])],
-              ['Oklahoma State Athletic Commission rate','5%'],['Oklahoma State Athletic Commission amount',money(summary['state_commission_cents'])],
+              ['Oklahoma State Athletic Commission rate','5% with $450 minimum'],['Assessment minimum',money(summary['minimum_cents'])],['Oklahoma State Athletic Commission amount',money(summary['state_commission_cents'])],
               ['Unpaid orders (not included)',summary['unpaid_orders']],['Unreconciled paper tickets (not included)',summary['unreconciled_paper_tickets']],
               ['Partial refund orders (review)',summary['partial_refund_orders']],['Paid orders with issuance mismatch (review)',summary['paid_orders_missing_tickets']]]
     return [('Event summary',['Metric','Value'],totals),
             ('Paid sales by seller',['Seller','Paid orders','Tickets','Ticket gross','Seller commission'],[[n,s['orders'],s['quantity'],money(s['gross']),money(s['commission'])] for n,s in sorted(sellers.items())]),
-            ('All order records - only PAID subtotals included in 5% calculation',['Order','Receipt','Seller','Buyer','Payment status','Provider','Payment ID','Clover checkout','Quantity','Ticket subtotal','Fees','Order total','Paid / created (UTC)','Ticket numbers','Ticket states','Ticket types'],orders),
+            ('All order records - only PAID subtotals included in assessment calculation',['Order','Receipt','Seller','Buyer','Payment status','Provider','Payment ID','Clover checkout','Quantity','Ticket subtotal','Fees','Order total','Paid / created (UTC)','Ticket numbers','Ticket states','Ticket types'],orders),
             ('Issued ticket ledger',['Ticket','Order','Seller','Type','Status','Face value','Seller commission','Issued (UTC)','Scanned (UTC)'],ledger),
             ('Paper stock awaiting sales reconciliation - not paid revenue',['Ticket','Batch','Seller','Status','Face value'],paper)]
 

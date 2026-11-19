@@ -26,20 +26,20 @@ class EventSalesReportTests(unittest.TestCase):
         self.assertEqual(r.status_code,200,r.text)
         summary=r.json()['state_athletic_commission']
         self.assertEqual(summary['paid_ticket_gross_cents'],8000)
-        self.assertEqual(summary['state_commission_cents'],400)
+        self.assertEqual(summary['state_commission_cents'],45000)
         self.assertEqual(summary['paid_ticket_quantity'],2)
         self.assertEqual(summary['paid_orders_missing_tickets'],0)
         self.assertEqual(r.json()['commission_cents'],800)
 
     def test_unpaid_refunds_and_paper_stock_never_inflate_base(self):
         o=self.order()
-        self.assertEqual(commission_summary(self.db,self.event.id)['state_commission_cents'],0)
+        self.assertEqual(commission_summary(self.db,self.event.id)['state_commission_cents'],45000)
         o.payment_status='refunded';self.db.commit()
         self.assertEqual(commission_summary(self.db,self.event.id)['paid_ticket_gross_cents'],0)
         o.payment_status='partial_refund';self.db.commit()
         summary=commission_summary(self.db,self.event.id)
         self.assertEqual(summary['partial_refund_orders'],1)
-        self.assertEqual(summary['state_commission_cents'],0)
+        self.assertEqual(summary['state_commission_cents'],45000)
         from app.ticketing.models import PaperTicketBatch,PaperTicket
         b=PaperTicketBatch(event_id=self.event.id,seller_id=self.seller.id,ticket_type_id=self.kind.id,quantity=1,price_cents=4000,commission_cents=800,request_key='report-paper',created_by_user_id=self.users['admin'].id)
         self.db.add(b);self.db.flush()
@@ -53,18 +53,19 @@ class EventSalesReportTests(unittest.TestCase):
         o.payment_status='paid';self.db.commit()
         summary=commission_summary(self.db,self.event.id)
         self.assertEqual(summary['paid_ticket_gross_cents'],201)
-        self.assertEqual(summary['state_commission_cents'],10)
+        self.assertEqual(summary['state_commission_cents'],45000)
+        self.assertEqual(summary['percentage_only_cents'],10)
         self.assertEqual(summary['paid_orders_missing_tickets'],1)
         # Half-cent rounding occurs once on the event total.
         o.subtotal_cents=210;self.db.commit()
-        self.assertEqual(commission_summary(self.db,self.event.id)['state_commission_cents'],11)
+        self.assertEqual(commission_summary(self.db,self.event.id)['state_commission_cents'],45000)
 
     def test_csv_includes_summary_orders_and_ledger_without_qr_tokens(self):
         o=self.paid();o.buyer_name='=HYPERLINK("https://example.com")';self.db.commit()
         r=self.client.get(f'/api/ticketing/events/{self.event.id}/report.csv',headers=self.headers())
         self.assertEqual(r.status_code,200,r.text)
         rows=list(csv.reader(io.StringIO(r.content.decode('utf-8-sig'))))
-        self.assertIn(['Oklahoma State Athletic Commission amount','$4.00'],rows)
+        self.assertIn(['Oklahoma State Athletic Commission amount','$450.00'],rows)
         self.assertIn('Issued ticket ledger',r.text)
         self.assertIn('REPORT-CASH',r.text)
         self.assertIn("'=HYPERLINK",r.text)
@@ -85,3 +86,7 @@ class EventSalesReportTests(unittest.TestCase):
         self.assertTrue(r.content.startswith(b'%PDF-'))
         self.assertEqual(r.headers['cache-control'],'private, no-store')
         self.assertGreater(len(r.content),2000)
+
+    def test_osac_minimum_and_percentage_threshold(self):
+        from app.ticketing.assessment import required_cents
+        for gross,expected in [(0,45000),(700000,45000),(900000,45000),(1000000,50000),(1000100,50005)]:self.assertEqual(required_cents(gross),expected)

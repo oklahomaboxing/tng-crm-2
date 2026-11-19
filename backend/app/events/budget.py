@@ -32,7 +32,7 @@ class BudgetBody(BaseModel):
  purse_allowance_cents:int|None=Field(default=None,ge=0,le=100000000)
  commission_percent:Decimal=Field(default=0,ge=0,le=100,max_digits=5,decimal_places=2)
  assessment_percent:Decimal=Field(default=5,ge=0,le=100,max_digits=5,decimal_places=2)
- assessment_minimum_cents:int=Field(default=0,ge=0,le=100000000)
+ assessment_minimum_cents:int=Field(default=45000,ge=0,le=100000000)
  processing_fee_percent:Decimal|None=Field(default=None,ge=0,le=100)
  @field_validator("processing_fee_percent")
  @classmethod
@@ -88,7 +88,7 @@ def defaults(db,event,baseline_id=None):
  if not any('insurance' in c['name'].lower()for c in costs):costs.append({'name':'Event insurance','amount_cents':None,'basis':'Confirm actual event coverage cost; excluded placeholders are not estimates'})
  from .concessions_finance import EventPosSnapshot
  has_pos=bool(baseline and (p:=db.get(EventPosSnapshot,baseline['id'])) and p.imported_at)
- body={'baseline_event_id':baseline['id']if baseline else None,'expected_paid_tickets':max(q,current_s['paid_ticket_quantity']),'average_ticket_cents':cents(s['ticket_sales_cents']/q)if q else None,'concessions_per_ticket_cents':cents(s.get('concessions_sales_cents',0)/q)if q and has_pos else None,'bar_per_ticket_cents':cents(s.get('bar_sales_cents',0)/q)if q and has_pos else None,'sponsor_vendor_cents':max(0,s.get('other_income_cents',0)-s.get('concessions_sales_cents',0)-s.get('bar_sales_cents',0))if baseline else None,'purse_allowance_cents':current_s['purse_cost_cents']if current_s['current_card_fighters'] else (s.get('purse_cost_cents')if baseline else None),'commission_percent':min(100,cents(Decimal(s.get('commission_cost_cents',0))*10000/Decimal(s['ticket_sales_cents']))/100) if s.get('ticket_sales_cents') else 0,'assessment_percent':5,'assessment_minimum_cents':0,'processing_fee_percent':None,'operating_costs':costs,'notes':'Planning assumptions only. Prior costs, revenue per paid ticket and sponsorship are references, not booked commitments. Ticket price excludes customer fees. Enter missing costs and confirm any commission minimum. Do not reuse prior purses as booked current-card contracts.','version':0}
+ body={'baseline_event_id':baseline['id']if baseline else None,'expected_paid_tickets':max(q,current_s['paid_ticket_quantity']),'average_ticket_cents':cents(s['ticket_sales_cents']/q)if q else None,'concessions_per_ticket_cents':cents(s.get('concessions_sales_cents',0)/q)if q and has_pos else None,'bar_per_ticket_cents':cents(s.get('bar_sales_cents',0)/q)if q and has_pos else None,'sponsor_vendor_cents':max(0,s.get('other_income_cents',0)-s.get('concessions_sales_cents',0)-s.get('bar_sales_cents',0))if baseline else None,'purse_allowance_cents':current_s['purse_cost_cents']if current_s['current_card_fighters'] else (s.get('purse_cost_cents')if baseline else None),'commission_percent':min(100,cents(Decimal(s.get('commission_cost_cents',0))*10000/Decimal(s['ticket_sales_cents']))/100) if s.get('ticket_sales_cents') else 0,'assessment_percent':5,'assessment_minimum_cents':45000,'processing_fee_percent':None,'operating_costs':costs,'notes':'Planning assumptions only. Prior costs, revenue per paid ticket and sponsorship are references, not booked commitments. Ticket price excludes customer fees. Enter missing costs and confirm any commission minimum. Do not reuse prior purses as booked current-card contracts.','version':0}
  return BudgetBody(**body),options,current
 
 def attach_reference(forecast,options,baseline_id):
@@ -105,7 +105,7 @@ def calculate(body,current):
  numeric_missing=any(getattr(body,k)is None for k in ('average_ticket_cents','concessions_per_ticket_cents','bar_per_ticket_cents','sponsor_vendor_cents','purse_allowance_cents','processing_fee_percent')) or any(c.amount_cents is None for c in body.operating_costs)
  fixed=sum(c.amount_cents or 0 for c in body.operating_costs)+(body.purse_allowance_cents or 0);sponsors=body.sponsor_vendor_cents or 0;scenarios=[]
  def scenario(name,quantity):
-  ticket=quantity*(body.average_ticket_cents or 0);food=quantity*(body.concessions_per_ticket_cents or 0);bar=quantity*(body.bar_per_ticket_cents or 0);commission=max(current['summary']['commission_cost_cents'],cents(Decimal(ticket)*body.commission_percent/100));assessment=max(body.assessment_minimum_cents,cents(Decimal(ticket)*body.assessment_percent/100));fees=cents(Decimal(ticket+food+bar+sponsors)*(body.processing_fee_percent or 0)/100);income=ticket+food+bar+sponsors;cost=fixed+commission+assessment+fees
+  ticket=quantity*(body.average_ticket_cents or 0);food=quantity*(body.concessions_per_ticket_cents or 0);bar=quantity*(body.bar_per_ticket_cents or 0);commission=max(current['summary']['commission_cost_cents'],cents(Decimal(ticket)*body.commission_percent/100));assessment=max(45000,body.assessment_minimum_cents,cents(Decimal(ticket)*body.assessment_percent/100));fees=cents(Decimal(ticket+food+bar+sponsors)*(body.processing_fee_percent or 0)/100);income=ticket+food+bar+sponsors;cost=fixed+commission+assessment+fees
   return {'name':name,'paid_tickets':quantity,'ticket_revenue_cents':ticket,'concessions_revenue_cents':food,'bar_revenue_cents':bar,'sponsor_vendor_revenue_cents':sponsors,'income_cents':income,'fixed_costs_cents':fixed,'commission_cents':commission,'assessment_cents':assessment,'processing_fees_cents':fees,'cost_cents':cost,'projected_result_cents':income-cost}
  for name,factor in [('Lower sales',Decimal('.8')),('Planning case',Decimal('1')),('Higher sales',Decimal('1.2'))]:scenarios.append(scenario(name,cents(body.expected_paid_tickets*factor)))
  # Monotone search includes assessment minima, recorded commission obligations and all fee assumptions.
@@ -122,7 +122,7 @@ def calculate(body,current):
 @router.get('/{event_id}/budget')
 def get_budget(event_id:int,response:Response,baseline_event_id:int|None=None,db=Depends(get_db),user=Depends(staff)):
  e=event_for(db,event_id);response.headers['Cache-Control']='private, no-store';body,options,current=defaults(db,e,baseline_event_id);saved=db.get(EventBudget,event_id)
- if saved and baseline_event_id is None:body=BudgetBody(**json.loads(saved.assumptions_json),version=saved.version)
+ if saved and baseline_event_id is None:body=BudgetBody(**{**json.loads(saved.assumptions_json),'assessment_minimum_cents':max(45000,json.loads(saved.assumptions_json).get('assessment_minimum_cents',0))},version=saved.version)
  return {'event':{'id':e.id,'name':e.name,'date':e.event_date},'assumptions':body.model_dump(mode='json'),'prior_events':options,'forecast':attach_reference(calculate(body,current),options,body.baseline_event_id),'version':saved.version if saved else 0,'current_recorded_summary':current['summary']}
 @router.post('/{event_id}/budget/preview')
 def preview(event_id:int,body:BudgetBody,db=Depends(get_db),user=Depends(staff)):
@@ -136,6 +136,7 @@ def save(event_id:int,body:BudgetBody,db=Depends(get_db),user=Depends(staff)):
  row=db.get(EventBudget,event_id)
  if (row.version if row else 0)!=body.version:raise HTTPException(409,'Budget changed. Refresh before saving')
  if not row:row=EventBudget(event_id=event_id);db.add(row)
+ body.assessment_minimum_cents=max(45000,body.assessment_minimum_cents)
  row.assumptions_json=json.dumps(body.model_dump(mode='json',exclude={'version'}));row.version=body.version+1;row.updated_at=datetime.utcnow();db.add(SecurityLog(user_id=user.id,action='EVENT_BUDGET_SAVED',description=f'Event {event_id}; baseline {body.baseline_event_id}; version {row.version}; planning only',success=True));db.commit();return {'saved':True}
 @router.get('/{event_id}/budget.pdf')
 def pdf(event_id:int,db=Depends(get_db),user=Depends(staff)):

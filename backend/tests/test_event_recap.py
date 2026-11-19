@@ -49,8 +49,8 @@ class RecapTests(unittest.TestCase):
         self.assertEqual(s['ticket_sales_cents'], 8000)
         self.assertEqual(s['purse_cost_cents'], 17500)
         self.assertEqual(s['commission_cost_cents'], 800)
-        self.assertEqual(s['state_assessment_cents'], 400)
-        self.assertEqual(s['recorded_result_cents'], -10700)
+        self.assertEqual(s['state_assessment_cents'], 45000)
+        self.assertEqual(s['recorded_result_cents'], -55300)
         self.assertEqual(s['purse_payment_status_unknown'], 2)
         self.assertIsNone(d['fighters'][1]['purse_paid_cents'])
         self.assertEqual(self.db.query(EventPursePayment).count(), 0)
@@ -158,11 +158,11 @@ class RecapTests(unittest.TestCase):
 
     def test_actual_assessment_replaces_estimate_and_zero_payment_is_known(self):
         self.fixture()
-        self.db.add(BoxingEventFee(event_id=self.event.id,fee_key='assessment',name='State assessment',actual_amount=10))
+        self.db.add(BoxingEventFee(event_id=self.event.id,fee_key='assessment',name='State assessment',actual_amount=1000))
         self.db.commit()
         self.client.put(self.url+f'/purses/{self.a.id}',headers=self.headers(),json={'amount_paid':'0','version':0})
         data=self.get()
-        self.assertEqual(data['summary']['state_assessment_cents'],1000)
+        self.assertEqual(data['summary']['state_assessment_cents'],100000)
         self.assertEqual(data['summary']['assessment_basis'],'recorded_actual')
         self.assertEqual(data['summary']['purse_payment_status_unknown'],1)
         self.assertEqual(next(r for r in data['fighters'] if r['fighter_id']==self.a.id)['purse_paid_cents'],0)
@@ -265,3 +265,6 @@ class RecapTests(unittest.TestCase):
         def run(_):gate.wait();return self.client.put(self.url+f'/purses/{fid}/hold',headers=headers,json={'active':True,'reason':'Pending commission approval','version':0}).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:statuses=list(pool.map(run,range(2)))
         self.assertEqual(sorted(statuses),[200,409]);self.assertEqual(self.db.query(EventPurseHold).count(),1);self.assertEqual(self.db.query(EventPaymentChange).filter_by(kind='hold').count(),1);self.assertEqual(self.db.query(EventPursePayment).count(),0)
+
+    def test_recorded_assessment_below_minimum_does_not_understate_liability(self):
+        self.fixture();self.db.add(BoxingEventFee(event_id=self.event.id,fee_key='assessment',name='Assessment partial record',actual_amount=10));self.db.commit();d=self.get();self.assertEqual(d['summary']['state_assessment_cents'],45000);self.assertEqual(d['summary']['state_assessment_recorded_cents'],1000);self.assertEqual(d['summary']['assessment_basis'],'required_exceeds_recorded');self.assertTrue(any('below the required' in w for w in d['warnings']))

@@ -72,7 +72,7 @@ def day(value):
 def allowed_date(d,period,now):return period=='all' or bool(d and d.year==now.year and (period=='year' or d.month==now.month))
 
 def safe_event(db,event):
- r=recap(db,event.id);fields=['ticket_sales_cents','concessions_sales_cents','bar_sales_cents','paid_ticket_quantity','total_recorded_income_cents','other_income_cents','purse_cost_cents','commission_cost_cents','state_assessment_cents','other_expenses_cents','total_cost_cents','recorded_result_cents','purse_payments_recorded_cents','commission_payments_recorded_cents','unconfirmed_orders','assessment_basis']
+ r=recap(db,event.id);fields=['pos_snapshot_imported','pos_snapshot_imported_at','ticket_sales_cents','concessions_sales_cents','bar_sales_cents','paid_ticket_quantity','total_recorded_income_cents','other_income_cents','purse_cost_cents','commission_cost_cents','state_assessment_cents','state_assessment_required_cents','state_assessment_recorded_cents','other_expenses_cents','total_cost_cents','recorded_result_cents','purse_payments_recorded_cents','commission_payments_recorded_cents','unconfirmed_orders','paid_orders','assessment_basis']
  fighter_fields=['fighter_id','name','ticket_quantity','ticket_sales_cents','gross_purse_cents','travel_cents','per_diem_cents','deductions_cents','net_obligation_cents','purse_cost_cents','purse_paid_cents','purse_status','commission_earned_cents','commission_cost_cents','commission_paid_cents','commission_status','total_fighter_cost_cents','ticket_contribution_cents']
  fighters=[{k:f[k] for k in fighter_fields} for f in r['fighters']];by_id={f['fighter_id']:f for f in fighters};sellers=[]
  source_sellers={s.id:s for s in db.query(EventSeller).filter_by(event_id=event.id)}

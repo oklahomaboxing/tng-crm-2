@@ -640,7 +640,7 @@ const [ticketTypes, setTicketTypes] = useState([]);
       {eventId && <MediaPassPanel key={`media-${eventId}`} eventId={eventId}/>}
       {eventId && <CommissionReportPanel key={eventId} eventId={eventId}/>}
       {eventId && summary?.state_athletic_commission && <section aria-label="Oklahoma State Athletic Commission" style={{ marginTop: 24, padding: 22, border: '1px solid #d71920', borderRadius: 12, background: '#fff8f8' }}>
-        <h2 style={{ marginTop: 0 }}>Oklahoma State Athletic Commission — 5%</h2>
+        <h2 style={{ marginTop: 0 }}>Oklahoma State Athletic Commission — 5%, $450 minimum</h2>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32 }}>
           <div>Recorded paid ticket gross<strong style={{ display: 'block', fontSize: 24 }}>{money(summary.state_athletic_commission.paid_ticket_gross_cents)}</strong></div>
           <div>Calculated commission amount<strong style={{ display: 'block', fontSize: 32, color: '#c91c28' }}>{money(summary.state_athletic_commission.state_commission_cents)}</strong></div>
