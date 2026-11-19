@@ -131,10 +131,27 @@ def defaults(e):
  except (ValueError,TypeError):return {'start_local':'','end_local':''}
  return {'start_local':start.strftime('%Y-%m-%dT%H:%M'),'end_local':(start+timedelta(days=1,hours=6)).strftime('%Y-%m-%dT%H:%M')}
 
+def verified_ticket_orders(db,source):
+ """Only exclude a receipt if its payment reference AND complete net amount match a paid ticket order."""
+ from app.ticketing.models import TicketOrder
+ rows=defaultdict(list)
+ for r in source.get('rows',[]):rows[r['order_id']].append(r)
+ payments={p for rs in rows.values() for r in rs for p in r.get('payment_ids',[])}
+ references=payments|{'CLOVER-ORDER-'+oid for oid in rows}
+ paid=db.query(TicketOrder).filter(TicketOrder.payment_status=='paid',TicketOrder.payment_id.in_(references)).all() if references else []
+ matches=set()
+ for oid,rs in rows.items():
+  ids={p for r in rs for p in r.get('payment_ids',[])}|{'CLOVER-ORDER-'+oid}
+  candidates=[o for o in paid if o.payment_id in ids]
+  if len(candidates)==1 and sum(r['net_cents'] for r in rs)==candidates[0].subtotal_cents:matches.add(oid)
+ return matches
+
 def report_data(db,eid):
  e=event_for(db,eid);snapshot=db.get(EventPosSnapshot,eid);source=json.loads(snapshot.source_json) if snapshot else {};settings=json.loads(snapshot.settings_json) if snapshot else {};groups={};totals={'concessions':0,'bar':0,'review':0,'exclude':0}
+ verified=verified_ticket_orders(db,source)
  for row in source.get('rows',[]):
-  item=groups.setdefault(row['key'],{'key':row['key'],'name':row['name'],'categories':row['categories'],'order_reference':row.get('order_reference',''),'quantity':0,'net_cents':0,'channel':settings.get('items',{}).get(row['key'],suggest(row['name'],row['categories']))});item['quantity']+=row['quantity'];item['net_cents']+=row['net_cents']
+  group_key=('verified-ticket:'+row['order_id']+':'+row['key']) if row['order_id'] in verified else row['key']
+  item=groups.setdefault(group_key,{'key':group_key,'name':row['name'],'categories':row['categories'],'order_reference':row.get('order_reference',''),'quantity':0,'net_cents':0,'channel':'exclude' if row['order_id'] in verified else settings.get('items',{}).get(row['key'],suggest(row['name'],row['categories']))});item['quantity']+=row['quantity'];item['net_cents']+=row['net_cents']
  for item in groups.values():totals[item['channel'] if item['channel'] in totals else 'review']+=item['net_cents']
  from .recap import RecapFeeTreatment,default_treatment
  mappings={x.fee_id:x.treatment for x in db.query(RecapFeeTreatment).join(BoxingEventFee,BoxingEventFee.id==RecapFeeTreatment.fee_id).filter(BoxingEventFee.event_id==eid)}
@@ -163,8 +180,8 @@ def pos_revenue(db,eid):
 def pos_references(db,eid,fully_covered=False):
  s=db.get(EventPosSnapshot,eid)
  if not s or not s.imported_at:return set()
- settings=json.loads(s.settings_json);orders=defaultdict(list)
- for r in json.loads(s.source_json).get('rows',[]):orders[r['order_id']].append(settings.get('items',{}).get(r['key'],suggest(r['name'],r['categories'])))
+ settings=json.loads(s.settings_json);orders=defaultdict(list);source=json.loads(s.source_json);verified=verified_ticket_orders(db,source)
+ for r in source.get('rows',[]):orders[r['order_id']].append('exclude' if r['order_id'] in verified else settings.get('items',{}).get(r['key'],suggest(r['name'],r['categories'])))
  return {oid for oid,channels in orders.items() if any(c in ('concessions','bar') for c in channels) and (not fully_covered or all(c in ('concessions','bar') for c in channels))}
 
 @router.get('/{event_id}/financials')

@@ -32,3 +32,13 @@ class BudgetTests(unittest.TestCase):
   self.assertEqual(self.client.get(self.path).status_code,401)
   for role in ['announcer','dj','investor','sponsor']:
    u=User(name=role,email='budget-'+role+'@example.com',role=role,active=True,password_hash='none');self.db.add(u);self.db.commit();self.users[role]=u;self.assertEqual(self.client.get(self.path,headers=self.headers(role)).status_code,403)
+
+ def test_recorded_receipts_and_costs_cannot_disappear_in_blank_forecast(self):
+  current={'summary':{'current_card_fighters':10,'paid_ticket_quantity':114,'ticket_sales_cents':700000,'concessions_sales_cents':40500,'bar_sales_cents':68100,'other_income_cents':108600,'purse_cost_cents':1009500,'other_expenses_cents':628900,'commission_cost_cents':107950,'state_assessment_cents':45000}}
+  b=BudgetBody(expected_paid_tickets=114,average_ticket_cents=None,concessions_per_ticket_cents=None,bar_per_ticket_cents=None,sponsor_vendor_cents=None,purse_allowance_cents=None,processing_fee_percent=None)
+  f=calculate(b,current)
+  for scenario in f['scenarios']:
+   self.assertEqual(scenario['income_cents'],808600);self.assertEqual(scenario['cost_cents'],1791350);self.assertEqual(scenario['purse_allowance_cents'],1009500);self.assertEqual(scenario['operating_costs_cents'],628900);self.assertGreaterEqual(scenario['paid_tickets'],114)
+  self.assertTrue(f['provisional']);self.assertEqual(f['break_even_status'],'missing_inputs')
+ def test_no_prior_event_uses_its_own_known_sales_instead_of_zero(self):
+  d=self.client.get(f'/api/events/{self.past.id}/budget',headers=self.headers()).json();self.assertEqual(d['assumptions']['average_ticket_cents'],4000);self.assertGreaterEqual(d['forecast']['scenarios'][1]['income_cents'],40000)

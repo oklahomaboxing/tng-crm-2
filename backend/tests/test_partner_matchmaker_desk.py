@@ -24,7 +24,7 @@ class PartnerAndDeskTests(unittest.TestCase):
   self.assertEqual(self.client.post('/api/users',headers=self.headers('staff'),json=body).status_code,403)
  def grant(self,role,**extra):return self.client.put('/api/partners/access',headers=self.headers(),json={'user_id':self.users[role].id,'event_id':self.event.id,'update_text':'Your event update',**extra})
  def test_grants_are_event_specific_and_sponsor_cannot_receive_financials(self):
-  self.assertEqual(self.grant('investor',financials=True).status_code,200);self.assertEqual(self.grant('sponsor',financials=True).status_code,422);self.assertEqual(self.grant('sponsor').status_code,200);self.assertEqual(self.grant('concessions').status_code,200)
+  self.assertEqual(self.grant('investor',financials=True).status_code,200);self.assertEqual(self.grant('sponsor',financials=True).status_code,200);self.assertEqual(self.grant('concessions').status_code,200)
   for role in ('investor','sponsor','concessions'):
    d=self.client.get('/api/partners/portal',headers=self.headers(role)).json();self.assertEqual([e['name'] for e in d['events']],['Assigned Event']);self.assertEqual('financials' in d['events'][0],role=='investor');self.assertNotIn('fighters',d['events'][0]);self.assertNotIn('contracts',d['events'][0])
  def test_revocation_and_disabled_login_take_effect(self):
@@ -57,3 +57,19 @@ class PartnerAndDeskTests(unittest.TestCase):
   d=self.client.get('/api/partners/portal',headers=self.headers('concessions')).json()
   self.assertEqual(d['title'],'Executive Chef');self.assertEqual(d['role'],'concessions');self.assertEqual(len(d['events']),1)
   self.assertNotIn('financials',d['events'][0]);self.assertNotIn('current_bouts',d['events'][0]);self.assertNotIn('phone',d)
+
+ def test_cost_only_statement_requires_event_grant_and_redacts_sensitive_records(self):
+  from app.matchmaker.models import BoxingEventFee
+  self.db.add(BoxingEventFee(event_id=self.event.id,name='Production',fee_key='production',actual_amount=500,paid=True));self.db.commit()
+  path=f'/api/partners/events/{self.event.id}/cost-statement'
+  self.assertEqual(self.client.get(path,headers=self.headers('sponsor')).status_code,403)
+  self.grant('sponsor',financials=True)
+  r=self.client.get(path,headers=self.headers('sponsor'));self.assertEqual(r.status_code,200,r.text)
+  d=r.json();self.assertEqual(d['total_cost_cents'],95000);self.assertEqual(d['recorded_paid_cents'],50000);self.assertEqual(d['unpaid_or_unrecorded_cents'],45000)
+  self.assertEqual(d['expenses'][0]['name'],'Production')
+  for key in ('fighters','sellers','other_income','buyer_email','purse_hold_reason','contract_ids'):self.assertNotIn(key,r.text)
+  pdf=self.client.get(path+'.pdf',headers=self.headers('sponsor'));self.assertEqual(pdf.status_code,200);self.assertTrue(pdf.content.startswith(b'%PDF'));self.assertIn('no-store',pdf.headers['cache-control'])
+  self.assertEqual(self.client.get(f'/api/partners/events/{self.other.id}/cost-statement',headers=self.headers('sponsor')).status_code,403)
+  for role in ('concessions','member','fighter','rep'):self.assertEqual(self.client.get(path,headers=self.headers(role)).status_code,403)
+  portal=self.client.get('/api/partners/portal',headers=self.headers('sponsor')).json();self.assertIn('cost_statement',portal['events'][0]);self.assertNotIn('financials',portal['events'][0]);self.assertNotIn('business',portal)
+  self.grant('sponsor',financials=False);self.assertEqual(self.client.get(path,headers=self.headers('sponsor')).status_code,403)

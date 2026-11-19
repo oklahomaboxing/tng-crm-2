@@ -247,4 +247,30 @@ class PaperTicketTests(unittest.TestCase):
         self.assertEqual(r.status_code,409)
         self.db.refresh(paper);self.assertEqual(paper.status,'allocated')
 
-if __name__=='__main__':unittest.main(verbosity=2)
+
+    def test_complimentary_preserves_used_admissions_without_creating_sales(self):
+        b=self.batch(3).json()['id'];tickets=self.db.query(PaperTicket).filter_by(batch_id=b).order_by(PaperTicket.id).all()
+        tickets[0].status='offline_used';self.db.commit()
+        before=[self.db.query(m).count() for m in (TicketOrder,IssuedTicket,TicketDelivery)]
+        path=f'/api/ticketing/paper-batches/{b}/mark-complimentary';body={'ticket_ids':[t.id for t in tickets]}
+        result=self.client.post(path,headers=self.headers(),json=body)
+        self.assertEqual(result.status_code,200,result.text);self.assertEqual(result.json()['complimentary'],3)
+        self.assertEqual(result.json()['complimentary_admitted'],1)
+        self.assertEqual(self.client.post(path,headers=self.headers(),json=body).json()['new_complimentary'],0)
+        self.assertEqual(self.scan(tickets[0])['result'],'already_used')
+        self.assertEqual(self.scan(tickets[1])['result'],'admitted')
+        self.assertEqual(self.scan(tickets[1])['result'],'already_used')
+        self.assertEqual(before,[self.db.query(m).count() for m in (TicketOrder,IssuedTicket,TicketDelivery)])
+        self.assertEqual(self.sell(b,[tickets[2].id]).status_code,409)
+        report=self.client.get(f'/api/ticketing/events/{self.event.id}/report',headers=self.headers()).json()
+        self.assertEqual(report['complimentary_paper_tickets'],3)
+        self.assertEqual(report['complimentary_paper_admissions'],2)
+        self.assertEqual(report['state_athletic_commission']['unreconciled_paper_tickets'],0)
+
+    def test_complimentary_rejects_paid_stock_atomically_and_requires_staff(self):
+        b=self.batch(2).json()['id'];rows=self.db.query(PaperTicket).filter_by(batch_id=b).all()
+        self.assertEqual(self.sell(b,[rows[0].id]).status_code,200)
+        path=f'/api/ticketing/paper-batches/{b}/mark-complimentary';body={'ticket_ids':[r.id for r in rows]}
+        self.assertEqual(self.client.post(path,headers=self.headers('fighter'),json=body).status_code,403)
+        self.assertEqual(self.client.post(path,headers=self.headers(),json=body).status_code,409)
+        self.db.expire_all();self.assertEqual(self.db.get(PaperTicket,rows[1].id).status,'allocated')

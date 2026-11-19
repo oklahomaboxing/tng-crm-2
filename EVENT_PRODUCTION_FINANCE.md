@@ -32,3 +32,17 @@ Preview recalculates without saving. Save persists only the separate, versioned 
 The OSAC calculation is the greater of 5% of paid ticket subtotals or $450 per event. Recorded assessments above that amount remain honored; amounts recorded below the required calculation remain visible and create a review warning instead of reducing the liability. Reports, recap totals and forecast scenarios share this rule. Existing saved budget minima below $450 are normalized when read/saved; no order, ticket or fighter commission is fabricated to adjust the aggregate.
 
 The event statement presents paid ticket revenue, classified Clover concessions and bar receipts, sponsor/vendor receipts, total income, and costs separately. Charts use those same numeric summary fields and exclude unpaid checkouts and excluded expense placeholders. The investor default selects the latest held-date event with paid ticket sales rather than an upcoming event; the overview links to its full statement. Unimported food/bar snapshots display as not recorded. Expense composition distinguishes operating expenses, purses, seller commissions and state assessment. Itemized expenses have their own top-level recap view; paid markers, source dates and provisional status remain visible.
+
+## November 19 navigation and reconciliation update
+
+The sidebar uses compact rows, explicit group icons and a single selected-page highlight; Daily Tools no longer duplicates navigation. Event finance has Overview, Revenue, All Expenses, Paid Purses and Commissions views. All expense entries are visible together, with no second collapsed expense list. Investor event expenses are expanded and finance view selectors are tabs on desktop and mobile.
+
+Forecasts retain recorded receipts and obligations as floors. Blank historical inputs cannot make an event with paid ticket sales display zero income. Both corners remain included and the $450 assessment minimum remains enforced.
+
+Paper stock can be explicitly marked complimentary without creating paid orders, customer messages, revenue or commissions. Previously scanned stock stays used; reprints retain QR identities and four-per-page layout. Sold/order-linked/returned stock cannot be converted. Complimentary stock remains included in paper inventory capacity and attendance totals.
+
+Assigned sponsors may receive a cost-only statement with explicit admin sharing. Event access checks protect JSON/PDF endpoints. It includes category obligations, recorded payments and flat expense entries; no individual fighter contracts, buyer records or global business accounts are shared. Investors retain their existing scoped permissions. Unknown payments are labeled unrecorded, not assumed paid or unpaid.
+
+POS exclusion of a previously counted ticket receipt requires an exact payment reference and exact whole-order subtotal match. Unclassified receipts remain visible for review; legitimate exclusions and open orders alone do not produce a generic financial error. Deduction guidance is informational and does not invent vendor expenses.
+
+Tournament defaults are Saturday Noon / PM and optional Sunday Noon / PM. Existing saved morning times are labeled honestly and recorded results are preserved.

@@ -14,6 +14,7 @@ from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from app.matchmaker.models import BoxingEvent
+from .offline_paper import complimentary_counts
 from .assessment import required_cents,percentage_cents,MINIMUM_CENTS
 from .models import TicketOrder, IssuedTicket, EventSeller, EventTicketType, PaperTicket, PaperTicketBatch
 
@@ -36,7 +37,7 @@ def commission_summary(db, event_id, orders=None):
     amount = required_cents(gross)
     paper = db.query(PaperTicket).join(PaperTicketBatch).filter(PaperTicketBatch.event_id == event_id, PaperTicket.status.in_(['allocated', 'released', 'offline_used'])).all()
     issued_counts = dict(db.query(IssuedTicket.order_id, func.count(IssuedTicket.id)).filter_by(event_id=event_id).group_by(IssuedTicket.order_id).all())
-    return {'rate_percent': 5, 'minimum_cents':MINIMUM_CENTS,'percentage_only_cents':percentage_cents(gross),'minimum_applied':percentage_cents(gross)<MINIMUM_CENTS, 'paid_ticket_gross_cents': gross, 'state_commission_cents': amount,
+    return {**complimentary_counts(db,event_id),'rate_percent': 5, 'minimum_cents':MINIMUM_CENTS,'percentage_only_cents':percentage_cents(gross),'minimum_applied':percentage_cents(gross)<MINIMUM_CENTS, 'paid_ticket_gross_cents': gross, 'state_commission_cents': amount,
             'paid_orders': len(paid), 'paid_ticket_quantity': sum(quantity(o) for o in paid),
             'unpaid_orders': sum(o.payment_status in ('pending', 'failed') for o in orders),
             'unreconciled_paper_tickets': len(paper),
@@ -84,7 +85,7 @@ def sections(event, summary, orders, sellers, paper, ledger):
               ['Paid orders',summary['paid_orders']],['Paid ticket quantity',summary['paid_ticket_quantity']],
               ['Recorded paid ticket gross',money(summary['paid_ticket_gross_cents'])],
               ['Oklahoma State Athletic Commission rate','5% with $450 minimum'],['Assessment minimum',money(summary['minimum_cents'])],['Oklahoma State Athletic Commission amount',money(summary['state_commission_cents'])],
-              ['Unpaid orders (not included)',summary['unpaid_orders']],['Unreconciled paper tickets (not included)',summary['unreconciled_paper_tickets']],
+              ['Complimentary paper tickets (no revenue)',summary['complimentary_paper_tickets']],['Complimentary paper admissions',summary['complimentary_paper_admissions']],['Unpaid orders (not included)',summary['unpaid_orders']],['Unreconciled paper tickets (not included)',summary['unreconciled_paper_tickets']],
               ['Partial refund orders (review)',summary['partial_refund_orders']],['Paid orders with issuance mismatch (review)',summary['paid_orders_missing_tickets']]]
     return [('Event summary',['Metric','Value'],totals),
             ('Paid sales by seller',['Seller','Paid orders','Tickets','Ticket gross','Seller commission'],[[n,s['orders'],s['quantity'],money(s['gross']),money(s['commission'])] for n,s in sorted(sellers.items())]),

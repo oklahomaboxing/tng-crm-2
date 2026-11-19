@@ -11,8 +11,8 @@ from app.events.venue import utc_local
 from .rosters import access,roster_for,AmateurEntry
 router=APIRouter(prefix='/api/amateurs/tournaments',tags=['Amateur tournaments'])
 SESSION_KEYS=['sat_am','sat_pm','sun_am','sun_pm']
-LABELS={'sat_am':'Saturday AM','sat_pm':'Saturday PM','sun_am':'Sunday AM','sun_pm':'Sunday PM'}
-DEFAULT_SESSIONS={k:{'start':v,'capacity':20} for k,v in [('sat_am','09:00'),('sat_pm','17:00'),('sun_am','09:00'),('sun_pm','15:00')]}
+LABELS={'sat_am':'Saturday Noon','sat_pm':'Saturday PM','sun_am':'Sunday Noon','sun_pm':'Sunday PM'}
+DEFAULT_SESSIONS={k:{'start':v,'capacity':12 if k=='sun_am' else 20} for k,v in [('sat_am','12:00'),('sat_pm','17:00'),('sun_am','12:00'),('sun_pm','15:00')]}
 NOTICE='Draft tournament plan, not an official draw or eligibility approval. Division classification, seed order, event Fact Sheet and the public draw require the Official in Charge. Local matched-bout Appendix F proposals are not used to certify tournament divisions. Daily weigh-ins, medical clearance and restrictions must be checked before every bout.'
 POLICY='TNG planning defaults: at most one bout per boxer per day and 12 hours between potential bouts. These conservative planning settings are not represented as universal USA Boxing rules. Extra sessions add capacity, not permission to box more often. Brackets needing more competition days remain visibly unscheduled.'
 class TournamentPlan(Base):
@@ -60,14 +60,14 @@ class PlanBody(BaseModel):
   ranges={}
   for k,s in self.sessions.items():
    if s.start.tzinfo or s.start.second or s.start.microsecond:raise ValueError('Use local Oklahoma City times to the minute')
-   if (k.endswith('am') and s.start.hour>=12) or (k.endswith('pm') and s.start.hour<12):raise ValueError('AM sessions must start before noon and PM sessions at/after noon')
+   if (k.endswith('am') and s.start.hour*60+s.start.minute>720) or (k.endswith('pm') and s.start.hour<12):raise ValueError('The first session must start by noon and PM sessions at/after noon; session capacities cannot overlap')
    start=s.start.hour*60+s.start.minute;end=start+s.capacity*self.slot_minutes
    if end>1440:raise ValueError('Session capacity extends past midnight; adjust time or capacity')
    utc_local(datetime.combine(self.saturday+timedelta(days=int(k.startswith('sun'))),s.start))
    ranges[k]=(start,end)
   for day in ('sat','sun'):
    if day=='sun' and self.sunday_am=='off':continue
-   if ranges[day+'_am'][1]>ranges[day+'_pm'][0]:raise ValueError('AM and PM session windows overlap; adjust capacity or start times')
+   if ranges[day+'_am'][1]>ranges[day+'_pm'][0]:raise ValueError('Noon and PM session windows overlap; adjust capacity or start times')
   return self
 class PlanUpdate(PlanBody):version:int=Field(ge=1)
 class DivisionBody(BaseModel):
@@ -116,11 +116,15 @@ def bracket(d,entries):
  return nodes
 
 def snapshot(p,ds,entries):return hashlib.sha256(json.dumps({'date':p.saturday.isoformat(),'sessions':p.sessions,'sunday_am':p.sunday_am,'slot':p.slot_minutes,'divisions':[(d.id,d.name,d.entry_ids,[(i,entries[i].version) for i in d.entry_ids]) for d in ds]},sort_keys=True).encode()).hexdigest()
+def session_label(key,start):
+ if key.endswith('am') and str(start)[:2]<'12':return ('Saturday'if key.startswith('sat')else'Sunday')+' Morning (saved time)'
+ return LABELS[key]
+
 def session_list(p,include_am):
  result=[]
  for k in SESSION_KEYS:
   cfg=p.sessions[k];day=p.saturday+timedelta(days=int(k.startswith('sun')));start=datetime.combine(day,time.fromisoformat(cfg['start']));end=start+timedelta(minutes=p.slot_minutes*cfg['capacity'])
-  result.append({'key':k,'label':LABELS[k],'date':day.isoformat(),'start_local':start.isoformat(timespec='minutes'),'end_local':end.isoformat(timespec='minutes'),'starts_at':utc_local(start).isoformat()+'Z','ends_at':utc_local(end).isoformat()+'Z','capacity':cfg['capacity'],'enabled':k!='sun_am' or include_am})
+  result.append({'key':k,'label':session_label(k,cfg['start']),'date':day.isoformat(),'start_local':start.isoformat(timespec='minutes'),'end_local':end.isoformat(timespec='minutes'),'starts_at':utc_local(start).isoformat()+'Z','ends_at':utc_local(end).isoformat()+'Z','capacity':cfg['capacity'],'enabled':k!='sun_am' or include_am})
  return result
 
 def allocate(p,nodes,include_am):
@@ -240,7 +244,7 @@ def export(plan_id:int,db=Depends(get_db),user=Depends(access)):
  def cell(x):
   s=str(x or '');return "'"+s if s.lstrip().startswith(('=','+','-','@')) else s
  for b in p.schedule['bouts']:
-  n=nodes[b['bout_key']];writer.writerow([LABELS[b['session_key']],b['start_local'],cell(n['division_name']),n['round'],cell(n['red_label']),cell(n['blue_label']),'Draft; OIC approval required'])
+  n=nodes[b['bout_key']];writer.writerow([session_label(b['session_key'],b['start_local'][11:16]),b['start_local'],cell(n['division_name']),n['round'],cell(n['red_label']),cell(n['blue_label']),'Draft; OIC approval required'])
  for b in p.schedule['unscheduled']:
   n=nodes[b['bout_key']];writer.writerow(['UNSCHEDULED','',cell(n['division_name']),n['round'],cell(n['red_label']),cell(n['blue_label']),b['reason']])
  return Response('\ufeff'+out.getvalue(),media_type='text/csv',headers={'Cache-Control':'private, no-store','Content-Disposition':f'attachment; filename="tng-tournament-{p.id}-draft-schedule.csv"'})

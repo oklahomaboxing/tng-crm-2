@@ -79,7 +79,7 @@ def landscape(pdf,item,event,seller,kind,price,schedule,x,y,w,h,sample):
     text(pdf,schedule or 'Event schedule: see official event updates',x+18,y+(33 if short else 35),body-36,7 if short else 8,color=MUTED)
     pdf.setFillColor(RED);pdf.rect(x,y,body,27,fill=1,stroke=0)
     text(pdf,kind.upper(),x+18,y+9,body-110,12,'TNG-Bold')
-    text(pdf,f'${price/100:,.2f}',x+body-92,y+8,78,15,'TNG-Bold')
+    text(pdf,'COMP' if item.get('status','').startswith('complimentary') else f'${price/100:,.2f}',x+body-92,y+8,78,15,'TNG-Bold')
     sx=x+body
     pdf.setFillColor(HexColor('#F7F7F4'));pdf.rect(sx,y,stub,h,fill=1,stroke=0)
     pdf.setFillColor(RED);pdf.rect(sx,y+h-31,stub,31,fill=1,stroke=0)
@@ -88,7 +88,7 @@ def landscape(pdf,item,event,seller,kind,price,schedule,x,y,w,h,sample):
     text(pdf,item['number'],sx+12,y+(39 if short else 63),stub-24,8 if short else 9,'TNG-Bold',black)
     if not short:text(pdf,'SOLD THROUGH',sx+12,y+46,stub-24,7,'TNG-Bold',HexColor('#666666'))
     text(pdf,seller,sx+12,y+(25 if short else 32),stub-24,9 if short else 10,'TNG-Bold',black)
-    status='ACTIVATE AFTER SALE' if item.get('status')=='allocated' else 'PRESENT AT CHECK-IN'
+    status='COMPLIMENTARY · ADMIT ONCE' if item.get('status','').startswith('complimentary') else 'ACTIVATE AFTER SALE' if item.get('status')=='allocated' else 'PRESENT AT CHECK-IN'
     text(pdf,'NOT VALID FOR ENTRY' if sample else status,sx+12,y+12,stub-24,7,'TNG-Bold',RED)
     pdf.setStrokeColor(HexColor('#AAAAB0'));pdf.setDash(3,3);pdf.line(sx,y,sx,y+h);pdf.setDash()
     if sample:

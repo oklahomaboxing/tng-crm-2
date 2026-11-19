@@ -82,6 +82,7 @@ def batch_summary(db, batch):
         'quantity': batch.quantity, 'price_cents': batch.price_cents,
         'allocation_commission_estimate_cents': batch.commission_cents,
         'allocated': counts.get('allocated', 0), 'released':counts.get('released',0),'unreconciled_admissions':counts.get('offline_used',0), 'sold': sold, 'returned': counts.get('returned', 0),
+        'complimentary':counts.get('complimentary',0)+counts.get('complimentary_used',0),'complimentary_admitted':counts.get('complimentary_used',0),
         'sold_total_cents': sold * batch.price_cents, 'commission_cents': int(earned),
         'created_at': batch.created_at.isoformat()}
 
@@ -111,7 +112,7 @@ def create_batch(event_id: int, body: BatchCreate, db: Session = Depends(get_db)
         return batch_summary(db, existing)
     if kind.inventory is not None:
         sold = db.query(IssuedTicket).filter(IssuedTicket.ticket_type_id == kind.id, IssuedTicket.status.in_(('valid','used'))).count()
-        held = db.query(PaperTicket).join(PaperTicketBatch).filter(PaperTicketBatch.ticket_type_id == kind.id, PaperTicket.status.in_(UNRECORDED)).count()
+        held = db.query(PaperTicket).join(PaperTicketBatch).filter(PaperTicketBatch.ticket_type_id == kind.id, PaperTicket.status.in_((*UNRECORDED,'complimentary','complimentary_used'))).count()
         if sold + held + body.quantity > kind.inventory:
             raise HTTPException(409, 'Not enough unallocated ticket inventory for this batch')
     commission = seller_commission_cents(db, kind, kind.price_cents, seller.id)
@@ -194,6 +195,23 @@ def record_sales(batch_id: int, body: PaperSale, db: Session = Depends(get_db), 
         description=f'Batch {batch_id}; new sales {recorded}; staff attested customer cash payment. Not fighter remittance.', success=True))
     db.commit()
     return {**batch_summary(db, batch), 'new_sales_recorded':recorded}
+
+
+@router.post('/paper-batches/{batch_id}/mark-complimentary')
+def mark_complimentary(batch_id:int,body:BatchSelection,db:Session=Depends(get_db),user=Depends(staff_user)):
+    batch=batch_or_404(db,batch_id)
+    rows=selection(db,batch_id,body.ticket_ids)
+    allowed=(*UNRECORDED,'complimentary','complimentary_used')
+    if any(t.status not in allowed or t.order_id is not None for t in rows):
+        raise HTTPException(409,'Sold, returned or order-linked tickets cannot be made complimentary')
+    changed=0
+    for ticket in rows:
+        if ticket.status in UNRECORDED:
+            ticket.status='complimentary_used' if ticket.status=='offline_used' else 'complimentary'
+            changed+=1
+    db.add(SecurityLog(user_id=user.id,action='PAPER_TICKETS_COMPLIMENTARY',description=json.dumps({'batch_id':batch_id,'ticket_ids':body.ticket_ids,'new_complimentary':changed,'revenue_cents':0,'commission_cents':0}),success=True))
+    db.commit()
+    return {**batch_summary(db,batch),'new_complimentary':changed}
 
 
 @router.post('/paper-batches/{batch_id}/return-unsold')

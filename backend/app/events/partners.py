@@ -48,7 +48,7 @@ def grant(body:GrantBody,db=Depends(get_db),user=Depends(admin)):
     partner=db.get(User,body.user_id)
     if not partner or partner.role not in ('investor','sponsor','concessions'):raise HTTPException(422,'Choose an investor, sponsor or concessions account')
     if not db.get(BoxingEvent,body.event_id):raise HTTPException(404,'Event not found')
-    if body.financials and partner.role!='investor':raise HTTPException(422,'Financial summaries are available only for investor grants')
+    if body.financials and partner.role not in ('investor','sponsor'):raise HTTPException(422,'Cost statements are available for investor and sponsor grants')
     row=db.query(PartnerGrant).filter_by(user_id=body.user_id,event_id=body.event_id).first()
     if not row:row=PartnerGrant(user_id=body.user_id,event_id=body.event_id);db.add(row)
     row.update_text=body.update_text.strip();row.financials=body.financials;row.updated_at=datetime.utcnow()
@@ -74,6 +74,9 @@ def portal(response:Response,period:Literal['all','month','year']='all',db=Depen
         if user.role=='concessions':item.pop('current_bouts',None)
         if user.role=='investor' and g.financials:
             d=recap(db,e.id);summary=d['summary'];item['financials']={k:summary[k] for k in ['ticket_sales_cents','total_recorded_income_cents','total_cost_cents','recorded_result_cents']};item['financials_provisional']=d['provisional'];item['financials_basis']='Recorded event income and costs; not a bank balance. Incomplete records can change these totals.'
+        if g.financials and user.role in ('investor','sponsor'):
+            from .cost_statement import statement
+            item['cost_statement']=statement(recap(db,e.id))
         events.append(item)
     profile=db.get(PartnerProfile,user.id)
     result={'name':user.name,'role':user.role,'title':profile.title if profile else '', 'events':events}
@@ -84,3 +87,26 @@ def portal(response:Response,period:Literal['all','month','year']='all',db=Depen
         for item in result['events']:
             if 'financials' in item:item['financial_detail']=safe_event(db,db.get(BoxingEvent,item['id']))
     return result
+
+
+def cost_access(db,user,event_id):
+    if user.role in ('admin','staff'):return
+    if user.role=='investor':
+        from .investors import InvestorBusinessAccess
+        grant=db.get(InvestorBusinessAccess,user.id)
+        if grant and grant.enabled:return
+    grant=db.query(PartnerGrant).filter_by(user_id=user.id,event_id=event_id,financials=True).first()
+    if user.role not in ('investor','sponsor') or not grant:raise HTTPException(403,'Event cost statement access required')
+
+@router.get('/events/{event_id}/cost-statement')
+def cost_statement(event_id:int,response:Response,db=Depends(get_db),user=Depends(current_user)):
+    cost_access(db,user,event_id)
+    from .cost_statement import statement
+    response.headers['Cache-Control']='private, no-store'
+    return statement(recap(db,event_id))
+
+@router.get('/events/{event_id}/cost-statement.pdf')
+def cost_statement_pdf(event_id:int,db=Depends(get_db),user=Depends(current_user)):
+    cost_access(db,user,event_id)
+    from .cost_statement import statement,pdf
+    return Response(pdf(statement(recap(db,event_id))),media_type='application/pdf',headers={'Cache-Control':'private, no-store','Content-Disposition':f'attachment; filename="TNG-event-{event_id}-cost-statement.pdf"'})

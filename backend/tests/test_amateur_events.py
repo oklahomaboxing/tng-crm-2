@@ -112,3 +112,11 @@ class ExtraDirectoryOfficialTests(EventCase):
 class TournamentIdempotencyTests(EventCase):
  def test_create_retry_reopens_same_plan_without_resetting_divisions(self):
   p=self.plan();ids=self.entries(p['roster_id'],2);p=self.division(p,ids);body={'roster_id':p['roster_id'],'name':p['name'],'saturday':p['saturday'],'sessions':p['sessions'],'sunday_am':p['sunday_am'],'slot_minutes':p['slot_minutes'],'request_key':'fixture-tournament-0001'};r=self.client.post('/api/amateurs/tournaments',headers=self.headers(),json=body);self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['id'],p['id']);self.assertEqual(len(r.json()['divisions']),1);self.assertEqual(self.db.query(TournamentPlan).count(),1)
+
+ def test_default_noon_sessions_fit_sunday_pm_and_preserve_legacy_time_label(self):
+  from app.amateurs.tournaments import session_list,session_label
+  p=self.plan();self.assertEqual(p['sessions']['sat_am']['start'],'12:00');self.assertEqual(p['sessions']['sun_am']['start'],'12:00')
+  row=self.db.get(TournamentPlan,p['id']);sessions=session_list(row,True)
+  self.assertEqual(sessions[0]['label'],'Saturday Noon');self.assertEqual(sessions[2]['label'],'Sunday Noon')
+  self.assertLessEqual(sessions[2]['ends_at'],sessions[3]['starts_at'])
+  self.assertEqual(session_label('sat_am','09:00'),'Saturday Morning (saved time)')

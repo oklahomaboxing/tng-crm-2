@@ -15,7 +15,7 @@ def release_offline_stock(db,batch_id,user,expected_quantity):
     rows=db.query(PaperTicket).filter_by(batch_id=batch_id).populate_existing().all()
     if batch.quantity!=expected_quantity or len(rows)!=expected_quantity:raise HTTPException(409,'Batch quantity changed; review the stock before releasing')
     if any(t.status=='returned' for t in rows):raise HTTPException(409,'Returned stock cannot be released')
-    if any(t.status not in (*UNRECORDED,'sold') for t in rows):raise HTTPException(409,'Ticket state requires review')
+    if any(t.status not in (*UNRECORDED,'sold','complimentary','complimentary_used') for t in rows):raise HTTPException(409,'Ticket state requires review')
     changed=0
     for ticket in rows:
         if ticket.status=='allocated':ticket.status='released';changed+=1
@@ -25,3 +25,8 @@ def release_offline_stock(db,batch_id,user,expected_quantity):
 
 def offline_admissions(db,event_id):
     return db.query(PaperTicket).join(PaperTicketBatch).filter(PaperTicketBatch.event_id==event_id,PaperTicket.status=='offline_used').count()
+
+
+def complimentary_counts(db,event_id):
+    rows=db.query(PaperTicket).join(PaperTicketBatch).filter(PaperTicketBatch.event_id==event_id,PaperTicket.status.in_(('complimentary','complimentary_used'))).all()
+    return {'complimentary_paper_tickets':len(rows),'complimentary_paper_admissions':sum(t.status=='complimentary_used' for t in rows)}

@@ -59,3 +59,11 @@ class FinancialTests(unittest.TestCase):
 
  def test_generic_ledger_mirror_of_fully_classified_pos_order_is_not_extra_revenue(self):
   self.assertEqual(self.sync().status_code,200);p=MembershipProduct(name='Generic POS purchase',price=22,category='retail',is_membership=False);self.db.add(p);self.db.flush();self.db.add(Sale(member_id=self.member.id,sales_rep_id=self.rep.id,product_id=p.id,amount=22,payment_status='paid',clover_order_id='ORDER1',clover_payment_id='PAY1'));self.db.commit();d=overview(self.db);self.assertEqual(d['income_categories']['concessions'],1000);self.assertEqual(d['income_categories']['bar'],1000);self.assertEqual(d['income_categories']['retail_apparel'],0)
+
+ def test_verified_paid_ticket_receipt_excluded_only_with_exact_reference_and_whole_amount(self):
+  import test_ticketing as ticket_support
+  event=self.event;o=ticket_support.TicketingTests.order(self);self.event=event;o.event_id=event.id;o.payment_status='paid';o.payment_id='PAY1';o.subtotal_cents=2000;self.db.commit()
+  self.assertEqual(self.sync().status_code,200)
+  d=report_data(self.db,self.event.id);self.assertEqual(d['totals']['exclude'],2000);self.assertEqual(d['totals']['concessions'],0);self.assertEqual(d['totals']['bar'],0)
+  o.subtotal_cents=1999;self.db.commit();d=report_data(self.db,self.event.id);self.assertEqual(d['totals']['concessions'],1000)
+  o.subtotal_cents=2000;o.payment_id='DIFFERENT';self.db.commit();d=report_data(self.db,self.event.id);self.assertEqual(d['totals']['bar'],1000)

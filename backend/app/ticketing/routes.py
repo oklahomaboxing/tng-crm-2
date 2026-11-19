@@ -577,15 +577,17 @@ def scan(body: ScanRequest, db: Session = Depends(get_db), user=Depends(staff_us
 
 @router.get("/events/{event_id}/report")
 def event_report(event_id: int, db: Session = Depends(get_db), user=Depends(staff_user)):
-    from .offline_paper import offline_admissions
+    from .offline_paper import offline_admissions,complimentary_counts
     from .sales_reports import commission_summary
     unrecorded=offline_admissions(db,event_id)
+    comps=complimentary_counts(db,event_id)
     sellers = seller_totals(db, event_id)
     tickets = db.query(IssuedTicket).filter(IssuedTicket.event_id == event_id).all()
     return {
         "event_id": event_id,
         "tickets_sold": sum(1 for t in tickets if t.status in ("valid", "used")),
-        "tickets_scanned": sum(1 for t in tickets if t.status == "used")+unrecorded,
+        "tickets_scanned": sum(1 for t in tickets if t.status == "used")+unrecorded+comps["complimentary_paper_admissions"],
+        **comps,
         "unreconciled_paper_admissions":unrecorded,
         "gross_sales_cents": sum(t.price_cents for t in tickets if t.status in ("valid", "used")),
         "commission_cents": sum(t.commission_cents for t in tickets if t.status in ("valid", "used")),
