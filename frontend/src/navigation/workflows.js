@@ -1,6 +1,6 @@
 import { ROLE_MENUS, WORKSPACE_HINTS, workspaceGroup } from './workspaces.js';
 const related={
- Dashboard:['System Overview','Members','TNG BOXING EVENTS','Reports'],
+ Dashboard:['System Overview','Members','TNG BOXING EVENTS','Fight Recap','Reports'],
  'System Overview':['Clover','Duplicate Review','Security Center','Reports'],
  Members:['Member Check-In','Renewal Reminders','Duplicate Review','Products'],
  'Member Check-In':['Members','Check-In Kiosk','Renewal Reminders'],
@@ -8,7 +8,8 @@ const related={
  'Renewal Reminders':['Members','Text Inbox','Marketing Center'],
  TNGTrainer:['Members','Member Check-In','Products'],
  Promoter:['TNG BOXING EVENTS','Fight Calendar','Fighter Portal Videos'],
- 'TNG BOXING EVENTS':['Promoter','Event Check-In','Fight Calendar','Reports'],
+ 'Fight Recap':['TNG BOXING EVENTS','Reports'],
+ 'TNG BOXING EVENTS':['Fight Recap','Promoter','Event Check-In','Fight Calendar','Reports'],
  'Event Check-In':['TNG BOXING EVENTS','Promoter'],
  'Fight Calendar':['TNG BOXING EVENTS','Promoter'],
  'Fighter Portal Videos':['Promoter','TNG BOXING EVENTS'],

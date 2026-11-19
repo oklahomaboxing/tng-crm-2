@@ -101,3 +101,9 @@ test('event budget links are available to finance staff and filtered for matchma
  assert.deepEqual(readWorkspace(hash,'matchmaker').target,{eventId:3});
  for(const role of ['announcer','dj','investor','sponsor','concessions','member'])assert.equal(readWorkspace(hash,role),null);
 });
+
+test('fight recap is a finance staff workspace with a direct route',()=>{
+ for(const role of ['admin','staff'])assert.equal(readWorkspace('#/fight-recap',role).page,'Fight Recap');
+ for(const role of ['matchmaker','announcer','dj','investor','sponsor','concessions','member','fighter','manager','rep'])assert.equal(readWorkspace('#/fight-recap',role),null);
+ assert.ok(searchWorkspaces('admin','compare').includes('Fight Recap'));
+});

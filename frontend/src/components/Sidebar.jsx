@@ -41,6 +41,7 @@ import { ROLE_MENUS, WORKSPACE_GROUPS, searchWorkspaces, workspaceGroup } from "
 export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
+  "Fight Recap": <AssessmentRoundedIcon/>,
   Dashboard: <DashboardRoundedIcon />,
   "Venue & Event Bookings": <EventRoundedIcon />,
   "Chef & Concessions": <RestaurantRoundedIcon />,
@@ -112,7 +113,7 @@ export default function Sidebar({
         {!search&&shortcuts.length>0&&<Box sx={{mb:2}}><Typography sx={{px:1.5,mb:.75,fontSize:10,color:'#8294ad',letterSpacing:1.4}}>PINNED</Typography>{shortcuts.map(item=>tool(item,true))}</Box>}
         <List component="nav" aria-label="Workspace navigation" disablePadding>
           {search?<><Typography sx={{px:1.25,py:1,fontSize:10,color:'#8091a9',letterSpacing:1}}>SEARCH RESULTS · {filtered.length}</Typography>{filtered.map(item=>tool(item,true))}{!filtered.length&&<Typography sx={{p:1.5,color:'#a5b3c7',fontSize:12}}>No tools match your search.</Typography>}</>:WORKSPACE_GROUPS.map(group=>{
-            const priority=['TNG BOXING EVENTS','Promoter','Amateur Matchmaker','Fight Calendar','Event Check-In'];const items=group.pages.filter(item=>filtered.includes(item)).sort((a,b)=>{if(group.id!=='boxing')return 0;const ai=priority.indexOf(a),bi=priority.indexOf(b);return (ai<0?99:ai)-(bi<0?99:bi);});if(!items.length)return null;const open=openGroup===group.id;
+            const priority=['TNG BOXING EVENTS','Fight Recap','Promoter','Amateur Matchmaker','Fight Calendar','Event Check-In'];const items=group.pages.filter(item=>filtered.includes(item)).sort((a,b)=>{if(group.id!=='boxing')return 0;const ai=priority.indexOf(a),bi=priority.indexOf(b);return (ai<0?99:ai)-(bi<0?99:bi);});if(!items.length)return null;const open=openGroup===group.id;
             return <Box key={group.id} sx={{mb:.75}}><ListItemButton component="button" aria-label={`Toggle ${group.label}`} aria-expanded={open} onClick={()=>setOpenGroup(open?null:group.id)} sx={{width:'100%',minHeight:42,borderRadius:'6px',px:1.5,gap:1.25,color:open?'#fff':'#a5b5cb',textAlign:'left','&:hover':{bgcolor:'#ffffff08'}}}><Box sx={{display:'flex',color:open?'#f4657a':'#7186a3','& svg':{fontSize:18}}}>{groupIcons[group.id]}</Box><Typography sx={{flex:1,fontSize:12,fontWeight:700,letterSpacing:.2}}>{groupNames[group.id]||group.label}</Typography><ExpandMoreRoundedIcon sx={{fontSize:17,color:'#7f91aa',transform:open?'rotate(180deg)':'none'}}/></ListItemButton><Collapse in={open} timeout={120} unmountOnExit><Box sx={{ml:1.5,mt:.25,mb:1,pl:1,borderLeft:'1px solid #2c384a'}}>{items.map(item=>tool(item))}</Box></Collapse></Box>;
           })}
         </List>

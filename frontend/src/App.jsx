@@ -25,6 +25,7 @@ import tngTheme from "./theme/tngTheme";
 
 import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspaces";
 import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
+const FightRecap=lazy(()=>import('./pages/FightRecap'));
 const ShowControl=lazy(()=>import('./pages/ShowControl'));
 const TngBoxingGame = lazy(() => import('./pages/TngBoxingGame'));
 const MemberPortal = lazy(() => import("./pages/MemberPortal.jsx"));
@@ -888,6 +889,7 @@ return (
       {page === "Manager Portal" && role === "manager" && (
         <ManagerPortal />
       )}
+      {page === 'Fight Recap' && ['admin','staff'].includes(role) && <FightRecap onNavigate={navigate} />}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
       {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents initialEventId={navigationTarget.eventId} initialSection={navigationTarget.eventSection} />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
