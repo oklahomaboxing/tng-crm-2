@@ -42,3 +42,16 @@ class BudgetTests(unittest.TestCase):
   self.assertTrue(f['provisional']);self.assertEqual(f['break_even_status'],'missing_inputs')
  def test_no_prior_event_uses_its_own_known_sales_instead_of_zero(self):
   d=self.client.get(f'/api/events/{self.past.id}/budget',headers=self.headers()).json();self.assertEqual(d['assumptions']['average_ticket_cents'],4000);self.assertGreaterEqual(d['forecast']['scenarios'][1]['income_cents'],40000)
+
+ def test_minimum_worksheet_is_versioned_saved_and_does_not_create_actual_expenses(self):
+  before=self.db.query(BoxingEventFee).count();body=self.assumptions().model_dump(mode='json');body['pro_show_minimum']={'fighter_purses_cents':1000000,'fighter_insurance_cents':None}
+  r=self.client.put(self.path,headers=self.headers(),json=body);self.assertEqual(r.status_code,200,r.text)
+  d=self.client.get(self.path,headers=self.headers()).json();self.assertEqual(d['forecast']['minimum_pro_show']['known_cost_cents'],1271000);self.assertEqual(d['forecast']['minimum_pro_show']['missing'],['fighter_insurance_cents']);self.assertEqual(d['assumptions']['pro_show_minimum']['fighter_purses_cents'],1000000)
+  self.assertEqual(self.db.query(BoxingEventFee).count(),before);self.assertEqual(self.client.get(self.path+'.pdf',headers=self.headers()).status_code,200)
+
+class ProShowBaselineTests(unittest.TestCase):
+ def test_known_baseline_counts_commission_once_and_requires_purses_and_insurance(self):
+  from app.events.budget import ProShowMinimum
+  p=ProShowMinimum();self.assertEqual(sum(v or 0 for v in p.model_dump().values()),1271000)
+  self.assertEqual(p.fighter_purses_cents,1000000);self.assertIsNone(p.fighter_insurance_cents)
+  p.fighter_purses_cents=1000000;self.assertEqual(sum(v or 0 for v in p.model_dump().values()),1271000)

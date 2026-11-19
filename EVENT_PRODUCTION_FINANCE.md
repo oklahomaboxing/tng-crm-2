@@ -46,3 +46,9 @@ Assigned sponsors may receive a cost-only statement with explicit admin sharing.
 POS exclusion of a previously counted ticket receipt requires an exact payment reference and exact whole-order subtotal match. Unclassified receipts remain visible for review; legitimate exclusions and open orders alone do not produce a generic financial error. Deduction guidance is informational and does not invent vendor expenses.
 
 Tournament defaults are Saturday Noon / PM and optional Sunday Noon / PM. Existing saved morning times are labeled honestly and recorded results are preserved.
+
+## Direct comparison and minimum pro-show worksheet
+
+Fight Recap is available on the admin dashboard and in Boxing & Events for admin/staff only. Its direct URL is `/#/fight-recap`. Up to four event summaries can be compared in aligned columns, with full-recap links and horizontal scrolling inside the comparison on phones. Recorded income sources, both-corner purse costs, commissions, assessment, operating expenses and paid amounts use the existing recap API.
+
+The event budget includes a separate, saved minimum pro-show planning worksheet: $10,000 total professional purses, $1,750 inclusive athletic commission allowance, $400 EMSA, $50 event permit, $255 state liquor license and $255 ABLE liquor license. Known listed baseline is $12,710 plus fighter insurance (price not supplied). This worksheet is included in the budget PDF. It does not create actual expenses or payments and does not replace the complete event forecast; unlisted event costs remain separate. Fall Brawl liquor-license actual costs are recorded separately from the existing promoter/matchmaker/event/sport permit entries, per owner confirmation.
