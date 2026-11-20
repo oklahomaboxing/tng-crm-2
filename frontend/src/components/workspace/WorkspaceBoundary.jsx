@@ -1,3 +1,4 @@
+import {reportWorkspaceError} from '../../services/monitoring';
 import React from 'react';
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
 export function WorkspaceLoading() {
@@ -5,6 +6,7 @@ export function WorkspaceLoading() {
 }
 export default class WorkspaceBoundary extends React.Component {
   state = { failed: false };
+  componentDidCatch(error) { reportWorkspaceError(error); }
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidUpdate(previous) { if (previous.workspace !== this.props.workspace && this.state.failed) this.setState({ failed: false }); }
   render() {

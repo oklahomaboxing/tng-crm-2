@@ -1,0 +1,8 @@
+.tng-command-preview{color:#F5FAFF;background:radial-gradient(ellipse at 95% 0%,#168bff20,transparent 50%),radial-gradient(ellipse at 0% 100%,#865dff12,transparent 50%),#050a12;border:1px solid #294465;border-radius:18px;padding:clamp(16px,3vw,36px);min-height:80vh;isolation:isolate}
+.tng-command-preview:fullscreen{overflow:auto;border-radius:0}
+.tng-command-preview .command-panel{background:linear-gradient(135deg,#0b1424f5,#0b1424d9);border:1px solid #244461;border-radius:12px;box-shadow:inset 0 1px 0 #00e5ff14,0 12px 30px #0003;min-width:0}
+.tng-command-preview .command-launch{border:1px solid #244461;border-radius:8px;background:#07121f;color:#cce1f6;text-align:left;padding:12px 14px;cursor:pointer;min-height:44px}
+.tng-command-preview .command-launch:hover{border-color:#00e5ff;background:#102439}
+.tng-command-preview .command-launch:focus-visible{outline:2px solid #00e5ff;outline-offset:3px}
+.tng-command-preview .command-orb{width:64px;height:64px;flex-shrink:0;border:1px solid #00e5ff77;border-radius:50%;background:radial-gradient(circle at 35% 30%,#00e5ff44,#168bff11 45%,#050a12 75%);box-shadow:0 0 22px #168bff25,inset 0 0 12px #00e5ff22}
+@media(prefers-reduced-motion:reduce){.tng-command-preview *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

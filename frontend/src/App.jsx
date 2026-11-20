@@ -25,6 +25,9 @@ import tngTheme from "./theme/tngTheme";
 
 import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspaces";
 import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
+import {initializeMonitoring} from './services/monitoring';
+initializeMonitoring();
+const CommandCenterPreview=lazy(()=>import('./pages/CommandCenterPreview'));
 const FightRecap=lazy(()=>import('./pages/FightRecap'));
 const ShowControl=lazy(()=>import('./pages/ShowControl'));
 const TngBoxingGame = lazy(() => import('./pages/TngBoxingGame'));
@@ -858,6 +861,7 @@ return (
         </Alert>
       )}
 
+      {page === 'Command Center' && role === 'admin' && <CommandCenterPreview onNavigate={navigate} userName={userName}/>}
       {page === "Dashboard" && role !== "rep" && (
         <Dashboard dash={dash} leader={leader} load={load} onNavigate={navigate} userName={userName} error={dashboardError} />
       )}
