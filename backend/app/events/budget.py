@@ -2,6 +2,7 @@
 import io,json,math
 from datetime import datetime,timezone
 from decimal import Decimal,ROUND_HALF_UP
+from typing import Literal
 from xml.sax.saxutils import escape
 from fastapi import APIRouter,Depends,HTTPException,Response
 from pydantic import BaseModel,Field,field_validator
@@ -32,6 +33,8 @@ class ProShowMinimum(BaseModel):
  able_liquor_license_cents:int|None=Field(default=25500,ge=0,le=100000000)
 
 class BudgetBody(BaseModel):
+ show_format:Literal['amateur','professional']='professional'
+ show_cost_baseline_cents:int|None=Field(default=None,ge=0,le=100000000)
  pro_show_minimum:ProShowMinimum=Field(default_factory=ProShowMinimum)
  baseline_event_id:int|None=None
  expected_paid_tickets:int=Field(ge=0,le=100000)
@@ -108,6 +111,19 @@ def attach_reference(forecast,options,baseline_id):
   forecast['provisional']=True
  return forecast
 
+def show_cost_reference(body):
+ amount=body.show_cost_baseline_cents if body.show_cost_baseline_cents is not None else (500000 if body.show_format=='amateur' else 1500000)
+ return {'show_format':body.show_format,'baseline_cents':amount,'estimate_only':True,'basis':'Editable planning reference per show, not a fixed selling price or actual paid expense. Detailed costs and obligations can be above or below this reference.'}
+
+def planning_reference_for_event(db,event_id):
+ row=db.get(EventBudget,event_id)
+ if not row:return None
+ try:
+  raw=json.loads(row.assumptions_json)
+  if not any(k in raw for k in ('show_format','show_cost_baseline_cents')):return None
+  return show_cost_reference(BudgetBody(**raw))
+ except (ValueError,TypeError):return None
+
 def calculate(body,current):
  missing=[k.replace('_',' ')for k in ('average_ticket_cents','concessions_per_ticket_cents','bar_per_ticket_cents','sponsor_vendor_cents','purse_allowance_cents','processing_fee_percent')if getattr(body,k)is None]+[c.name for c in body.operating_costs if c.amount_cents is None]
  if not current['summary']['current_card_fighters']:missing.append('No fighters booked on the current card; purse reference is not a current contract')
@@ -127,7 +143,8 @@ def calculate(body,current):
    if scenario('',mid)['projected_result_cents']>=0:hi=mid
    else:lo=mid+1
   break_even=lo
- return {'minimum_pro_show':{'known_cost_cents':sum(v or 0 for v in body.pro_show_minimum.model_dump().values()),'missing':[k for k,v in body.pro_show_minimum.model_dump().items() if v is None],'complete':all(v is not None for v in body.pro_show_minimum.model_dump().values()),'basis':'Owner-provided minimum planning baseline. Athletic commission is one inclusive total, not added to a second assessment in this worksheet. This worksheet is separate from the full event forecast and actual expenses; it excludes unlisted production, venue, food/bar, security, staffing, seller commissions and processing costs.'},'recorded_receipts':{'ticket_cents':actual_tickets,'concessions_cents':actual_food,'bar_cents':actual_bar,'sponsor_vendor_cents':actual_sponsors,'total_cents':actual_tickets+actual_food+actual_bar+actual_sponsors,'paid_tickets':actual.get('paid_ticket_quantity',0)},'scenarios':scenarios,'break_even_status':'missing_inputs'if numeric_missing else'calculated'if break_even is not None else'unreachable','break_even_paid_tickets':None if numeric_missing else break_even,'missing_or_review':missing,'provisional':bool(missing),'purse_basis':('Current card recorded obligations'if body.purse_allowance_cents==current['summary'].get('purse_cost_cents')else'Staff planning amount; review against current card obligations')if current['summary']['current_card_fighters']else'Planning purse reference; current card not booked','basis':'Estimate only, not guaranteed demand or final profit. Already recorded paid receipts, ticket quantities and cost obligations are floors: a sales scenario cannot erase money already recorded or obligations already booked. Paid-ticket count is a planning proxy, not verified attendance. Prior food/bar revenue is divided by recorded paid tickets and scaled to expected tickets. Inventory carryover and unsold stock are not valued automatically; review required new purchases. Operating costs are fixed planning amounts; earned commissions, ticket assessment and processor percentages vary with forecast receipts. Recorded current commission obligations are a floor. Processing percentage applies to all forecast receipts as a planning approximation. Unrecorded costs contribute zero to scenario arithmetic but remain explicitly missing; do not treat incomplete projections as complete profit. 80%/100%/120% sales scenarios are assumptions, not statistical probabilities.'}
+ reference=show_cost_reference(body);reference['detailed_forecast_cents']=scenarios[1]['cost_cents'];reference['variance_cents']=scenarios[1]['cost_cents']-reference['baseline_cents']
+ return {'show_cost_reference':reference,'minimum_pro_show':{'known_cost_cents':sum(v or 0 for v in body.pro_show_minimum.model_dump().values()),'missing':[k for k,v in body.pro_show_minimum.model_dump().items() if v is None],'complete':all(v is not None for v in body.pro_show_minimum.model_dump().values()),'basis':'Owner-provided minimum planning baseline. Athletic commission is one inclusive total, not added to a second assessment in this worksheet. This worksheet is separate from the full event forecast and actual expenses; it excludes unlisted production, venue, food/bar, security, staffing, seller commissions and processing costs.'},'recorded_receipts':{'ticket_cents':actual_tickets,'concessions_cents':actual_food,'bar_cents':actual_bar,'sponsor_vendor_cents':actual_sponsors,'total_cents':actual_tickets+actual_food+actual_bar+actual_sponsors,'paid_tickets':actual.get('paid_ticket_quantity',0)},'scenarios':scenarios,'break_even_status':'missing_inputs'if numeric_missing else'calculated'if break_even is not None else'unreachable','break_even_paid_tickets':None if numeric_missing else break_even,'missing_or_review':missing,'provisional':bool(missing),'purse_basis':('Current card recorded obligations'if body.purse_allowance_cents==current['summary'].get('purse_cost_cents')else'Staff planning amount; review against current card obligations')if current['summary']['current_card_fighters']else'Planning purse reference; current card not booked','basis':'Estimate only, not guaranteed demand or final profit. Already recorded paid receipts, ticket quantities and cost obligations are floors: a sales scenario cannot erase money already recorded or obligations already booked. Paid-ticket count is a planning proxy, not verified attendance. Prior food/bar revenue is divided by recorded paid tickets and scaled to expected tickets. Inventory carryover and unsold stock are not valued automatically; review required new purchases. Operating costs are fixed planning amounts; earned commissions, ticket assessment and processor percentages vary with forecast receipts. Recorded current commission obligations are a floor. Processing percentage applies to all forecast receipts as a planning approximation. Unrecorded costs contribute zero to scenario arithmetic but remain explicitly missing; do not treat incomplete projections as complete profit. 80%/100%/120% sales scenarios are assumptions, not statistical probabilities.'}
 
 @router.get('/{event_id}/budget')
 def get_budget(event_id:int,response:Response,baseline_event_id:int|None=None,db=Depends(get_db),user=Depends(staff)):
@@ -159,6 +176,7 @@ def pdf(event_id:int,db=Depends(get_db),user=Depends(staff)):
  from reportlab.lib import colors
  if not db.get(EventBudget,event_id):raise HTTPException(409,'Save and review the planning budget before downloading')
  d=get_budget(event_id,Response(),None,db,user);a=d['assumptions'];f=d['forecast'];styles=getSampleStyleSheet();out=io.BytesIO();money=lambda x:'NOT ENTERED'if x is None else f'${x/100:,.2f}';story=[Paragraph('TNG BOXING | EVENT BUDGET & FORECAST',styles['Title']),Paragraph(escape(d['event']['name']),styles['Heading2']),Paragraph(escape(f['basis']),styles['Normal']),Spacer(1,12)]
+ reference=f['show_cost_reference'];story.append(Paragraph(escape(reference['show_format'].title())+' boxing planning reference: '+money(reference['baseline_cents'])+' per show. '+escape(reference['basis']),styles['Normal']));story.append(Spacer(1,12))
  rows=[['Sales scenario','Paid tickets','Projected income','Projected costs','Projected result']]+[[s['name'],str(s['paid_tickets']),money(s['income_cents']),money(s['cost_cents']),money(s['projected_result_cents'])]for s in f['scenarios']]
  table=Table([[Paragraph(escape(str(c)),styles['Normal'])for c in r]for r in rows],colWidths=[105,65,115,115,120],repeatRows=1);table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e8e8ed')),('VALIGN',(0,0),(-1,-1),'TOP')]));story.extend([table,Spacer(1,12),Paragraph('Break-even paid tickets: '+str('Enter missing inputs first'if f['break_even_status']=='missing_inputs'else f['break_even_paid_tickets']if f['break_even_paid_tickets']is not None else'Not achievable within 100,000 tickets under these assumptions'),styles['Heading2'])])
  story.append(Paragraph('Purses / allowances: '+money(a['purse_allowance_cents'])+' | '+escape(f['purse_basis']),styles['Normal']))

@@ -297,7 +297,8 @@ def recap(db, eid):
     summary['purses_on_hold']=sum(r['purse_status']=='on_hold' for r in fighter_rows)
     summary['purses_fully_paid']=sum(r['purse_status'] in ('paid','overpaid') for r in fighter_rows)
     summary['commissions_fully_paid']=sum(r['commission_status'] in ('paid','overpaid') for r in seller_rows)
-    return {'roster_scope': 'current_bout_card', 'current_bout_ids': [b.id for b in active], 'event': {'id': event.id, 'name': event.name, 'date': event.event_date, 'status': event.status}, 'summary': summary, 'fighters': fighter_rows, 'sellers': seller_rows, 'expenses': fee_rows, 'other_income': income_rows, 'accounting_notes':accounting_notes,'warnings': sorted(issues), 'provisional': bool(issues), 'generated_at': datetime.now(timezone.utc).isoformat(), 'basis': 'Fighter breakdown and purse totals use only fighters on the current bout card. Off-card purse records are excluded and retained in payment history. Ticket revenue, seller commissions and other event costs remain event-wide. Recorded paid ticket subtotals + PAID sponsor/vendor receipts + attributed Clover concessions/bar sales − net purse/allowance obligations (or higher recorded payments) − earned seller commissions (or higher recorded payments) − state assessment − other actual expenses. Pending sales, customer fees, textual estimates and unreconciled partial refunds are not included. This is not a bank balance or proof that an unrecorded payment is unpaid.'}
+    from .budget import planning_reference_for_event
+    return {'planning_cost_reference':planning_reference_for_event(db,eid),'roster_scope': 'current_bout_card', 'current_bout_ids': [b.id for b in active], 'event': {'id': event.id, 'name': event.name, 'date': event.event_date, 'status': event.status}, 'summary': summary, 'fighters': fighter_rows, 'sellers': seller_rows, 'expenses': fee_rows, 'other_income': income_rows, 'accounting_notes':accounting_notes,'warnings': sorted(issues), 'provisional': bool(issues), 'generated_at': datetime.now(timezone.utc).isoformat(), 'basis': 'Fighter breakdown and purse totals use only fighters on the current bout card. Off-card purse records are excluded and retained in payment history. Ticket revenue, seller commissions and other event costs remain event-wide. Recorded paid ticket subtotals + PAID sponsor/vendor receipts + attributed Clover concessions/bar sales − net purse/allowance obligations (or higher recorded payments) − earned seller commissions (or higher recorded payments) − state assessment − other actual expenses. Pending sales, customer fees, textual estimates and unreconciled partial refunds are not included. This is not a bank balance or proof that an unrecorded payment is unpaid.'}
 
 @router.get('/{event_id}/recap')
 def get_recap(event_id: int, response: Response, db=Depends(get_db), user=Depends(staff_user)):
@@ -312,7 +313,7 @@ def event_recaps(response: Response, limit: int=Query(20, ge=1, le=50), offset: 
     data = []
     for e in events.offset(offset).limit(limit):
         d = recap(db, e.id)
-        data.append({'event': d['event'], 'summary': d['summary'], 'provisional': d['provisional']})
+        data.append({'event': d['event'], 'summary': d['summary'], 'provisional': d['provisional'],'planning_cost_reference':d.get('planning_cost_reference')})
     return {'events': data, 'total': total, 'limit': limit, 'offset': offset}
 
 class PaymentBody(BaseModel):

@@ -49,9 +49,29 @@ class BudgetTests(unittest.TestCase):
   d=self.client.get(self.path,headers=self.headers()).json();self.assertEqual(d['forecast']['minimum_pro_show']['known_cost_cents'],1271000);self.assertEqual(d['forecast']['minimum_pro_show']['missing'],['fighter_insurance_cents']);self.assertEqual(d['assumptions']['pro_show_minimum']['fighter_purses_cents'],1000000)
   self.assertEqual(self.db.query(BoxingEventFee).count(),before);self.assertEqual(self.client.get(self.path+'.pdf',headers=self.headers()).status_code,200)
 
+ def test_show_cost_reference_saves_without_changing_sales_prices_or_actual_costs(self):
+  from app.models import MembershipProduct
+  from app.ticketing.models import EventTicketType
+  kind=EventTicketType(event_id=self.event.id,name='GA',price_cents=4000);product=MembershipProduct(name='Test shirt',price=20,category='retail',is_membership=False);self.db.add_all([kind,product]);self.db.commit()
+  before_fees=self.db.query(BoxingEventFee).count();body=self.assumptions().model_dump(mode='json');body.update(show_format='amateur',show_cost_baseline_cents=500000)
+  self.assertEqual(self.client.put(self.path,headers=self.headers(),json=body).status_code,200)
+  d=self.client.get(self.path,headers=self.headers()).json();self.assertEqual(d['forecast']['show_cost_reference']['baseline_cents'],500000)
+  r=self.client.get(f'/api/events/{self.event.id}/recap',headers=self.headers()).json();self.assertEqual(r['planning_cost_reference']['baseline_cents'],500000)
+  self.assertEqual(self.db.query(BoxingEventFee).count(),before_fees);self.db.expire_all();self.assertEqual(self.db.get(EventTicketType,kind.id).price_cents,4000);self.assertEqual(self.db.get(MembershipProduct,product.id).price,20)
+
 class ProShowBaselineTests(unittest.TestCase):
  def test_known_baseline_counts_commission_once_and_requires_purses_and_insurance(self):
   from app.events.budget import ProShowMinimum
   p=ProShowMinimum();self.assertEqual(sum(v or 0 for v in p.model_dump().values()),1271000)
   self.assertEqual(p.fighter_purses_cents,1000000);self.assertIsNone(p.fighter_insurance_cents)
   p.fighter_purses_cents=1000000;self.assertEqual(sum(v or 0 for v in p.model_dump().values()),1271000)
+
+class ShowCostReferenceTests(unittest.TestCase):
+ def test_amateur_and_pro_reference_defaults_are_estimates(self):
+  from app.events.budget import show_cost_reference
+  self.assertEqual(show_cost_reference(BudgetBody(expected_paid_tickets=0,show_format='amateur'))['baseline_cents'],500000)
+  p=show_cost_reference(BudgetBody(expected_paid_tickets=0));self.assertEqual(p['baseline_cents'],1500000);self.assertTrue(p['estimate_only'])
+ def test_custom_reference_and_explicit_zero_are_preserved(self):
+  from app.events.budget import show_cost_reference
+  self.assertEqual(show_cost_reference(BudgetBody(expected_paid_tickets=0,show_format='amateur',show_cost_baseline_cents=650000))['baseline_cents'],650000)
+  self.assertEqual(show_cost_reference(BudgetBody(expected_paid_tickets=0,show_cost_baseline_cents=0))['baseline_cents'],0)
