@@ -41,6 +41,7 @@ import { ROLE_MENUS, WORKSPACE_GROUPS, searchWorkspaces, workspaceGroup } from "
 export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
+  "Command Center": <DashboardRoundedIcon/>,
   "Fight Recap": <AssessmentRoundedIcon/>,
   Dashboard: <DashboardRoundedIcon />,
   "Venue & Event Bookings": <EventRoundedIcon />,

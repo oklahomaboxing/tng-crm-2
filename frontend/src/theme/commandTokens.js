@@ -1,0 +1,3 @@
+import{createTheme}from'@mui/material';import commandTheme from'./commandTheme';
+export const commandTokens=Object.freeze({background:'#050A12',panel:'#0B1424',cyan:'#00E5FF',blue:'#168BFF',purple:'#865DFF',success:'#00FFB2',warning:'#FFB020',critical:'#FF4057',text:'#F5FAFF'});
+export default createTheme(commandTheme,{palette:{primary:{main:commandTokens.cyan,contrastText:commandTokens.background},secondary:{main:commandTokens.purple},background:{default:commandTokens.background,paper:commandTokens.panel},text:{primary:commandTokens.text,secondary:'#a9c2de'},success:{main:commandTokens.success},warning:{main:commandTokens.warning},error:{main:commandTokens.critical}}});

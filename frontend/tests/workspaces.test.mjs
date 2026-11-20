@@ -107,3 +107,9 @@ test('fight recap is a finance staff workspace with a direct route',()=>{
  for(const role of ['matchmaker','announcer','dj','investor','sponsor','concessions','member','fighter','manager','rep'])assert.equal(readWorkspace('#/fight-recap',role),null);
  assert.ok(searchWorkspaces('admin','compare').includes('Fight Recap'));
 });
+
+test('command center preview is admin only and supports its admin alias',()=>{
+ assert.equal(readWorkspace('#/command-center','admin').page,'Command Center');
+ assert.equal(readWorkspace('#/admin/command-center','admin').page,'Command Center');
+ for(const role of ['staff','member','fighter','matchmaker','investor','sponsor','concessions','manager','rep','announcer','dj','event_coordinator'])assert.equal(readWorkspace('#/command-center',role),null);
+});

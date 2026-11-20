@@ -1,5 +1,6 @@
 export const ROLE_MENUS = {
   admin: [
+    "Command Center",
     "Dashboard",
     "System Overview",
     "Call Center",
@@ -68,7 +69,7 @@ export const ROLE_MENUS = {
 };
 
 export const WORKSPACE_GROUPS = [
-  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal', 'Chef & Concessions'] },
+  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'Command Center', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal', 'Chef & Concessions'] },
   { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer', 'TNG Boxing Game'] },
   { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Announcer & DJ', 'Amateur Matchmaker', 'Venue & Event Bookings', 'TNG BOXING EVENTS', 'Fight Recap', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
@@ -76,6 +77,7 @@ export const WORKSPACE_GROUPS = [
   { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Investor Center', 'Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
 ];
 export const WORKSPACE_HINTS = {
+ 'Command Center':'Development preview futuristic command center read only operations dashboard',
  'Fight Recap':'Compare event revenue costs fighter purses commissions expenses profit loss side by side',
   "Announcer & DJ": "Event run of show, fighter introductions, walkout songs, announcer profile, sponsor promotions and concessions sales announcements",
   "TNG Boxing Game": "Play boxing combinations with keyboard or controller: punches, slips, defense and timed drills",
@@ -146,6 +148,7 @@ export function workspaceHash(page, target = {}) {
 }
 export function readWorkspace(hash, role) {
   let [slug, query = ""] = String(hash || "").replace(/^#\/?/, "").split("?");
+  if (slug === 'admin/command-center') slug='command-center';
   if (slug === 'concessions-portal') slug='chef-concessions';
   if (slug === 'front-desk') slug='member-check-in';
   const page = (ROLE_MENUS[role] || []).find(p => workspaceSlug(p) === slug);
