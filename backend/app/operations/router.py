@@ -96,6 +96,8 @@ router.include_router(amateur_directory_router)
 
 from app.amateurs.officials import router as amateur_officials_router
 router.include_router(amateur_officials_router)
+from app.amateurs.work_texts import router as official_work_texts_router
+router.include_router(official_work_texts_router)
 
 from app.events.investors import router as investor_business_router
 router.include_router(investor_business_router)

@@ -107,3 +107,9 @@ test('fight recap is a finance staff workspace with a direct route',()=>{
  for(const role of ['matchmaker','announcer','dj','investor','sponsor','concessions','member','fighter','manager','rep'])assert.equal(readWorkspace('#/fight-recap',role),null);
  assert.ok(searchWorkspaces('admin','compare').includes('Fight Recap'));
 });
+
+test('USA Boxing Officials work messaging is available only to admin and staff',()=>{
+ for(const role of ['admin','staff'])assert.equal(readWorkspace('#/usa-boxing-officials',role).page,'USA Boxing Officials');
+ for(const role of ['member','rep','fighter','manager','matchmaker','investor','sponsor','concessions','announcer','dj','event_coordinator'])assert.equal(readWorkspace('#/usa-boxing-officials',role),null);
+ assert.ok(searchWorkspaces('admin','official texts').includes('USA Boxing Officials'));
+});
