@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Query,Request
 from fastapi.responses import JSONResponse,Response
 from pydantic import BaseModel,Field
-from sqlalchemy import Column,Integer,String,Text,DateTime,ForeignKey,func
+from sqlalchemy import Column,Integer,String,Text,DateTime,ForeignKey,func,case
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database import Base,get_db
@@ -69,11 +69,12 @@ def allowed(db,phone):
 
 def serialize(row):return {'id':row.id,'direction':row.direction,'body':row.body,'command':row.command,'media_count':row.media_count,'status':row.status,'error_code':row.error_code,'created_at':stamp(row.created_at),'read_at':stamp(row.read_at)}
 
+def unread_totals(db,officials):
+    return db.query(func.count(InboxMessage.id),func.max(InboxMessage.id),func.coalesce(func.sum(case((InboxMessage.phone.in_(officials),1),else_=0)),0)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None)).one()
+
 @router.get('/summary')
 def summary(db:Session=Depends(get_db),user=Depends(staff_user)):
-    count,latest=db.query(func.count(InboxMessage.id),func.max(InboxMessage.id)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None)).one()
-    officials=official_phones(db)
-    official_count=db.query(InboxMessage).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None),InboxMessage.phone.in_(officials)).count()
+    count,latest,official_count=unread_totals(db,official_phones(db))
     return response({'unread_messages':count,'latest_unread_id':latest,'officials_unread':official_count,'gym_unread':count-official_count})
 
 @router.get('')
@@ -82,8 +83,8 @@ def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,
     query=db.query(InboxMessage).join(grouped,InboxMessage.id==grouped.c.latest)
     unread=db.query(InboxMessage.phone).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None))
     officials=official_phones(db)
-    official_unread=scoped(unread,InboxMessage.phone,'officials',officials).count()
-    inbox_counts={'all':unread.count(),'officials':official_unread,'gym':unread.count()-official_unread}
+    total_unread,_,official_unread=unread_totals(db,officials)
+    inbox_counts={'all':total_unread,'officials':official_unread,'gym':total_unread-official_unread}
     query=scoped(query,InboxMessage.phone,scope,officials)
     unread=scoped(unread,InboxMessage.phone,scope,officials)
     from .contact_names import contact_names
