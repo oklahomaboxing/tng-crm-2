@@ -1,5 +1,6 @@
 import { workspaceGroup } from '../navigation/workspaces';
 import React from "react";
+import MessageNotifications from "../components/MessageNotifications";
 import WorkspaceSearch from "../components/workspace/WorkspaceSearch";
 import {
   AppBar,
@@ -88,6 +89,7 @@ export default function TopBar({
         >
           <ToggleButtonGroup size="small" exclusive value={mode||'standard'} onChange={(_,v)=>{if(v)onModeChange?.(v)}} aria-label="Display mode" sx={{bgcolor:'#ffffff09','& .MuiToggleButton-root':{color:'#c8dceb',borderColor:'#527087',fontSize:12,px:1,'&.Mui-selected':{color:'#04121e',bgcolor:'#8de7ff','&:hover':{bgcolor:'#b3f0ff'}}}}}><ToggleButton value="standard">Standard</ToggleButton><ToggleButton value="command">Command</ToggleButton></ToggleButtonGroup>
           <Tooltip title="All modules and layout settings"><Button color="inherit" onClick={onModules} aria-label="Open module center" sx={{minWidth:44,px:1}}><AppsRoundedIcon/><Box component="span" sx={{display:{xs:'none',xl:'inline'},ml:1}}>Modules</Box></Button></Tooltip>
+          {["admin","staff"].includes(role)&&<MessageNotifications onNavigate={onNavigate}/>}
           <WorkspaceSearch disabled={moduleCenterOpen} role={role} onNavigate={onNavigate}/>
           <Tooltip title="Refresh overview metrics">
             <IconButton onClick={onRefresh} aria-label="Refresh overview metrics" sx={{color:'#aebdd1'}}>

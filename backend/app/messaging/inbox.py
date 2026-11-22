@@ -67,6 +67,11 @@ def allowed(db,phone):
 
 def serialize(row):return {'id':row.id,'direction':row.direction,'body':row.body,'command':row.command,'media_count':row.media_count,'status':row.status,'error_code':row.error_code,'created_at':stamp(row.created_at),'read_at':stamp(row.read_at)}
 
+@router.get('/summary')
+def summary(db:Session=Depends(get_db),user=Depends(staff_user)):
+    count,latest=db.query(func.count(InboxMessage.id),func.max(InboxMessage.id)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None)).one()
+    return response({'unread_messages':count,'latest_unread_id':latest})
+
 @router.get('')
 def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,ge=1),db:Session=Depends(get_db),user=Depends(staff_user)):
     grouped=db.query(InboxMessage.phone.label('phone'),func.max(InboxMessage.id).label('latest')).group_by(InboxMessage.phone).subquery()
