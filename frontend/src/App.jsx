@@ -863,7 +863,7 @@ return (
         <Dashboard dash={dash} leader={leader} load={load} onNavigate={navigate} userName={userName} error={dashboardError} />
       )}
       {page === "Text Inbox" && ["admin", "staff"].includes(role) && <TextInbox />}
-      {page === "Officials Inbox" && ["admin", "staff"].includes(role) && <TextInbox initialScope="officials" />}
+      {page === "Officials Inbox" && ["admin", "staff"].includes(role) && <USABoxingOfficials initialView="inbox" onNavigate={navigate}/>}
       {page === "Call Center" && role === "admin" && <CallCenter onNavigate={navigate} />}
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
       {page === "TNG Apparel" && role === "admin" && <ApparelAdmin/>}

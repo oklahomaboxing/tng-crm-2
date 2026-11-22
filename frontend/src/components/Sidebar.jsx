@@ -89,10 +89,10 @@ export default function Sidebar({
   onNavigate,
 }) {
   const [search, setSearch] = useState("");
-  const filtered = searchWorkspaces(role,search);
+  const filtered = searchWorkspaces(role,search).filter(item=>item!=='Officials Inbox');
   const [openGroup,setOpenGroup]=useState(()=>workspaceGroup(page)?.id||null);
   useEffect(()=>{setOpenGroup(workspaceGroup(page)?.id||null);setSearch("");},[page,role]);
-  const shortcuts=pinned.filter(item=>(ROLE_MENUS[role]||[]).includes(item));
+  const shortcuts=pinned.filter(item=>item!=='Officials Inbox'&&(ROLE_MENUS[role]||[]).includes(item));
   const groupNames={home:'Overview',gym:'Gym & members',boxing:'Boxing & events',retail:'Shop & sales',growth:'Marketing & messages',admin:'Administration'};
   const labels={'TNG BOXING EVENTS':'TNG Boxing Events','TNGTrainer':'Training','TNG Boxing Game':'Boxing Game'};
   const groupIcons={home:<DashboardRoundedIcon/>,gym:<PeopleAltRoundedIcon/>,boxing:<SportsMmaRoundedIcon/>,retail:<StorefrontRoundedIcon/>,growth:<CampaignRoundedIcon/>,admin:<ManageAccountsRoundedIcon/>};
