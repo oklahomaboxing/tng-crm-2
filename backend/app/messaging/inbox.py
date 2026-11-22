@@ -77,11 +77,16 @@ def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,
     grouped=db.query(InboxMessage.phone.label('phone'),func.max(InboxMessage.id).label('latest')).group_by(InboxMessage.phone).subquery()
     query=db.query(InboxMessage).join(grouped,InboxMessage.id==grouped.c.latest)
     unread=db.query(InboxMessage.phone).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None))
-    if q.strip():query=query.filter(InboxMessage.phone.contains(re.sub(r'[^0-9+]','',q) or 'INVALID'))
+    from .contact_names import contact_names
+    labels=contact_names(db,[r[0] for r in db.query(grouped.c.phone).all()])
+    if q.strip():
+        term=q.strip().casefold();digits=re.sub(r'[^0-9+]','',q)
+        phones=[p for p,label in labels.items() if (digits and digits in p) or any(term in name.casefold() for name in label['matched_names'])]
+        query=query.filter(InboxMessage.phone.in_(phones))
     if unread_only:query=query.filter(InboxMessage.phone.in_(unread))
     total=query.count();rows=query.order_by(InboxMessage.id.desc()).offset((page-1)*25).limit(25).all()
     counts=dict(db.query(InboxMessage.phone,func.count(InboxMessage.id)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None),InboxMessage.phone.in_([r.phone for r in rows])).group_by(InboxMessage.phone).all()) if rows else {}
-    return response({'number':os.getenv('TWILIO_PHONE_NUMBER',''),'total':total,'page_size':25,'unread_messages':unread.count(),'conversations':[{'phone':r.phone,'latest':serialize(r),'unread':counts.get(r.phone,0)} for r in rows]})
+    return response({'number':os.getenv('TWILIO_PHONE_NUMBER',''),'total':total,'page_size':25,'unread_messages':unread.count(),'conversations':[{'phone':r.phone,**labels[r.phone],'latest':serialize(r),'unread':counts.get(r.phone,0)} for r in rows]})
 
 @router.get('/thread')
 def thread(phone:str,before:int|None=Query(None,ge=1),db:Session=Depends(get_db),user=Depends(staff_user)):
@@ -89,7 +94,8 @@ def thread(phone:str,before:int|None=Query(None,ge=1),db:Session=Depends(get_db)
     if before:query=query.filter(InboxMessage.id<before)
     rows=query.order_by(InboxMessage.id.desc()).limit(101).all();more=len(rows)>100;rows=list(reversed(rows[:100]))
     can_reply,reason=allowed(db,phone)
-    return response({'phone':phone,'messages':[serialize(r) for r in rows],'has_more':more,'can_reply':can_reply,'reply_blocked_reason':reason})
+    from .contact_names import contact_names
+    return response({'phone':phone,**contact_names(db,[phone])[phone],'messages':[serialize(r) for r in rows],'has_more':more,'can_reply':can_reply,'reply_blocked_reason':reason})
 
 class ReadMessages(BaseModel):
     phone:str
