@@ -1,5 +1,7 @@
 """Staff inbox for verified inbound texts and explicit one-to-one service replies."""
 import os,re
+from typing import Literal
+from .inbox_scopes import official_phones,scoped
 from datetime import datetime,timedelta
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Query,Request
@@ -70,13 +72,20 @@ def serialize(row):return {'id':row.id,'direction':row.direction,'body':row.body
 @router.get('/summary')
 def summary(db:Session=Depends(get_db),user=Depends(staff_user)):
     count,latest=db.query(func.count(InboxMessage.id),func.max(InboxMessage.id)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None)).one()
-    return response({'unread_messages':count,'latest_unread_id':latest})
+    officials=official_phones(db)
+    official_count=db.query(InboxMessage).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None),InboxMessage.phone.in_(officials)).count()
+    return response({'unread_messages':count,'latest_unread_id':latest,'officials_unread':official_count,'gym_unread':count-official_count})
 
 @router.get('')
-def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,ge=1),db:Session=Depends(get_db),user=Depends(staff_user)):
+def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,ge=1),scope:Literal['all','officials','gym']='all',db:Session=Depends(get_db),user=Depends(staff_user)):
     grouped=db.query(InboxMessage.phone.label('phone'),func.max(InboxMessage.id).label('latest')).group_by(InboxMessage.phone).subquery()
     query=db.query(InboxMessage).join(grouped,InboxMessage.id==grouped.c.latest)
     unread=db.query(InboxMessage.phone).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None))
+    officials=official_phones(db)
+    official_unread=scoped(unread,InboxMessage.phone,'officials',officials).count()
+    inbox_counts={'all':unread.count(),'officials':official_unread,'gym':unread.count()-official_unread}
+    query=scoped(query,InboxMessage.phone,scope,officials)
+    unread=scoped(unread,InboxMessage.phone,scope,officials)
     from .contact_names import contact_names
     labels=contact_names(db,[r[0] for r in db.query(grouped.c.phone).all()])
     if q.strip():
@@ -86,7 +95,7 @@ def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,
     if unread_only:query=query.filter(InboxMessage.phone.in_(unread))
     total=query.count();rows=query.order_by(InboxMessage.id.desc()).offset((page-1)*25).limit(25).all()
     counts=dict(db.query(InboxMessage.phone,func.count(InboxMessage.id)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None),InboxMessage.phone.in_([r.phone for r in rows])).group_by(InboxMessage.phone).all()) if rows else {}
-    return response({'number':os.getenv('TWILIO_PHONE_NUMBER',''),'total':total,'page_size':25,'unread_messages':unread.count(),'conversations':[{'phone':r.phone,**labels[r.phone],'latest':serialize(r),'unread':counts.get(r.phone,0)} for r in rows]})
+    return response({'scope':scope,'inbox_counts':inbox_counts,'number':os.getenv('TWILIO_PHONE_NUMBER',''),'total':total,'page_size':25,'unread_messages':unread.count(),'conversations':[{'phone':r.phone,**labels[r.phone],'latest':serialize(r),'unread':counts.get(r.phone,0)} for r in rows]})
 
 @router.get('/thread')
 def thread(phone:str,before:int|None=Query(None,ge=1),db:Session=Depends(get_db),user=Depends(staff_user)):

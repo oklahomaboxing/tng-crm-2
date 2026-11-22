@@ -47,6 +47,7 @@ const ICONS = {
   "Venue & Event Bookings": <EventRoundedIcon />,
   "Chef & Concessions": <RestaurantRoundedIcon />,
   "Text Inbox": <CampaignRoundedIcon />,
+  "Officials Inbox": <CampaignRoundedIcon />,
   "Call Center": <DialpadRoundedIcon />,
   "System Overview": <HealthAndSafetyRoundedIcon />,
   "Renewal Reminders": <CampaignRoundedIcon />,

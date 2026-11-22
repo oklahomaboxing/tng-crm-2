@@ -19,3 +19,9 @@ Text Inbox contains all SMS threads, refreshes every 15 seconds, and supports un
 ## Sender names
 
 Text Inbox resolves normalized phone numbers against person directory contacts, members, marketing contacts, fighters, ticket buyers, and sales representatives. It shows the saved name above the phone number in the list and thread header, and accepts name or number searches. Matching is display-only and does not authenticate the sender, grant access, infer consent, or change records. Repeated identical names across sources collapse into one label; conflicting names show Shared number and candidate names. Unmatched numbers show Unknown contact. Club, emergency, and guardian phone numbers are not used to attribute a personal sender. Changes to saved contact names appear on the next inbox refresh.
+
+## Separate officials inbox
+
+The admin/staff **Officials Inbox** (`/#/officials-inbox`) opens the officials-only view. **Text Inbox** defaults to Gym & other contacts. Tabs switch between those views and All messages, with separate unread counts. Officials-page conversation links open Officials Inbox. Notifications show officials and gym/other unread totals and open Officials Inbox directly when only officials have unread replies.
+
+Classification uses normalized phone numbers on identified official directory contacts (the same category/verified-role criteria as the work-text workspace). A number shared with a gym member stays in one thread under Officials, with the shared-name warning. These views organize the existing assigned SMS line; they do not provision a new number, change message ownership, copy history, or alter permissions/read states. Updating a contact's official designation/phone changes its view on refresh. Unidentified numbers remain in Gym & other contacts and are visible in All messages.

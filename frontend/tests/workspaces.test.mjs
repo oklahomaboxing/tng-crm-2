@@ -113,3 +113,9 @@ test('USA Boxing Officials work messaging is available only to admin and staff',
  for(const role of ['member','rep','fighter','manager','matchmaker','investor','sponsor','concessions','announcer','dj','event_coordinator'])assert.equal(readWorkspace('#/usa-boxing-officials',role),null);
  assert.ok(searchWorkspaces('admin','official texts').includes('USA Boxing Officials'));
 });
+
+test('officials inbox is a separate admin and staff workspace',()=>{
+ for(const role of ['admin','staff'])assert.equal(readWorkspace('#/officials-inbox',role).page,'Officials Inbox');
+ for(const role of ['member','rep','fighter','manager','matchmaker','investor','sponsor'])assert.equal(readWorkspace('#/officials-inbox',role),null);
+ assert.ok(searchWorkspaces('admin','officials inbox').includes('Officials Inbox'));
+});
