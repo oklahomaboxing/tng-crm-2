@@ -34,6 +34,7 @@ export const ROLE_MENUS = {
     "Investor Center",
     "Fight Recap",
     "USA Boxing Officials",
+    "Oklahoma Boxing Clubs",
   ],
   staff: [
     "Amateur Matchmaker",
@@ -52,6 +53,7 @@ export const ROLE_MENUS = {
     "TNGTrainer",
     "Fight Recap",
     "USA Boxing Officials",
+    "Oklahoma Boxing Clubs",
   ],
   matchmaker: [
     "Promoter",
@@ -74,12 +76,13 @@ export const ROLE_MENUS = {
 export const WORKSPACE_GROUPS = [
   { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal', 'Chef & Concessions'] },
   { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer', 'TNG Boxing Game'] },
-  { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Announcer & DJ', 'Amateur Matchmaker', 'Venue & Event Bookings', 'TNG BOXING EVENTS', 'Fight Recap', 'USA Boxing Officials', 'Officials Inbox', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
+  { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Announcer & DJ', 'Amateur Matchmaker', 'Venue & Event Bookings', 'TNG BOXING EVENTS', 'Fight Recap', 'USA Boxing Officials', 'Oklahoma Boxing Clubs', 'Officials Inbox', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
   { id: 'growth', label: 'MARKETING', description: 'Leads, member communication and referral links.', accent: '#8f83d8', pages: ['Text Inbox', 'Call Center', 'Marketing Center', 'Leads', 'QR Referrals'] },
   { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Investor Center', 'Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
 ];
 export const WORKSPACE_HINTS = {
+ 'Oklahoma Boxing Clubs':'Oklahoma boxing gyms clubs coaches contact person phone email directory',
  'USA Boxing Officials':'Oklahoma LBC 27 USA Boxing official contacts work texts SMS permission messages conversations',
  'Fight Recap':'Compare event revenue costs fighter purses commissions expenses profit loss side by side',
   "Announcer & DJ": "Event run of show, fighter introductions, walkout songs, announcer profile, sponsor promotions and concessions sales announcements",

@@ -115,10 +115,13 @@ def normalize(kind,row):
 
 def serialize(c):return {k:getattr(c,k) for k in ('id','kind','name','emails','phones','details','roles','role_verified','sms_consent','consent_note','active','issues','version')}
 @router.get('')
-def list_contacts(response:Response,kind:str='person',category:str='all',q:str=Query('',max_length=160),page:int=Query(1,ge=1),db=Depends(get_db),user=Depends(access)):
+def list_contacts(response:Response,kind:str='person',category:str='all',q:str=Query('',max_length=160),page:int=Query(1,ge=1),state:str=Query('',max_length=100),db=Depends(get_db),user=Depends(access)):
  response.headers['Cache-Control']='private, no-store';rows=db.query(DirectoryContact).filter_by(kind=kind).order_by(DirectoryContact.name).all()
  if category=='official':rows=[c for c in rows if c.role_verified and c.roles]
  elif category!='all':rows=[c for c in rows if category in c.details.get('categories',[])]
+ if state.strip():
+  selected=state.strip().casefold();states={'ok','oklahoma'} if selected in {'ok','oklahoma'} else {selected}
+  rows=[c for c in rows if str(c.details.get('state','')).strip().casefold() in states]
  if q.strip():rows=[c for c in rows if q.casefold() in json.dumps([c.name,c.emails,c.phones,c.details],ensure_ascii=False).casefold()]
  return {'total':len(rows),'page_size':25,'contacts':[serialize(c) for c in rows[(page-1)*25:page*25]],'roles':ROLES}
 @router.get('/imports')
@@ -196,7 +199,7 @@ def create_contact(body:ContactBody,db=Depends(get_db),user=Depends(access)):
  if db.query(DirectoryContact).filter_by(identity_key=key(identity)).first():raise HTTPException(409,'This contact already exists')
  c=DirectoryContact(identity_key=key(identity),kind=body.kind,name=body.name,emails=[body.email.casefold()] if body.email else [],phones=[body.phone] if body.phone else [],details={'categories':['manual']},observations=[],issues=[]);db.add(c);return save_contact(db,c,body,user)
 def save_contact(db,c,body,user):
- c.details={**c.details,**{k:getattr(body,k).strip() for k in ('city','state','club','contact_name','address') if getattr(body,k).strip()}}
+ c.details={**c.details,**{k:getattr(body,k).strip() for k in ('city','state','club','contact_name','address') if getattr(body,k).strip() or (k=='contact_name' and k in body.model_fields_set)}}
  c.name=body.name;c.emails=list(dict.fromkeys(([body.email.casefold()] if body.email else [])+c.emails));c.phones=list(dict.fromkeys(([body.phone] if body.phone else [])+c.phones));c.roles=list(dict.fromkeys(body.roles));c.role_verified=body.role_verified;c.sms_consent=body.sms_consent;c.consent_note=body.consent_note.strip();c.consent_at=datetime.utcnow() if body.sms_consent else None;c.active=body.active;c.version=(c.version or 0)+1;db.flush();db.add(SecurityLog(user_id=user.id,action='AMATEUR_DIRECTORY_UPDATED',description=f'Directory contact {c.id}; role verification {c.role_verified}; SMS permission {c.sms_consent}'));db.commit();return serialize(c)
 @router.put('/{contact_id}')
 def update_contact(contact_id:int,body:ContactBody,db=Depends(get_db),user=Depends(access)):

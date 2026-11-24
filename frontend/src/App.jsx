@@ -25,6 +25,7 @@ import tngTheme from "./theme/tngTheme";
 
 import { ROLE_MENUS, readWorkspace, workspaceHash } from "./navigation/workspaces";
 import WorkspaceBoundary, { WorkspaceLoading } from "./components/workspace/WorkspaceBoundary";
+const OklahomaBoxingClubs=lazy(()=>import('./pages/OklahomaBoxingClubs'));
 const USABoxingOfficials=lazy(()=>import('./pages/USABoxingOfficials'));
 const FightRecap=lazy(()=>import('./pages/FightRecap'));
 const ShowControl=lazy(()=>import('./pages/ShowControl'));
@@ -891,6 +892,7 @@ return (
       {page === "Manager Portal" && role === "manager" && (
         <ManagerPortal />
       )}
+      {page === 'Oklahoma Boxing Clubs' && ['admin','staff'].includes(role) && <OklahomaBoxingClubs/>}
       {page === 'USA Boxing Officials' && ['admin','staff'].includes(role) && <USABoxingOfficials onNavigate={navigate}/>}
       {page === 'Fight Recap' && ['admin','staff'].includes(role) && <FightRecap onNavigate={navigate} />}
       {page === "Fight Calendar" && role !== "rep" && <EventCalendar />}
