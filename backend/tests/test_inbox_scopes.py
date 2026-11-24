@@ -13,7 +13,7 @@ class InboxScopeTests(unittest.TestCase):
   self.db.add(DirectoryContact(identity_key='scope-official',kind='person',name='Test Official',phones=['4055550123'],details={'categories':['official']}));self.db.commit()
   self.webhook();self.webhook(MessageSid='SM'+'2'*32,From='+14055550456')
   o=self.get('officials').json();g=self.get('gym').json();a=self.get('all').json()
-  self.assertEqual(o['inbox_counts'],{'officials':1,'gym':1,'all':2});self.assertEqual(o['unread_messages'],1);self.assertEqual(g['unread_messages'],1)
+  self.assertEqual(o['inbox_counts'],{'officials':1,'gym':1,'all':2,'clubs':0});self.assertEqual(o['unread_messages'],1);self.assertEqual(g['unread_messages'],1)
   self.assertEqual([c['phone']for c in o['conversations']],['+14055550123']);self.assertEqual([c['phone']for c in g['conversations']],['+14055550456']);self.assertEqual(a['total'],2)
   self.assertEqual(self.get('gym',q='Test Official').json()['total'],0);self.assertEqual(self.get('officials',q='Test Official').json()['total'],1)
   s=self.client.get('/api/messages/summary',headers=self.headers()).json();self.assertEqual(s['officials_unread'],1);self.assertEqual(s['gym_unread'],1)

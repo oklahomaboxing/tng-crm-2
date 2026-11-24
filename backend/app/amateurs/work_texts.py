@@ -1,5 +1,6 @@
 """Explicit staff work texts to identified officials; uses the existing private SMS inbox."""
 import os,json,hashlib,re
+from typing import Literal
 from datetime import datetime,timedelta
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Response,Query
@@ -18,26 +19,30 @@ from twilio.http.http_client import TwilioHttpClient
 router=APIRouter(prefix='/api/amateurs/official-work-texts',tags=['Officials work communication'])
 
 def official(c):return bool(c and c.kind=='person' and ('official' in c.details.get('categories',[])or(c.role_verified and c.roles)))
+def contact_scope(c,scope):
+ if scope=='clubs':return bool(c and c.kind=='club' and str(c.details.get('state','')).strip().casefold() in {'ok','oklahoma'})
+ return official(c)
+
 def phone(c):
  try:return normalize_ticket_phone(c.phones[0])if c.phones else None
  except ValueError:return None
 
-def eligibility(c,blocked):
- if not official(c):return None,'Not an identified official contact'
+def eligibility(c,blocked,scope='officials'):
+ if not contact_scope(c,scope):return None,'Contact is not in this work-text directory'
  if not c.active:return None,'Inactive contact'
  p=phone(c)
  if not p:return None,'Phone number missing or invalid'
- if number_blocked(p,blocked):return p,'Opted out — official must text START to resume'
+ if number_blocked(p,blocked):return p,'Opted out — contact must text START to resume'
  if not c.sms_consent:return p,'Work-text permission not recorded'
  return p,None
 
 @router.get('')
-def workspace(response:Response,q:str=Query('',max_length=160),db=Depends(get_db),user=Depends(staff_user)):
+def workspace(response:Response,q:str=Query('',max_length=160),db=Depends(get_db),user=Depends(staff_user),scope:Literal['officials','clubs']='officials'):
  response.headers['Cache-Control']='private, no-store';blocked=blocked_sms_numbers(db);rows=[]
- for c in db.query(DirectoryContact).filter_by(kind='person').order_by(DirectoryContact.name):
-  if not official(c):continue
+ for c in db.query(DirectoryContact).filter_by(kind='club' if scope=='clubs' else 'person').order_by(DirectoryContact.name):
+  if not contact_scope(c,scope):continue
   if q.strip()and q.casefold()not in json.dumps([c.name,c.emails,c.phones,c.details]).casefold():continue
-  p,reason=eligibility(c,blocked);rows.append({**contact_dict(c),'sms_phone':p,'can_text':reason is None,'text_blocked_reason':reason})
+  p,reason=eligibility(c,blocked,scope);rows.append({**contact_dict(c),'sms_phone':p,'can_text':reason is None,'text_blocked_reason':reason})
  return {'contacts':rows,'sending_number':os.getenv('TWILIO_PHONE_NUMBER',''),'provider_status':'Verified on send; no provider health check performed','reply_workspace':'Text Inbox'}
 
 class OfficialContact(BaseModel):
@@ -46,8 +51,9 @@ class OfficialContact(BaseModel):
  phone:str=Field(default='',max_length=40)
  group:str=Field(default='',max_length=120)
 @router.post('/contacts')
-def add_contact(body:OfficialContact,db=Depends(get_db),user=Depends(staff_user)):
+def add_contact(body:OfficialContact,db=Depends(get_db),user=Depends(staff_user),scope:Literal['officials','clubs']='officials'):
  name=body.name.strip();email=body.email.strip().casefold();p=None
+ if scope!='officials':raise HTTPException(422,'Add clubs in the Oklahoma Boxing Clubs directory')
  if len(name)<2:raise HTTPException(422,'Enter the official name')
  if email and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise HTTPException(422,'Enter a valid email')
  if body.phone.strip():
@@ -69,17 +75,17 @@ class Permission(BaseModel):
  evidence:str=Field(default='',max_length=500)
  version:int=Field(ge=1)
 @router.put('/contacts/{contact_id}/permission')
-def permission(contact_id:int,body:Permission,db=Depends(get_db),user=Depends(staff_user)):
+def permission(contact_id:int,body:Permission,db=Depends(get_db),user=Depends(staff_user),scope:Literal['officials','clubs']='officials'):
  lock(db);c=db.query(DirectoryContact).filter_by(id=contact_id).with_for_update().first()
- if not official(c):raise HTTPException(404,'Official contact not found')
+ if not contact_scope(c,scope):raise HTTPException(404,'Work contact not found')
  if c.version!=body.version:raise HTTPException(409,'Contact changed. Refresh before recording permission')
  if body.opt_in:
   p=phone(c)
   if not p or not c.active:raise HTTPException(422,'An active contact with a valid phone number is required')
-  if number_blocked(p,blocked_sms_numbers(db)):raise HTTPException(409,'This number opted out. The official must text START before permission can be restored')
-  if len(body.evidence.strip())<10:raise HTTPException(422,'Record when and how the official agreed to work-related texts')
+  if number_blocked(p,blocked_sms_numbers(db)):raise HTTPException(409,'This number opted out. The contact must text START before permission can be restored')
+  if len(body.evidence.strip())<10:raise HTTPException(422,'Record when and how the contact agreed to work-related texts')
  c.sms_consent=body.opt_in;c.consent_note=body.evidence.strip();c.consent_at=datetime.utcnow()if body.opt_in else None;c.version+=1
- db.add(SecurityLog(user_id=user.id,action='OFFICIAL_WORK_TEXT_PERMISSION',description=json.dumps({'contact_id':c.id,'opt_in':body.opt_in,'evidence':c.consent_note,'phone':phone(c)}),success=True));db.commit();return {'saved':True,'version':c.version}
+ db.add(SecurityLog(user_id=user.id,action='CLUB_WORK_TEXT_PERMISSION' if scope=='clubs' else 'OFFICIAL_WORK_TEXT_PERMISSION',description=json.dumps({'contact_id':c.id,'opt_in':body.opt_in,'evidence':c.consent_note,'phone':phone(c)}),success=True));db.commit();return {'saved':True,'version':c.version}
 
 class Draft(BaseModel):
  contact_ids:list[int]=Field(min_length=1,max_length=50)
@@ -90,43 +96,44 @@ class Send(Draft):
  work_related:bool=False
 
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True).encode()).hexdigest()
-def content(body):
+def content(body,scope='officials'):
  text=body.message.strip()
  if not text:raise HTTPException(422,'Enter a work-related message')
- text=ensure_stop_footer('TNG Boxing officials: '+text)
+ text=ensure_stop_footer(('TNG Boxing clubs: ' if scope=='clubs' else 'TNG Boxing officials: ')+text)
  if len(text)>1500:raise HTTPException(422,'Shorten the text to 1,500 characters including the footer')
  return text
 
-def draft(db,body):
+def draft(db,body,scope='officials'):
  ids=sorted(set(body.contact_ids));contacts={c.id:c for c in db.query(DirectoryContact).filter(DirectoryContact.id.in_(ids)).populate_existing()};blocked=blocked_sms_numbers(db);recipients=[];skipped=[];seen=set();state=[]
  for cid in ids:
-  c=contacts.get(cid);p,reason=eligibility(c,blocked);state.append({'id':cid,'version':c.version if c else None,'phone':p,'reason':reason})
+  c=contacts.get(cid);p,reason=eligibility(c,blocked,scope);state.append({'id':cid,'version':c.version if c else None,'phone':p,'reason':reason})
   if not reason and p in seen:reason='Duplicate phone in this selection'
   if reason:skipped.append({'contact_id':cid,'name':c.name if c else 'Contact not found','reason':reason});continue
   seen.add(p);recipients.append({'contact_id':cid,'name':c.name,'phone':p})
- text=content(body);return {'body':text,'recipients':recipients,'skipped':skipped,'preview_hash':digest({'state':state,'body':text}),'notice':'Review recipients and message. Provider acceptance does not confirm delivery. No text has been sent by this preview.'}
+ text=content(body,scope);return {'body':text,'recipients':recipients,'skipped':skipped,'preview_hash':digest({'state':state,'body':text}),'notice':'Review recipients and message. Provider acceptance does not confirm delivery. No text has been sent by this preview.'}
 
 @router.post('/preview')
-def preview(body:Draft,response:Response,db=Depends(get_db),user=Depends(staff_user)):
- response.headers['Cache-Control']='private, no-store';return draft(db,body)
+def preview(body:Draft,response:Response,db=Depends(get_db),user=Depends(staff_user),scope:Literal['officials','clubs']='officials'):
+ response.headers['Cache-Control']='private, no-store';return draft(db,body,scope)
 
 def batch_result(db,manifest,existing):
  rows=db.query(InboxMessage).filter(InboxMessage.id.in_(manifest['message_ids'])).order_by(InboxMessage.id).all()
  return {'already_submitted':existing,'messages':[{'phone':r.phone,**message_dict(r)}for r in rows],'skipped':manifest['skipped'],'notice':'Accepted is not delivered. Unknown/submitting messages require provider review; repeating this submission does not resend them.'}
 
 @router.post('/send')
-def send(body:Send,response:Response,db=Depends(get_db),user=Depends(staff_user)):
+def send(body:Send,response:Response,db=Depends(get_db),user=Depends(staff_user),scope:Literal['officials','clubs']='officials'):
  response.headers['Cache-Control']='private, no-store'
- if not body.work_related:raise HTTPException(422,'Confirm this concerns official work, not advertising or promotions')
- text=content(body);endpoint=f'/api/amateurs/official-work-texts/batches/{user.id}/{body.request_key}';fingerprint=digest({'staff_id':user.id,'ids':sorted(set(body.contact_ids)),'body':text})
+ if not body.work_related:raise HTTPException(422,'Confirm this concerns work coordination, not advertising or promotions')
+ text=content(body,scope);namespace='club' if scope=='clubs' else 'official';endpoint=f'/api/amateurs/{namespace}-work-texts/batches/{user.id}/{body.request_key}';fingerprint=digest({'staff_id':user.id,'ids':sorted(set(body.contact_ids)),'body':text})
  # One durable batch per staff/key; the no-op write serializes SQLite and PostgreSQL submissions alike.
  db.query(User).filter_by(id=user.id).update({User.id:User.id},synchronize_session=False)
- old=db.query(SecurityLog).filter_by(action='OFFICIAL_WORK_SMS_BATCH',endpoint=endpoint).first()
+ batch_action='CLUB_WORK_SMS_BATCH' if scope=='clubs' else 'OFFICIAL_WORK_SMS_BATCH'
+ old=db.query(SecurityLog).filter_by(action=batch_action,endpoint=endpoint).first()
  if old:
   manifest=json.loads(old.description)
   if manifest['fingerprint']!=fingerprint:raise HTTPException(409,'Submission key belongs to a different message or selection')
   return batch_result(db,manifest,True)
- lock(db);d=draft(db,body)
+ lock(db);d=draft(db,body,scope)
  if d['preview_hash']!=body.preview_hash:raise HTTPException(409,'Contacts, permission or message changed. Review a new preview')
  if not d['recipients']:raise HTTPException(422,'No eligible recipients. Review phone numbers, permission and opt-out status')
  recent=db.query(InboxMessage).filter(InboxMessage.staff_id==user.id,InboxMessage.direction=='outbound',InboxMessage.created_at>=datetime.utcnow()-timedelta(hours=1)).count()
@@ -135,9 +142,9 @@ def send(body:Send,response:Response,db=Depends(get_db),user=Depends(staff_user)
  if not service or not line:raise HTTPException(409,'An approved notification sending service and assigned phone line are required')
  rows=[]
  for r in d['recipients']:
-  row=InboxMessage(request_key=f'official:{user.id}:{body.request_key}:{r["contact_id"]}',phone=r['phone'],line=line,direction='outbound',body=text,status='submitting',staff_id=user.id);db.add(row);db.flush();rows.append((row.id,r['contact_id']))
+  row=InboxMessage(request_key=f'{namespace}:{user.id}:{body.request_key}:{r["contact_id"]}',phone=r['phone'],line=line,direction='outbound',body=text,status='submitting',staff_id=user.id);db.add(row);db.flush();rows.append((row.id,r['contact_id']))
  manifest={'fingerprint':fingerprint,'message_ids':[mid for mid,_ in rows],'skipped':d['skipped']}
- db.add(SecurityLog(user_id=user.id,action='OFFICIAL_WORK_SMS_BATCH',endpoint=endpoint,description=json.dumps(manifest),success=True))
+ db.add(SecurityLog(user_id=user.id,action=batch_action,endpoint=endpoint,description=json.dumps(manifest),success=True))
  try:db.commit()
  except IntegrityError:db.rollback();raise HTTPException(409,'Submission was already recorded. Refresh the conversation')
  halted=False
@@ -145,7 +152,7 @@ def send(body:Send,response:Response,db=Depends(get_db),user=Depends(staff_user)
   row=db.get(InboxMessage,mid)
   if halted:
    row.status='failed';row.error_code='not_submitted_after_provider_error';db.commit();continue
-  c=db.query(DirectoryContact).filter_by(id=cid).populate_existing().first();p,reason=eligibility(c,blocked_sms_numbers(db))
+  c=db.query(DirectoryContact).filter_by(id=cid).populate_existing().first();p,reason=eligibility(c,blocked_sms_numbers(db),scope)
   if reason or p!=row.phone:
    row.status='failed';row.error_code='recipient_changed_or_suppressed';db.commit();continue
   try:
@@ -165,9 +172,9 @@ def send(body:Send,response:Response,db=Depends(get_db),user=Depends(staff_user)
  return batch_result(db,manifest,False)
 
 @router.get('/contacts/{contact_id}/history')
-def history(contact_id:int,response:Response,db=Depends(get_db),user=Depends(staff_user)):
+def history(contact_id:int,response:Response,db=Depends(get_db),user=Depends(staff_user),scope:Literal['officials','clubs']='officials'):
  c=db.get(DirectoryContact,contact_id)
- if not official(c):raise HTTPException(404,'Official contact not found')
+ if not contact_scope(c,scope):raise HTTPException(404,'Work contact not found')
  response.headers['Cache-Control']='private, no-store';p=phone(c)
  rows=db.query(InboxMessage).filter_by(phone=p).order_by(InboxMessage.id.desc()).limit(100).all()if p else[]
  return {'name':c.name,'phone':p,'messages':[message_dict(r)for r in reversed(rows)]}

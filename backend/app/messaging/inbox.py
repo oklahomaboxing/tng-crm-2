@@ -1,7 +1,7 @@
 """Staff inbox for verified inbound texts and explicit one-to-one service replies."""
 import os,re
 from typing import Literal
-from .inbox_scopes import official_phones,scoped
+from .inbox_scopes import official_phones,club_phones,scoped
 from datetime import datetime,timedelta
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Query,Request
@@ -78,20 +78,20 @@ def summary(db:Session=Depends(get_db),user=Depends(staff_user)):
     return response({'unread_messages':count,'latest_unread_id':latest,'officials_unread':official_count,'gym_unread':count-official_count})
 
 @router.get('')
-def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,ge=1),scope:Literal['all','officials','gym']='all',db:Session=Depends(get_db),user=Depends(staff_user)):
+def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,ge=1),scope:Literal['all','officials','gym','clubs']='all',db:Session=Depends(get_db),user=Depends(staff_user)):
     grouped=db.query(InboxMessage.phone.label('phone'),func.max(InboxMessage.id).label('latest')).group_by(InboxMessage.phone).subquery()
     query=db.query(InboxMessage).join(grouped,InboxMessage.id==grouped.c.latest)
     unread=db.query(InboxMessage.phone).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None))
-    officials=official_phones(db)
+    officials=official_phones(db);clubs=club_phones(db)
     total_unread,_,official_unread=unread_totals(db,officials)
-    inbox_counts={'all':total_unread,'officials':official_unread,'gym':total_unread-official_unread}
-    query=scoped(query,InboxMessage.phone,scope,officials)
-    unread=scoped(unread,InboxMessage.phone,scope,officials)
+    inbox_counts={'all':total_unread,'officials':official_unread,'gym':total_unread-official_unread,'clubs':scoped(unread,InboxMessage.phone,'clubs',officials,clubs).count()}
+    query=scoped(query,InboxMessage.phone,scope,officials,clubs)
+    unread=scoped(unread,InboxMessage.phone,scope,officials,clubs)
     from .contact_names import contact_names
     labels=contact_names(db,[r[0] for r in db.query(grouped.c.phone).all()])
     if q.strip():
         term=q.strip().casefold();digits=re.sub(r'[^0-9+]','',q)
-        phones=[p for p,label in labels.items() if (digits and digits in p) or any(term in name.casefold() for name in label['matched_names'])]
+        phones=[p for p,label in labels.items() if (digits and digits in p) or any(term in name.casefold() for name in label['matched_names']+label.get('club_names',[]))]
         query=query.filter(InboxMessage.phone.in_(phones))
     if unread_only:query=query.filter(InboxMessage.phone.in_(unread))
     total=query.count();rows=query.order_by(InboxMessage.id.desc()).offset((page-1)*25).limit(25).all()

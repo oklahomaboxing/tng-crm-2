@@ -24,8 +24,14 @@ def contact_names(db,phones):
     for name,phone in db.query(BoxingFighter.legal_name,BoxingFighter.phone):add(name,[phone])
     for name,phone in db.query(TicketOrder.buyer_name,TicketOrder.buyer_phone).distinct():add(name,[phone])
     for name,phone in db.query(User.name,SalesRep.phone).join(SalesRep,SalesRep.user_id==User.id):add(name,[phone])
+    clubs={p:set() for p in matches}
+    for name,values in db.query(DirectoryContact.name,DirectoryContact.phones).filter_by(kind='club'):
+        for value in values or []:
+            try:p=normalize_ticket_phone(value)
+            except (ValueError,TypeError):continue
+            if p in clubs:clubs[p].add(name)
     result={}
     for phone,names in matches.items():
         names=sorted(names.values(),key=str.casefold)
-        result[phone]={'display_name':names[0] if len(names)==1 else 'Shared number' if names else 'Unknown contact','matched_names':names[:5],'matched_name_count':len(names),'name_match':'single' if len(names)==1 else 'shared' if names else 'unknown'}
+        result[phone]={'club_names':sorted(clubs[phone]),'display_name':names[0] if len(names)==1 else 'Shared number' if names else 'Unknown contact','matched_names':names[:5],'matched_name_count':len(names),'name_match':'single' if len(names)==1 else 'shared' if names else 'unknown'}
     return result
