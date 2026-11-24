@@ -36,3 +36,10 @@ class DedicatedInboxTests(unittest.TestCase):
   self.assertEqual(self.client.post('/api/messages/move',headers=self.headers(),json={**payload,'folder':'invalid'}).status_code,422)
   self.assertEqual(self.client.post('/api/messages/move',headers=self.headers(),json={**payload,'phone':'4055550999'}).status_code,404)
   self.client.post('/api/messages/move',headers=self.headers('staff'),json=payload);self.webhook(MessageSid='SM'+'2'*32);self.assertEqual(self.inbox('venue')['total'],1);self.assertEqual(self.inbox('venue')['unread_messages'],2);self.assertEqual(self.inbox('gym')['total'],0)
+
+ def test_latest_work_text_routes_shared_number_but_staff_override_wins(self):
+  self.venue('+14055550123');self.webhook();self.assertEqual(self.inbox('venue')['total'],1)
+  self.db.add(InboxMessage(phone='+14055550123',line='+14055550199',direction='outbound',request_key='club:fixture',body='Club logistics',status='accepted'));self.db.commit();self.assertEqual(self.inbox('clubs')['total'],1)
+  self.client.post('/api/messages/move',headers=self.headers(),json={'phone':'4055550123','folder':'venue'})
+  self.db.add(InboxMessage(phone='+14055550123',line='+14055550199',direction='outbound',request_key='official:fixture',body='Official logistics',status='accepted'));self.db.commit();self.assertEqual(self.inbox('venue')['total'],1)
+  self.client.post('/api/messages/move',headers=self.headers(),json={'phone':'4055550123','folder':'auto'});self.assertEqual(self.inbox('officials')['total'],1)

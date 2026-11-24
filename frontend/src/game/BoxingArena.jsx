@@ -1,8 +1,8 @@
 import React, { useId } from 'react';
-import { MOVES } from './boxingEngine.mjs';
+import { ALL_MOVES as MOVES } from './trainingEngine.mjs';
 import './boxingArena.css';
 
-function Fighter({ opponent = false, move, hit, stance, paint, actionId }) {
+function Fighter({ opponent = false, move, hit, stance, paint, actionId, x, y=218 }) {
   let lead = [[-7, 18], [20, 46], [54, -7]], rear = [[-30, 23], [-21, 55], [26, 0]];
   if (move === '1') lead = [[-7,18],[65,0],[137,-9]];
   if (move === '2') rear = [[-30,23],[62,14],[143,-7]];
@@ -10,9 +10,10 @@ function Fighter({ opponent = false, move, hit, stance, paint, actionId }) {
   if (move === '4') rear = [[-30,23],[84,-39],[133,7]];
   if (move === '5') lead = [[-7,18],[54,66],[111,-24]];
   if (move === '6') rear = [[-30,23],[49,72],[120,-22]];
+  if (move === 'bodyBlock') { lead=[[-7,18],[45,56],[20,55]];rear=[[-30,23],[-40,45],[-7,51]]; }
   if (move === 'block') { lead=[[-7,18],[44,26],[28,-42]];rear=[[-30,23],[-21,2],[-7,-43]]; }
   if (!opponent && stance === 'southpaw') [lead,rear]=[rear,lead];
-  const lean = move==='slipLeft'?-19:move==='slipRight'?19:move==='roll'?22:hit?-9:0;
+  const lean = move==='slipLeft'?-19:move==='slipRight'?19:move==='roll'?22:hit?-9:['2','4','6'].includes(move)?7:move==='pivotLeft'?-6:move==='pivotRight'?6:0;
   const drop = move==='roll'?34:move?.startsWith('slip')?12:0;
   const kit = opponent?'blue':'red', skin=opponent?'darkSkin':'skin';
   const color=opponent?'#50d5ff':'#ff3c5f';
@@ -33,7 +34,7 @@ function Fighter({ opponent = false, move, hit, stance, paint, actionId }) {
     </g>
   </g>; };
   const punch=/^[1-6]$/.test(move||'');
-  return <g transform={`translate(${opponent?486:304},218) scale(${opponent?-1:1},1)`}>
+  return <g data-boxer={opponent?'partner':'player'} transform={`translate(${x??(opponent?486:304)},${y}) scale(${opponent?-1:1},1)`}>
     <ellipse cx="-8" cy="183" rx="77" ry="15" fill="#000" opacity=".45"/>
     <ellipse cx="-8" cy="184" rx="60" ry="4" fill={color} opacity=".12"/>
     <g className="tng-boxing-stance">
@@ -67,9 +68,10 @@ function Fighter({ opponent = false, move, hit, stance, paint, actionId }) {
 }
 export default function BoxingArena({ animation, expected, stance, active, effects=true }) {
   const id=useId().replace(/:/g,'');const paint=name=>`url(#${id}-${name})`;
-  const defense=['slip','slipLeft','slipRight','roll','block'].includes(expected);
+  const simulation=!!animation.mode;const distance=animation.distance??1.4;const playerX=304+(1.4-distance)*45;const opponentX=486+(distance-1.4)*45;
+  const defense=simulation?!!animation.threat:['slip','slipLeft','slipRight','roll','block'].includes(expected);
   const gradient=(name,colors)=><linearGradient key={name} id={`${id}-${name}`} x1="0" y1="0" x2="1" y2="1">{colors.map(([at,color])=><stop key={at} offset={at} stopColor={color}/>)}</linearGradient>;
-  return <svg className={`tng-boxing-arena ${active?'is-playing':''} ${effects?'':'low-effects'}`} viewBox="0 0 800 470" role="img" aria-label={`TNG boxing ring. ${animation.move?MOVES[animation.move].name:'Boxers in guard'}.`} style={{width:'100%',display:'block',maxHeight:'56vh'}}>
+  return <svg className={`tng-boxing-arena ${active?'is-playing':''} ${effects?'':'low-effects'}`} viewBox="0 0 800 470" role="img" aria-label={`TNG boxing ring. ${animation.move?MOVES[animation.move]?.name||'Footwork':'Boxers in guard'}.`} style={{width:'100%',display:'block',maxHeight:'56vh'}}>
     <defs>
       {gradient('background',[[0,'#070c18'],[.55,'#152139'],[1,'#050915']])}
       {gradient('canvas',[[0,'#354359'],[.5,'#202d41'],[1,'#0f1a2b']])}
@@ -87,7 +89,7 @@ export default function BoxingArena({ animation, expected, stance, active, effec
     <g stroke="#58718e" fill="none" opacity=".5"><path d="M0 18H800M0 39H800M0 18L40 39L80 18L120 39L160 18L200 39L240 18L280 39L320 18L360 39L400 18L440 39L480 18L520 39L560 18L600 39L640 18L680 39L720 18L760 39L800 18"/></g>
     {[92,186,307,493,614,708].map(x=><g key={x}><rect x={x-9} y="25" width="18" height="11" rx="3" fill="#bddef4"/><ellipse cx={x} cy="38" rx="19" ry="4" fill="#82cdf5" opacity=".3"/></g>)}
     <rect x="297" y="61" width="206" height="65" rx="6" fill="#070e1c" stroke="#ffffff23"/><path d="M297 61H355M445 126H503" stroke="#f13656" strokeWidth="2"/>
-    <text x="400" y="93" fontSize="29" fontStyle="italic" fontWeight="950" textAnchor="middle" fill="#f4f8ff">TNG BOXING</text><text x="400" y="112" textAnchor="middle" fontSize="8" letterSpacing="4" fill="#88aac7">COMBINATION LAB</text>
+    <text x="400" y="93" fontSize="29" fontStyle="italic" fontWeight="950" textAnchor="middle" fill="#f4f8ff">TNG BOXING</text><text x="400" y="112" textAnchor="middle" fontSize="8" letterSpacing="4" fill="#88aac7">{simulation?(animation.mode==='bag'?'HEAVY BAG':animation.mode==='footwork'?'FOOTWORK LAB':animation.mode==='defense'?'DEFENSE & COUNTERS':'SPARRING PARTNER'):'COMBINATION LAB'}</text>
     <g opacity=".65">{Array.from({length:60},(_,i)=>{const x=(i%20)*42-4,y=160+Math.floor(i/20)*24;return <g key={i} fill={i%4===0?'#35435a':'#1a2539'}><ellipse cx={x} cy={y-8} rx="8" ry="10"/><path d={`M${x-13} ${y+17}q0 -20 13 -19q13 -1 13 19Z`}/></g>;})}</g>
     <ellipse cx="400" cy="236" rx="380" ry="174" fill={paint('haze')}/>
     <path d="M60 275H740L788 436H12Z" fill={paint('canvas')} stroke="#728195" strokeWidth="2"/>
@@ -95,9 +97,12 @@ export default function BoxingArena({ animation, expected, stance, active, effec
     <ellipse cx="400" cy="367" rx="173" ry="41" fill="#091321" stroke="#a5bed81f"/><text x="400" y="376" fill="#c4d5e02b" textAnchor="middle" fontSize="48" fontWeight="950" fontStyle="italic">TNG</text><text x="400" y="395" fill="#afc8df40" textAnchor="middle" fontSize="8" letterSpacing="3">EARNED NOT GIVEN</text>
     {[176,212,249].map((y,i)=><g key={y}><path d={`M49 ${y+2}H751`} stroke="#030812" strokeWidth="6"/><path d={`M49 ${y}H751`} stroke={i===0?'#d8e6f0':i===1?'#647d99':'#bd213e'} strokeWidth="3"/></g>)}
     <g><path d="M49 156v137M751 156v137" stroke="#111a29" strokeWidth="17"/><path d="M47 156v137" stroke="#d32745" strokeWidth="9"/><path d="M753 156v137" stroke="#35a8d1" strokeWidth="9"/>{[179,215,251].map(y=><g key={y}><rect x="38" y={y-7} width="21" height="14" rx="4" fill={paint('red')}/><rect x="741" y={y-7} width="21" height="14" rx="4" fill={paint('blue')}/></g>)}</g>
-    <Fighter actionId={animation.id} move={animation.move} stance={stance} paint={paint}/><Fighter opponent move={active&&defense?'1':'block'} hit={animation.hit} paint={paint}/>
-    {animation.hit&&<g key={animation.id} className="tng-boxing-impact" transform="translate(445 171)"><g className="tng-boxing-burst"><circle r="29" fill="#ffe8b5" opacity=".12"/><circle r="24" fill="none" stroke="#ffe1a6" strokeWidth="2"/>{Array.from({length:9},(_,i)=><path key={i} transform={`rotate(${i*40})`} d="M15 0L37 -2" stroke={i%2?'#ffb44d':'#fff3cf'} strokeWidth={i%3?2:4} strokeLinecap="round"/>)}</g><text y="-47" fill="#ffde9b" textAnchor="middle" fontSize="15" fontWeight="900" letterSpacing="2">CLEAN!</text></g>}
-    {active&&defense&&<g><rect x="262" y="132" width="276" height="23" rx="12" fill="#071a2c" stroke="#4ed3f750"/><text x="400" y="147" textAnchor="middle" fill="#95e5ff" fontSize="9" letterSpacing="2">DEFEND · {MOVES[expected].name.toUpperCase()}</text></g>}
+    {animation.mode==='footwork'&&<g opacity=".7"><ellipse cx="355" cy="393" rx="120" ry="25" fill="none" stroke="#5cd9d4" strokeDasharray="7 6"/><path d={`M${350+(animation.angle||0)*65} 365v32`} stroke="#fff" strokeWidth="4"/><text x="355" y="425" fill="#9ee7e1" textAnchor="middle" fontSize="10">W / Z · STEP  —  Q / E · PIVOT</text></g>}
+    <Fighter actionId={animation.id} move={animation.move} hit={animation.playerHit} stance={stance} paint={paint} x={simulation?playerX:undefined} y={218+(animation.angle||0)*12}/>
+    {animation.mode==='bag'?<g key={`heavybag-${animation.hit?animation.id:'idle'}`} className={animation.hit?'tng-heavybag tng-heavybag-hit':'tng-heavybag'}><path d="M500 62v50M470 144l30 -34l30 34" fill="none" stroke="#95a5b5" strokeWidth="4"/><ellipse cx="500" cy="379" rx="62" ry="13" fill="#000" opacity=".4"/><rect x="453" y="139" width="94" height="217" rx="27" fill={paint('boot')} stroke="#8899a9" strokeWidth="2"/><path d="M460 173h80M459 315h82" stroke="#e52a4b" strokeWidth="15"/><path d="M470 148v199" stroke="#cbd7e3" strokeWidth="3" opacity=".3"/><text x="500" y="238" textAnchor="middle" fill="#fff" fontWeight="900" fontSize="24" fontStyle="italic">TNG</text><text x="500" y="258" textAnchor="middle" fill="#a9bbcc" fontSize="8">EARNED NOT GIVEN</text></g>:<Fighter opponent x={simulation?opponentX:undefined} actionId={animation.id} move={simulation?animation.opponentMove||'block':active&&defense?'1':'block'} hit={animation.hit} paint={paint}/>}
+    {animation.playerHit&&<g><circle cx={playerX+15} cy="172" r="31" fill="#ff335d" opacity=".2"/><text x={playerX} y="126" textAnchor="middle" fill="#ff9db0" fontSize="12" fontWeight="800">CAUGHT</text></g>}
+    {animation.hit&&<g key={`impact-${animation.id}`} className="tng-boxing-impact" transform={`translate(${animation.mode==='bag'?454:simulation?opponentX-40:445} ${animation.mode==='bag'?230:171})`}><g className="tng-boxing-burst"><circle r="29" fill="#ffe8b5" opacity=".12"/><circle r="24" fill="none" stroke="#ffe1a6" strokeWidth="2"/>{Array.from({length:9},(_,i)=><path key={i} transform={`rotate(${i*40})`} d="M15 0L37 -2" stroke={i%2?'#ffb44d':'#fff3cf'} strokeWidth={i%3?2:4} strokeLinecap="round"/>)}</g><text y="-47" fill="#ffde9b" textAnchor="middle" fontSize="15" fontWeight="900" letterSpacing="2">CLEAN!</text></g>}
+    {active&&defense&&<g><rect x="262" y="132" width="276" height="23" rx="12" fill="#071a2c" stroke="#4ed3f750"/><text x="400" y="147" textAnchor="middle" fill="#95e5ff" fontSize="9" letterSpacing="2">DEFEND · {simulation?animation.threat:MOVES[expected].name.toUpperCase()}</text></g>}
     <path d="M12 437H788" stroke="#3f5169" strokeWidth="5"/><path d="M12 440H788V469H12Z" fill="#070e1a"/><text x="400" y="459" fill="#61768f" textAnchor="middle" fontSize="9" letterSpacing="4">THE NEXT GENERATION</text>
   </svg>;
 }

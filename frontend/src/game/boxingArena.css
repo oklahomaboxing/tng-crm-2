@@ -1,6 +1,5 @@
 .tng-boxing-body{transform-origin:0 95px;transition:transform 100ms ease-out}
-.tng-boxing-active-arm{transform-origin:-7px 18px;animation:tng-arm-drive 180ms ease-out both}
-@keyframes tng-arm-drive{from{transform:translate(-8px,5px) rotate(-3deg)}to{transform:translate(0,0) rotate(0deg)}}
+.tng-boxing-active-arm{transform-origin:-7px 18px;animation:tng-arm-drive 320ms ease-out both}
 .tng-boxing-arena.is-playing:not(.low-effects) .tng-boxing-stance{animation:tng-guard-breathe 1.5s ease-in-out infinite alternate}
 .tng-boxing-arena.is-playing:not(.low-effects) .tng-boxing-lights{animation:tng-arena-light 6s ease-in-out infinite alternate}
 .tng-boxing-arena .tng-boxing-burst{animation:tng-impact-burst 210ms ease-out both}
@@ -11,3 +10,8 @@
 @keyframes tng-punch-trail{from{opacity:.9}to{opacity:.15}}
 .tng-boxing-arena.low-effects *{animation:none!important;transition:none!important}
 @media(prefers-reduced-motion:reduce){.tng-boxing-arena *{animation:none!important;transition:none!important}}
+.tng-boxing-arena>g{transition:transform 140ms ease-out}
+.tng-heavybag{transform-origin:500px 108px}
+.tng-heavybag-hit{animation:tng-bag-swing 650ms ease-out}
+@keyframes tng-bag-swing{0%{transform:rotate(0)}25%{transform:rotate(-4deg)}60%{transform:rotate(2deg)}100%{transform:rotate(0)}}
+@keyframes tng-arm-drive{0%{transform:translate(-8px,7px) rotate(-7deg) scaleX(.75)}42%{transform:translate(0,0) rotate(0) scaleX(1)}100%{transform:translate(-6px,4px) rotate(-4deg) scaleX(.85)}}
