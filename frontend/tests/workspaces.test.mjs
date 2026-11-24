@@ -125,3 +125,10 @@ test('Oklahoma Boxing Clubs has its own admin and staff workspace',()=>{
  for(const role of ['member','rep','fighter','manager','matchmaker','investor','sponsor'])assert.equal(readWorkspace('#/oklahoma-boxing-clubs',role),null);
  assert.ok(searchWorkspaces('admin','Oklahoma clubs').includes('Oklahoma Boxing Clubs'));
 });
+
+test('clubs and venue each have dedicated private inbox workspaces',()=>{
+ for(const page of ['Club Inbox','Venue Inbox']){
+  for(const role of ['admin','staff'])assert.equal(readWorkspace(workspaceHash(page),role).page,page);
+  for(const role of ['member','rep','fighter','manager','investor','sponsor','event_coordinator'])assert.equal(readWorkspace(workspaceHash(page),role),null);
+ }
+});

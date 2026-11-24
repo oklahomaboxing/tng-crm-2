@@ -30,6 +30,8 @@ def contact_names(db,phones):
             try:p=normalize_ticket_phone(value)
             except (ValueError,TypeError):continue
             if p in clubs:clubs[p].add(name)
+    from app.events.venue import VenueBooking
+    for name,phone in db.query(VenueBooking.contact_name,VenueBooking.phone).distinct():add(name,[phone])
     result={}
     for phone,names in matches.items():
         names=sorted(names.values(),key=str.casefold)

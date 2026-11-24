@@ -15,3 +15,11 @@ Club texts reuse the existing work-text engine, approved notification service, d
 Club Inbox filters conversations by normalized phone numbers stored on Oklahoma clubs. It shows club names without treating an organization number as authenticated personal identity. Names/club searches and manual read controls remain available. A number shared by a club and an official remains one SMS conversation and may appear in both relevant views; no history is copied or split. Club conversations also remain available in the general inbox. Switching club tabs is disabled during submission to avoid losing an in-progress send or reply.
 
 The main dashboard also has a **Venue & Event Bookings** card that opens the existing booking workspace.
+
+## Dedicated inbox folders
+
+**Club Inbox** and **Venue Inbox** are separate admin/staff dashboard and sidebar destinations. Booking contacts are identified from saved venue bookings; officials and clubs use the existing directory. The automatic priority for a number appearing in multiple sources is Venue, Officials, Clubs, then Gym/other. Every conversation belongs to exactly one folder. All messages remains an oversight view.
+
+**Move to another inbox** records a durable staff override for a phone conversation in `sms_inbox_conversations`. Future replies follow that folder. Automatic restores source-based routing. This moves no message rows, sends no text, changes no read state or consent, and creates no member account. Moves are audited. The new small routing table is created through the existing SQLAlchemy metadata initialization; historical SMS rows do not require backfilling or copying.
+
+Unread totals are separate for Gym, Officials, Clubs, and Venue and sum to the overall count. Notifications open the dedicated inbox when only one folder has unread replies. Venue booking requests remain in their existing calendar/request workflow; Venue Inbox contains SMS conversation threads. Booking coordinators' account permissions are unchanged; SMS inboxes retain their existing admin/staff boundary.

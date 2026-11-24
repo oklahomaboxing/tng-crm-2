@@ -864,6 +864,8 @@ return (
         <Dashboard dash={dash} leader={leader} load={load} onNavigate={navigate} userName={userName} error={dashboardError} />
       )}
       {page === "Text Inbox" && ["admin", "staff"].includes(role) && <TextInbox />}
+      {page === "Club Inbox" && ["admin","staff"].includes(role) && <TextInbox initialScope="clubs" fixedScope/>}
+      {page === "Venue Inbox" && ["admin","staff"].includes(role) && <TextInbox initialScope="venue" fixedScope/>}
       {page === "Officials Inbox" && ["admin", "staff"].includes(role) && <USABoxingOfficials initialView="inbox" onNavigate={navigate}/>}
       {page === "Call Center" && role === "admin" && <CallCenter onNavigate={navigate} />}
       {page === "System Overview" && role === "admin" && <SystemOverview onNavigate={navigate} />}
@@ -899,7 +901,7 @@ return (
       {page === 'TNG BOXING EVENTS' && ['admin','staff','matchmaker'].includes(role) && <TngBoxingEvents initialEventId={navigationTarget.eventId} initialSection={navigationTarget.eventSection} />}
       {page === "Fighter Portal Videos" && role === "admin" && <FighterPortalVideos />}
       {page === "Amateur Matchmaker" && ["admin","staff","matchmaker"].includes(role) && <AmateurMatchmaker/>}
-      {page === "Venue & Event Bookings" && ["admin","event_coordinator"].includes(role) && <VenueBookings/>}
+      {page === "Venue & Event Bookings" && ["admin","event_coordinator"].includes(role) && <VenueBookings role={role} onNavigate={navigate}/>}
       {page === "Chef & Concessions" && ["admin","concessions"].includes(role) && <ChefDashboard/>}
       {((page === "Investor Portal" && role === "investor") || (page === "Sponsor Portal" && role === "sponsor") || (page === "Concessions Portal" && role === "concessions")) && <PartnerPortal/>}
       {page === "Announcer & DJ" && ["admin","staff","announcer","dj"].includes(role) && <ShowControl initialEventId={navigationTarget.eventId}/>}

@@ -1,7 +1,7 @@
 """Staff inbox for verified inbound texts and explicit one-to-one service replies."""
 import os,re
 from typing import Literal
-from .inbox_scopes import official_phones,club_phones,scoped
+from .routing import InboxConversation,FOLDERS,folders
 from datetime import datetime,timedelta
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Query,Request
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database import Base,get_db
 from app.core.dependencies import staff_user
-from app.models import User
+from app.models import User,SecurityLog
 from app.marketing.sms import validate_webhook,blocked_sms_numbers,number_blocked,approved_routes
 from app.ticketing.delivery import normalize_ticket_phone
 from app.services.sms_service import ensure_stop_footer
@@ -69,34 +69,54 @@ def allowed(db,phone):
 
 def serialize(row):return {'id':row.id,'direction':row.direction,'body':row.body,'command':row.command,'media_count':row.media_count,'status':row.status,'error_code':row.error_code,'created_at':stamp(row.created_at),'read_at':stamp(row.read_at)}
 
-def unread_totals(db,officials):
-    return db.query(func.count(InboxMessage.id),func.max(InboxMessage.id),func.coalesce(func.sum(case((InboxMessage.phone.in_(officials),1),else_=0)),0)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None)).one()
+def unread_summary(db,routes):
+    groups=db.query(InboxMessage.phone,func.count(InboxMessage.id),func.max(InboxMessage.id)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None)).group_by(InboxMessage.phone).all()
+    missing={phone for phone,_,_ in groups}-routes.keys()
+    if missing:routes.update(folders(db,missing))
+    counts={k:0 for k in ('all','gym','officials','clubs','venue')};latest=None
+    for phone,count,mid in groups:
+        counts['all']+=count;counts[routes.get(phone,'gym')]+=count;latest=max(latest or 0,mid)
+    return counts,latest
 
 @router.get('/summary')
 def summary(db:Session=Depends(get_db),user=Depends(staff_user)):
-    count,latest,official_count=unread_totals(db,official_phones(db))
-    return response({'unread_messages':count,'latest_unread_id':latest,'officials_unread':official_count,'gym_unread':count-official_count})
+    phones=[p for p, in db.query(InboxMessage.phone).distinct()];counts,latest=unread_summary(db,folders(db,phones))
+    return response({'unread_messages':counts['all'],'latest_unread_id':latest,**{k+'_unread':counts[k] for k in FOLDERS}})
 
 @router.get('')
-def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,ge=1),scope:Literal['all','officials','gym','clubs']='all',db:Session=Depends(get_db),user=Depends(staff_user)):
+def inbox(q:str=Query('',max_length=40),unread_only:bool=False,page:int=Query(1,ge=1),scope:Literal['all','officials','gym','clubs','venue']='all',db:Session=Depends(get_db),user=Depends(staff_user)):
     grouped=db.query(InboxMessage.phone.label('phone'),func.max(InboxMessage.id).label('latest')).group_by(InboxMessage.phone).subquery()
     query=db.query(InboxMessage).join(grouped,InboxMessage.id==grouped.c.latest)
+    routes=folders(db,[r[0] for r in db.query(grouped.c.phone).all()]);inbox_counts,_=unread_summary(db,routes)
+    query=query.filter(InboxMessage.phone.in_(routes))
     unread=db.query(InboxMessage.phone).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None))
-    officials=official_phones(db);clubs=club_phones(db)
-    total_unread,_,official_unread=unread_totals(db,officials)
-    inbox_counts={'all':total_unread,'officials':official_unread,'gym':total_unread-official_unread,'clubs':scoped(unread,InboxMessage.phone,'clubs',officials,clubs).count()}
-    query=scoped(query,InboxMessage.phone,scope,officials,clubs)
-    unread=scoped(unread,InboxMessage.phone,scope,officials,clubs)
+    if scope!='all':query=query.filter(InboxMessage.phone.in_([p for p,b in routes.items() if b==scope]))
     from .contact_names import contact_names
-    labels=contact_names(db,[r[0] for r in db.query(grouped.c.phone).all()])
+    labels=contact_names(db,list(routes))
     if q.strip():
         term=q.strip().casefold();digits=re.sub(r'[^0-9+]','',q)
         phones=[p for p,label in labels.items() if (digits and digits in p) or any(term in name.casefold() for name in label['matched_names']+label.get('club_names',[]))]
         query=query.filter(InboxMessage.phone.in_(phones))
     if unread_only:query=query.filter(InboxMessage.phone.in_(unread))
     total=query.count();rows=query.order_by(InboxMessage.id.desc()).offset((page-1)*25).limit(25).all()
-    counts=dict(db.query(InboxMessage.phone,func.count(InboxMessage.id)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None),InboxMessage.phone.in_([r.phone for r in rows])).group_by(InboxMessage.phone).all()) if rows else {}
-    return response({'scope':scope,'inbox_counts':inbox_counts,'number':os.getenv('TWILIO_PHONE_NUMBER',''),'total':total,'page_size':25,'unread_messages':unread.count(),'conversations':[{'phone':r.phone,**labels[r.phone],'latest':serialize(r),'unread':counts.get(r.phone,0)} for r in rows]})
+    counts=dict(db.query(InboxMessage.phone,func.count(InboxMessage.id)).filter(InboxMessage.direction=='inbound',InboxMessage.read_at.is_(None),InboxMessage.phone.in_([r.phone for r in rows])).group_by(InboxMessage.phone).all())if rows else{}
+    return response({'scope':scope,'inbox_counts':inbox_counts,'number':os.getenv('TWILIO_PHONE_NUMBER',''),'total':total,'page_size':25,'unread_messages':inbox_counts[scope],'conversations':[{'phone':r.phone,'folder':routes[r.phone],**labels[r.phone],'latest':serialize(r),'unread':counts.get(r.phone,0)}for r in rows]})
+
+class MoveConversation(BaseModel):
+    phone:str
+    folder:Literal['gym','officials','clubs','venue','auto']
+@router.post('/move')
+def move_conversation(body:MoveConversation,db:Session=Depends(get_db),user=Depends(staff_user)):
+    phone=phone_value(body.phone)
+    if not db.query(InboxMessage.id).filter_by(phone=phone).first():raise HTTPException(404,'Conversation not found')
+    from app.amateurs.directory import lock
+    lock(db);old=folders(db,[phone])[phone];row=db.get(InboxConversation,phone)
+    if body.folder=='auto':
+        if row:db.delete(row)
+    elif row:row.folder=body.folder;row.updated_at=datetime.utcnow()
+    else:db.add(InboxConversation(phone=phone,folder=body.folder))
+    db.add(SecurityLog(user_id=user.id,action='SMS_CONVERSATION_MOVED',description=f'SMS conversation {phone}; from {old} to {body.folder}; messages and permission unchanged.',success=True));db.commit()
+    return {'moved':True,'folder':folders(db,[phone])[phone]}
 
 @router.get('/thread')
 def thread(phone:str,before:int|None=Query(None,ge=1),db:Session=Depends(get_db),user=Depends(staff_user)):
@@ -105,7 +125,7 @@ def thread(phone:str,before:int|None=Query(None,ge=1),db:Session=Depends(get_db)
     rows=query.order_by(InboxMessage.id.desc()).limit(101).all();more=len(rows)>100;rows=list(reversed(rows[:100]))
     can_reply,reason=allowed(db,phone)
     from .contact_names import contact_names
-    return response({'phone':phone,**contact_names(db,[phone])[phone],'messages':[serialize(r) for r in rows],'has_more':more,'can_reply':can_reply,'reply_blocked_reason':reason})
+    return response({'phone':phone,'folder':folders(db,[phone])[phone],**contact_names(db,[phone])[phone],'messages':[serialize(r) for r in rows],'has_more':more,'can_reply':can_reply,'reply_blocked_reason':reason})
 
 class ReadMessages(BaseModel):
     phone:str
