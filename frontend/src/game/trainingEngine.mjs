@@ -100,5 +100,5 @@ export function trainingGamepadEdges(pad,previous={}){
 }
 export function trainingPose(state,now){
  const recent=state.lastEvent&&now-state.lastEvent.at<260;
- return {id:state.lastEvent?.at||state.lastInput,move:now<state.visualUntil?state.lastMove:state.defenseUntil>now?state.defense:'block',hit:recent&&state.lastEvent.type==='landed',playerHit:recent&&state.lastEvent.type==='caught',opponentMove:state.threat&&state.threat.impactAt-now<240?state.threat.move:'block',distance:state.distance,angle:state.angle,mode:state.mode,threat:state.threat?.name};
+ return {actionId:state.lastInput,actionDuration:Math.max(300,state.visualUntil-state.lastInput),id:state.lastEvent?.at||state.lastInput,move:now<state.visualUntil?state.lastMove:state.defenseUntil>now?state.defense:'block',hit:recent&&state.lastEvent.type==='landed',playerHit:recent&&state.lastEvent.type==='caught',opponentMove:state.threat&&state.threat.impactAt-now<240?state.threat.move:'block',distance:state.distance,angle:state.angle,mode:state.mode,threat:state.threat?.name};
 }

@@ -1,0 +1,202 @@
+{
+  "height": 1.8,
+  "bones": [
+    {
+      "name": "hips",
+      "parent": null,
+      "position": [
+        0,
+        0.9459257975034674,
+        -0.06031553398058252
+      ]
+    },
+    {
+      "name": "spine",
+      "parent": "hips",
+      "position": [
+        -1.8044973744557632e-19,
+        1.0521029819694867,
+        -0.030001733703190012
+      ]
+    },
+    {
+      "name": "chest",
+      "parent": "spine",
+      "position": [
+        0,
+        1.3280426490984742,
+        -0.05216712898751733
+      ]
+    },
+    {
+      "name": "neck",
+      "parent": "chest",
+      "position": [
+        0,
+        1.5437361303744799,
+        0.012011095700416089
+      ]
+    },
+    {
+      "name": "head",
+      "parent": "neck",
+      "position": [
+        0,
+        1.6442597087378639,
+        0.049531900138696246
+      ]
+    },
+    {
+      "name": "clavL",
+      "parent": "chest",
+      "position": [
+        0.11316920943134534,
+        1.4805287794729542,
+        0.023074722607489596
+      ]
+    },
+    {
+      "name": "armL",
+      "parent": "clavL",
+      "position": [
+        0.19399271844660196,
+        1.4349081137309292,
+        0.018551490984743416
+      ]
+    },
+    {
+      "name": "forearmL",
+      "parent": "armL",
+      "position": [
+        0.3663735263522885,
+        1.237427617891817,
+        0.01626777045769764
+      ]
+    },
+    {
+      "name": "handL",
+      "parent": "forearmL",
+      "position": [
+        0.5064294382801664,
+        1.103572728848821,
+        0.2159726074895978
+      ]
+    },
+    {
+      "name": "thighL",
+      "parent": "hips",
+      "position": [
+        0.11286234396671288,
+        0.9559830097087378,
+        -0.007936893203883496
+      ]
+    },
+    {
+      "name": "shinL",
+      "parent": "thighL",
+      "position": [
+        0.15739684466019416,
+        0.5253900832177532,
+        0.027964632454923713
+      ]
+    },
+    {
+      "name": "footL",
+      "parent": "shinL",
+      "position": [
+        0.20571601941747572,
+        0.07438626907073505,
+        0.015822642163661582
+      ]
+    },
+    {
+      "name": "clavR",
+      "parent": "chest",
+      "position": [
+        -0.11316920943134534,
+        1.4805287794729542,
+        0.023074722607489596
+      ]
+    },
+    {
+      "name": "armR",
+      "parent": "clavR",
+      "position": [
+        -0.19399271844660196,
+        1.4349081137309292,
+        0.018551490984743416
+      ]
+    },
+    {
+      "name": "forearmR",
+      "parent": "armR",
+      "position": [
+        -0.3663735263522885,
+        1.237427617891817,
+        0.01626777045769764
+      ]
+    },
+    {
+      "name": "handR",
+      "parent": "forearmR",
+      "position": [
+        -0.5064294382801664,
+        1.103572728848821,
+        0.2159726074895978
+      ]
+    },
+    {
+      "name": "thighR",
+      "parent": "hips",
+      "position": [
+        -0.11286234396671288,
+        0.9559830097087378,
+        -0.007936893203883496
+      ]
+    },
+    {
+      "name": "shinR",
+      "parent": "thighR",
+      "position": [
+        -0.15739684466019416,
+        0.5253900832177532,
+        0.027964632454923713
+      ]
+    },
+    {
+      "name": "footR",
+      "parent": "shinR",
+      "position": [
+        -0.20571601941747572,
+        0.07438626907073505,
+        0.015822642163661582
+      ]
+    }
+  ],
+  "eyes": {
+    "L": [
+      0.030539181692094314,
+      1.6871940013869624,
+      0.13146844660194174
+    ],
+    "R": [
+      -0.030539181692094314,
+      1.6871940013869624,
+      0.13146844660194174
+    ]
+  },
+  "license": "CC0-1.0",
+  "source_sha256": {
+    "body": "8e761e6624b8f54536409135d1636da63b32486a90d4897f84e121d144f6fb4c",
+    "rig": "99f179bce0aa850b45d4191a1d0d234c5851f881c057439470ded3bddf729a24",
+    "weights": "0f3641d651ae3d00ad6b4ccee43142edb109d3bd909d27d9e4139ef1beed8625",
+    "assets-license": "f6089cba01cb570a24712b41ab8a586ccd3cc5ef53dc266ca50b95c288956d2c",
+    "caucasian-male-young.target": "70e228ba7164737dae664454394536fc5935fa48d333c1a97d77e2dc6eacc5f5",
+    "african-male-young.target": "894abc1fbb3d28543a51fef16f89d5d4bdf9aa2e1534413339811a3d47818b7d",
+    "asian-male-young.target": "ed2e8c191cb6b87b4a2d97c80486acb2604fa549316c7aa2a738a5d5a14334dc",
+    "universal-male-young-maxmuscle-averageweight.target": "c171ff9cc95e96273beb3e3b1969a01988c2d4982ebc6fe04bf81cf72ee3b295",
+    "universal-male-young-averagemuscle-averageweight.target": "4ba5396ddabda448ece15650a566fbebfbb10239256ccb201e8f883429e12249"
+  },
+  "vertex_count": 9055,
+  "triangle_count": 16198
+}
