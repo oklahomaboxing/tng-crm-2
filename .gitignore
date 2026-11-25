@@ -47,3 +47,5 @@ backups/
 App_broken_backup.jsx
 
 backend/.env
+# Reviewed Godot source download; general archives remain ignored.
+!frontend/public/downloads/TNGOS-Godot-Amateur-Prototype.zip
