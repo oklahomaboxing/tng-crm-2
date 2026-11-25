@@ -27,7 +27,7 @@ export function firstPersonPunchPath(move,progress,base,contact=.43,aim=null){
   const end=aim?[clamp(aim[0],-.30,.30),clamp(aim[1],-.25,.16),-.60]:[sign*.035,.09,-.60],chamber=[sign*.15,Math.min(base[1]-.20,end[1]-.26),base[2]+.035],loadAt=at*.30;
   const from=t<loadAt?base:t<at?chamber:end,to=t<loadAt?chamber:t<at?end:base;
   const fraction=t<loadAt?ease(t/loadAt):t<at?ease((t-loadAt)/(at-loadAt)):ease((t-at)/(1-at));
-  return {position:from.map((v,i)=>v+(to[i]-v)*fraction),rotation:[-motion.extension*1.0,sign*.12+motion.turn,sign*-.14]};
+  return {position:from.map((v,i)=>v+(to[i]-v)*fraction),rotation:[motion.extension*1.0,sign*.12+motion.turn,sign*-.14]};
  }
  const start=[base[0]+sign*motion.arc,base[1]+motion.lift,base[2]+motion.load*.035],end=aim?[clamp(aim[0],-.30,.30),clamp(aim[1],-.30,.16),-.68]:[sign*.025,-.015,-.68];
  return {position:start.map((v,i)=>v+(end[i]-v)*motion.extension),rotation:[-motion.extension*.16,sign*.12+motion.turn,sign*-.14]};
