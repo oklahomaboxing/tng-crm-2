@@ -26,3 +26,7 @@ test('uppercuts rise into the actual low mitt target rather than snapping into a
  const base=[-.18,-.145,-.43],aim=[-.08,-.20,-.60];const chamber=firstPersonPunchPath('5',.43*.3,base,.43,aim),contact=firstPersonPunchPath('5',.43,base,.43,aim);assert.ok(chamber.position[1]<aim[1]-.2);assert.deepEqual(contact.position,aim);assert.ok(contact.rotation[0]<-.8);
 });
 test('stationary mitts can be struck immediately after starting the drill',()=>{let s=newTargetRound(0,30,'mitts');s=targetInput(s,'1',0);s=stepTargetRound(s,150);assert.equal(s.hits,1);assert.equal(s.target.move,'2');});
+test('numbered targets and the trainer mitt stay on the correct first-person punch side',async()=>{
+ const THREE=await import('three');const{mittHandForPunch,targetLaneForStance}=await import('../src/game/fightPresentation.mjs');const camera=new THREE.PerspectiveCamera(76,1,.025,10);camera.position.set(0,1.6,0);camera.lookAt(0,1.6,1);camera.updateMatrixWorld();
+ let s=newTargetRound(0,30,'targets');assert.ok(new THREE.Vector3(s.target.lane,1.6,.85).project(camera).x<0,'jab cue is on the player left');s=targetInput(s,'1',1900);s=stepTargetRound(s,2100);assert.ok(new THREE.Vector3(s.target.lane,1.6,.85).project(camera).x>0,'cross cue is on the player right');assert.equal(mittHandForPunch('1'),'R');assert.equal(mittHandForPunch('5'),'R');assert.equal(mittHandForPunch('2'),'L');assert.equal(mittHandForPunch('6'),'L');assert.equal(mittHandForPunch('1','southpaw'),'L');assert.equal(mittHandForPunch('5','southpaw'),'L');assert.equal(targetLaneForStance(.23,'southpaw'),-.23);
+});

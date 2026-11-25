@@ -3,7 +3,7 @@ const COMBOS=[['1','2'],['1','2','3','2'],['5','2','3'],['3','6','2']];
 const SPEED={learn:1700,flow:1350,fast:1050};
 function nextTarget(s,now){
  const sequence=COMBOS[s.sequenceIndex%COMBOS.length],move=s.mode==='mitts'?sequence[s.sequenceStep%sequence.length]:String(s.targetCount%6+1),travel=s.mode==='mitts'?0:SPEED[s.level];
- return {...s,targetCount:s.targetCount+1,target:{id:s.targetCount+1,move,spawnAt:now,arriveAt:now+travel,expiresAt:now+travel+(s.mode==='mitts'?1800:260),lane:Number(move)%2===1?-.23:.23,body:['5','6'].includes(move)},feedback:s.mode==='mitts'?`Mitts: ${sequence.join(' · ')}`:`Incoming ${move}. Time your contact when it reaches range.`};
+ return {...s,targetCount:s.targetCount+1,target:{id:s.targetCount+1,move,spawnAt:now,arriveAt:now+travel,expiresAt:now+travel+(s.mode==='mitts'?1800:260),lane:Number(move)%2===1?.23:-.23,body:['5','6'].includes(move)},feedback:s.mode==='mitts'?`Mitts: ${sequence.join(' · ')}`:`Incoming ${move}. Time your contact when it reaches range.`};
 }
 export function newTargetRound(now,seconds=120,mode='targets',level='learn'){
  if(!['targets','mitts'].includes(mode)||!SPEED[level])throw Error('Choose a target mode and difficulty.');

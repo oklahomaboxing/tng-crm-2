@@ -32,3 +32,7 @@ export function firstPersonPunchPath(move,progress,base,contact=.43,aim=null){
  const start=[base[0]+sign*motion.arc,base[1]+motion.lift,base[2]+motion.load*.035],end=aim?[clamp(aim[0],-.30,.30),clamp(aim[1],-.30,.16),-.68]:[sign*.025,-.015,-.68];
  return {position:start.map((v,i)=>v+(end[i]-v)*motion.extension),rotation:[-motion.extension*.16,sign*.12+motion.turn,sign*-.14]};
 }
+
+// A trainer faces the player: the player's left hand meets the trainer's right mitt.
+export function mittHandForPunch(move,stance='orthodox'){const side=['1','3','5'].includes(String(move))?'R':'L';return stance==='southpaw'?(side==='R'?'L':'R'):side;}
+export function targetLaneForStance(lane,stance='orthodox'){return lane*(stance==='southpaw'?-1:1);}

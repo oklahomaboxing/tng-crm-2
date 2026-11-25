@@ -6,7 +6,7 @@ import{RoomEnvironment}from'three/addons/environments/RoomEnvironment.js';
 import{createBoxer}from'./boxerRig.mjs';
 import{createTrainingEquipment}from'./trainingEquipment.mjs';
 import{createFirstPersonHands}from'./firstPersonHands.mjs';
-import{broadcastFrame,firstPersonLens}from'./fightPresentation.mjs';
+import{broadcastFrame,firstPersonLens,targetLaneForStance}from'./fightPresentation.mjs';
 import './boxing3d.css';
 let assetPromise;
 function assets(){if(!assetPromise)assetPromise=Promise.all([new GLTFLoader().loadAsync('/game/assets/boxer-rig-v1.glb'),fetch('/game/assets/boxer-rig-v1.json').then(r=>{if(!r.ok)throw Error('Fighter metadata unavailable');return r.json();})]).catch(e=>{assetPromise=null;throw e;});return assetPromise;}
@@ -73,10 +73,10 @@ export default function BoxingArena3D({animation={},stance='orthodox',active,eff
      const distance=p.distance??1.4,gap=s.camera==='firstperson'?Math.max(.95,Math.min(2.6,distance)):.4+Math.max(.45,Math.min(2.6,distance))*.24,targetPlayer=new THREE.Vector3((p.angle||0)*.3,.18,-gap*.5),targetPartner=new THREE.Vector3(0,.18,gap*.5);
      player.root.position.lerp(targetPlayer,Math.min(1,dt*10));partner.root.position.lerp(targetPartner,Math.min(1,dt*10));const facing=Math.atan2(partner.root.position.x-player.root.position.x,partner.root.position.z-player.root.position.z);player.root.rotation.y=facing;partner.root.rotation.y=facing+Math.PI;
      partner.root.visible=!['bag','targets'].includes(mode);partner.setMittMode(mode==='mitts');ring.bag.visible=mode==='bag';ring.bag.position.set(0,.18,gap*.5);ring.bag.rotation.z=p.hit&&s.effects?Math.sin(visualNow*.018)*.035:0;
-     const target=mode==='mitts'&&p.target?partner.mittTarget(p.target.move):mode==='targets'&&p.target?player.root.localToWorld(new THREE.Vector3(p.target.lane,p.target.body?1.35:1.62,.85)):mode==='bag'?new THREE.Vector3(0,1.25,gap*.5-.18):partner.headTarget();player.root.visible=s.camera!=='firstperson';player.update(p,visualNow,dt,{stance:s.stance,target,active:s.active&&s.effects});partner.update(p,visualNow,dt,{opponent:true,target:player.headTarget(),active:s.active&&s.effects});
+     const target=mode==='mitts'&&p.target?partner.mittTarget(p.target.move,s.stance):mode==='targets'&&p.target?player.root.localToWorld(new THREE.Vector3(targetLaneForStance(p.target.lane,s.stance),p.target.body?1.35:1.62,.85)):mode==='bag'?new THREE.Vector3(0,1.25,gap*.5-.18):partner.headTarget();player.root.visible=s.camera!=='firstperson';player.update(p,visualNow,dt,{stance:s.stance,target,active:s.active&&s.effects});partner.update(p,visualNow,dt,{opponent:true,target:player.headTarget(),active:s.active&&s.effects});
      for(const[i,boxer]of[player,partner].entries()){ring.shadows[i].position.x=boxer.root.position.x;ring.shadows[i].position.z=boxer.root.position.z;ring.shadows[i].visible=i===0||!['bag','targets'].includes(mode);}
      if((p.playerHit||p.hit)&&p.id!==lastHit){lastHit=p.id;impact=s.effects ? .024 : 0;if(s.effects&&!['bag','targets','mitts'].includes(mode)){const origin=p.playerHit?player.headTarget():partner.headTarget();drops.length=0;for(let i=0;i<sweatCount;i++)drops.push({position:origin.clone(),velocity:new THREE.Vector3(Math.sin(i*2.4)*.55,.3+(i%4)*.11,Math.cos(i*2.4)*.55),life:.26});}}
-     trainingEquipment.update(p,player,partner,dt);impact=Math.max(0,impact-dt*.12);
+     trainingEquipment.update(p,player,partner,dt,s.stance);impact=Math.max(0,impact-dt*.12);
      sweat.visible=s.effects&&drops.some(d=>d.life>0);for(let i=0;i<drops.length;i++){const d=drops[i];if(s.active){d.life-=dt;d.velocity.y-=dt*2.4;d.position.addScaledVector(d.velocity,dt);}dropMatrix.position.copy(d.position);dropMatrix.scale.setScalar(Math.max(0,d.life/.26));dropMatrix.updateMatrix();sweat.setMatrixAt(i,dropMatrix.matrix);}sweat.instanceMatrix.needsUpdate=true;
     }
     controls.enabled=s.camera!=='firstperson';

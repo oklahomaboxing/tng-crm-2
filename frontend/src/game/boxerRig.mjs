@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import{punchMotion,sampleMotion}from'./fightPresentation.mjs';
+import{punchMotion,sampleMotion,mittHandForPunch}from'./fightPresentation.mjs';
 import{clone}from'three/addons/utils/SkeletonUtils.js';
 const V=(a)=>new THREE.Vector3().fromArray(a),UP=new THREE.Vector3(0,1,0),clamp=THREE.MathUtils.clamp;
 export function solveLimb(start,target,a,b,pole){
@@ -104,6 +104,6 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
  function headTarget(){return bones.head.localToWorld(new THREE.Vector3(0,.015,.14));}
  function eyePosition(stable=false){return stable?root.localToWorld(new THREE.Vector3(0,1.61,.15)):bones.head.localToWorld(new THREE.Vector3(0,.015,.16));}
  function setMittMode(value){for(const group of gloveGroups)group.visible=!value;for(const group of mittGroups)group.visible=!!value;}
- function mittTarget(move){const side=['1','3','5'].includes(String(move))?'L':'R';return bones['hand'+side].localToWorld(new THREE.Vector3(0,.10,.07));}
+ function mittTarget(move,stance){const side=mittHandForPunch(move,stance);return bones['hand'+side].localToWorld(new THREE.Vector3(0,.10,.07));}
  return {root,model,bones,rest,update,headTarget,eyePosition,setMittMode,mittTarget};
 }
