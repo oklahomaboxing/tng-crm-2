@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import{punchMotion}from'./fightPresentation.mjs';
+import{punchMotion,sampleMotion}from'./fightPresentation.mjs';
 import{clone}from'three/addons/utils/SkeletonUtils.js';
 const V=(a)=>new THREE.Vector3().fromArray(a),UP=new THREE.Vector3(0,1,0),clamp=THREE.MathUtils.clamp;
 export function solveLimb(start,target,a,b,pole){
@@ -67,10 +67,10 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
  }
  function update(pose,now,dt,{opponent=false,stance='orthodox',target,active=true}={}){
   const move=opponent?pose.opponentMove:pose.move;const id=opponent?pose.opponentActionId??move:pose.actionId??pose.id;
-  if(/^[1-6]$/.test(move||'')&&id!==state.actionId){state.actionId=id;state.move=move;state.start=now;state.duration=opponent?360:pose.actionDuration||380;}
+  if(/^[1-6]$/.test(move||'')&&(id!==state.actionId||state.move!==move)){state.actionId=id;state.move=move;state.start=now;state.duration=opponent?500:pose.actionDuration||380;}else if(!/^[1-6]$/.test(move||'')&&(id!==state.actionId||state.move!==move)){state.actionId=id;state.move=null;}
   const hit=opponent?pose.hit:pose.playerHit;
   if(hit&&pose.id!==state.lastHit){state.hit=1;state.lastHit=pose.id;}state.hit=Math.max(0,state.hit-dt*4.5);
-  const supplied=opponent?pose.opponentProgress:pose.actionProgress;const t=Number.isFinite(supplied)?supplied:(now-state.start)/state.duration,punch=t>=0&&t<1&&state.move;const motion=punch?punchMotion(state.move,t,opponent ? .48 : pose.contactFraction||.43):{extension:0,load:0,arc:0,lift:0,turn:0,reach:1};const drive=motion.extension;
+  const supplied=opponent?pose.opponentProgress:pose.actionProgress;if(Number.isFinite(supplied))state.sample=sampleMotion(state.sample,id,supplied,now,state.duration);const t=Number.isFinite(supplied)?state.sample.value:(now-state.start)/state.duration,punch=t>=0&&t<1&&state.move;const motion=punch?punchMotion(state.move,t,opponent ? .48 : pose.contactFraction||.43):{extension:0,load:0,arc:0,lift:0,turn:0,reach:1};const drive=motion.extension;
   const slip=move==='slipLeft'?-1:move==='slipRight'?1:0,duck=move==='roll'?1:0;const lead=stance==='southpaw'?'R':'L';
   const side=(punch&&['1','3','5'].includes(state.move)?lead:punch?lead==='L'?'R':'L':null);
   bones.hips.position.copy(rest.hips);bones.hips.position.y-=.055+duck*.10;const breath=active?Math.sin(now*.0024)*.006:0;bones.hips.position.y+=breath;bones.hips.position.x+=slip*.075;

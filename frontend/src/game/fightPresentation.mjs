@@ -13,3 +13,8 @@ export function broadcastFrame(distance=1.4,angle=0,portrait=false){
  return {gap,midX,position:[midX-2.7,1.67,portrait?-1.8:-1.4],target:[midX,1.12,0],fov:portrait?47:40};
 }
 export function meterPercent(value){return Number.isFinite(value)?clamp(value,0,100):100;}
+// Simulation snapshots arrive at 10 Hz; advance between them at render cadence.
+export function sampleMotion(previous,id,progress,now,duration){
+ const sample=!previous||previous.id!==id||previous.progress!==progress?{id,progress,at:now}:previous;
+ return {...sample,value:sample.progress+Math.max(0,now-sample.at)/Math.max(1,duration)};
+}
