@@ -24,7 +24,7 @@ const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const event=(s,now,type,text)=>({...s,lastEvent:{at:now,type},feedback:text,result:type});
 export function newTrainingRound(now,duration=120,mode='bag',level='learn'){
  if(!TRAINING_MODES.some(m=>m.id===mode&&mode!=='combo')||!LEVELS[level])throw Error('Choose a training mode and difficulty.');
- return {...newRound(now,duration),mode,level,lastTick:now,stamina:100,playerHealth:100,opponentHealth:100,distance:mode==='footwork'?2.2:1.4,angle:0,readyAt:now,defenseUntil:0,defense:null,counterUntil:0,nextThreatAt:now+1800,threat:null,threatIndex:0,pendingPunch:null,lastExertion:-Infinity,lastMove:null,visualUntil:0,lastEvent:null,defenses:0,taken:0,counters:0,footworkGoals:0,targetIndex:0,targetHoldSince:null,feedback:mode==='footwork'?'Find jab range. Use W / Z to step and Q / E to pivot.':'Set your feet. Work at the right distance.',result:'ready'};
+ return {...newRound(now,duration),mode,level,lastTick:now,stamina:100,playerHealth:100,opponentHealth:100,distance:mode==='footwork'?2.2:1.4,angle:0,readyAt:now,defenseUntil:0,defense:null,counterUntil:0,nextThreatAt:now+1800,threat:null,threatIndex:0,lastOpponentAttack:null,pendingPunch:null,lastExertion:-Infinity,lastMove:null,visualUntil:0,lastEvent:null,defenses:0,taken:0,counters:0,footworkGoals:0,targetIndex:0,targetHoldSince:null,feedback:mode==='footwork'?'Find jab range. Use W / Z to step and Q / E to pivot.':'Set your feet. Work at the right distance.',result:'ready'};
 }
 export function stepTraining(state,now){
  if(state.result==='finished')return state;
@@ -33,7 +33,7 @@ export function stepTraining(state,now){
  if(s.mode==='sparring'&&s.distance>1.4)s.distance=Math.max(1.4,s.distance-dt*.35);
  if(s.pendingPunch&&now>=s.pendingPunch.impactAt){
   const punch=s.pendingPunch,stats=PUNCHES[punch.move];s.pendingPunch=null;
-  const inRange=s.distance>=stats.min&&s.distance<=stats.max;
+  const inRange=s.distance>=stats.min-1e-6&&s.distance<=stats.max+1e-6;
   const guarded=s.mode==='sparring'&&!s.threat&&Math.floor((now-s.startedAt)/1400)%3===0;
   if(!inRange)s=event(s,now,'missed','Out of range. Straight punches reach farther; hooks and uppercuts need inside position.');
   else if(guarded)s=event(s,now,'blocked','Partner caught it on the guard. Draw an attack and counter.');
@@ -44,7 +44,7 @@ export function stepTraining(state,now){
   }
  }
  if(['defense','sparring'].includes(s.mode)){
-  if(!s.threat&&now>=s.nextThreatAt){const attack=THREATS[s.threatIndex%THREATS.length];s.threat={...attack,impactAt:now+LEVELS[s.level].telegraph};s.threatIndex++;s.feedback=attack.name+' incoming — '+attack.hint+'.';}
+  if(!s.threat&&now>=s.nextThreatAt){const attack=THREATS[s.threatIndex%THREATS.length];s.threat={...attack,impactAt:now+LEVELS[s.level].telegraph};s.threatIndex++;s.lastOpponentAttack={move:attack.move,id:s.threatIndex,impactAt:s.threat.impactAt};s.feedback=attack.name+' incoming — '+attack.hint+'.';}
   if(s.threat&&now>=s.threat.impactAt){
    const threat=s.threat;const outside=s.distance>threat.range;const defended=outside||(s.defenseUntil>=threat.impactAt&&threat.defenses.includes(s.defense));
    s.threat=null;s.nextThreatAt=now+LEVELS[s.level].interval;
@@ -63,7 +63,7 @@ export function stepTraining(state,now){
  return s;
 }
 export function trainingInput(state,move,now){
- if(state.result==='finished'||now-state.lastInput<90)return state;
+ if(state.result==='finished'||(!PUNCHES[move]&&now-state.lastInput<90))return state;
  let s=stepTraining(state,now);if(s.result==='finished'||!ALL_MOVES[move]||move==='slip')return s;
  if(PUNCHES[move]){
   if(s.mode==='footwork')return event(s,now,'movement','Footwork round: use W / Z and Q / E to find the called position.');
@@ -87,6 +87,7 @@ export function resumeTraining(state,pausedAt,now){
  for(const key of ['startedAt','endsAt','readyAt','defenseUntil','counterUntil','nextThreatAt','lastExertion','lastInput','visualUntil'])s[key]+=elapsed;
  if(s.pendingPunch)s.pendingPunch={...s.pendingPunch,impactAt:s.pendingPunch.impactAt+elapsed};
  if(s.threat)s.threat={...s.threat,impactAt:s.threat.impactAt+elapsed};
+ if(s.lastOpponentAttack)s.lastOpponentAttack={...s.lastOpponentAttack,impactAt:s.lastOpponentAttack.impactAt+elapsed};
  if(s.targetHoldSince!==null)s.targetHoldSince+=elapsed;
  if(s.lastEvent)s.lastEvent={...s.lastEvent,at:s.lastEvent.at+elapsed};
  return s;
@@ -100,5 +101,8 @@ export function trainingGamepadEdges(pad,previous={}){
 }
 export function trainingPose(state,now){
  const recent=state.lastEvent&&now-state.lastEvent.at<260;
- return {actionId:state.lastInput,actionDuration:Math.max(300,state.visualUntil-state.lastInput),id:state.lastEvent?.at||state.lastInput,move:now<state.visualUntil?state.lastMove:state.defenseUntil>now?state.defense:'block',hit:recent&&state.lastEvent.type==='landed',playerHit:recent&&state.lastEvent.type==='caught',opponentMove:state.threat&&state.threat.impactAt-now<240?state.threat.move:'block',distance:state.distance,angle:state.angle,mode:state.mode,threat:state.threat?.name};
+ const attack=state.lastOpponentAttack,opponentActive=attack&&now>=attack.impactAt-240&&now<attack.impactAt+260;
+ const duration=Number.isFinite(state.lastInput)?Math.max(300,state.visualUntil-state.lastInput):380,stats=PUNCHES[state.lastMove];
+ const contact=stats?stats.startup/stats.recovery:.43;
+ return {actionId:state.lastInput,actionDuration:duration,actionProgress:Number.isFinite(state.lastInput)?(now-state.lastInput)/duration:1,contactFraction:contact,id:state.lastEvent?.at||state.lastInput,move:now<state.visualUntil?state.lastMove:state.defenseUntil>now?state.defense:'block',hit:recent&&state.lastEvent.type==='landed',playerHit:recent&&state.lastEvent.type==='caught',opponentMove:opponentActive?attack.move:'block',opponentActionId:attack?.id,opponentProgress:opponentActive?(now-(attack.impactAt-240))/500:1,opponentHealth:state.opponentHealth,playerHealth:state.playerHealth,stamina:state.stamina,distance:state.distance,angle:state.angle,mode:state.mode,threat:state.threat?.name};
 }

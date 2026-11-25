@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import{punchMotion}from'./fightPresentation.mjs';
 import{clone}from'three/addons/utils/SkeletonUtils.js';
 const V=(a)=>new THREE.Vector3().fromArray(a),UP=new THREE.Vector3(0,1,0),clamp=THREE.MathUtils.clamp;
 export function solveLimb(start,target,a,b,pole){
@@ -10,21 +11,22 @@ export function solveLimb(start,target,a,b,pole){
 function textTexture(text,color='#fff',background='#10131a'){
  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=96;const c=canvas.getContext('2d');c.fillStyle=background;c.fillRect(0,0,256,96);c.fillStyle=color;c.font='italic 900 58px Arial';c.textAlign='center';c.textBaseline='middle';c.fillText(text,128,48);const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;return t;
 }
-export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowDetail=false}={}){
+export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowDetail=false,outfit='pro'}={}){
  const root=new THREE.Group(),model=clone(source),bones={},rest=Object.fromEntries(meta.bones.map(b=>[b.name,V(b.position)]));root.add(model);
  const BodyMaterial=lowDetail?THREE.MeshStandardMaterial:THREE.MeshPhysicalMaterial;const athlete=new BodyMaterial({color:0xffffff,roughness:.56,metalness:0,...(!lowDetail?{clearcoat:.1,clearcoatRoughness:.6,ior:1.4,specularIntensity:.3}:{}),bumpMap:lowDetail?null:bumpMap,bumpScale:.0012});
- athlete.customProgramCacheKey=()=>"tng-athlete-kit-v1";
+ athlete.customProgramCacheKey=()=>"tng-athlete-kit-v2-"+outfit;
  athlete.onBeforeCompile=shader=>{
-  shader.uniforms.tngSkin={value:new THREE.Color(skin)};shader.uniforms.tngKit={value:new THREE.Color(kit)};
+  shader.uniforms.tngVest={value:outfit==='gym'?1:0};shader.uniforms.tngSkin={value:new THREE.Color(skin)};shader.uniforms.tngKit={value:new THREE.Color(kit)};
   shader.vertexShader='varying vec3 tngRest;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntngRest=position;');
-  shader.fragmentShader='varying vec3 tngRest;uniform vec3 tngSkin;uniform vec3 tngKit;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+  shader.fragmentShader='varying vec3 tngRest;uniform vec3 tngSkin;uniform vec3 tngKit;uniform float tngVest;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
    float y=tngRest.y;float ax=abs(tngRest.x);
    float shirt=smoothstep(1.018,1.023,y)*(1.0-smoothstep(1.50,1.505,y))*(1.0-smoothstep(.203,.209,ax));
    shirt*=1.0-smoothstep(1.415,1.44,y)*(1.0-smoothstep(.067,.075,ax));
    float shorts=smoothstep(.605,.610,y)*(1.0-smoothstep(1.020,1.025,y));
-   float clothes=clamp(shirt+shorts,0.0,1.0);
+   shirt*=tngVest;float clothes=clamp(shirt+shorts,0.0,1.0);
    vec3 tone=tngSkin;float cheek=(1.0-smoothstep(.045,.075,abs(y-1.655)))*smoothstep(.025,.05,ax)*(1.0-smoothstep(.07,.09,ax))*smoothstep(.07,.13,tngRest.z);
    tone=mix(tone,tone*vec3(1.04,.90,.88),cheek*.5);
+   float pores=sin(tngRest.x*1250.0)*sin(y*1400.0)*sin(tngRest.z*1300.0);tone*=1.0+pores*.022;
    diffuseColor.rgb=mix(tone,tngKit*mix(.73,1.0,shirt),clothes);
    float waist=smoothstep(.995,1.0,y)*(1.0-smoothstep(1.027,1.032,y));
    float hem=smoothstep(.61,.614,y)*(1.0-smoothstep(.632,.636,y));
@@ -52,6 +54,7 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
   const center=V(meta.eyes[side]).sub(rest.head);mesh(new THREE.SphereGeometry(.013,18,12),whites,bones.head,center.toArray());mesh(new THREE.SphereGeometry(.006,14,10),iris,bones.head,[center.x,center.y,center.z+.011]);const brow=mesh(new THREE.CapsuleGeometry(.0025,.029,3,8),bootMat,bones.head,[center.x,center.y+.019,center.z+.007]);brow.rotation.z=Math.PI/2;
  }
  const chestPatch=mesh(new THREE.PlaneGeometry(.105,.04),patch,bones.chest,[0,.015,.15]);chestPatch.castShadow=false;const backPatch=mesh(new THREE.PlaneGeometry(.12,.045),patch,bones.chest,[0,.015,-.115]);backPatch.rotation.y=Math.PI;backPatch.castShadow=false;
+ chestPatch.visible=backPatch.visible=outfit==='gym';
  root.updateMatrixWorld(true);
  const restDirection={};for(const side of ['L','R']){restDirection['arm'+side]=rest['forearm'+side].clone().sub(rest['arm'+side]);restDirection['forearm'+side]=rest['hand'+side].clone().sub(rest['forearm'+side]);restDirection['thigh'+side]=rest['shin'+side].clone().sub(rest['thigh'+side]);restDirection['shin'+side]=rest['foot'+side].clone().sub(rest['shin'+side]);}
  const state={actionId:null,move:null,start:0,duration:360,hit:0,lastHit:null,opponentAction:null,opponentStart:0};
@@ -63,16 +66,16 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
   const start=localPosition(bones[upper]),length1=restDirection[upper].length(),length2=restDirection[lower].length();const solution=solveLimb(start,target,length1,length2,pole);aim(upper,solution.elbow.clone().sub(start));const elbow=localPosition(bones[lower]);aim(lower,solution.end.clone().sub(elbow));
  }
  function update(pose,now,dt,{opponent=false,stance='orthodox',target,active=true}={}){
-  const move=opponent?pose.opponentMove:pose.move;const id=opponent?move:pose.actionId??pose.id;
+  const move=opponent?pose.opponentMove:pose.move;const id=opponent?pose.opponentActionId??move:pose.actionId??pose.id;
   if(/^[1-6]$/.test(move||'')&&id!==state.actionId){state.actionId=id;state.move=move;state.start=now;state.duration=opponent?360:pose.actionDuration||380;}
   const hit=opponent?pose.hit:pose.playerHit;
   if(hit&&pose.id!==state.lastHit){state.hit=1;state.lastHit=pose.id;}state.hit=Math.max(0,state.hit-dt*4.5);
-  const t=(now-state.start)/state.duration,punch=t>=0&&t<1&&state.move;const drive=punch?(t<.42?Math.sin(t/.42*Math.PI/2):Math.cos((t-.42)/.58*Math.PI/2)):0;
+  const supplied=opponent?pose.opponentProgress:pose.actionProgress;const t=Number.isFinite(supplied)?supplied:(now-state.start)/state.duration,punch=t>=0&&t<1&&state.move;const motion=punch?punchMotion(state.move,t,opponent ? .48 : pose.contactFraction||.43):{extension:0,load:0,arc:0,lift:0,turn:0,reach:1};const drive=motion.extension;
   const slip=move==='slipLeft'?-1:move==='slipRight'?1:0,duck=move==='roll'?1:0;const lead=stance==='southpaw'?'R':'L';
   const side=(punch&&['1','3','5'].includes(state.move)?lead:punch?lead==='L'?'R':'L':null);
   bones.hips.position.copy(rest.hips);bones.hips.position.y-=.055+duck*.10;const breath=active?Math.sin(now*.0024)*.006:0;bones.hips.position.y+=breath;bones.hips.position.x+=slip*.075;
   bones.hips.rotation.set(.04-state.hit*.10,(stance==='southpaw'?.22:-.22)+(side==='L'?-1:1)*drive*.12,-slip*.07);
-  bones.spine.rotation.set(.055-state.hit*.12,0,-slip*.08);bones.chest.rotation.set(.025,(side==='L'?-1:1)*drive*.20,0);bones.neck.rotation.set(.02,0,0);bones.head.rotation.set(.06-state.hit*.10,0,0);
+  bones.spine.rotation.set(.055-state.hit*.12+motion.load*.035,0,-slip*.08);bones.chest.rotation.set(.025,motion.turn,0);bones.neck.rotation.set(.02,0,0);bones.head.rotation.set(.06-state.hit*.10,0,0);
   root.updateMatrixWorld(true);
   for(const s of ['L','R']){
    const sign=s==='L'?1:-1,isLead=s===lead;const foot=rest['foot'+s].clone();foot.x=sign*.17;foot.y=.075;foot.z=isLead?.20:-.19;
@@ -87,9 +90,10 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
    let hand=guard.clone();
    if(punch&&s===side){
     let end=target?root.worldToLocal(target.clone()):new THREE.Vector3(0,1.6,.8);end.z-=.12;end.x+=sign*.018;
-    if(['3','4'].includes(state.move)){hand.x+=sign*Math.sin(Math.PI*t)*.14;end.z-=.06;end.y-=.03;}
-    if(['5','6'].includes(state.move)){hand.y-=Math.sin(Math.PI*t)*.15;end.y-=.06;}
-    hand.lerp(end,drive);
+    hand.z-=motion.load*.07;hand.x+=sign*motion.arc;hand.y+=motion.lift;
+    if(['3','4'].includes(state.move)){end.x-=sign*.065;end.z-=.06;end.y-=.03;}
+    if(['5','6'].includes(state.move)){end.y-=.06;}
+    hand.lerp(end,drive*motion.reach);
    }
    const shoulder=localPosition(bones['arm'+s]);const pole=new THREE.Vector3(sign*.65,shoulder.y-.52,.05+(s===side?drive*.18:0));limb('arm'+s,'forearm'+s,'hand'+s,hand,pole);
   }
