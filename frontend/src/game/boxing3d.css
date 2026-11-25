@@ -41,3 +41,23 @@
 .tng-session-card{justify-content:safe center}
 .tng-touch-idle .tng-touch-bottom,.tng-touch-idle .tng-touch-top{display:none}
 @media(max-width:600px){.tng-session-results{bottom:10%}}
+/* Mobile play view fills the available screen, including browser-only fallback. */
+.tng-boxing-page.is-immersive.has-touch{padding:0!important;border:0!important;border-radius:0!important;gap:0;overflow:hidden!important;overscroll-behavior:none}
+.tng-boxing-page.is-immersive.has-touch>*+*{margin-top:0!important}
+.tng-boxing-page.is-immersive.has-touch .tng-game-toolbar{padding:max(5px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 5px max(10px,env(safe-area-inset-left));min-height:44px;flex-wrap:nowrap!important;flex:0 0 auto}
+.tng-boxing-page.is-immersive.has-touch .tng-game-toolbar h5{display:none}
+.tng-boxing-page.is-immersive.has-touch .tng-game-toolbar .MuiTypography-overline{font-size:11px;white-space:nowrap;letter-spacing:.14em}
+.tng-boxing-page.is-immersive.has-touch .tng-boxing-arena{flex:1 1 auto!important;min-height:0;border:0!important;border-radius:0!important;display:flex;flex-direction:column}
+.tng-boxing-page.is-immersive.has-touch .tng-3d-stage{flex:1;min-height:0}
+.tng-boxing-page.is-immersive.has-touch .tng-3d-viewport{height:100%;min-height:0;max-height:none}
+.tng-boxing-page.is-immersive.has-touch .tng-game-statusbar{display:none}
+.tng-boxing-page.has-touch .tng-touch-bottom{padding:12px max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+.tng-boxing-page.has-touch .tng-touch-button{min-height:58px;-webkit-tap-highlight-color:transparent}
+.tng-boxing-page.has-touch .tng-touch-defense{min-height:46px}
+.tng-boxing-page.has-touch .tng-session-actions{right:max(10px,env(safe-area-inset-right))}
+@media(max-height:540px) and (orientation:landscape){.tng-boxing-page.has-touch .tng-touch-button{min-height:44px}.tng-boxing-page.has-touch .tng-touch-defense{min-height:44px}.tng-boxing-page.has-touch .tng-touch-right{width:260px}.tng-boxing-page.has-touch .tng-session-card{inset:27% 27% 5%}.tng-boxing-page.has-touch .tng-fight-broadcast{top:6px}.tng-boxing-page.has-touch .tng-session-actions{top:6px}}
+@media(display-mode:standalone){.tng-boxing-page{overscroll-behavior:contain}}
+/* Let the browser fullscreen fallback escape the application's isolated workspace. */
+.tng-main:has(.tng-boxing-page.is-immersive){isolation:auto}
+.tng-module-surface:has(.tng-boxing-page.is-immersive){animation:none!important;transform:none!important}
+.tng-shell:has(.tng-boxing-page.is-immersive) .tng-topbar{visibility:hidden!important;pointer-events:none;z-index:1!important}
