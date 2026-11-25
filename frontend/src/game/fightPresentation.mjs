@@ -18,3 +18,5 @@ export function sampleMotion(previous,id,progress,now,duration){
  const sample=!previous||previous.id!==id||previous.progress!==progress?{id,progress,at:now}:previous;
  return {...sample,value:sample.progress+Math.max(0,now-sample.at)/Math.max(1,duration)};
 }
+
+export function firstPersonLens(portrait=false){return {fov:portrait?96:76,near:.025};}

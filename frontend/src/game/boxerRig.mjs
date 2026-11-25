@@ -100,5 +100,6 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
   root.updateMatrixWorld(true);
  }
  function headTarget(){return bones.head.localToWorld(new THREE.Vector3(0,.015,.14));}
- return {root,model,bones,rest,update,headTarget};
+ function eyePosition(stable=false){return stable?root.localToWorld(new THREE.Vector3(0,1.61,.15)):bones.head.localToWorld(new THREE.Vector3(0,.015,.16));}
+ return {root,model,bones,rest,update,headTarget,eyePosition};
 }
