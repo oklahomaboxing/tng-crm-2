@@ -1,0 +1,18 @@
+{
+  "version": "0.1.0",
+  "engine": "Godot 4.6.3 Standard",
+  "kind": "source prototype and Godot resource pack",
+  "standalone_executable": false,
+  "files": [
+    {
+      "name": "TNGOS-Godot-Amateur-Prototype.zip",
+      "bytes": 353150,
+      "sha256": "f68bcdceba587b03a85677eb78c133778320294d9fac266eadc2f34faf35e1a1"
+    },
+    {
+      "name": "TNGOS-Amateur-Boxing.pck",
+      "bytes": 442332,
+      "sha256": "37ac1facac451b2456ee64829ba15e4e9c822e4f26a8f1b0795c9356cae2a2ba"
+    }
+  ]
+}
