@@ -39,12 +39,14 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
   if(object.isBone)bones[object.name]=object;
   if(object.isSkinnedMesh){object.frustumCulled=false;object.castShadow=true;object.receiveShadow=true;object.material=athlete;}
  });
+ const gloveGroups=[],mittGroups=[];const mittMat=new THREE.MeshStandardMaterial({color:0x161b24,roughness:.55}),mittFace=new THREE.MeshStandardMaterial({color:0xe6bf50,roughness:.65});
  const gloveMat=new BodyMaterial({color:kit,roughness:.34,...(!lowDetail?{clearcoat:.42,clearcoatRoughness:.25}:{}),bumpMap:lowDetail?null:bumpMap,bumpScale:.0013});
  const bootMat=new THREE.MeshStandardMaterial({color:0x111722,roughness:.55}),trim=new THREE.MeshStandardMaterial({color:0xe5e8ee,roughness:.6});
  const patch=new THREE.MeshStandardMaterial({map:textTexture('TNG'),roughness:.6});
  const mesh=(g,m,parent,position,scale)=>{const o=new THREE.Mesh(g,m);if(position)o.position.set(...position);if(scale)o.scale.set(...scale);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o;};
  for(const side of ['L','R']){
-  const glove=new THREE.Group();glove.quaternion.setFromUnitVectors(UP,rest['hand'+side].clone().sub(rest['forearm'+side]).normalize());bones['hand'+side].add(glove);
+  const glove=new THREE.Group();glove.quaternion.setFromUnitVectors(UP,rest['hand'+side].clone().sub(rest['forearm'+side]).normalize());bones['hand'+side].add(glove);gloveGroups.push(glove);
+  const mitt=new THREE.Group();mitt.quaternion.copy(glove.quaternion);mitt.visible=false;bones['hand'+side].add(mitt);mittGroups.push(mitt);mesh(new THREE.SphereGeometry(1,24,16),mittMat,mitt,[0,.095,0],[.105,.135,.065]);mesh(new THREE.SphereGeometry(1,24,16),mittFace,mitt,[0,.10,.05],[.083,.108,.022]);
   mesh(new THREE.SphereGeometry(1,24,18),gloveMat,glove,[0,.10,0],[.087,.115,.092]);mesh(new THREE.CapsuleGeometry(.031,.07,5,12),gloveMat,glove,[side==='L'?-.073:.073,.055,.035]);mesh(new THREE.CylinderGeometry(.065,.058,.06,20),gloveMat,glove,[0,-.015,0]);mesh(new THREE.CylinderGeometry(.059,.06,.018,20),trim,glove,[0,-.045,0]);const label=mesh(new THREE.PlaneGeometry(.075,.028),patch,glove,[0,.09,.09]);
   label.castShadow=false;
   const boot=new THREE.Group();bones['foot'+side].add(boot);mesh(new THREE.SphereGeometry(1,20,10),bootMat,boot,[0,-.061,.07],[.072,.018,.145]);mesh(new THREE.SphereGeometry(1,16,12),bootMat,boot,[0,-.025,.085],[.066,.062,.137]);mesh(new THREE.CapsuleGeometry(.045,.14,5,12),bootMat,boot,[0,.025,0]);for(let i=0;i<4;i++)mesh(new THREE.BoxGeometry(.078,.005,.006),trim,boot,[0,.025-i*.012,.037+i*.023]);
@@ -84,7 +86,7 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
   }
   root.updateMatrixWorld(true);
   for(const s of ['L','R']){
-   const sign=s==='L'?1:-1,isLead=s===lead;const guard=new THREE.Vector3(sign*(isLead?.14:.11),isLead?1.48:1.52,isLead?.27:.19);
+   const sign=s==='L'?1:-1,isLead=s===lead;const mittMode=opponent&&pose.mode==='mitts',upperMitt=['5','6'].includes(pose.target?.move),guard=mittMode?new THREE.Vector3(sign*.23,upperMitt?1.30:1.51,.34):new THREE.Vector3(sign*(isLead?.14:.11),isLead?1.48:1.52,isLead?.27:.19);
    if(move==='bodyBlock'){guard.y=1.19;guard.z=.24;}
    if(duck)guard.y-=.09;
    let hand=guard.clone();
@@ -92,7 +94,7 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
     let end=target?root.worldToLocal(target.clone()):new THREE.Vector3(0,1.6,.8);end.z-=.12;end.x+=sign*.018;
     hand.z-=motion.load*.07;hand.x+=sign*motion.arc;hand.y+=motion.lift;
     if(['3','4'].includes(state.move)){end.x-=sign*.065;end.z-=.06;end.y-=.03;}
-    if(['5','6'].includes(state.move)){end.y-=.06;}
+    if(['5','6'].includes(state.move)){end.y+=.06;}
     hand.lerp(end,drive*motion.reach);
    }
    const shoulder=localPosition(bones['arm'+s]);const pole=new THREE.Vector3(sign*.65,shoulder.y-.52,.05+(s===side?drive*.18:0));limb('arm'+s,'forearm'+s,'hand'+s,hand,pole);
@@ -101,5 +103,7 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
  }
  function headTarget(){return bones.head.localToWorld(new THREE.Vector3(0,.015,.14));}
  function eyePosition(stable=false){return stable?root.localToWorld(new THREE.Vector3(0,1.61,.15)):bones.head.localToWorld(new THREE.Vector3(0,.015,.16));}
- return {root,model,bones,rest,update,headTarget,eyePosition};
+ function setMittMode(value){for(const group of gloveGroups)group.visible=!value;for(const group of mittGroups)group.visible=!!value;}
+ function mittTarget(move){const side=['1','3','5'].includes(String(move))?'L':'R';return bones['hand'+side].localToWorld(new THREE.Vector3(0,.10,.07));}
+ return {root,model,bones,rest,update,headTarget,eyePosition,setMittMode,mittTarget};
 }
