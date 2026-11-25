@@ -30,3 +30,13 @@ test('numbered targets and the trainer mitt stay on the correct first-person pun
  const THREE=await import('three');const{mittHandForPunch,targetLaneForStance}=await import('../src/game/fightPresentation.mjs');const camera=new THREE.PerspectiveCamera(76,1,.025,10);camera.position.set(0,1.6,0);camera.lookAt(0,1.6,1);camera.updateMatrixWorld();
  let s=newTargetRound(0,30,'targets');assert.ok(new THREE.Vector3(s.target.lane,1.6,.85).project(camera).x<0,'jab cue is on the player left');s=targetInput(s,'1',1900);s=stepTargetRound(s,2100);assert.ok(new THREE.Vector3(s.target.lane,1.6,.85).project(camera).x>0,'cross cue is on the player right');assert.equal(mittHandForPunch('1'),'R');assert.equal(mittHandForPunch('5'),'R');assert.equal(mittHandForPunch('2'),'L');assert.equal(mittHandForPunch('6'),'L');assert.equal(mittHandForPunch('1','southpaw'),'L');assert.equal(mittHandForPunch('5','southpaw'),'L');assert.equal(targetLaneForStance(.23,'southpaw'),-.23);
 });
+test('a pending punch cannot score against a replacement target even if the number matches',()=>{
+ let s=targetInput(newTargetRound(0,30,'mitts'),'1',0);s={...s,target:{...s.target,id:99}};s=stepTargetRound(s,150);assert.equal(s.hits,0);
+});
+test('trainer holds the caught mitt through recovery before presenting the next cue',()=>{
+ let s=targetInput(newTargetRound(0,30,'mitts'),'1',0);s=stepTargetRound(s,150);assert.equal(s.target.move,'2');assert.equal(targetPose(s,151).move,'1');assert.equal(targetPose(s,s.target.spawnAt+1).move,'2');
+});
+test('catch positions present only the opposite mitt and turn uppercut pads downward',async()=>{
+ const{mittCatchPose,mittHandForPunch}=await import('../src/game/fightPresentation.mjs');
+ for(const stance of['orthodox','southpaw'])for(const move of['1','2','3','4','5','6']){const side=mittHandForPunch(move,stance),active=mittCatchPose(move,side,stance),idle=mittCatchPose(move,side==='L'?'R':'L',stance);assert.equal(active.active,true);assert.equal(idle.active,false);assert.ok(active.position[2]>idle.position[2]);if(['5','6'].includes(move)){assert.ok(active.normal[1]<-.9);assert.ok(active.position[1]<1.4);}}
+});

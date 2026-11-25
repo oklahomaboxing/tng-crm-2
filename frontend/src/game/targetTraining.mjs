@@ -3,7 +3,7 @@ const COMBOS=[['1','2'],['1','2','3','2'],['5','2','3'],['3','6','2']];
 const SPEED={learn:1700,flow:1350,fast:1050};
 function nextTarget(s,now){
  const sequence=COMBOS[s.sequenceIndex%COMBOS.length],move=s.mode==='mitts'?sequence[s.sequenceStep%sequence.length]:String(s.targetCount%6+1),travel=s.mode==='mitts'?0:SPEED[s.level];
- return {...s,targetCount:s.targetCount+1,target:{id:s.targetCount+1,move,spawnAt:now,arriveAt:now+travel,expiresAt:now+travel+(s.mode==='mitts'?1800:260),lane:Number(move)%2===1?.23:-.23,body:['5','6'].includes(move)},feedback:s.mode==='mitts'?`Mitts: ${sequence.join(' · ')}`:`Incoming ${move}. Time your contact when it reaches range.`};
+ return {...s,targetCount:s.targetCount+1,target:{id:s.targetCount+1,move,spawnAt:now,arriveAt:now+travel,expiresAt:now+travel+(s.mode==='mitts'?({learn:3200,flow:2400,fast:1800}[s.level]):260),lane:Number(move)%2===1?.23:-.23,body:['5','6'].includes(move)},feedback:s.mode==='mitts'?`Mitts: ${sequence.join(' · ')}`:`Incoming ${move}. Time your contact when it reaches range.`};
 }
 export function newTargetRound(now,seconds=120,mode='targets',level='learn'){
  if(!['targets','mitts'].includes(mode)||!SPEED[level])throw Error('Choose a target mode and difficulty.');
@@ -16,11 +16,11 @@ export function stepTargetRound(s,now){
  let next=stepTraining({...s,mode:'bag',pendingPunch:null},now);next={...next,mode:s.mode,target:s.target,pendingPunch:s.pendingPunch};
  if(next.pendingPunch&&now>=next.pendingPunch.impactAt){
   const punch=next.pendingPunch;next.pendingPunch=null;const target=next.target;
-  const inWindow=target&&punch.impactAt>=target.spawnAt&&punch.impactAt>=target.arriveAt-(s.mode==='mitts'?Infinity:430)&&punch.impactAt<=target.expiresAt;
+  const inWindow=target&&punch.targetId===target.id&&punch.impactAt>=target.spawnAt&&punch.impactAt>=target.arriveAt-(s.mode==='mitts'?Infinity:430)&&punch.impactAt<=target.expiresAt;
   if(inWindow&&punch.move===target.move){
    next.hits++;next.points+=s.mode==='mitts'?125:100;next.lastEvent={at:now,type:'landed'};next.result='landed';
    if(s.mode==='mitts'){const seq=COMBOS[s.sequenceIndex%COMBOS.length];next.sequenceStep++;if(next.sequenceStep>=seq.length){next.sequenceStep=0;next.sequenceIndex++;next.completedSequences++;next.points+=200;}}
-   next=nextTarget(next,now+180);
+   next=nextTarget({...next,caughtTarget:s.mode==='mitts'?target:null},Math.max(now+180,s.mode==='mitts'?next.visualUntil||0:0));
   }else{next.lastEvent={at:now,type:'missed'};next.feedback=!inWindow?'Wait until the target enters range.':`Use punch ${target.move} on this mitt.`;next.result='missed';}
  }
  if(next.target&&now>next.target.expiresAt){next.misses++;next.lastEvent={at:now,type:'missed'};if(s.mode==='targets')next.playerHealth=Math.max(0,next.playerHealth-6);next=nextTarget(next,now+300);}
@@ -31,7 +31,8 @@ export function targetInput(s,move,now){
  let next=stepTargetRound(s,now);if(next.result==='finished')return next;
  if(!/^[1-6]$/.test(move))return {...next,feedback:'This drill uses punches 1–6. Focus on the active target.'};
  const target=next.target;const withPunch=trainingInput({...next,mode:'bag'},move,now);
+ if(withPunch.pendingPunch&&withPunch.attempts>next.attempts)withPunch.pendingPunch={...withPunch.pendingPunch,targetId:target?.id};
  return {...withPunch,mode:s.mode,target,sequenceIndex:next.sequenceIndex,sequenceStep:next.sequenceStep,completedSequences:next.completedSequences,targetCount:next.targetCount};
 }
 export function resumeTargetRound(s,pausedAt,now){const shift=Math.max(0,now-pausedAt),next=resumeTraining(s,pausedAt,now);return {...next,target:s.target?{...s.target,spawnAt:s.target.spawnAt+shift,arriveAt:s.target.arriveAt+shift,expiresAt:s.target.expiresAt+shift}:null};}
-export function targetPose(s,now){const target=s.target;return target?{...target,progress:s.mode==='mitts'?1:Math.max(0,Math.min(1.25,(now-target.spawnAt)/(target.arriveAt-target.spawnAt)))}:null;}
+export function targetPose(s,now){const target=s.mode==='mitts'&&s.caughtTarget&&now<s.target?.spawnAt?s.caughtTarget:s.target;return target?{...target,progress:s.mode==='mitts'?1:Math.max(0,Math.min(1.25,(now-target.spawnAt)/(target.arriveAt-target.spawnAt)))}:null;}

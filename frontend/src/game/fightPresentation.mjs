@@ -36,3 +36,9 @@ export function firstPersonPunchPath(move,progress,base,contact=.43,aim=null){
 // A trainer faces the player: the player's left hand meets the trainer's right mitt.
 export function mittHandForPunch(move,stance='orthodox'){const side=['1','3','5'].includes(String(move))?'R':'L';return stance==='southpaw'?(side==='R'?'L':'R'):side;}
 export function targetLaneForStance(lane,stance='orthodox'){return lane*(stance==='southpaw'?-1:1);}
+
+export function mittCatchPose(move,side,stance='orthodox'){
+ const active=side===mittHandForPunch(move,stance),sign=side==='L'?1:-1;
+ const upper=['5','6'].includes(String(move)),hook=['3','4'].includes(String(move));
+ return {active,position:[sign*(active?.24:.30),active?(upper?1.28:1.51):1.38,active?.39:.23],normal:active?(upper?[0,-1,.25]:hook?[sign*.85,0,.55]:[0,0,1]):[0,0,1]};
+}

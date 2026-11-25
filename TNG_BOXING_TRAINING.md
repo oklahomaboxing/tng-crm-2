@@ -67,3 +67,11 @@ The default fictional training gym has a ring, clear walkway, bag lane, warm-up 
 For a home-screen shortcut, open TNGOS in Safari and choose Share → Add to Home Screen, or use the Android browser's Install/Add to Home Screen command when available. Sign in as an administrator and open the boxing game. The root standalone manifest preserves the normal account entry; it does not add offline access or a native APK.
 
 Validation: 101 frontend tests, production build, and Chromium checks of portrait/landscape play, multi-touch scoring, setup selectors, three-round results, wake-lock lifecycle, rotation, environment switching and the real AppShell fullscreen fallback. No browser console errors occurred. Physical Android/iPhone GPU and installation behavior still require device testing.
+
+## Opposite-hand mitt catching and swipe punches
+
+The trainer presents the anatomical opposite hand for each punch in both stances: trainer right catches player left, trainer left catches player right. Only the active mitt is extended; straight pads face the player, hook pads angle outward into the punch, and uppercut pads face downward. Contact points now come from the padded face's actual transform. The trainer updates before glove targeting, and the caught mitt holds through recovery before the next cue is presented. Each pending punch is bound to its original target ID to prevent credit against a replacement cue. Mitt response windows are 3.2/2.4/1.8 seconds for Learn/Flow/Fast.
+
+In first-person view, touch the unobstructed scene: tap for a straight, swipe sideways for a hook, swipe upward for an uppercut. The starting screen half selects the anatomical left/right hand, and punch numbering mirrors for southpaw. Downward/diagonal swipes, long holds, canceled touches, mouse events, paused play and other camera modes do not throw swipe punches. Buttons and keyboard remain available. Swipes use the existing stamina, recovery and combination resolver, with no extra scoring path.
+
+Validation: 108 frontend tests include actual rig pad positions/normals, both stances, target identity/recovery, gesture classification and pointer cancellation. Chromium phone touch tests completed a jab–cross mitt combination for 450 points and exercised hook/uppercut swipes without console errors. Physical touch devices still require performance testing.

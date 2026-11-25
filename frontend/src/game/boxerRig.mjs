@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import{punchMotion,sampleMotion,mittHandForPunch}from'./fightPresentation.mjs';
+import{punchMotion,sampleMotion,mittHandForPunch,mittCatchPose}from'./fightPresentation.mjs';
 import{clone}from'three/addons/utils/SkeletonUtils.js';
 const V=(a)=>new THREE.Vector3().fromArray(a),UP=new THREE.Vector3(0,1,0),clamp=THREE.MathUtils.clamp;
 export function solveLimb(start,target,a,b,pole){
@@ -86,7 +86,7 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
   }
   root.updateMatrixWorld(true);
   for(const s of ['L','R']){
-   const sign=s==='L'?1:-1,isLead=s===lead;const mittMode=opponent&&pose.mode==='mitts',upperMitt=['5','6'].includes(pose.target?.move),guard=mittMode?new THREE.Vector3(sign*.23,upperMitt?1.30:1.51,.34):new THREE.Vector3(sign*(isLead?.14:.11),isLead?1.48:1.52,isLead?.27:.19);
+   const sign=s==='L'?1:-1,isLead=s===lead;const mittMode=opponent&&pose.mode==='mitts',catchPose=mittCatchPose(pose.target?.move,s,stance),guard=mittMode?new THREE.Vector3(...catchPose.position):new THREE.Vector3(sign*(isLead?.14:.11),isLead?1.48:1.52,isLead?.27:.19);
    if(move==='bodyBlock'){guard.y=1.19;guard.z=.24;}
    if(duck)guard.y-=.09;
    let hand=guard.clone();
@@ -98,12 +98,13 @@ export function createBoxer(source,meta,{kit=0xc71e3b,skin=0xb77c59,bumpMap,lowD
     hand.lerp(end,drive*motion.reach);
    }
    const shoulder=localPosition(bones['arm'+s]);const pole=new THREE.Vector3(sign*.65,shoulder.y-.52,.05+(s===side?drive*.18:0));limb('arm'+s,'forearm'+s,'hand'+s,hand,pole);
+   if(mittMode){const mitt=mittGroups[s==='L'?0:1],world=root.getWorldQuaternion(new THREE.Quaternion()).multiply(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),new THREE.Vector3(...catchPose.normal).normalize()));mitt.quaternion.copy(bones['hand'+s].getWorldQuaternion(new THREE.Quaternion()).invert().multiply(world));}
   }
   root.updateMatrixWorld(true);
  }
  function headTarget(){return bones.head.localToWorld(new THREE.Vector3(0,.015,.14));}
  function eyePosition(stable=false){return stable?root.localToWorld(new THREE.Vector3(0,1.61,.15)):bones.head.localToWorld(new THREE.Vector3(0,.015,.16));}
  function setMittMode(value){for(const group of gloveGroups)group.visible=!value;for(const group of mittGroups)group.visible=!!value;}
- function mittTarget(move,stance){const side=mittHandForPunch(move,stance);return bones['hand'+side].localToWorld(new THREE.Vector3(0,.10,.07));}
+ function mittTarget(move,stance){const side=mittHandForPunch(move,stance);return mittGroups[side==='L'?0:1].localToWorld(new THREE.Vector3(0,.10,.072));}
  return {root,model,bones,rest,update,headTarget,eyePosition,setMittMode,mittTarget};
 }

@@ -8,6 +8,7 @@ import{createBoxer}from'./boxerRig.mjs';
 import{createTrainingEquipment}from'./trainingEquipment.mjs';
 import{createFirstPersonHands}from'./firstPersonHands.mjs';
 import{broadcastFrame,firstPersonLens,targetLaneForStance}from'./fightPresentation.mjs';
+import{bindSwipePunch}from'./swipePunch.mjs';
 import './boxing3d.css';
 let assetPromise;
 function assets(){if(!assetPromise)assetPromise=Promise.all([new GLTFLoader().loadAsync('/game/assets/boxer-rig-v1.glb'),fetch('/game/assets/boxer-rig-v1.json').then(r=>{if(!r.ok)throw Error('Fighter metadata unavailable');return r.json();})]).catch(e=>{assetPromise=null;throw e;});return assetPromise;}
@@ -47,10 +48,10 @@ function buildArena(scene,low=false,venue='gym'){
  const bag=new THREE.Group();const bagMat=new THREE.MeshPhysicalMaterial({color:0x171c26,roughness:.43,clearcoat:.15,bumpMap:low?null:noise,bumpScale:.003});const body=new THREE.Mesh(new THREE.CapsuleGeometry(.19,.88,8,24),bagMat);body.position.y=.83;body.castShadow=true;bag.add(body);for(const y of[.43,1.22]){const band=new THREE.Mesh(new THREE.CylinderGeometry(.195,.195,.065,24),red);band.position.y=y;bag.add(band);}const bagLabel=new THREE.Mesh(new THREE.PlaneGeometry(.27,.10),new THREE.MeshStandardMaterial({map:brand('TNG','TRAINING'),roughness:.6}));bagLabel.position.set(0,.91,.2);bag.add(bagLabel);for(const x of[-.12,.12]){const chain=new THREE.Mesh(new THREE.CylinderGeometry(.006,.006,1.1,6),metal);chain.position.set(x,1.85,0);chain.rotation.z=x*.2;bag.add(chain);}scene.add(bag);
  return {noise,shadows,bag};
 }
-export default function BoxingArena3D({animation={},stance='orthodox',active,effects=true,quality='auto',camera='firstperson',outfit='pro',venue='gym',onReady,onError,onFocusArena}){
- const host=useRef(null),latest=useRef(null),sceneControls=useRef(null);latest.current={animation,stance,active,effects,camera,onReady,onError,onFocusArena};const[loading,setLoading]=useState(true),[failure,setFailure]=useState(''),[attempt,setAttempt]=useState(0);
+export default function BoxingArena3D({animation={},stance='orthodox',active,effects=true,quality='auto',camera='firstperson',outfit='pro',venue='gym',onReady,onError,onFocusArena,onSwipePunch}){
+ const host=useRef(null),latest=useRef(null),sceneControls=useRef(null);latest.current={animation,stance,active,effects,camera,onReady,onError,onFocusArena,onSwipePunch};const[loading,setLoading]=useState(true),[failure,setFailure]=useState(''),[attempt,setAttempt]=useState(0);
  useEffect(()=>{
-  let alive=true,renderer,frame,observer,controls,environment,scene,viewHands;const container=host.current;setLoading(true);setFailure('');latest.current.onReady?.(false);
+  let alive=true,renderer,frame,observer,controls,environment,scene,viewHands,removeSwipes=()=>{};const container=host.current;setLoading(true);setFailure('');latest.current.onReady?.(false);
   try{
    const low=quality==='battery'||(quality==='auto'&&(window.innerWidth<760||window.matchMedia('(pointer:coarse)').matches));renderer=new THREE.WebGLRenderer({antialias:!low,alpha:false,powerPreference:low?'low-power':'high-performance'});renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
    renderer.domElement.setAttribute('aria-label','Interactive 3D boxing arena. Drag to orbit the camera.');renderer.domElement.setAttribute('role','img');container.appendChild(renderer.domElement);
@@ -64,7 +65,7 @@ export default function BoxingArena3D({animation={},stance='orthodox',active,eff
    const manual=()=>{manualUntil=performance.now()+5000;};controls.addEventListener('start',manual);controls.addEventListener('end',manual);
    const sweatCount=low?8:18,sweat=new THREE.InstancedMesh(new THREE.SphereGeometry(.007,5,4),new THREE.MeshBasicMaterial({color:0xc7e0ec,transparent:true,opacity:.65,depthWrite:false}),sweatCount),drops=[];sweat.frustumCulled=false;sweat.visible=false;scene.add(sweat);const dropMatrix=new THREE.Object3D();
    const resize=()=>{const width=Math.max(1,container.clientWidth),height=Math.max(1,container.clientHeight);currentLow=quality==='battery'||(quality==='auto'&&(width<760||window.matchMedia('(pointer:coarse)').matches));renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,currentLow?1:quality==='high'?1.75:1.25));renderer.shadowMap.enabled=!currentLow;renderer.setSize(width,height,false);perspective.aspect=width/height;perspective.updateProjectionMatrix();};observer=new ResizeObserver(resize);observer.observe(container);resize();
-   const focus=()=>latest.current.onFocusArena?.();renderer.domElement.addEventListener('pointerdown',focus);
+   removeSwipes=bindSwipePunch(renderer.domElement,()=>latest.current);const focus=()=>latest.current.onFocusArena?.();renderer.domElement.addEventListener('pointerdown',focus);
    const contextLost=e=>{e.preventDefault();if(alive){setFailure('The graphics context paused. Reload the arena to continue.');latest.current.onError?.('3D graphics paused. Your round has been paused.');}};renderer.domElement.addEventListener('webglcontextlost',contextLost);
    assets().then(([gltf,meta])=>{
     if(!alive)return;player=createBoxer(gltf.scene,meta,{kit:0xc51b37,skin:0xb57a56,bumpMap:ring.noise,lowDetail:low,outfit});partner=createBoxer(gltf.scene,meta,{kit:0x174a8b,skin:0x79533d,bumpMap:ring.noise,lowDetail:low,outfit});scene.add(player.root,partner.root);player.root.position.set(0,.18,-.48);partner.root.position.set(0,.18,.35);partner.root.rotation.y=Math.PI;setLoading(false);latest.current.onReady?.(true);
@@ -76,7 +77,8 @@ export default function BoxingArena3D({animation={},stance='orthodox',active,eff
      const distance=p.distance??1.4,gap=s.camera==='firstperson'?Math.max(.95,Math.min(2.6,distance)):.4+Math.max(.45,Math.min(2.6,distance))*.24,targetPlayer=new THREE.Vector3((p.angle||0)*.3,.18,-gap*.5),targetPartner=new THREE.Vector3(0,.18,gap*.5);
      player.root.position.lerp(targetPlayer,Math.min(1,dt*10));partner.root.position.lerp(targetPartner,Math.min(1,dt*10));const facing=Math.atan2(partner.root.position.x-player.root.position.x,partner.root.position.z-player.root.position.z);player.root.rotation.y=facing;partner.root.rotation.y=facing+Math.PI;
      partner.root.visible=!['bag','targets'].includes(mode);partner.setMittMode(mode==='mitts');ring.bag.visible=mode==='bag';ring.bag.position.set(0,.18,gap*.5);ring.bag.rotation.z=p.hit&&s.effects?Math.sin(visualNow*.018)*.035:0;
-     const target=mode==='mitts'&&p.target?partner.mittTarget(p.target.move,s.stance):mode==='targets'&&p.target?player.root.localToWorld(new THREE.Vector3(targetLaneForStance(p.target.lane,s.stance),p.target.body?1.35:1.62,.85)):mode==='bag'?new THREE.Vector3(0,1.25,gap*.5-.18):partner.headTarget();player.root.visible=s.camera!=='firstperson';player.update(p,visualNow,dt,{stance:s.stance,target,active:s.active&&s.effects});partner.update(p,visualNow,dt,{opponent:true,target:player.headTarget(),active:s.active&&s.effects});
+     partner.update(p,visualNow,dt,{opponent:true,stance:s.stance,target:player.headTarget(),active:s.active&&s.effects});
+     const target=mode==='mitts'&&p.target?partner.mittTarget(p.target.move,s.stance):mode==='targets'&&p.target?player.root.localToWorld(new THREE.Vector3(targetLaneForStance(p.target.lane,s.stance),p.target.body?1.35:1.62,.85)):mode==='bag'?new THREE.Vector3(0,1.25,gap*.5-.18):partner.headTarget();player.root.visible=s.camera!=='firstperson';player.update(p,visualNow,dt,{stance:s.stance,target,active:s.active&&s.effects});
      for(const[i,boxer]of[player,partner].entries()){ring.shadows[i].position.x=boxer.root.position.x;ring.shadows[i].position.z=boxer.root.position.z;ring.shadows[i].visible=i===0||!['bag','targets'].includes(mode);}
      if((p.playerHit||p.hit)&&p.id!==lastHit){lastHit=p.id;impact=s.effects ? .024 : 0;if(s.effects&&!['bag','targets','mitts'].includes(mode)){const origin=p.playerHit?player.headTarget():partner.headTarget();drops.length=0;for(let i=0;i<sweatCount;i++)drops.push({position:origin.clone(),velocity:new THREE.Vector3(Math.sin(i*2.4)*.55,.3+(i%4)*.11,Math.cos(i*2.4)*.55),life:.26});}}
      trainingEquipment.update(p,player,partner,dt,s.stance);impact=Math.max(0,impact-dt*.12);
@@ -90,13 +92,13 @@ export default function BoxingArena3D({animation={},stance='orthodox',active,eff
     }catch{cancelAnimationFrame(frame);if(alive){setFailure('The 3D scene stopped. Reload the arena to continue.');latest.current.onError?.('3D rendering stopped. Your round has been paused.');}}
    };frame=requestAnimationFrame(render);
    return()=>{
-    alive=false;cancelAnimationFrame(frame);observer.disconnect();controls.removeEventListener('start',manual);controls.removeEventListener('end',manual);renderer.domElement.removeEventListener('pointerdown',focus);renderer.domElement.removeEventListener('webglcontextlost',contextLost);controls.dispose();sceneControls.current=null;
+    alive=false;removeSwipes();cancelAnimationFrame(frame);observer.disconnect();controls.removeEventListener('start',manual);controls.removeEventListener('end',manual);renderer.domElement.removeEventListener('pointerdown',focus);renderer.domElement.removeEventListener('webglcontextlost',contextLost);controls.dispose();sceneControls.current=null;
     const geos=new Set(),materials=new Set(),textures=new Set();scene.traverse(o=>{if(o.geometry)geos.add(o.geometry);for(const m of(o.material?Array.isArray(o.material)?o.material:[o.material]:[])){materials.add(m);for(const v of Object.values(m))if(v?.isTexture)textures.add(v);}});for(const t of textures)t.dispose();for(const m of materials)m.dispose();for(const g of geos)g.dispose();trainingEquipment.dispose();viewHands?.dispose();environment?.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();
    };
   }catch{
    renderer?.dispose();renderer?.domElement?.remove();setFailure('3D graphics are unavailable in this browser. Try a current browser with WebGL 2 enabled.');latest.current.onError?.('3D graphics could not start. Try another browser or device.');
   }
-  return()=>{alive=false;cancelAnimationFrame(frame);observer?.disconnect();controls?.dispose();viewHands?.dispose();environment?.dispose();renderer?.dispose();};
+  return()=>{alive=false;removeSwipes();cancelAnimationFrame(frame);observer?.disconnect();controls?.dispose();viewHands?.dispose();environment?.dispose();renderer?.dispose();};
  },[quality,attempt,outfit,venue]);
  return <div className="tng-3d-viewport"><div className="tng-3d-canvas" ref={host}/><div className="tng-ring-lens" aria-hidden="true"/>{loading&&!failure&&<div className="tng-3d-loading" role="status"><span className="tng-3d-loader"/>Loading rigged fighters…</div>}{failure&&<div className="tng-3d-loading" role="alert"><strong>3D arena unavailable</strong><p>{failure}</p><button type="button" onClick={()=>setAttempt(n=>n+1)}>Reload arena</button></div>}</div>;
 }
