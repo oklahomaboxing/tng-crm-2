@@ -47,3 +47,7 @@ backups/
 App_broken_backup.jsx
 
 backend/.env
+
+# Unity export is built locally and published only after Editor validation.
+frontend/public/boxing-unity/
+unity/**/__pycache__/
