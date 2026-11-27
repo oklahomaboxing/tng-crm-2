@@ -1,0 +1,3 @@
+import test from'node:test';import assert from'node:assert/strict';import{experienceClass,experienceLabel}from'../src/amateurs/experience.mjs';
+test('reported experience classes put exactly ten in novice and eleven in open',()=>{for(const n of[0,7,8,9,10,'10'])assert.equal(experienceClass(n),'novice');for(const n of[11,12,'11'])assert.equal(experienceClass(n),'open');assert.equal(experienceLabel(10),'Novice · 0–10 bouts');assert.equal(experienceLabel(11),'Open · 11+ bouts');});
+test('missing and invalid bout counts do not masquerade as novice',()=>{for(const n of[null,undefined,'',' ',false,-1,8.5,'8.0',1001])assert.equal(experienceClass(n),'review');});

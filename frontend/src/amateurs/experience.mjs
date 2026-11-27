@@ -1,0 +1,2 @@
+export function experienceClass(bouts){if(bouts===null||bouts===undefined||bouts===''||typeof bouts==='boolean')return 'review';if(typeof bouts==='string'&&!/^\d+$/.test(bouts.trim()))return 'review';const n=Number(bouts);return Number.isInteger(n)&&n>=0&&n<=1000?n<=10?'novice':'open':'review';}
+export function experienceLabel(bouts){return {novice:'Novice · 0–10 bouts',open:'Open · 11+ bouts',review:'Experience needs review'}[experienceClass(bouts)];}

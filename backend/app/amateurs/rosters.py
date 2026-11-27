@@ -10,8 +10,9 @@ from app.database import Base,get_db
 from app.core.dependencies import current_user
 from app.models import SecurityLog
 from app.matchmaker.models import BoxingEvent
+from .experience import experience_class,POLICY as EXPERIENCE_POLICY
 router=APIRouter(prefix='/api/amateurs',tags=['Amateur matchmaking'])
-DEFAULT_PREFERENCES={'max_bout_gap':5,'allow_same_club':False,'allow_coed_peewee':False,'max_unlimited_weight_gap_lb':20}
+DEFAULT_PREFERENCES={'max_bout_gap':5,'allow_same_club':False,'allow_coed_peewee':False,'max_unlimited_weight_gap_lb':20,'allow_novice_open_consideration':True}
 SOURCE='https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt5ff28f6e78e9624d/695ed2d8b45570d8a64b74b9/USA_Boxing_Rule_Book_Revisions_-_1.1.2026.pdf'
 
 class AmateurRoster(Base):
@@ -163,7 +164,7 @@ def entry_dict(row,event_date=None):
         dob=date.fromisoformat(d['dob'])
         if event_date:age=event_date.year-dob.year-((event_date.month,event_date.day)<(dob.month,dob.day));calendar_age=event_date.year-dob.year
     except (ValueError,KeyError):pass
-    return {'id':row.id,'row_number':row.row_number,'data':d,'issues':row.issues,'excluded':row.excluded,'version':row.version,'birthday_age_at_event':age,'calendar_year_age':calendar_age}
+    return {'id':row.id,'row_number':row.row_number,'data':d,'issues':row.issues,'excluded':row.excluded,'version':row.version,'experience_class':experience_class(d.get('bouts')),'birthday_age_at_event':age,'calendar_year_age':calendar_age}
 
 def rule_status(db,year):
     rule=db.query(AmateurRulebook).filter_by(year=year,enabled=True).first()
@@ -205,10 +206,11 @@ def get_roster(roster_id:int,response:Response,db=Depends(get_db),user=Depends(a
         rule=db.get(AmateurRulebook,latest.rulebook_id)
         stale=not r.competition_date or not rule or not rule.enabled or latest.competition_date!=r.competition_date or latest.roster_fingerprint!=roster_fingerprint(r,rule,rows)
         last_match={'run_id':latest.id,**latest.result,'stale':bool(stale)}
-    return {'id':r.id,'name':r.name,'file_name':r.file_name,'competition_date':r.competition_date.isoformat() if r.competition_date else None,'event_id':r.event_id,'version':r.version,'last_match':last_match,'preferences':r.preferences or DEFAULT_PREFERENCES,'entries':[entry_dict(x,r.competition_date) for x in rows],'rules':rule_status(db,r.competition_date.year if r.competition_date else 2027),'notice':'Roster weights and bout counts are declared values, not weigh-in results or verified competition history. Upload does not verify USA Boxing membership, medical clearance or eligibility.'}
+    return {'id':r.id,'name':r.name,'file_name':r.file_name,'competition_date':r.competition_date.isoformat() if r.competition_date else None,'event_id':r.event_id,'version':r.version,'last_match':last_match,'experience_policy':EXPERIENCE_POLICY,'preferences':{**DEFAULT_PREFERENCES,**(r.preferences or {})},'entries':[entry_dict(x,r.competition_date) for x in rows],'rules':rule_status(db,r.competition_date.year if r.competition_date else 2027),'notice':'Roster weights and bout counts are declared values, not weigh-in results or verified competition history. Upload does not verify USA Boxing membership, medical clearance or eligibility.'}
 
 class MatchPreferences(BaseModel):
     model_config=ConfigDict(extra='forbid')
+    allow_novice_open_consideration:bool=True
     max_bout_gap:int=Field(default=5,ge=0,le=1000)
     allow_same_club:bool=False
     allow_coed_peewee:bool=False
