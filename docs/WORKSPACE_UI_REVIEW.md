@@ -42,7 +42,7 @@ This source review covers every role-visible navigation entry. Public checkout, 
 | Fighter Portal Videos | Review fighter submissions and footage | admin |
 | Manager Portal | Manager agreements and fighter representation | manager |
 
-### VENUE & OPERATIONS
+### FACILITY MANAGEMENT
 
 | Page | Purpose | Roles |
 | --- | --- | --- |
