@@ -19,3 +19,11 @@ The yearly view displays a linked pair once, with both booking-review and event 
 23 backend booking/quote/yearly tests: 22 passed; one PostgreSQL-only concurrency test skipped without an isolated TEST_DATABASE_URL. Coverage includes annual/leap-year ranges, roles, stale edits, live ticketing locks, booking title edits, linked creation/retry, public creation rejection, atomic conflict rollback, self-overlap exclusion, quote acceptance, cancellation and reopening. All 108 frontend tests and the production build pass.
 
 An isolated browser/API walk-through edited a planning event, verified protected editing was disabled, created a manual linked boxing booking, verified one annual entry and the build-show navigation, and checked phone width with no captured browser errors. Sample screenshots contain fixture data. No live events/bookings or customer messages were changed during testing.
+
+## Date-range filters and declined entries
+
+Yearly Events now hides declined events/bookings, including a linked event whose booking was declined, without deleting records. Time range offers Full selected year, Current & upcoming, Past events, and Next 2 years · planned. Current/planned views exclude ended/completed, cancelled and archived records. Past uses recorded completion or the actual booking end time; today’s all-day events remain current.
+
+Next 2 years is a rolling, inclusive date range from today through the same Oklahoma City date two years later (leap-day anniversaries clamp to February 28). It uses bounded calendar requests of at most 366 days each, deduplicates boundary-spanning records, and groups by month AND year. It does not remove the backend’s one-year-per-request limit. The selected-year controls are replaced by the actual range while using this view. Adding a booking from the current-year/default view now starts with today rather than a past January 1.
+
+Four schedule tests cover declined and linked-declined records, current/past and ongoing bookings, rolling range boundaries, cross-year grouping, merge deduplication, leap days and Oklahoma City/UTC date differences. An isolated browser check verified all views, hidden declined/cancelled records in the planned view, boundary deduplication, default dates and phone width, with no captured browser errors. No production data was changed during testing.
