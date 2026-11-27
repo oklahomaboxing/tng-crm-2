@@ -100,3 +100,7 @@ The UI upgrade is not a multi-tenant product release. Before selling hosted vers
 ## Validation
 
 All 108 frontend tests passed, including navigation ownership, role-limited routes, event deep links and existing game/operations tests. The production Vite build passed. Browser checks used the real AppShell/Dashboard with synthetic read-only fixtures at desktop 1440×1050 and phone 390×844: four scoped dashboard panels, category ownership, Standard/Command switching, mobile navigation, no page overflow, and no captured browser errors. This does not replace live payment, email, text, contract or kiosk acceptance testing. No production data was changed and no messages were sent.
+
+## Overview visual revision
+
+The Overview tab now uses a black/red event spotlight with recorded ticket totals, a compact membership/attendance strip and a separate quick-action grid beside the monitored work queue. The Gym, Promotions and Business tabs keep their dedicated content. No sample event names, chart values or financial figures are stored in production code. Desktop/phone browser checks verified tab separation, no horizontal page overflow, navigation categories and Standard/Command switching with no captured errors. Screenshots use synthetic data only.
