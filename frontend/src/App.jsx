@@ -65,6 +65,7 @@ const FighterRegistration = lazy(() => import("./pages/FighterRegistration.jsx")
 const PublicOfficialAvailability = lazy(() => import('./pages/PublicOfficialAvailability.jsx'));
 const AmateurMatchmaker = lazy(() => import('./pages/AmateurMatchmaker.jsx'));
 const VenueBookings = lazy(() => import('./pages/VenueBookings.jsx'));
+const PublicVenueQuote = lazy(() => import('./pages/PublicVenueQuote.jsx'));
 const PublicVenueBooking = lazy(() => import('./pages/PublicVenueBooking.jsx'));
 const ChefDashboard = lazy(() => import("./pages/ChefDashboard.jsx"));
 const InvestorCenter = lazy(() => import('./pages/InvestorCenter.jsx'));
@@ -143,6 +144,7 @@ function PaymentMessage({ status }) {
 
 function RootEntry() {
   if (/^\/officials\/respond\/?$/.test(window.location.pathname)) return <PublicOfficialAvailability/>;
+  if (/^\/venue\/quote\/?$/.test(window.location.pathname)) return <PublicVenueQuote/>;
   if (/^\/venue\/book\/?$/.test(window.location.pathname)||window.location.hash==='#/venue-booking') return <PublicVenueBooking/>;
   const phoneTicketEvent=legacyPhoneTicketEvent(window.location);
   if(phoneTicketEvent!==null)return <PublicSellerTickets phoneEventId={phoneTicketEvent}/>;

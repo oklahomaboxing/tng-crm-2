@@ -183,7 +183,8 @@ def calendar(response:Response,start:date,end:date,db=Depends(get_db),user=Depen
     inbox=db.query(VenueBooking).filter_by(status='requested').order_by(VenueBooking.created_at).limit(200).all()
     events=db.query(BoxingEvent).filter(BoxingEvent.event_date>=start.isoformat(),BoxingEvent.event_date<end.isoformat()).order_by(BoxingEvent.event_date).all()
     cfg=db.get(VenueSettings,1);blocking_ids={ev.id for ev,_,_ in reserved_events(db)}
-    return {'bookings':[serialize(r) for r in rows],'requests':[serialize(r) for r in inbox],'events':[{'id':x.id,'name':x.name,'date':x.event_date,'venue':x.venue,'status':x.status,'blocks_facility':x.id in blocking_ids} for x in events],'settings':{'enabled':cfg.enabled if cfg else True,'version':cfg.version if cfg else 1},'timezone':'America/Chicago','public_url':os.getenv('TNG_APP_URL','https://tngos.tngboxinggym.com').rstrip('/')+'/venue/book'}
+    from .venue_quotes import calendar_quote_states
+    return {'quote_statuses':calendar_quote_states(db,rows+inbox),'bookings':[serialize(r) for r in rows],'requests':[serialize(r) for r in inbox],'events':[{'id':x.id,'name':x.name,'date':x.event_date,'venue':x.venue,'status':x.status,'blocks_facility':x.id in blocking_ids} for x in events],'settings':{'enabled':cfg.enabled if cfg else True,'version':cfg.version if cfg else 1},'timezone':'America/Chicago','public_url':os.getenv('TNG_APP_URL','https://tngos.tngboxinggym.com').rstrip('/')+'/venue/book'}
 
 @router.post('/bookings')
 def internal_request(body:BookingBody,db=Depends(get_db),user=Depends(staff)):
@@ -199,6 +200,13 @@ def review(booking_id:int,body:ReviewBody,db=Depends(get_db),user=Depends(staff)
     end=utc_local(body.ends_local) if body.ends_local else row.ends_at
     if (start,end)!=(row.starts_at,row.ends_at) and start<datetime.utcnow():raise HTTPException(422,'Choose a future start time when rescheduling')
     if body.status in BLOCKING and conflicts(db,start,end,row.id):raise HTTPException(409,'This overlaps another reserved booking or an event at TNG. Resolve the conflict before reserving')
+    if (start,end)!=(row.starts_at,row.ends_at):
+        from .venue_quotes import latest,paid
+        q=latest(db,row.id)
+        if q and paid(db,q):raise HTTPException(409,'A receipt is recorded. Resolve the payment before rescheduling this quoted booking')
+    if body.status=='confirmed':
+        from .venue_quotes import check_quote_confirmation
+        check_quote_confirmation(db,row,start,end)
     row.starts_at=start;row.ends_at=end
     row.status=body.status;row.staff_notes=body.staff_notes.strip();row.updated_by=user.id;row.updated_at=datetime.utcnow();row.version+=1;audit(db,user,row,'UPDATED');db.commit();return serialize(row)
 
@@ -207,3 +215,6 @@ def settings(body:SettingsBody,db=Depends(get_db),user=Depends(staff)):
     lock_calendar(db);row=config(db)
     if row.version!=body.version:raise HTTPException(409,'Settings changed. Refresh before updating')
     row.enabled=body.enabled;row.version+=1;db.add(SecurityLog(user_id=user.id,action='VENUE_REQUESTS_TOGGLED',description=f'Facility request form enabled: {row.enabled}'));db.commit();return {'enabled':row.enabled,'version':row.version}
+
+# Register quote models before the application's metadata initialization.
+from . import venue_quotes
