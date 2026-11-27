@@ -48,6 +48,15 @@ class VenueBooking(Base):
     created_at=Column(DateTime,default=datetime.utcnow,nullable=False)
     updated_at=Column(DateTime,default=datetime.utcnow,nullable=False)
 
+class VenueBookingPromotion(Base):
+    __tablename__='venue_booking_promotions'
+    booking_id=Column(Integer,ForeignKey('venue_bookings.id'),primary_key=True)
+    event_id=Column(Integer,ForeignKey('boxing_events.id'),nullable=False,unique=True)
+
+def promotion_reference(db,booking_id):
+    link=db.get(VenueBookingPromotion,booking_id)
+    return {'promotion_event_id':link.event_id if link else None}
+
 class BookingBody(BaseModel):
     model_config=ConfigDict(extra='forbid')
     title:str=Field(min_length=2,max_length=160)
@@ -61,6 +70,7 @@ class BookingBody(BaseModel):
     details:str=Field(default='',max_length=4000)
     request_key:str=Field(min_length=16,max_length=80)
     acknowledge:bool
+    create_promotion_event:bool=False
     website_confirmation:str=Field(default='',max_length=300)
     @model_validator(mode='after')
     def validate_booking(self):
@@ -81,6 +91,7 @@ class ReviewBody(BaseModel):
     status:Literal['requested','on_hold','confirmed','declined','cancelled']
     staff_notes:str=Field(default='',max_length=8000)
     version:int=Field(ge=1)
+    title:str|None=Field(default=None,min_length=2,max_length=160)
     starts_local:datetime|None=None
     ends_local:datetime|None=None
     @model_validator(mode='after')
@@ -126,7 +137,8 @@ def reserved_events(db):
 def conflicts(db,start,end,exclude=None):
     q=db.query(VenueBooking).filter(VenueBooking.status.in_(BLOCKING),VenueBooking.starts_at<end,VenueBooking.ends_at>start)
     if exclude:q=q.filter(VenueBooking.id!=exclude)
-    return bool(q.first()) or any(s<end and e>start for _,s,e in reserved_events(db))
+    linked=db.get(VenueBookingPromotion,exclude) if exclude else None
+    return bool(q.first()) or any(s<end and e>start and (not linked or ev.id!=linked.event_id) for ev,s,e in reserved_events(db))
 
 def serialize(row):
     fields=('id','reference','title','event_type','contact_name','email','phone','guests','details','staff_notes','status','source','version','created_by','updated_by')
@@ -159,6 +171,7 @@ def public_request(body:BookingBody,request:Request,response:Response,db=Depends
     lock_calendar(db);c=config(db)
     if not c.enabled:raise HTTPException(409,'Facility requests are currently closed')
     if body.website_confirmation:return {'received':True,'status':'requested'}
+    if body.create_promotion_event:raise HTTPException(403,'Only staff can create a promotions event')
     return save_request(db,body,request_key='public:'+body.request_key)
 
 def save_request(db,body,user=None,request_key=None):
@@ -167,12 +180,18 @@ def save_request(db,body,user=None,request_key=None):
     prior=db.query(VenueBooking).filter_by(request_key=key).first()
     if prior:
         if (prior.email,prior.title,prior.starts_at,prior.ends_at)!=(email,body.title,start,end):raise HTTPException(409,'This request key was already used. Start a new request')
-        return {'received':True,'reference':prior.reference,'status':prior.status}
+        return {'received':True,'reference':prior.reference,'status':prior.status,**promotion_reference(db,prior.id)}
     if conflicts(db,start,end):raise HTTPException(409,'That time overlaps a confirmed booking, hold or TNG event at this facility. Choose another time or contact TNG')
     row=VenueBooking(reference='TNG-V-'+secrets.token_hex(5).upper(),request_key=key,title=body.title,event_type=body.event_type,contact_name=body.contact_name,email=email,phone=body.phone,starts_at=start,ends_at=end,guests=body.guests,details=body.details.strip(),status='requested',source='staff' if user else 'public',created_by=user.id if user else None)
     db.add(row);db.flush()
+    if body.create_promotion_event:
+        if not user:raise HTTPException(403,'Staff access required')
+        from .venue_planning import PlanningEventBody,conflicts_for_event
+        plan=PlanningEventBody(name=row.title,event_date=body.starts_local.date(),venue='TNG Boxing',venue_address=ADDRESS)
+        conflicts_for_event(db,plan)
+        event=BoxingEvent(slug='tng-event-'+secrets.token_hex(8),name=row.title,event_date=plan.event_date.isoformat(),venue=plan.venue,venue_address=plan.venue_address,status='planning');db.add(event);db.flush();db.add(VenueBookingPromotion(booking_id=row.id,event_id=event.id));audit(db,user,row,'PROMOTION_EVENT_CREATED')
     if user:audit(db,user,row,'CREATED')
-    db.commit();return {'received':True,'reference':row.reference,'status':'requested'}
+    db.commit();return {'received':True,'reference':row.reference,'status':'requested',**promotion_reference(db,row.id)}
 
 @router.get('/calendar')
 def calendar(response:Response,start:date,end:date,db=Depends(get_db),user=Depends(staff)):
@@ -184,7 +203,9 @@ def calendar(response:Response,start:date,end:date,db=Depends(get_db),user=Depen
     events=db.query(BoxingEvent).filter(BoxingEvent.event_date>=start.isoformat(),BoxingEvent.event_date<end.isoformat()).order_by(BoxingEvent.event_date).all()
     cfg=db.get(VenueSettings,1);blocking_ids={ev.id for ev,_,_ in reserved_events(db)}
     from .venue_quotes import calendar_quote_states
-    return {'quote_statuses':calendar_quote_states(db,rows+inbox),'bookings':[serialize(r) for r in rows],'requests':[serialize(r) for r in inbox],'events':[{'id':x.id,'name':x.name,'date':x.event_date,'venue':x.venue,'status':x.status,'blocks_facility':x.id in blocking_ids} for x in events],'settings':{'enabled':cfg.enabled if cfg else True,'version':cfg.version if cfg else 1},'timezone':'America/Chicago','public_url':os.getenv('TNG_APP_URL','https://tngos.tngboxinggym.com').rstrip('/')+'/venue/book'}
+    from .venue_planning import event_result
+    links=db.query(VenueBookingPromotion).all();by_booking={x.booking_id:x.event_id for x in links};by_event={x.event_id:x.booking_id for x in links}
+    return {'quote_statuses':calendar_quote_states(db,rows+inbox),'bookings':[{**serialize(r),'promotion_event_id':by_booking.get(r.id)} for r in rows],'requests':[{**serialize(r),'promotion_event_id':by_booking.get(r.id)} for r in inbox],'events':[{**event_result(db,x),'booking_id':by_event.get(x.id),'blocks_facility':x.id in blocking_ids} for x in events],'settings':{'enabled':cfg.enabled if cfg else True,'version':cfg.version if cfg else 1},'timezone':'America/Chicago','public_url':os.getenv('TNG_APP_URL','https://tngos.tngboxinggym.com').rstrip('/')+'/venue/book'}
 
 @router.post('/bookings')
 def internal_request(body:BookingBody,db=Depends(get_db),user=Depends(staff)):
@@ -207,6 +228,26 @@ def review(booking_id:int,body:ReviewBody,db=Depends(get_db),user=Depends(staff)
     if body.status=='confirmed':
         from .venue_quotes import check_quote_confirmation
         check_quote_confirmation(db,row,start,end)
+    linked=db.get(VenueBookingPromotion,row.id)
+    cancellation_changed=body.status!=row.status and (body.status in ('cancelled','declined') or row.status in ('cancelled','declined'))
+    if linked and ((start,end)!=(row.starts_at,row.ends_at) or (body.title is not None and body.title.strip()!=row.title) or cancellation_changed):
+        from .venue_planning import protected_event,PlanningEventBody,conflicts_for_event
+        event=db.query(BoxingEvent).filter_by(id=linked.event_id).with_for_update().one()
+        if protected_event(db,event,ignore_link=True,allow_cancelled=row.status in ('cancelled','declined')):raise HTTPException(409,'The linked boxing event has live records. Coordinate schedule changes in its event workspace')
+        plan=PlanningEventBody(name=body.title or row.title,event_date=start.replace(tzinfo=timezone.utc).astimezone(TZ).date(),venue=event.venue,venue_address=event.venue_address)
+        if body.status not in ('cancelled','declined'):conflicts_for_event(db,plan,event.id,row.id)
+        event.name=plan.name;event.event_date=plan.event_date.isoformat()
+        if body.status in ('cancelled','declined'):event.status='cancelled'
+        elif cancellation_changed:event.status='planning'
+    for field in ('title',):
+        value=getattr(body,field)
+        if value is not None:
+            value=value.strip() if isinstance(value,str) else value
+            if field in ('title','event_type') and len(value)<2:raise HTTPException(422,'Enter complete event names and types')
+            if value!=getattr(row,field):
+                from .venue_quotes import latest
+                if latest(db,row.id):raise HTTPException(409,'This booking has a quote. Coordinate changes to its event details before editing')
+                setattr(row,field,value)
     row.starts_at=start;row.ends_at=end
     row.status=body.status;row.staff_notes=body.staff_notes.strip();row.updated_by=user.id;row.updated_at=datetime.utcnow();row.version+=1;audit(db,user,row,'UPDATED');db.commit();return serialize(row)
 
@@ -218,3 +259,5 @@ def settings(body:SettingsBody,db=Depends(get_db),user=Depends(staff)):
 
 # Register quote models before the application's metadata initialization.
 from . import venue_quotes
+
+from . import venue_planning
