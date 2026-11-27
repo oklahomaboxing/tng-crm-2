@@ -68,3 +68,8 @@
 .tng-command .tng-event-command {background:linear-gradient(125deg,#102d43ed,#081726f5);border-color:#66dfff45;box-shadow:0 12px 36px #0004;}
 .tng-command .tng-event-step {border-color:#66dfff40;background:#12354b80;color:#e6f4ff;}
 .tng-command .tng-event-step:hover {border-color:#66dfff;background:#16435caa;}
+
+/* Standard workspace: quieter surfaces keep business content in focus. */
+.tng-shell:not(.tng-command){background:#f4f6f9;}
+.tng-workspace-tabs{position:relative;}
+@media(max-width:600px){.tng-workspace-tabs .MuiTab-root{min-width:88px;padding-inline:12px;font-size:12px;}}

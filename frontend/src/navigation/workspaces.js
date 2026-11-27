@@ -78,9 +78,10 @@ export const ROLE_MENUS = {
 };
 
 export const WORKSPACE_GROUPS = [
-  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal', 'Chef & Concessions'] },
+  { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal'] },
   { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer', 'TNG Boxing Game'] },
-  { id: 'boxing', label: 'BOXING & EVENTS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Announcer & DJ', 'Amateur Matchmaker', 'Venue & Event Bookings', 'TNG BOXING EVENTS', 'Fight Recap', 'USA Boxing Officials', 'Oklahoma Boxing Clubs', 'Club Inbox', 'Venue Inbox', 'Officials Inbox', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
+  { id: 'boxing', label: 'TNG PROMOTIONS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Announcer & DJ', 'Amateur Matchmaker', 'TNG BOXING EVENTS', 'Fight Recap', 'USA Boxing Officials', 'Oklahoma Boxing Clubs', 'Club Inbox', 'Officials Inbox', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
+  { id: 'operations', label: 'VENUE & OPERATIONS', description: 'Facility bookings, venue messages and event concessions.', accent: '#487e93', pages: ['Venue & Event Bookings', 'Venue Inbox', 'Chef & Concessions'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },
   { id: 'growth', label: 'MARKETING', description: 'Leads, member communication and referral links.', accent: '#8f83d8', pages: ['Text Inbox', 'Call Center', 'Marketing Center', 'Leads', 'QR Referrals'] },
   { id: 'admin', label: 'ADMINISTRATION', description: 'Connections, account security, users and contact cleanup.', accent: '#7896b3', pages: ['Investor Center', 'Clover', 'Duplicate Review', 'User Management', 'Security Center'] },
@@ -134,7 +135,7 @@ const ALIASES = {
  'Event Check-In':'door scanner fight night scan tickets checkin check in',
  'TNG Apparel':'shirts tee tshirt clothing shop store preorder',
  'Promoter':'matchmaker matchmaking pro boxers scouting signed pdf download contracts',
- 'TNG BOXING EVENTS':'fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget forecast planning break even itemized expenses concessions bar recap paid purses payouts deductions profit loss commission results scorecards judges winners knockout',
+ 'TNG BOXING EVENTS':'boxing events tng promotions fight night promotion signed pdf download contracts paper tickets print batch sponsors sponsorship budget forecast planning break even itemized expenses concessions bar recap paid purses payouts deductions profit loss commission results scorecards judges winners knockout',
  'Marketing Center':'sms txt text email members marketing campaigns',
  'Members':'activate activation reset email resend customer profile',
  'Renewal Reminders':'sms txt text expired expiring membership reminders renew',

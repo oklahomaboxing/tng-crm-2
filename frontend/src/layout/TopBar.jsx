@@ -1,136 +1,33 @@
-import { workspaceGroup } from '../navigation/workspaces';
-import React from "react";
-import MessageNotifications from "../components/MessageNotifications";
-import WorkspaceSearch from "../components/workspace/WorkspaceSearch";
-import {
-  AppBar,
-  Avatar,
-  Box,
-  Button,
-  Chip,
-  IconButton,
-  Stack,
-  Toolbar,
-  Tooltip,
-  Typography, ToggleButton, ToggleButtonGroup,
-} from "@mui/material";
-import AppsRoundedIcon from "@mui/icons-material/AppsRounded";
-import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
-import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
-import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
-import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
-
-function initials(name) {
-  return (name || "TNG")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
-
-export default function TopBar({
-  page,
-  mode, onModeChange, onModules, moduleCenterOpen,
-  role,
-  userName,
-  onMenu,
-  onRefresh,
-  onSync,
-  onLogout,
-  onNavigate,
-  syncing,
-}) {
-  return (
-    <AppBar
-      className="tng-topbar"
-      position="sticky"
-      elevation={0}
-      color="transparent"
-      sx={{
-        top: 0,
-        zIndex: (theme) => theme.zIndex.drawer - 1,
-        bgcolor: "rgba(12,17,26,.97)",color:'#f4f7fb',
-        backdropFilter: "blur(14px)",
-        borderBottom: "1px solid #293240",boxShadow:'inset 0 2px 0 #d71932',
-      }}
-    >
-      <Toolbar sx={{ minHeight: { xs: 68, md: 76 }, gap: 1, flexWrap: {xs:"wrap",md:"nowrap"}, py:{xs:1,md:0} }}>
-        <IconButton
-          onClick={onMenu}
-          sx={{ color:'#dbe6f4',display: { xs: "inline-flex", lg: "none" } }}
-          aria-label="Open navigation"
-        >
-          <MenuRoundedIcon />
-        </IconButton>
-
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography
-            variant="h5"
-            noWrap
-            sx={{fontWeight: 900,  letterSpacing: -0.5 }}
-          >
-            {page}
-          </Typography>
-          <Typography variant="caption" sx={{color:'#8f9caf',letterSpacing:'.07em'}} noWrap>
-            TNGOS / {workspaceGroup(page)?.label || 'WORKSPACE'}
-          </Typography>
-        </Box>
-
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            alignItems: "center",
-            flexWrap: "wrap",
-            justifyContent: "flex-end",
-            maxWidth: "100%",
-          }}
-        >
-          <ToggleButtonGroup size="small" exclusive value={mode||'standard'} onChange={(_,v)=>{if(v)onModeChange?.(v)}} aria-label="Display mode" sx={{bgcolor:'#ffffff09','& .MuiToggleButton-root':{color:'#c8dceb',borderColor:'#527087',fontSize:12,px:1,'&.Mui-selected':{color:'#04121e',bgcolor:'#8de7ff','&:hover':{bgcolor:'#b3f0ff'}}}}}><ToggleButton value="standard">Standard</ToggleButton><ToggleButton value="command">Command</ToggleButton></ToggleButtonGroup>
-          <Tooltip title="All modules and layout settings"><Button color="inherit" onClick={onModules} aria-label="Open module center" sx={{minWidth:44,px:1}}><AppsRoundedIcon/><Box component="span" sx={{display:{xs:'none',xl:'inline'},ml:1}}>Modules</Box></Button></Tooltip>
-          {["admin","staff"].includes(role)&&<MessageNotifications onNavigate={onNavigate}/>}
-          <WorkspaceSearch disabled={moduleCenterOpen} role={role} onNavigate={onNavigate}/>
-          <Tooltip title="Refresh overview metrics">
-            <IconButton onClick={onRefresh} aria-label="Refresh overview metrics" sx={{color:'#aebdd1'}}>
-              <RefreshRoundedIcon />
-            </IconButton>
-          </Tooltip>
-
-          {role === "admin" && (
-            <Button
-              variant="outlined"
-              startIcon={<SyncRoundedIcon />}
-              onClick={onSync}
-              disabled={syncing}
-              sx={{ display: { xs: "none", md: "inline-flex" },color:'#d9e4f2',borderColor:'#394456' }}
-            >
-              {syncing ? "Syncing…" : "Sync Clover"}
-            </Button>
-          )}
-
-          <Chip
-            avatar={
-              <Avatar sx={{ bgcolor: "#111", color: "white" }}>
-                {initials(userName)}
-              </Avatar>
-            }
-            label={userName || role}
-            sx={{
-              display: { xs: "none", sm: "flex" },
-              fontWeight: 750,
-              bgcolor: "#ffffff08",color:'#dbe6f4',
-              border: "1px solid #303c4d",
-            }}
-          />
-
-          <Tooltip title="Logout">
-            <IconButton onClick={onLogout} aria-label="Logout" sx={{color:'#aebdd1'}}>
-              <LogoutRoundedIcon />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      </Toolbar>
-    </AppBar>
-  );
+import React,{useState}from'react';
+import{AppBar,Avatar,Box,Button,Divider,IconButton,Menu,MenuItem,Stack,Toolbar,Tooltip,Typography,ToggleButton,ToggleButtonGroup}from'@mui/material';
+import MenuRoundedIcon from'@mui/icons-material/MenuRounded';
+import AppsRoundedIcon from'@mui/icons-material/AppsRounded';
+import RefreshRoundedIcon from'@mui/icons-material/RefreshRounded';
+import MessageNotifications from'../components/MessageNotifications';
+import WorkspaceSearch from'../components/workspace/WorkspaceSearch';
+import{workspaceGroup}from'../navigation/workspaces';
+function initials(name){return(name||'TNG').split(' ').filter(Boolean).slice(0,2).map(p=>p[0]?.toUpperCase()).join('');}
+export default function TopBar({page,mode,onModeChange,onModules,moduleCenterOpen,role,userName,onMenu,onRefresh,onLogout,onNavigate}){
+ const[anchor,setAnchor]=useState(null);
+ const title=page==='TNG BOXING EVENTS'?'Events & fight cards':page==='Promoter'?'Pro matchmaking':page;
+ return <AppBar className="tng-topbar" position="sticky" elevation={0} color="transparent" sx={{top:0,zIndex:t=>t.zIndex.drawer-1,bgcolor:'background.paper',color:'text.primary',borderBottom:'1px solid',borderColor:'divider'}}>
+  <Toolbar sx={{minHeight:{xs:64,md:76},gap:{xs:.5,sm:1.5},px:{xs:1,sm:3}}}>
+   <IconButton onClick={onMenu} sx={{display:{xs:'inline-flex',lg:'none'}}} aria-label="Open navigation"><MenuRoundedIcon/></IconButton>
+   <Box sx={{flex:1,minWidth:0}}><Typography variant="overline" color="text.secondary" noWrap sx={{display:'block',lineHeight:1.6,letterSpacing:1}}>{workspaceGroup(page)?.label||'TNGOS'}</Typography><Typography noWrap sx={{fontSize:{xs:16,sm:20},fontWeight:750,lineHeight:1.4}}>{title}</Typography></Box>
+   <Stack direction="row" sx={{alignItems:'center',gap:{xs:0,sm:.5}}}>
+    <WorkspaceSearch disabled={moduleCenterOpen} role={role} onNavigate={onNavigate}/>
+    {['admin','staff'].includes(role)&&<MessageNotifications compact onNavigate={onNavigate}/>}
+    <Tooltip title="All workspaces"><IconButton onClick={onModules} aria-label="Open module center"><AppsRoundedIcon/></IconButton></Tooltip>
+    <Tooltip title="Account and appearance"><IconButton onClick={e=>setAnchor(e.currentTarget)} aria-label="Account and appearance" aria-expanded={!!anchor} aria-haspopup="menu"><Avatar sx={{width:32,height:32,bgcolor:'primary.main',color:'#fff',fontSize:12,fontWeight:800}}>{initials(userName)}</Avatar></IconButton></Tooltip>
+   </Stack>
+   <Menu anchorEl={anchor} open={!!anchor} onClose={()=>setAnchor(null)} slotProps={{paper:{sx:{width:280}}}}>
+    <Box sx={{px:2,py:1}}><Typography fontWeight={750}>{userName||'TNGOS'}</Typography><Typography variant="caption" color="text.secondary" sx={{textTransform:'capitalize'}}>{role} workspace</Typography></Box><Divider/>
+    <Box sx={{p:2}}><Typography variant="caption" color="text.secondary" sx={{display:'block',mb:1}}>Display mode</Typography><ToggleButtonGroup size="small" exclusive fullWidth value={mode||'standard'} onChange={(_,v)=>{if(v)onModeChange?.(v)}} aria-label="Display mode"><ToggleButton value="standard">Standard</ToggleButton><ToggleButton value="command">Command</ToggleButton></ToggleButtonGroup></Box>
+    {['Dashboard','System Overview'].includes(page)&&<MenuItem onClick={()=>{onRefresh?.();setAnchor(null);}}><RefreshRoundedIcon sx={{mr:1,fontSize:18}}/>Refresh overview metrics</MenuItem>}
+    <MenuItem onClick={()=>{onModules?.();setAnchor(null);}}>Workspace & layout settings</MenuItem>
+    {role==='admin'&&<MenuItem onClick={()=>{onNavigate?.('Clover');setAnchor(null);}}>Connections & synchronization</MenuItem>}
+    <Divider/><MenuItem onClick={()=>{setAnchor(null);onLogout?.();}} sx={{color:'error.main'}}>Log out</MenuItem>
+   </Menu>
+  </Toolbar>
+ </AppBar>;
 }

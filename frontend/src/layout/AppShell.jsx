@@ -126,7 +126,7 @@ export default function AppShell({
         >
           {offline&&<Alert severity="warning" sx={{mb:2}}>This browser is offline. Reconnect before saving or checking in. TNGOS cannot confirm changes while offline.</Alert>}
           {role==='admin'&&<CommissionReportAlerts/>}
-          {role==='admin'&&mode==='command'&&<Box component="details" onToggle={e=>setBriefingOpen(e.currentTarget.open)} sx={{mb:2}}><Box component="summary" sx={{cursor:'pointer',fontWeight:700,p:1}}>Command briefing</Box>{briefingOpen&&<CommandCenter onNavigate={setPage}/>}</Box>}
+          {role==='admin'&&['Dashboard','System Overview'].includes(page)&&mode==='command'&&<Box component="details" onToggle={e=>setBriefingOpen(e.currentTarget.open)} sx={{mb:2}}><Box component="summary" sx={{cursor:'pointer',fontWeight:700,p:1}}>Command briefing</Box>{briefingOpen&&<CommandCenter onNavigate={setPage}/>}</Box>}
           {!preferences.focus&&<WorkspaceGuide key={`guide-${page}`} role={role} page={page} onNavigate={setPage} pinned={preferences.pinned.includes(page)} onPin={pin} onModules={()=>setModulesOpen(true)}/>}
           <Box key={page} className={`tng-module-surface ${mode==='command'?'tng-command-page':''}`}><WorkspaceBoundary workspace={page}><Suspense fallback={<WorkspaceLoading/>}>{children}</Suspense></WorkspaceBoundary></Box>
         </Box>

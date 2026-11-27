@@ -917,7 +917,7 @@ return (
       {page === "Clover" && role === "admin" && (
         <Card>
           <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-            <Typography variant="h5" fontWeight={900}>Clover Integration</Typography>
+            <Typography variant="h5" fontWeight={900}>Clover Integration</Typography><Button variant="contained" sx={{mt:2}} onClick={syncTngOS} disabled={syncing}>{syncing?"Syncing…":"Sync Clover"}</Button>
             <Typography color="text.secondary" sx={{ mt: 1, mb: 2 }}>
               Payment synchronization and webhook configuration.
             </Typography>
