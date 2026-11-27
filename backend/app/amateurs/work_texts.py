@@ -99,7 +99,7 @@ def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True).encode(
 def content(body,scope='officials'):
  text=body.message.strip()
  if not text:raise HTTPException(422,'Enter a work-related message')
- text=ensure_stop_footer(('TNG Boxing clubs: ' if scope=='clubs' else 'TNG Boxing officials: ')+text)
+ text=ensure_stop_footer(('TNG Boxing clubs: ' if scope=='clubs' else 'Boxing officials: ')+text)
  if len(text)>1500:raise HTTPException(422,'Shorten the text to 1,500 characters including the footer')
  return text
 
