@@ -80,7 +80,8 @@ export const ROLE_MENUS = {
 
 export const WORKSPACE_GROUPS = [
   { id: 'home', label: 'HOME', description: 'Daily overview and work that needs attention.', accent: '#88b8cf', pages: ['Dashboard', 'System Overview', 'Investor Portal', 'Sponsor Portal', 'Concessions Portal'] },
-  { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer', 'TNG Boxing Game', 'TNG NeuroLab'] },
+  { id: 'gym', label: 'GYM & MEMBERS', description: 'Profiles, check-in, renewals and training.', accent: '#34b6b0', pages: ['Members', 'Member Check-In', 'Check-In Kiosk', 'Renewal Reminders', 'TNGTrainer', 'TNG Boxing Game'] },
+  { id: 'research', label: 'TNG NEUROLAB', description: 'Admin-only simulated neural signal research, sessions and virtual controls.', accent: '#66d5c4', pages: ['TNG NeuroLab'] },
   { id: 'boxing', label: 'TNG PROMOTIONS', description: 'Fighters, matchmaking, fight cards, contracts and entry.', accent: '#e43852', pages: ['Announcer & DJ', 'Amateur Matchmaker', 'TNG BOXING EVENTS', 'Fight Recap', 'USA Boxing Officials', 'Oklahoma Boxing Clubs', 'Club Inbox', 'Officials Inbox', 'Promoter', 'Event Check-In', 'Fight Calendar', 'Fighter Portal Videos', 'Manager Portal'] },
   { id: 'operations', label: 'FACILITY MANAGEMENT', description: 'Facility bookings, venue messages and event concessions.', accent: '#487e93', pages: ['Venue & Event Bookings', 'Venue Inbox', 'Chef & Concessions'] },
   { id: 'retail', label: 'SHOP & SALES', description: 'Apparel, products, purchases and sales reporting.', accent: '#bb8d40', pages: ['TNG Apparel', 'Sales', 'Products', 'Reports', 'My Sales'] },

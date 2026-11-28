@@ -27,6 +27,7 @@ import SportsMmaRoundedIcon from "@mui/icons-material/SportsMmaRounded";
 import AssessmentRoundedIcon from "@mui/icons-material/AssessmentRounded";
 import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
+import PsychologyRoundedIcon from "@mui/icons-material/PsychologyRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import EventRoundedIcon from "@mui/icons-material/EventRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -41,7 +42,7 @@ import { ROLE_MENUS, WORKSPACE_GROUPS, searchWorkspaces, workspaceGroup } from "
 export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
-  "TNG NeuroLab": <SchoolRoundedIcon/>,
+  "TNG NeuroLab": <PsychologyRoundedIcon/>,
   "USA Boxing Officials": <GroupsRoundedIcon/>,
   "Oklahoma Boxing Clubs": <GroupsRoundedIcon/>,
   "Fight Recap": <AssessmentRoundedIcon/>,
@@ -97,9 +98,9 @@ export default function Sidebar({
   const [openGroup,setOpenGroup]=useState(()=>workspaceGroup(page)?.id||null);
   useEffect(()=>{setOpenGroup(workspaceGroup(page)?.id||null);setSearch("");},[page,role]);
   const shortcuts=pinned.filter(item=>item!=='Officials Inbox'&&(ROLE_MENUS[role]||[]).includes(item));
-  const groupNames={home:'Overview',gym:'Gym & members',boxing:'TNG PROMOTIONS',operations:'Facility management',retail:'Shop & sales',growth:'Marketing & messages',admin:'Administration'};
-  const labels={'TNG BOXING EVENTS':'Events & fight cards','Promoter':'Pro matchmaking','TNGTrainer':'Training','TNG Boxing Game':'Boxing Game'};
-  const groupIcons={home:<DashboardRoundedIcon/>,gym:<PeopleAltRoundedIcon/>,operations:<EventRoundedIcon/>,boxing:<SportsMmaRoundedIcon/>,retail:<StorefrontRoundedIcon/>,growth:<CampaignRoundedIcon/>,admin:<ManageAccountsRoundedIcon/>};
+  const groupNames={research:'TNG NEUROLAB',home:'Overview',gym:'Gym & members',boxing:'TNG PROMOTIONS',operations:'Facility management',retail:'Shop & sales',growth:'Marketing & messages',admin:'Administration'};
+  const labels={'TNG NeuroLab':'Open research lab','TNG BOXING EVENTS':'Events & fight cards','Promoter':'Pro matchmaking','TNGTrainer':'Training','TNG Boxing Game':'Boxing Game'};
+  const groupIcons={research:<PsychologyRoundedIcon/>,home:<DashboardRoundedIcon/>,gym:<PeopleAltRoundedIcon/>,operations:<EventRoundedIcon/>,boxing:<SportsMmaRoundedIcon/>,retail:<StorefrontRoundedIcon/>,growth:<CampaignRoundedIcon/>,admin:<ManageAccountsRoundedIcon/>};
   function tool(item,shortcut=false){const active=page===item;return <ListItemButton key={item} component="button" aria-current={active?'page':undefined} selected={active} onClick={()=>choosePage(item)} sx={{width:'100%',minHeight:40,borderRadius:'6px',mb:'2px',px:1.5,color:'#fff',textAlign:'left',border:'1px solid transparent','&.Mui-selected, &.Mui-selected:hover':{bgcolor:'#b41d33',borderColor:'#e03a50',color:'#fff',boxShadow:'none'},'&:hover':{bgcolor:'#ffffff0b',color:'#fff'}}}><ListItemIcon sx={{minWidth:28,color:'#e4eaf3','& svg':{fontSize:17}}}>{ICONS[item]||<DashboardRoundedIcon/>}</ListItemIcon><ListItemText primary={labels[item]||item} slotProps={{primary:{sx:{fontSize:13,fontWeight:active?700:500,lineHeight:1.35}}}}/></ListItemButton>;}
 
   function choosePage(item) {

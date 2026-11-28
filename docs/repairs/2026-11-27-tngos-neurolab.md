@@ -4,7 +4,7 @@ The user's instruction to add NeuroLab to TNGOS authorizes a TNGOS entry point w
 
 ## Access
 
-Admin only: `#/tng-neurolab`, Gym & Members sidebar, or Dashboard → Gym → TNG NeuroLab. Role menus, URL resolution, search and rendering all restrict the page to admin. Members, fighters, staff and partners are not given access. No new backend endpoints, database tables, production dependencies or customer-record reads.
+Admin only: `#/tng-neurolab`, the dedicated TNG NEUROLAB sidebar section, or Dashboard → Overview → Open TNG NeuroLab. Role menus, URL resolution, search and rendering all restrict the page to admin. Members, fighters, staff and partners are not given access. No new backend endpoints, database tables, production dependencies or customer-record reads.
 
 ## Functionality
 
@@ -25,3 +25,7 @@ Explicit simulation consent before streaming/recording. Consent applies to the p
 ## Verification
 
 120 frontend tests passed, including six new tests covering synthetic spectral classification, provenance, artifact abstention, finite-window handling, bounded virtual movement, role restrictions and HTTPS service link validation. Production frontend build passed. Browser verification at 1450px and 390px covered consent gate, live signals, recording, downloaded JSON provenance, replay, virtual movement, artifact suppression and withdrawal clearing recordings. Zero JavaScript exceptions and zero `/api/` requests from the lab. Existing standalone repository and TNGOS backend source unchanged.
+
+## Dedicated main section follow-up
+
+Moved NeuroLab out of Gym & Members into its own TNG NEUROLAB main navigation group and added a separate dark research card on the main Dashboard Overview. Removed the gym-dashboard shortcut so research has its own home. Admin-only route/access unchanged. 121 frontend tests and the production build passed. Browser checks verified both menu and dashboard-card navigation, absence of the research section for staff, and no JavaScript exceptions. No backend changes in this navigation follow-up.
