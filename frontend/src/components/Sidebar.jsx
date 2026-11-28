@@ -41,6 +41,7 @@ import { ROLE_MENUS, WORKSPACE_GROUPS, searchWorkspaces, workspaceGroup } from "
 export { ROLE_MENUS } from "../navigation/workspaces";
 
 const ICONS = {
+  "TNG NeuroLab": <SchoolRoundedIcon/>,
   "USA Boxing Officials": <GroupsRoundedIcon/>,
   "Oklahoma Boxing Clubs": <GroupsRoundedIcon/>,
   "Fight Recap": <AssessmentRoundedIcon/>,

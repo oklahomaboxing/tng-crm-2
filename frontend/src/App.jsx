@@ -29,6 +29,7 @@ const OklahomaBoxingClubs=lazy(()=>import('./pages/OklahomaBoxingClubs'));
 const USABoxingOfficials=lazy(()=>import('./pages/USABoxingOfficials'));
 const FightRecap=lazy(()=>import('./pages/FightRecap'));
 const ShowControl=lazy(()=>import('./pages/ShowControl'));
+const TngNeuroLab=lazy(()=>import('./pages/TngNeuroLab.jsx'));
 const TngBoxingGame = lazy(() => import('./pages/TngBoxingGame'));
 const MemberPortal = lazy(() => import("./pages/MemberPortal.jsx"));
 const MemberActivate = lazy(() => import("./pages/MemberActivate.jsx"));
@@ -887,6 +888,7 @@ return (
       {page === "Duplicate Review" && role === "admin" && <DuplicateReview />}
       {page === "Leads" && role !== "rep" && <Leads />}
       {page === "TNGTrainer" && role !== "rep" && <TNGAcademy allowGame={role === "admin"} />}
+      {page === "TNG NeuroLab" && role === "admin" && <TngNeuroLab/>}
       {page === "TNG Boxing Game" && role === "admin" && <TngBoxingGame/>}
       {page === "Promoter" &&
         ["admin", "staff", "matchmaker"].includes(role) && (
