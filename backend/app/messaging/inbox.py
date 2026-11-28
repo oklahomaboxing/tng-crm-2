@@ -2,6 +2,7 @@
 import os,re
 from typing import Literal
 from .routing import InboxConversation,FOLDERS,folders
+from .labels import message_label
 from datetime import datetime,timedelta
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Query,Request
@@ -146,7 +147,7 @@ def reply(body:Reply,db:Session=Depends(get_db),user=Depends(staff_user)):
     if not body.service_reply:raise HTTPException(400,'Confirm this answers their account, membership or ticket question and is not a promotion')
     phone=phone_value(body.phone);text=body.message.strip()
     if not text:raise HTTPException(400,'Enter a reply')
-    text=ensure_stop_footer('TNG Boxing: '+text)
+    text=ensure_stop_footer(message_label(folders(db,[phone])[phone])+': '+text)
     # Serialize staff submissions to enforce limits and durable idempotency.
     db.query(User).filter_by(id=user.id).with_for_update().one()
     previous=db.query(InboxMessage).filter_by(request_key=str(body.request_key)).first()

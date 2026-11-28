@@ -14,6 +14,7 @@ from app.messaging.inbox import InboxMessage,serialize as message_dict,base
 from app.marketing.sms import blocked_sms_numbers,number_blocked,approved_routes
 from app.ticketing.delivery import normalize_ticket_phone
 from app.services.sms_service import ensure_stop_footer
+from app.messaging.labels import message_label
 from twilio.rest import Client
 from twilio.http.http_client import TwilioHttpClient
 router=APIRouter(prefix='/api/amateurs/official-work-texts',tags=['Officials work communication'])
@@ -99,7 +100,7 @@ def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True).encode(
 def content(body,scope='officials'):
  text=body.message.strip()
  if not text:raise HTTPException(422,'Enter a work-related message')
- text=ensure_stop_footer(('TNG Boxing clubs: ' if scope=='clubs' else 'Boxing officials: ')+text)
+ text=ensure_stop_footer(message_label(scope)+': '+text)
  if len(text)>1500:raise HTTPException(422,'Shorten the text to 1,500 characters including the footer')
  return text
 

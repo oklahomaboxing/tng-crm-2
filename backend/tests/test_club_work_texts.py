@@ -26,7 +26,7 @@ class ClubWorkTextTests(unittest.TestCase):
   self.assertEqual(self.client.get(self.path+'?scope=clubs').status_code,401)
   self.assertEqual(self.client.get(self.path+'?scope=clubs',headers=self.headers('member')).status_code,403);self.clientMock.messages.create.assert_not_called()
  def test_preview_scope_footer_and_no_transmission(self):
-  r=self.request('/preview','post',self.draft([self.club.id,self.a.id,self.other.id]));d=r.json();self.assertEqual(len(d['recipients']),1);self.assertEqual(len(d['skipped']),2);self.assertTrue(d['body'].startswith('TNG Boxing clubs:'));self.assertTrue(d['body'].endswith('Reply STOP to unsubscribe.'));self.clientMock.messages.create.assert_not_called()
+  r=self.request('/preview','post',self.draft([self.club.id,self.a.id,self.other.id]));d=r.json();self.assertEqual(len(d['recipients']),1);self.assertEqual(len(d['skipped']),2);self.assertTrue(d['body'].startswith('LBC 27 Boxing Clubs:'));self.assertTrue(d['body'].endswith('Reply STOP to unsubscribe.'));self.clientMock.messages.create.assert_not_called()
   self.assertEqual(self.client.post(self.path+'/preview',headers=self.headers(),json=self.draft()).json()['recipients'],[])
  def test_permission_evidence_version_and_directory_scope(self):
   self.club.sms_consent=False;self.db.commit();body={'opt_in':True,'evidence':'Agreed by phone for event logistics','version':self.club.version}
@@ -35,7 +35,7 @@ class ClubWorkTextTests(unittest.TestCase):
   self.assertEqual(self.request(f'/contacts/{self.club.id}/permission','put',body).status_code,200);self.assertEqual(self.request(f'/contacts/{self.club.id}/permission','put',body).status_code,409);self.db.expire_all();self.assertFalse(self.db.get(DirectoryContact,self.club.id).role_verified)
  def test_send_reuses_approved_route_callback_and_durable_idempotency(self):
   before=self.db.query(Member).count();body=self.payload();r=self.request('/send','post',body);self.assertEqual(r.status_code,200,r.text);self.assertEqual(r.json()['messages'][0]['status'],'accepted')
-  args=self.clientMock.messages.create.call_args.kwargs;self.assertEqual(args['messaging_service_sid'],'MGapproved');self.assertEqual(args['to'],self.club.phones[0]);self.assertIn('/api/messages/status?message_id=',args['status_callback'])
+  args=self.clientMock.messages.create.call_args.kwargs;self.assertTrue(args['body'].startswith('LBC 27 Boxing Clubs: '));self.assertTrue(args['body'].endswith('Reply STOP to unsubscribe.'));self.assertEqual(args['messaging_service_sid'],'MGapproved');self.assertEqual(args['to'],self.club.phones[0]);self.assertIn('/api/messages/status?message_id=',args['status_callback'])
   self.assertTrue(self.db.query(InboxMessage).one().request_key.startswith('club:'));self.assertEqual(self.db.query(SecurityLog).filter_by(action='CLUB_WORK_SMS_BATCH').count(),1)
   self.assertTrue(self.request('/send','post',body).json()['already_submitted']);self.clientMock.messages.create.assert_called_once();self.assertEqual(self.db.query(Member).count(),before)
   self.assertEqual(self.request('/send','post',{**body,'message':'Different work message'}).status_code,409)

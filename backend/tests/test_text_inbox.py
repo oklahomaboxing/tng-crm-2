@@ -93,3 +93,12 @@ class TextInboxTests(unittest.TestCase):
   with patch('app.messaging.inbox.approved_routes',return_value={'notification':'MGfixture'}),patch('app.messaging.inbox.Client',return_value=provider):
    r=self.client.post('/api/messages/reply',headers=self.headers(),json=self.reply());self.assertEqual(r.json()['message']['status'],'failed')
    self.assertEqual(self.client.post('/api/messages/reply',headers=self.headers(),json=self.reply()).status_code,409);provider.messages.create.assert_called_once()
+
+ def test_reply_labels_follow_saved_conversation_folder(self):
+  from app.messaging.routing import InboxConversation
+  self.webhook();provider=Mock()
+  with patch('app.messaging.inbox.approved_routes',return_value={'notification':'MGfixture'}),patch('app.messaging.inbox.Client',return_value=provider):
+   for i,(folder,label) in enumerate([('clubs','LBC 27 Boxing Clubs'),('officials','LBC 27 Boxing Officials'),('gym','TNG Boxing'),('venue','TNG Boxing')]):
+    self.db.merge(InboxConversation(phone='+14055550123',folder=folder));self.db.commit();provider.messages.create.return_value=Mock(sid='SM'+str(i+2)*32)
+    r=self.client.post('/api/messages/reply',headers=self.headers(),json=self.reply());self.assertEqual(r.status_code,200,r.text)
+    body=provider.messages.create.call_args.kwargs['body'];self.assertTrue(body.startswith(label+': '));self.assertTrue(body.endswith('Reply STOP to unsubscribe.'))
